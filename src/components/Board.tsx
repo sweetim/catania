@@ -1,0 +1,1160 @@
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import type { Board as BoardState, Player } from "../game/types";
+
+const terrainStyles = {
+  wood: { fill: "#8fa58a", ink: "#365747", label: "Forest" },
+  brick: { fill: "#cb947b", ink: "#8b4f3e", label: "Hills" },
+  wool: { fill: "#bdc695", ink: "#64734a", label: "Pasture" },
+  grain: { fill: "#dfc680", ink: "#9c7938", label: "Fields" },
+  ore: { fill: "#a7b6b4", ink: "#536a6e", label: "Mountains" },
+  desert: { fill: "#dec49b", ink: "#ab8556", label: "Desert" },
+};
+
+export function Board({
+  board,
+  players,
+  robberTileId,
+  legalVertexIds = [],
+  legalEdgeIds = [],
+  legalTileIds = [],
+  selectedId,
+  onSelect,
+  interactive = true,
+  compact = false,
+}: {
+  board: BoardState;
+  players: Pick<Player, "id" | "name" | "color">[];
+  robberTileId?: string;
+  legalVertexIds?: string[];
+  legalEdgeIds?: string[];
+  legalTileIds?: string[];
+  selectedId?: string | null;
+  onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
+  interactive?: boolean;
+  compact?: boolean;
+}) {
+  const illustrationId = useId().replace(/:/g, "");
+  const viewportReference = useRef<HTMLDivElement>(null);
+  const panReference = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  const zoomCenterReference = useRef({ x: 0.5, y: 0.5 });
+  const [zoom, setZoom] = useState(1);
+  const [viewportWidth, setViewportWidth] = useState(710);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const verticesById = new Map(
+    board.vertices.map((vertex) => [vertex.id, vertex]),
+  );
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const halfWidth = Math.max(
+    355,
+    ...board.vertices.map((vertex) => Math.abs(vertex.x) + 85),
+  );
+  const halfHeight = Math.max(
+    337,
+    ...board.vertices.map((vertex) => Math.abs(vertex.y) + 85),
+  );
+  const viewWidth = halfWidth * 2;
+  const viewHeight = halfHeight * 2;
+  const canSelect = interactive && Boolean(onSelect);
+  const legalVertices = new Set(canSelect ? legalVertexIds : []);
+  const legalEdges = new Set(canSelect ? legalEdgeIds : []);
+  const legalTiles = new Set(canSelect ? legalTileIds : []);
+  const hitRadius = Math.max(20, (22 * viewWidth) / (viewportWidth * zoom));
+  const edgeGeometry = board.edges.map((edge) => {
+    const start = verticesById.get(edge.vertexIds[0])!;
+    const end = verticesById.get(edge.vertexIds[1])!;
+    return {
+      edge,
+      start,
+      end,
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+      coastal:
+        start.tileIds.filter((tileId) => end.tileIds.includes(tileId))
+          .length === 1,
+    };
+  });
+
+  useEffect(() => {
+    const viewport = viewportReference.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth);
+    });
+    observer.observe(viewport);
+    if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const viewport = viewportReference.current;
+    if (!viewport) return;
+    viewport.scrollLeft =
+      zoomCenterReference.current.x * viewport.scrollWidth -
+      viewport.clientWidth / 2;
+    viewport.scrollTop =
+      zoomCenterReference.current.y * viewport.scrollHeight -
+      viewport.clientHeight / 2;
+  }, [zoom]);
+
+  function changeZoom(nextZoom: number) {
+    const viewport = viewportReference.current;
+    if (viewport) {
+      zoomCenterReference.current = {
+        x:
+          (viewport.scrollLeft + viewport.clientWidth / 2) /
+          viewport.scrollWidth,
+        y:
+          (viewport.scrollTop + viewport.clientHeight / 2) /
+          viewport.scrollHeight,
+      };
+    }
+    setZoom(Math.min(2.5, Math.max(1, nextZoom)));
+  }
+
+  function targetProperties(
+    kind: "vertex" | "edge" | "tile",
+    id: string,
+    label: string,
+  ) {
+    return {
+      role: "button" as const,
+      tabIndex: 0,
+      "aria-label": label,
+      "aria-pressed": selectedId === id,
+      className: "cursor-pointer outline-none",
+      onClick: () => onSelect?.(kind, id),
+      onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect?.(kind, id);
+        }
+      },
+      onFocus: () => setFocusedId(id),
+      onBlur: () => setFocusedId(null),
+    };
+  }
+
+  const instruction = legalTiles.size
+    ? "Choose a hex for the robber"
+    : legalEdges.size
+      ? "Choose a marked road"
+      : legalVertices.size
+        ? "Choose a marked corner"
+        : "An island of possibilities";
+
+  return (
+    <div className="relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45]">
+      {!compact && (
+        <div
+          className="pointer-events-none absolute left-5 top-4 z-10 hidden sm:block"
+          aria-hidden="true"
+        >
+          <p className="text-[10px] font-bold tracking-[0.24em] text-[#687b6e]">
+            THE ISLAND
+          </p>
+          <p className="mt-1 font-serif text-xs italic text-[#7c8879]">
+            A place to begin.
+          </p>
+        </div>
+      )}
+      <div
+        ref={viewportReference}
+        role="region"
+        aria-label="Island map. Use the zoom controls to enlarge, then scroll or drag to pan."
+        tabIndex={zoom > 1 ? 0 : undefined}
+        className={`w-full overflow-auto overscroll-contain outline-offset-[-3px] focus-visible:outline-2 focus-visible:outline-[#8b6438] ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        style={{
+          aspectRatio: `${viewWidth} / ${viewHeight}`,
+          touchAction: "pan-x pan-y",
+        }}
+        onPointerDown={(event) => {
+          if (zoom === 1 || event.pointerType !== "mouse" || event.button !== 0)
+            return;
+          if ((event.target as Element).closest('[role="button"]')) return;
+          const viewport = event.currentTarget;
+          panReference.current = {
+            x: event.clientX,
+            y: event.clientY,
+            left: viewport.scrollLeft,
+            top: viewport.scrollTop,
+          };
+          viewport.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        }}
+        onPointerMove={(event) => {
+          const pan = panReference.current;
+          if (!pan) return;
+          event.currentTarget.scrollLeft = pan.left - event.clientX + pan.x;
+          event.currentTarget.scrollTop = pan.top - event.clientY + pan.y;
+        }}
+        onPointerUp={(event) => {
+          panReference.current = null;
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onPointerCancel={() => {
+          panReference.current = null;
+        }}
+        onLostPointerCapture={() => {
+          panReference.current = null;
+        }}
+      >
+        <div
+          style={{
+            width: `${zoom * 100}%`,
+            aspectRatio: `${viewWidth} / ${viewHeight}`,
+          }}
+        >
+          <svg
+            viewBox={`${-halfWidth} ${-halfHeight} ${viewWidth} ${viewHeight}`}
+            className="block h-full w-full select-none"
+            role="group"
+            aria-labelledby={`${illustrationId}-title ${illustrationId}-description`}
+            fontFamily="ui-sans-serif, system-ui, sans-serif"
+          >
+            <title id={`${illustrationId}-title`}>Catan island</title>
+            <desc id={`${illustrationId}-description`}>
+              {board.tiles.length} terrain hexes and {board.ports.length}{" "}
+              coastal harbors. Numbers show dice rolls; dots show their
+              probability. Pieces carry their player's number.
+              {canSelect
+                ? " Highlighted locations can be selected with Enter or Space."
+                : " Read-only board."}
+            </desc>
+            <defs>
+              <radialGradient
+                id={`${illustrationId}-sea`}
+                cx="48%"
+                cy="43%"
+                r="65%"
+              >
+                <stop offset="0" stopColor="#c5dcd0" />
+                <stop offset="0.78" stopColor="#a8c8bc" />
+                <stop offset="1" stopColor="#87afa5" />
+              </radialGradient>
+              <pattern
+                id={`${illustrationId}-texture`}
+                width="17"
+                height="19"
+                patternUnits="userSpaceOnUse"
+              >
+                <circle cx="3" cy="5" r="0.65" fill="#fff9e7" opacity="0.25" />
+                <circle
+                  cx="13"
+                  cy="14"
+                  r="0.55"
+                  fill="#394f40"
+                  opacity="0.09"
+                />
+              </pattern>
+              <filter
+                id={`${illustrationId}-shadow`}
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="145%"
+              >
+                <feDropShadow
+                  dx="0"
+                  dy="4"
+                  stdDeviation="4"
+                  floodColor="#294f46"
+                  floodOpacity="0.2"
+                />
+              </filter>
+              <g
+                id={`${illustrationId}-tree`}
+                stroke="#375947"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              >
+                <path d="M0 12V24" strokeWidth="2.4" />
+                <path d="M0-22 12-3H7L16 12H-16L-7-3H-12Z" fill="#4d7155" />
+                <path d="M0-22V12H-16L-7-3H-12Z" fill="#608363" stroke="none" />
+              </g>
+              <g
+                id={`${illustrationId}-wheat`}
+                fill="none"
+                stroke="#9b793b"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              >
+                <path d="M0 21V-18M0 9Q-10 5-8-2Q0 0 0 9M0 1Q10-3 8-10Q0-8 0 1M0-7Q-9-11-6-17Q0-16 0-7M0-14Q6-18 4-23Q0-21 0-14" />
+              </g>
+              <g
+                id={`${illustrationId}-sheep`}
+                stroke="#68734f"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              >
+                <path d="M-7 5V11M6 5V11" fill="none" strokeWidth="2" />
+                <path
+                  d="M-12 0C-17-8-10-13-5-10C-3-16 5-14 7-10C15-12 18-4 13 0C17 8 8 11 4 7C-2 12-10 9-10 5C-16 6-18 1-12 0Z"
+                  fill="#faf5df"
+                />
+                <ellipse cx="12" cy="1" rx="5" ry="6" fill="#647052" />
+                <path d="M10-5 7-8M15-4 19-6" />
+                <circle cx="13" cy="0" r="0.8" fill="#faf5df" stroke="none" />
+              </g>
+              <g id={`${illustrationId}-wood`}>
+                <path
+                  d="M-46 26Q-20 11 1 23T46 23M-38 32Q-14 22 9 32"
+                  fill="none"
+                  stroke="#577755"
+                  strokeWidth="1.5"
+                  opacity="0.6"
+                />
+                <use
+                  href={`#${illustrationId}-tree`}
+                  transform="translate(-27 -10) scale(.85)"
+                />
+                <use
+                  href={`#${illustrationId}-tree`}
+                  transform="translate(1 -24) scale(.8)"
+                />
+                <use
+                  href={`#${illustrationId}-tree`}
+                  transform="translate(29 -8) scale(.95)"
+                />
+                <use
+                  href={`#${illustrationId}-tree`}
+                  transform="translate(-26 16) scale(.62)"
+                />
+                <use
+                  href={`#${illustrationId}-tree`}
+                  transform="translate(25 20) scale(.55)"
+                />
+              </g>
+              <g
+                id={`${illustrationId}-brick`}
+                stroke="#945c47"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              >
+                <path
+                  d="M-47 5-33-21-16-12 2-37 20-18 30-22 48 8 30 23H-31Z"
+                  fill="#b97860"
+                  stroke="none"
+                />
+                <path
+                  d="M-33-21-19 3-8-12M2-37 8-17 20-18M30-22 38 1"
+                  fill="none"
+                  stroke="#e1ac8c"
+                />
+                <path
+                  d="M-41 12H-18V23H-41ZM-33 24H-10V34H-33ZM19 10H41V21H19ZM13 23H35V33H13Z"
+                  fill="#c38c6b"
+                />
+                <path d="M-30 12V23M30 10V21M24 23V33" />
+                <path d="M-40 14H-20M21 12H39" stroke="#e6b899" />
+              </g>
+              <g id={`${illustrationId}-wool`}>
+                <path
+                  d="M-47 10Q-26-15-4 0Q19-15 47 5L43 25Q17 9-1 22Q-24 10-43 30Z"
+                  fill="#9eaf78"
+                />
+                <path
+                  d="M-42 30Q-20 14 0 26Q22 14 42 27M-36-21l2-6 3 5M29-20l3-6 3 5M-12-33l3-5 3 4"
+                  fill="none"
+                  stroke="#819460"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+                <use
+                  href={`#${illustrationId}-sheep`}
+                  transform="translate(-28 7) scale(.78)"
+                />
+                <use
+                  href={`#${illustrationId}-sheep`}
+                  transform="translate(27 -10) scale(.8)"
+                />
+              </g>
+              <g id={`${illustrationId}-grain`}>
+                <path
+                  d="M-45 21Q0 5 44 23M-37 29Q0 15 37 31M-25 37Q0 26 25 38"
+                  fill="none"
+                  stroke="#b18c43"
+                  strokeWidth="1.4"
+                  opacity="0.7"
+                />
+                <use
+                  href={`#${illustrationId}-wheat`}
+                  transform="translate(-28 -3) rotate(-12)"
+                />
+                <use
+                  href={`#${illustrationId}-wheat`}
+                  transform="translate(27 -4) rotate(12)"
+                />
+                <use
+                  href={`#${illustrationId}-wheat`}
+                  transform="translate(-4 -25) scale(.6)"
+                />
+                <use
+                  href={`#${illustrationId}-wheat`}
+                  transform="translate(39 9) scale(.55)"
+                />
+              </g>
+              <g id={`${illustrationId}-ore`} strokeLinejoin="round">
+                <path
+                  d="M-49 19-26-25-11-7 7-43 46 18Z"
+                  fill="#6b8183"
+                  stroke="#576f74"
+                  strokeWidth="1.4"
+                />
+                <path d="M7-43 7 18H46ZM-26-25-26 19H-3Z" fill="#809597" />
+                <path
+                  d="M7-43-4-21 5-25 12-19 19-25ZM-26-25-34-10-26-14-19-9Z"
+                  fill="#e1e5d6"
+                />
+                <path
+                  d="M-44 27-35 18-25 26-30 34ZM23 28 32 18 42 24 36 34Z"
+                  fill="#819496"
+                  stroke="#596f72"
+                  strokeWidth="1.3"
+                />
+                <path
+                  d="M-35 18-35 28-30 34M32 18 32 27 42 24"
+                  fill="none"
+                  stroke="#bccac1"
+                  strokeWidth="1.2"
+                />
+              </g>
+              <g id={`${illustrationId}-desert`}>
+                <circle
+                  cx="23"
+                  cy="-22"
+                  r="10"
+                  fill="#eddbaf"
+                  stroke="#bc945f"
+                  strokeWidth="1.2"
+                />
+                <path
+                  d="M-48 13Q-25-11-1 9Q24 25 47 3L44 25Q17 12-2 29Q-23 9-43 30Z"
+                  fill="#c5a374"
+                />
+                <path
+                  d="M-44 23Q-22 3 1 20M8 31Q27 17 39 25M-31-18l8-3M-17-29l7-2"
+                  fill="none"
+                  stroke="#ae8b5b"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </g>
+            </defs>
+
+            <g aria-hidden="true">
+              <path
+                d="M-302-159C-273-260-165-318-40-315C95-340 245-274 296-169C350-67 332 92 267 195C198 291 72 322-42 309C-169 321-286 244-315 129C-345 26-341-54-302-159Z"
+                transform={`scale(${halfWidth / 355} ${halfHeight / 337})`}
+                fill={`url(#${illustrationId}-sea)`}
+              />
+              <ellipse
+                rx={halfWidth - 25}
+                ry={halfHeight - 24}
+                fill="none"
+                stroke="#86aca1"
+                strokeWidth="0.8"
+                strokeDasharray="2 7"
+                opacity="0.55"
+              />
+              <path
+                d="M-287-103q8-5 16 0t16 0M-306-88q8-5 16 0t16 0M240 134q8-5 16 0t16 0M250 148q8-5 16 0t16 0M-189 250q8-5 16 0t16 0M95-279q8-5 16 0t16 0M108-265q8-5 16 0t16 0"
+                fill="none"
+                stroke="#6e9c91"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                opacity="0.55"
+              />
+              <g
+                transform={`translate(${halfWidth - 55} ${-halfHeight + 55})`}
+                fill="none"
+                stroke="#80998a"
+                opacity="0.8"
+              >
+                <circle r="18" strokeWidth="0.7" />
+                <path d="M0-25V25M-25 0H25" strokeWidth="0.7" />
+                <path
+                  d="M0-18 4 0 0 18-4 0Z"
+                  fill="#80998a"
+                  strokeWidth="0.8"
+                />
+                <text
+                  y="-31"
+                  textAnchor="middle"
+                  fill="#718b7c"
+                  stroke="none"
+                  fontSize="9"
+                  letterSpacing="2"
+                >
+                  N
+                </text>
+              </g>
+              <g
+                filter={`url(#${illustrationId}-shadow)`}
+                stroke="#eee2bf"
+                strokeWidth="14"
+                strokeLinecap="round"
+              >
+                {edgeGeometry
+                  .filter(({ coastal }) => coastal)
+                  .map(({ edge, start, end }) => (
+                    <line
+                      key={edge.id}
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                    />
+                  ))}
+              </g>
+            </g>
+
+            {board.tiles.map((tile) => {
+              const terrain = terrainStyles[tile.terrain];
+              const points = tile.vertexIds
+                .map((id) => {
+                  const vertex = verticesById.get(id)!;
+                  return `${vertex.x},${vertex.y}`;
+                })
+                .join(" ");
+              const probability =
+                tile.number === null ? 0 : 6 - Math.abs(7 - tile.number);
+              const frequent = tile.number === 6 || tile.number === 8;
+              return (
+                <g
+                  key={tile.id}
+                  role="img"
+                  aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}`}
+                >
+                  <polygon
+                    points={points}
+                    fill={terrain.fill}
+                    stroke="#eee5cf"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                  />
+                  <polygon
+                    points={points}
+                    fill={`url(#${illustrationId}-texture)`}
+                    pointerEvents="none"
+                  />
+                  <use
+                    href={`#${illustrationId}-${tile.terrain}`}
+                    transform={`translate(${tile.x} ${tile.y})`}
+                  />
+                  <text
+                    x={tile.x}
+                    y={tile.y + 43}
+                    textAnchor="middle"
+                    fill={terrain.ink}
+                    fontSize="7.5"
+                    fontWeight="700"
+                    letterSpacing="1.5"
+                  >
+                    {terrain.label.toUpperCase()}
+                  </text>
+                  {tile.number !== null && (
+                    <g transform={`translate(${tile.x} ${tile.y + 2})`}>
+                      <circle cy="2" r="19" fill="#35453a" opacity="0.15" />
+                      <circle
+                        r="19"
+                        fill="#fbf4df"
+                        stroke="#c8b998"
+                        strokeWidth="1.3"
+                      />
+                      <circle
+                        r="16.3"
+                        fill="none"
+                        stroke="#e7ddc5"
+                        strokeWidth="0.7"
+                      />
+                      <text
+                        y="4.5"
+                        textAnchor="middle"
+                        fontFamily="Georgia, 'Times New Roman', serif"
+                        fontSize="23"
+                        fontWeight="700"
+                        fill={frequent ? "#b14e38" : "#394b42"}
+                      >
+                        {tile.number}
+                      </text>
+                      {Array.from({ length: probability }, (_, index) => (
+                        <circle
+                          key={index}
+                          cx={(index - (probability - 1) / 2) * 4.3}
+                          cy="11"
+                          r="1.35"
+                          fill={frequent ? "#b14e38" : "#59644f"}
+                        />
+                      ))}
+                    </g>
+                  )}
+                  {selectedId === tile.id && !legalTiles.has(tile.id) && (
+                    <polygon
+                      points={points}
+                      fill="none"
+                      stroke="#815b2b"
+                      strokeWidth="4"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                </g>
+              );
+            })}
+
+            <g
+              aria-hidden="true"
+              stroke="#b8a777"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              opacity="0.75"
+            >
+              {edgeGeometry
+                .filter(({ coastal }) => coastal)
+                .map(({ edge, start, end }) => (
+                  <line
+                    key={edge.id}
+                    x1={start.x}
+                    y1={start.y}
+                    x2={end.x}
+                    y2={end.y}
+                  />
+                ))}
+            </g>
+
+            {board.ports.map((port) => {
+              const { x, y } = edgeGeometry.find(
+                ({ edge }) => edge.id === port.edgeId,
+              )!;
+              const distance = Math.hypot(x, y);
+              const directionX = x / distance;
+              const directionY = y / distance;
+              const portX = x + directionX * 51;
+              const portY = y + directionY * 51;
+              const ratio = port.resource === "any" ? "3:1" : "2:1";
+              return (
+                <g
+                  key={port.edgeId}
+                  role="img"
+                  aria-label={`${port.resource === "any" ? "Any resource" : port.resource} harbor, trade ${ratio}`}
+                >
+                  <path
+                    d={`M${x + directionX * 8} ${y + directionY * 8}L${portX} ${portY}`}
+                    stroke="#e8d8ac"
+                    strokeWidth="8"
+                  />
+                  <path
+                    d={`M${x + directionX * 8} ${y + directionY * 8}L${portX} ${portY}`}
+                    stroke="#9a8864"
+                    strokeWidth="1.4"
+                    strokeDasharray="2 3"
+                  />
+                  <g transform={`translate(${portX} ${portY})`}>
+                    <rect
+                      x="-27"
+                      y="-15"
+                      width="54"
+                      height="33"
+                      rx="9"
+                      fill="#547f72"
+                      opacity="0.12"
+                    />
+                    <rect
+                      x="-27"
+                      y="-17"
+                      width="54"
+                      height="33"
+                      rx="9"
+                      fill="#f7f0d9"
+                      stroke="#a8b6a0"
+                      strokeWidth="1"
+                    />
+                    <text
+                      y="-2"
+                      textAnchor="middle"
+                      fill="#425c4d"
+                      fontSize="13"
+                      fontWeight="750"
+                      fontFamily="Georgia, 'Times New Roman', serif"
+                    >
+                      {ratio}
+                    </text>
+                    <text
+                      y="9"
+                      textAnchor="middle"
+                      fill="#61715c"
+                      fontSize="7.5"
+                      fontWeight="700"
+                      letterSpacing="0.8"
+                    >
+                      {port.resource.toUpperCase()}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+
+            {board.tiles
+              .filter((tile) => legalTiles.has(tile.id))
+              .map((tile) => {
+                const highlighted =
+                  selectedId === tile.id || focusedId === tile.id;
+                const points = tile.vertexIds
+                  .map((id) => {
+                    const vertex = verticesById.get(id)!;
+                    return `${vertex.x},${vertex.y}`;
+                  })
+                  .join(" ");
+                return (
+                  <g
+                    key={tile.id}
+                    {...targetProperties(
+                      "tile",
+                      tile.id,
+                      `Move robber to ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}`,
+                    )}
+                  >
+                    <polygon
+                      points={points}
+                      fill={highlighted ? "#fff5cb" : "transparent"}
+                      fillOpacity={highlighted ? "0.2" : "1"}
+                      stroke={highlighted ? "#553e20" : "#fff4d4"}
+                      strokeWidth={highlighted ? "5" : "2.5"}
+                      strokeDasharray={highlighted ? undefined : "5 5"}
+                      strokeLinejoin="round"
+                    />
+                    {highlighted && (
+                      <polygon
+                        points={points}
+                        fill="none"
+                        stroke="#fff5d8"
+                        strokeWidth="1"
+                        strokeLinejoin="round"
+                        pointerEvents="none"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+
+            {edgeGeometry
+              .filter(({ edge }) => edge.playerId)
+              .map(({ edge, start, end, x, y }) => {
+                const player = playersById.get(edge.playerId!)!;
+                return (
+                  <g
+                    key={edge.id}
+                    role="img"
+                    aria-label={`${player.name}'s road at ${edge.id}`}
+                    pointerEvents="none"
+                  >
+                    {selectedId === edge.id && (
+                      <line
+                        x1={start.x}
+                        y1={start.y}
+                        x2={end.x}
+                        y2={end.y}
+                        stroke="#8c672e"
+                        strokeWidth="20"
+                        strokeLinecap="round"
+                      />
+                    )}
+                    <line
+                      x1={start.x}
+                      y1={start.y + 2}
+                      x2={end.x}
+                      y2={end.y + 2}
+                      stroke="#364b3a"
+                      strokeOpacity="0.3"
+                      strokeWidth="13"
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      stroke="#fff5dc"
+                      strokeWidth="13"
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      stroke={player.color}
+                      strokeWidth="9"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r="7.5"
+                      fill="#fff5df"
+                      stroke={player.color}
+                      strokeWidth="1.5"
+                    />
+                    <text
+                      x={x}
+                      y={y + 3}
+                      textAnchor="middle"
+                      fill="#33483d"
+                      fontSize="8.5"
+                      fontWeight="800"
+                    >
+                      {players.findIndex(
+                        (candidate) => candidate.id === player.id,
+                      ) + 1}
+                    </text>
+                  </g>
+                );
+              })}
+
+            {edgeGeometry
+              .filter(({ edge }) => legalEdges.has(edge.id))
+              .map(({ edge, start, end, x, y }) => {
+                const highlighted =
+                  selectedId === edge.id || focusedId === edge.id;
+                // A generous touch target must never cover another road's visible center.
+                const radius = Math.min(
+                  hitRadius,
+                  ...edgeGeometry
+                    .filter(
+                      (other) =>
+                        other.edge.id !== edge.id &&
+                        legalEdges.has(other.edge.id),
+                    )
+                    .map((other) => Math.hypot(other.x - x, other.y - y) - 1),
+                );
+                return (
+                  <g
+                    key={edge.id}
+                    {...targetProperties(
+                      "edge",
+                      edge.id,
+                      `Build road at ${edge.id}`,
+                    )}
+                  >
+                    <circle cx={x} cy={y} r={radius} fill="transparent" />
+                    <line
+                      x1={start.x * 0.85 + end.x * 0.15}
+                      y1={start.y * 0.85 + end.y * 0.15}
+                      x2={start.x * 0.15 + end.x * 0.85}
+                      y2={start.y * 0.15 + end.y * 0.85}
+                      stroke="#fff4d4"
+                      strokeWidth={highlighted ? "12" : "9"}
+                      strokeLinecap="round"
+                      pointerEvents="none"
+                    />
+                    <line
+                      x1={start.x * 0.85 + end.x * 0.15}
+                      y1={start.y * 0.85 + end.y * 0.15}
+                      x2={start.x * 0.15 + end.x * 0.85}
+                      y2={start.y * 0.15 + end.y * 0.85}
+                      stroke={highlighted ? "#664b28" : "#b48b45"}
+                      strokeWidth={highlighted ? "7" : "4"}
+                      strokeDasharray={highlighted ? undefined : "3 6"}
+                      strokeLinecap="round"
+                      pointerEvents="none"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={highlighted ? 8 : 6}
+                      fill={highlighted ? "#664b28" : "#fff4d4"}
+                      stroke="#a77a3a"
+                      strokeWidth="1.4"
+                      pointerEvents="none"
+                    />
+                    <path
+                      d={`M${x - 2.5} ${y}h5M${x} ${y - 2.5}v5`}
+                      stroke={highlighted ? "#fff4d4" : "#8a642d"}
+                      strokeWidth="1.3"
+                      pointerEvents="none"
+                    />
+                  </g>
+                );
+              })}
+
+            {board.vertices
+              .filter((vertex) => vertex.building)
+              .map((vertex) => {
+                const building = vertex.building!;
+                const player = playersById.get(building.playerId)!;
+                const city = building.kind === "city";
+                return (
+                  <g
+                    key={vertex.id}
+                    transform={`translate(${vertex.x} ${vertex.y})`}
+                    role="img"
+                    aria-label={`${player.name}'s ${building.kind} at ${vertex.id}`}
+                    pointerEvents="none"
+                  >
+                    <ellipse
+                      cy="10"
+                      rx={city ? "19" : "15"}
+                      ry="6"
+                      fill="#35483c"
+                      opacity="0.23"
+                    />
+                    {selectedId === vertex.id && (
+                      <circle
+                        r="24"
+                        fill="none"
+                        stroke="#805e2c"
+                        strokeWidth="3"
+                        strokeDasharray="4 3"
+                      />
+                    )}
+                    <path
+                      d={
+                        city
+                          ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                          : "M-13 11V-5L0-17 13-5V11Z"
+                      }
+                      fill={player.color}
+                      stroke="#fff7df"
+                      strokeWidth="5"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d={
+                        city
+                          ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                          : "M-13 11V-5L0-17 13-5V11Z"
+                      }
+                      fill={player.color}
+                      stroke="#39483e"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d={
+                        city
+                          ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
+                          : "M-13-5 0-17 13-5"
+                      }
+                      fill="none"
+                      stroke="#fff6da"
+                      strokeOpacity="0.5"
+                      strokeWidth="1.5"
+                    />
+                    <rect
+                      x="-5.5"
+                      y="-2"
+                      width="11"
+                      height="12"
+                      rx="2"
+                      fill="#fff5dc"
+                    />
+                    <text
+                      y="7"
+                      textAnchor="middle"
+                      fill="#35483d"
+                      fontSize="9"
+                      fontWeight="800"
+                    >
+                      {players.findIndex(
+                        (candidate) => candidate.id === player.id,
+                      ) + 1}
+                    </text>
+                    {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
+                  </g>
+                );
+              })}
+
+            {board.tiles
+              .filter((tile) => tile.id === robberTileId)
+              .map((tile) => (
+                <g
+                  key={tile.id}
+                  transform={`translate(${tile.x + 24} ${tile.y + 18})`}
+                  role="img"
+                  aria-label={`Robber on ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}; production blocked`}
+                  pointerEvents="none"
+                >
+                  <ellipse
+                    cy="13"
+                    rx="13"
+                    ry="4"
+                    fill="#243b35"
+                    opacity="0.25"
+                  />
+                  <path
+                    d="M-10 11Q-12 8-8 3L-5-4Q-11-12-5-17Q0-21 5-17Q11-12 5-4L8 3Q12 8 10 11Z"
+                    fill="#36443e"
+                    stroke="#f8edcf"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M-3-15Q-6-12-3-9M-5 5-3-1"
+                    fill="none"
+                    stroke="#829084"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path d="M-8 8H8" stroke="#1f2f29" strokeWidth="2" />
+                </g>
+              ))}
+
+            {board.vertices
+              .filter((vertex) => legalVertices.has(vertex.id))
+              .map((vertex) => {
+                const highlighted =
+                  selectedId === vertex.id || focusedId === vertex.id;
+                const occupied = Boolean(vertex.building);
+                const radius = Math.min(
+                  hitRadius,
+                  ...board.vertices
+                    .filter(
+                      (other) =>
+                        other.id !== vertex.id && legalVertices.has(other.id),
+                    )
+                    .map(
+                      (other) =>
+                        Math.hypot(other.x - vertex.x, other.y - vertex.y) - 1,
+                    ),
+                );
+                return (
+                  <g
+                    key={vertex.id}
+                    {...targetProperties(
+                      "vertex",
+                      vertex.id,
+                      `${occupied ? "Upgrade to city" : "Place settlement"} at ${vertex.id}`,
+                    )}
+                  >
+                    <circle
+                      cx={vertex.x}
+                      cy={vertex.y}
+                      r={radius}
+                      fill="transparent"
+                    />
+                    <circle
+                      cx={vertex.x}
+                      cy={vertex.y}
+                      r={occupied ? 24 : highlighted ? 17 : 13}
+                      fill={occupied ? "none" : "#fff5d9"}
+                      fillOpacity="0.75"
+                      stroke={highlighted ? "#5d4525" : "#b68c45"}
+                      strokeWidth={highlighted ? "3" : "1.5"}
+                      strokeDasharray={
+                        occupied && !highlighted ? "3 3" : undefined
+                      }
+                      pointerEvents="none"
+                    />
+                    {!occupied && (
+                      <circle
+                        cx={vertex.x}
+                        cy={vertex.y}
+                        r={highlighted ? 10 : 8}
+                        fill={highlighted ? "#76562a" : "#faf2d6"}
+                        stroke="#ae8540"
+                        strokeWidth="1.5"
+                        pointerEvents="none"
+                      />
+                    )}
+                    {!occupied && (
+                      <path
+                        d={`M${vertex.x - 3.5} ${vertex.y}h7M${vertex.x} ${vertex.y - 3.5}v7`}
+                        stroke={highlighted ? "#fff4d4" : "#8b652f"}
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        pointerEvents="none"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+          </svg>
+        </div>
+      </div>
+      <div
+        className={`flex min-w-0 items-center justify-between gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+      >
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium leading-4 text-[#5c6b59] sm:text-xs">
+            {instruction}
+          </p>
+          {!compact && (
+            <p className="hidden text-[10px] leading-4 text-[#8a927f] sm:block">
+              {zoom > 1
+                ? "Drag or scroll to explore"
+                : "Zoom in for a closer look"}
+            </p>
+          )}
+        </div>
+        <div
+          className="flex shrink-0 items-center gap-1"
+          role="group"
+          aria-label="Map zoom controls"
+        >
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={zoom === 1}
+            onClick={() => changeZoom(zoom - 0.25)}
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            -
+          </button>
+          <output
+            aria-live="polite"
+            aria-label="Zoom level"
+            className="min-w-10 text-center text-[10px] font-semibold tabular-nums text-[#6a7862]"
+          >
+            {Math.round(zoom * 100)}%
+          </output>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={zoom === 2.5}
+            onClick={() => changeZoom(zoom + 0.25)}
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            aria-label="Reset board view"
+            onClick={() => {
+              zoomCenterReference.current = { x: 0.5, y: 0.5 };
+              setZoom(1);
+              viewportReference.current?.scrollTo({ left: 0, top: 0 });
+            }}
+            className="ml-1 flex size-11 items-center justify-center rounded-xl text-[#64735e] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]"
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 8a7 7 0 1 1 0 5M3 3v5h5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

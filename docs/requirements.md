@@ -1,8 +1,33 @@
 # Catania Requirements
 
-Status: Proposed product specification. Documentation was requested; game implementation has not been approved or completed.
+Status: The local pass-and-play base-game milestone is approved and implemented. The same-Wi-Fi multiplayer product described below remains a future milestone, not an implemented capability.
 
 Related document: [Architecture](architecture.md).
+
+## Current Milestone
+
+The approved first delivery is the full 3-4 player base game on one shared device,
+styled with Tailwind CSS. It includes randomized boards and turn order, snake
+setup, finite banks and piece supplies, production, building, domestic and
+maritime trades, robber/discard sequences, development cards, awards, and a
+10-point victory with results and rematch.
+
+Players enter names at the table screen. The device is passed to the named
+player before revealing their hand. A handoff screen removes private hand UI
+from the rendered page. Trade recipients use the same handoff flow to respond;
+the active player selects one acceptance and confirms the exchange. Players
+must respect these handoffs: anyone with the shared device can request another
+player's hand, and the browser necessarily contains the complete local state.
+
+This milestone replaces neither the network requirements nor their verification
+criteria. Rooms, QR codes, separate phone controllers, board-only host mode,
+WebRTC, admission, and reconnection are not implemented or advertised as working.
+The game is in memory only; refreshing or closing the tab loses it. The UI warns
+before an intentional exit and asks the browser to warn on refresh during play.
+
+Rule tests and desktop/mobile browser tests accompany the local implementation.
+See the README for commands and the architecture document for verification
+boundaries. Physical-phone network checks below apply to the future milestone.
 
 ## Purpose
 
@@ -19,9 +44,11 @@ Build a Catan-style browser board game for a group on the same Wi-Fi network. Pl
 - Prepare page-by-page user flows before coding.
 - Document the architecture and requirements in `docs/`.
 
-### Proposed First Version
+### Planned Multiplayer Version
 
-These details are proposals from the user-flow discussion, not separately approved requirements:
+The local base-game scope above is approved. The remaining device and network
+details from the user-flow discussion are proposals, not separately approved
+implementation requirements:
 
 - Use Catania as the working name.
 - Implement the standard 3-4 player base game with a 10-victory-point winning condition.
@@ -32,7 +59,8 @@ These details are proposals from the user-flow discussion, not separately approv
 - Keep rooms and games in memory; support player reconnection but not host migration or saved-game recovery.
 - Use original visual assets with a warm tabletop style, readable terrain, and distinct player pieces.
 
-Implementation must wait for approval of the revised scope and flows.
+The local game-first scope above has been approved. Implementation of the
+remaining multiplayer flows still requires its own approved scope.
 
 ## Device Roles
 
@@ -156,7 +184,7 @@ No optimistic action may spend resources or place a piece as if accepted before 
 
 ## Base Game Rules
 
-The proposed playable scope is the standard base game, not a board-only prototype or a simplified rule variant.
+The playable rules scope is the standard base game, not a board-only prototype or a simplified rule variant.
 
 - Support 3-4 players and the standard 19-land-hex island, terrain distribution, number tokens, desert, robber, and nine ports. Generate a legal board with a valid number-token arrangement.
 - Use the standard finite resource bank, development-card deck composition, and per-player piece limits.
@@ -238,4 +266,5 @@ The host necessarily holds private game state in memory. Board-only means displa
 7. Finish a game, inspect final points, and initiate a rematch. Confirm that old hands, pieces, turn state, and readiness do not leak into the new game.
 8. Repeat connection checks without internet access and exercise an unreachable or isolated-network case.
 
-These are planned checks, not results from an implemented application.
+These are planned multiplayer checks, not claimed results from the local
+pass-and-play implementation.

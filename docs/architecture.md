@@ -1,10 +1,49 @@
 # Catania Architecture
 
-Status: Proposed architecture for the same-Wi-Fi user flow. This document describes intended behavior, not an existing implementation or approval to start coding.
+Status: The approved local pass-and-play game is implemented. The same-Wi-Fi architecture below remains the intended next milestone, not an existing network implementation.
 
 Related document: [Requirements and page flows](requirements.md).
 
-## Architecture Summary
+## Implemented Local Game
+
+The first milestone uses the existing Bun, React 19, TypeScript, and Tailwind
+CSS v4 foundation without a database or runtime external assets.
+
+| File | Responsibility |
+| --- | --- |
+| `src/game/types.ts` | Board, inventory, explicit phase, and action types. |
+| `src/game/board.ts` | Shared hex graph, terrain, nonadjacent red number tokens, nine ports, and injectable randomness. |
+| `src/game/engine.ts` | Pure action validation and atomic transitions, placement previews, trading, awards, and victory. |
+| `src/components/Board.tsx` | Locally drawn SVG terrain and pieces, keyboard/touch targets, and contained zoom/panning. |
+| `src/components/GameUi.tsx` | Resource controls, icons, and native accessible dialogs. |
+| `src/App.tsx` | Table setup, private handoffs, board/actions, trade responses, results, and rematch. |
+| `tests/game/` | Deterministic rule and graph tests. |
+| `tests/browser/catania.spec.ts` | Real local pass-and-play browser interactions. |
+
+`createGame` accepts profiles and an optional random source. `applyAction` takes
+state, a player identity, an action, and an optional random source; it returns a
+new state or throws a validation error without changing the input. Production
+randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.
+All purchases and placements pass through the engine, including local actions.
+Selected board positions are previews until confirmed.
+
+The React application owns the local in-memory state. Private hands are rendered
+only after a handoff is acknowledged. Public scores exclude hidden victory-point
+cards until results. This is a shared-device privacy convention, not a security
+boundary: a later network implementation must add the authorized projections
+and identity binding described below rather than serializing the local state.
+
+The current Bun service only serves the application and the original template
+API; it does not create rooms or carry gameplay. No networking package, QR
+service, public relay, or cloud fallback has been added. Multiplayer and physical
+mobile-browser network compatibility remain unverified.
+
+Local verification uses Bun rule tests, Playwright Chromium desktop/mobile
+viewports, a TypeScript check, and the production build. Desktop/mobile viewport
+automation does not establish Android or iOS browser compatibility, real-device
+touch behavior, or the ability to join a Wi-Fi room.
+
+## Planned Multiplayer Architecture
 
 Use the existing Bun, React 19, TypeScript, and Tailwind foundation. A computer serves the application and a small local WebSocket signaling service. The room creator's browser owns the game state and rules. Each admitted player connects directly to that browser through a WebRTC data channel.
 
@@ -40,8 +79,8 @@ The diagram separates responsibilities, not additional deployed services. The pu
 ## Baseline And Scope
 
 - `src/index.ts` currently serves the Bun application and template API endpoints.
-- `src/App.tsx` and `src/index.css` currently contain the starter interface.
-- The current dependency set includes React 19 and Tailwind; no multiplayer transport or game engine is implemented.
+- `src/App.tsx` and `src/index.css` now implement the local game interface.
+- The dependency set includes React 19, Tailwind, and ts-pattern. The local game engine is implemented; multiplayer transport is not.
 - Preserve this foundation unless implementation reveals a concrete limitation. Do not introduce a separate framework, database, or cloud service merely for the design.
 - Choose additional packages only when implementing an approved requirement, such as local QR rendering or test tooling.
 - Use TypeScript `type` declarations, full descriptive names, and the repository's preference for `ts-pattern@5` where exhaustive state handling benefits from it.
@@ -219,20 +258,20 @@ Keep visual state distinct from rule state: an unconfirmed selected edge, open s
 | Real devices | A local computer with physical phones, native-camera QR opening, same-Wi-Fi peer channels, internet disconnected, mobile background/resume, firewall failure, and privacy on the shared display. |
 | Build and documentation | Type checking, production build, updated run instructions, and recorded browser/network limitations. |
 
-Browser automation alone does not verify a phone can reach the local address or that the real Wi-Fi permits peer traffic. Record which checks ran and which remain unverified. No tests or implementation outcomes are claimed by this design document.
+Browser automation alone does not verify a phone can reach the local address or that the real Wi-Fi permits peer traffic. Record which checks ran and which remain unverified. Network tests and multiplayer outcomes are not claimed by this design document.
 
 ## Implementation Sequence
 
-1. Obtain approval of the revised same-Wi-Fi scope and page flows.
+1. Obtain approval of the remaining same-Wi-Fi scope and page flows.
 2. Prove local app delivery, QR joining, and host-to-phone data channels on the intended browsers. Resolve any local-origin restrictions before building the complete interface.
-3. Implement the rule engine with tests for the proposed base-game scope.
+3. Reuse the implemented local rule engine and extend its tests at the host-session boundary.
 4. Integrate admission, identity, projections, action validation, and player reconnection.
-5. Implement the approved responsive pages and board-only/private-player separation with automated UI tests.
+5. Extend the existing responsive interface with the approved network pages and board-only/private-player separation, with automated UI tests.
 6. Verify a complete game and failure cases on actual devices, then update the existing run documentation with the final local setup and manual checks.
 
 ## Deferred Decisions
 
-- Final approval of the proposed 3-4 player base-game scope and device flows.
+- Final approval of the remaining same-Wi-Fi device flows and multiplayer scope.
 - Exact browser support based on the local-network prototype, including whether any browser needs trusted local HTTPS.
 - Final library choices, module layout, application port, and deployment commands, to be selected during approved implementation rather than presented as existing functionality.
 
