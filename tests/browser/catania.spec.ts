@@ -2099,7 +2099,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   state = applyAction(state, buyerId, { type: "buy-development" });
   await expect(confirmation).toHaveCount(0);
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource] - COSTS.development[resource]} ${RESOURCE_NAMES[resource]}`));
-  await expect(developmentHand.getByText("1", { exact: true })).toBeVisible();
+  await expect(developmentHand.locator(":scope > div").getByText("1", { exact: true })).toBeVisible();
   await expect(developmentHand.getByRole("listitem")).toHaveCount(1);
   const knight = developmentHand.getByRole("button", { name: /^Knight 1 card Move the robber/ });
   await expect(knight.locator('svg[data-development-kind="knight"]')).toBeVisible();
