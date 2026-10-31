@@ -25,10 +25,12 @@ export function Board({
   legalEdgeIds = [],
   legalTileIds = [],
   producingTileIds = [],
+  rolledNumber,
   selectedId,
   onSelect,
   interactive = true,
   compact = false,
+  fit = false,
 }: {
   board: BoardState;
   players: Pick<Player, "id" | "name" | "color">[];
@@ -37,10 +39,12 @@ export function Board({
   legalEdgeIds?: string[];
   legalTileIds?: string[];
   producingTileIds?: string[];
+  rolledNumber?: number;
   selectedId?: string | null;
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   interactive?: boolean;
   compact?: boolean;
+  fit?: boolean;
 }) {
   const illustrationId = useId().replace(/:/g, "");
   const viewportReference = useRef<HTMLDivElement>(null);
@@ -52,7 +56,7 @@ export function Board({
   } | null>(null);
   const zoomCenterReference = useRef({ x: 0.5, y: 0.5 });
   const [zoom, setZoom] = useState(1);
-  const [viewportWidth, setViewportWidth] = useState(710);
+  const [viewportSize, setViewportSize] = useState({ width: 710, height: 674 });
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const verticesById = new Map(
     board.vertices.map((vertex) => [vertex.id, vertex]),
@@ -72,7 +76,10 @@ export function Board({
   const legalVertices = new Set(canSelect ? legalVertexIds : []);
   const legalEdges = new Set(canSelect ? legalEdgeIds : []);
   const legalTiles = new Set(canSelect ? legalTileIds : []);
-  const hitRadius = Math.max(20, (22 * viewWidth) / (viewportWidth * zoom));
+  const mapWidth = fit
+    ? Math.min(viewportSize.width, (viewportSize.height * viewWidth) / viewHeight)
+    : viewportSize.width;
+  const hitRadius = Math.max(20, (22 * viewWidth) / (mapWidth * zoom));
   const edgeGeometry = board.edges.map((edge) => {
     const start = verticesById.get(edge.vertexIds[0])!;
     const end = verticesById.get(edge.vertexIds[1])!;
@@ -91,11 +98,18 @@ export function Board({
   useEffect(() => {
     const viewport = viewportReference.current;
     if (!viewport) return;
-    const observer = new ResizeObserver(() => {
-      if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth);
-    });
+    function measureViewport() {
+      if (!viewport || viewport.clientWidth <= 0 || viewport.clientHeight <= 0)
+        return;
+      const bounds = viewport.getBoundingClientRect();
+      setViewportSize({
+        width: Math.floor(bounds.width),
+        height: Math.floor(bounds.height),
+      });
+    }
+    const observer = new ResizeObserver(measureViewport);
     observer.observe(viewport);
-    if (viewport.clientWidth > 0) setViewportWidth(viewport.clientWidth);
+    measureViewport();
     return () => observer.disconnect();
   }, []);
 
@@ -157,7 +171,7 @@ export function Board({
         : "An island of possibilities";
 
   return (
-    <div className="relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45]">
+    <div className={`board-surface relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45] ${fit ? "board-surface-fit flex h-full min-h-0 flex-col" : ""}`}>
       {!compact && (
         <div
           className="pointer-events-none absolute left-5 top-4 z-10 hidden sm:block"
@@ -176,9 +190,9 @@ export function Board({
         role="region"
         aria-label="Island map. Use the zoom controls to enlarge, then scroll or drag to pan."
         tabIndex={zoom > 1 ? 0 : undefined}
-        className={`w-full overflow-auto overscroll-contain outline-offset-[-3px] focus-visible:outline-2 focus-visible:outline-[#8b6438] ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={`board-viewport w-full overflow-auto overscroll-contain outline-offset-[-3px] focus-visible:outline-2 focus-visible:outline-[#8b6438] ${fit ? "min-h-0 flex-1" : ""} ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
         style={{
-          aspectRatio: `${viewWidth} / ${viewHeight}`,
+          aspectRatio: fit ? undefined : `${viewWidth} / ${viewHeight}`,
           touchAction: "pan-x pan-y",
         }}
         onPointerDown={(event) => {
@@ -215,9 +229,15 @@ export function Board({
         }}
       >
         <div
+          className="board-map"
           style={{
-            width: `${zoom * 100}%`,
-            aspectRatio: `${viewWidth} / ${viewHeight}`,
+            width: fit
+              ? Math.max(viewportSize.width, mapWidth * zoom)
+              : `${zoom * 100}%`,
+            height: fit
+              ? Math.max(viewportSize.height, (mapWidth * zoom * viewHeight) / viewWidth)
+              : undefined,
+            aspectRatio: fit ? undefined : `${viewWidth} / ${viewHeight}`,
           }}
         >
           <svg
@@ -535,12 +555,24 @@ export function Board({
               const probability =
                 tile.number === null ? 0 : 6 - Math.abs(7 - tile.number);
               const frequent = tile.number === 6 || tile.number === 8;
+              const matchesRoll = tile.number !== null && tile.number === rolledNumber;
+              const blocked = matchesRoll && robberTileId === tile.id;
               return (
                 <g
                   key={tile.id}
                   role="img"
                   aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}${producingTileIds.includes(tile.id) ? ", produced resources this roll" : ""}`}
                 >
+                  <polygon
+                    points={points}
+                    transform="translate(0 2.5)"
+                    fill="#887753"
+                    stroke="#887753"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    opacity="0.45"
+                    pointerEvents="none"
+                  />
                   <polygon
                     points={points}
                     fill={terrain.fill}
@@ -569,18 +601,36 @@ export function Board({
                     {terrain.label.toUpperCase()}
                   </text>
                   {tile.number !== null && (
-                    <g transform={`translate(${tile.x} ${tile.y + 2})`}>
-                      <circle cy="2" r="19" fill="#35453a" opacity="0.15" />
+                    <g
+                      className={`number-token${matchesRoll ? " number-token-highlight" : ""}${blocked ? " number-token-blocked" : ""}`}
+                      transform={`translate(${tile.x} ${tile.y + 2})`}
+                    >
+                      {matchesRoll && (
+                        <circle
+                          className="number-token-halo"
+                          r="25"
+                          fill={blocked ? "none" : "#f4cf75"}
+                          fillOpacity="0.3"
+                          stroke={blocked ? "#817d71" : "#ae772c"}
+                          strokeWidth={blocked ? "1.5" : "2"}
+                          strokeDasharray={blocked ? "3 4" : undefined}
+                          opacity={blocked ? "0.7" : "1"}
+                          pointerEvents="none"
+                        />
+                      )}
+                      <circle cy="3" r="19.5" fill="#35453a" opacity="0.22" />
+                      <circle cy="1.5" r="19" fill="#b8a27b" />
                       <circle
+                        className="number-token-face"
                         r="19"
-                        fill="#fbf4df"
-                        stroke="#c8b998"
-                        strokeWidth="1.3"
+                        fill={blocked ? "#e6e1d4" : matchesRoll ? "#ffecab" : "#fbf4df"}
+                        stroke={blocked ? "#887f6c" : matchesRoll ? "#ac6b24" : "#c8b998"}
+                        strokeWidth={matchesRoll ? "2.2" : "1.3"}
                       />
                       <circle
                         r="16.3"
                         fill="none"
-                        stroke="#e7ddc5"
+                        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : "#e7ddc5"}
                         strokeWidth="0.7"
                       />
                       <text
@@ -611,18 +661,6 @@ export function Board({
                       stroke="#815b2b"
                       strokeWidth="4"
                       strokeLinejoin="round"
-                    />
-                  )}
-                  {producingTileIds.includes(tile.id) && (
-                    <polygon
-                      className="production-highlight"
-                      points={points}
-                      fill="#fff1ad"
-                      fillOpacity="0.12"
-                      stroke="#a9792f"
-                      strokeWidth="5"
-                      strokeLinejoin="round"
-                      pointerEvents="none"
                     />
                   )}
                 </g>
@@ -1099,7 +1137,7 @@ export function Board({
         </div>
       </div>
       <div
-        className={`flex min-w-0 items-center justify-between gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+        className={`board-controls flex min-w-0 shrink-0 items-center justify-between gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
         <div className="min-w-0">
           <p className="text-[10px] font-medium leading-4 text-[#5c6b59] sm:text-xs">

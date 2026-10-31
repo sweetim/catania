@@ -9,11 +9,13 @@ import {
   Cost,
   Dialog,
   Logo,
+  PieceIcon,
   RESOURCE_COLORS,
   RESOURCE_NAMES,
   ResourceCard,
   ResourceCardStepper,
   ResourceIcon,
+  ResourceInventory,
   SelectableResourceCard,
 } from "./components/GameUi";
 import { createBoard } from "./game/board";
@@ -149,7 +151,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "rules" | "trade" | "development" | "players" | "restart" | null
+    "rules" | "reference" | "trade" | "development" | "players" | "restart" | null
   >(null);
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
     "hand",
@@ -374,6 +376,8 @@ export function App() {
         setConfirmation(null);
       }
     }
+    if (automatic && nextController !== viewerId &&
+      !(next.phase.type === "discard" && (next.phase.required[viewerId ?? ""] ?? 0) > 0)) return;
     if (game?.phase.type === "roll" && next.phase.type === "actions") return;
     setMobileView(
       ["setup-settlement", "setup-road", "road-building", "robber"].includes(
@@ -432,16 +436,21 @@ export function App() {
   const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
   const producingTileIds = rollPresentation && rollPresentation.stage !== "rolling"
     ? rollPresentation.outcome.producingTileIds : [];
+  const rolledNumber = rollPresentation && rollPresentation.stage !== "rolling"
+    ? rollPresentation.outcome.dice[0] + rollPresentation.outcome.dice[1] : undefined;
   const receivedResources = resourceReceipt?.playerId === viewerId ? resourceReceipt?.gains : undefined;
   const awaitingViewer = viewer && (
     viewer.id === controllingPlayer?.id ||
     (game?.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0)
   );
+  const handTaskOpen = Boolean(viewer && game && (game.trade ||
+    (game.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0) ||
+    (game.phase.type === "steal" && isActive)));
   const instructionTitle = rollBusy ? "Let the island provide." : game && awaitingViewer
     ? phaseTitle(game)
     : "The island is in motion.";
   const instructionDescription = rollBusy
-    ? "Follow the dice, the producing hexes, and the resources arriving in your hand."
+    ? "Follow the dice, the matching number tokens, and the cards arriving in your hand."
     : game && awaitingViewer
     ? phaseDescription(game)
     : `${controllingPlayer?.name} is playing. You can inspect your hand and the island while you wait.`;
@@ -492,6 +501,8 @@ export function App() {
   );
   const ratio =
     game && viewer ? getTradeRatio(game, viewer.id, giveResource) : 4;
+  const canExchange = Boolean(game && viewer && giveResource !== receiveResource &&
+    viewer.resources[giveResource] >= ratio && game.bank[receiveResource] > 0);
 
   function playerCards(detailed = false) {
     if (!game) return null;
@@ -500,7 +511,7 @@ export function App() {
       return (
         <div
           key={player.id}
-          className={`min-w-0 rounded-xl border px-4 py-3 ${game.activePlayerId === player.id ? "border-forest/40 bg-moss/80" : "border-line bg-white/30"}`}
+          className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${game.activePlayerId === player.id ? "border-forest/40 bg-moss/80" : "border-line bg-white/30"}`}
         >
           <div className="flex items-center gap-2.5">
             <span
@@ -511,12 +522,16 @@ export function App() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{player.name}</p>
-              <p className="mt-0.5 text-[10px] text-muted">
+              <p className="mt-0.5 truncate text-[10px] text-muted">
                 {player.control === "computer" && "AI / "}
                 {game.activePlayerId === player.id
                   ? "At the helm"
                   : `Player ${index + 1}`}
               </p>
+            </div>
+            <div role="group" aria-label={`${player.name}'s card counts`} className="player-card-counts text-right text-[10px] leading-4 text-muted tabular-nums">
+              <p><strong className="text-sm text-ink">{resourceTotal(player.resources)}</strong> resource cards</p>
+              <p><strong className="text-sm text-ink">{player.developmentCards.length}</strong> development</p>
             </div>
             <div className="text-right">
               <span className="font-serif text-2xl">
@@ -527,11 +542,7 @@ export function App() {
           </div>
           {detailed && (
             <>
-              <div className="mt-4 flex justify-between text-xs text-muted">
-                <span>{resourceTotal(player.resources)} resources</span>
-                <span>{player.developmentCards.length} development</span>
-              </div>
-              <div className="mt-3 border-t border-line pt-3 text-xs leading-6">
+              <div className="player-awards mt-3 border-t border-line pt-3 text-xs leading-6">
                 <p>
                   {getLongestRoadLength(game, player.id)} connected roads{" "}
                   {game.awards.longestRoad === player.id && (
@@ -553,7 +564,7 @@ export function App() {
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className={game && !game.winnerId ? "game-shell" : "min-h-dvh"}>
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 border-b border-line px-5 py-5 sm:px-9 lg:px-12">
         <Logo />
         <div className="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted sm:flex">
@@ -836,17 +847,18 @@ export function App() {
           </div>
         </main>
       ) : !viewer && handoffPlayer ? (
-        <main className="mx-auto grid max-w-6xl items-center gap-8 px-5 py-12 lg:grid-cols-2">
-          <div className="order-2 opacity-75 lg:order-1">
+        <main className="handoff-table">
+          <div className="handoff-island">
             <Board
               board={game.board}
               players={game.players}
               robberTileId={game.robberTileId}
               interactive={false}
               compact
+              fit
             />
           </div>
-          <section className="order-1 text-center lg:order-2">
+          <section className="handoff-card panel text-center">
             <span
               className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-bold text-white"
               style={{ background: handoffPlayer.color }}
@@ -886,17 +898,20 @@ export function App() {
           </section>
         </main>
       ) : viewer ? (
-        <main className="mx-auto max-w-[1600px] px-4 pb-10 pt-6 sm:px-9 lg:px-12">
-          <div className="mb-5 flex items-center justify-between gap-3">
+        <main className="game-table">
+          <div className="table-toolbar flex items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="eyebrow">Your island, taking shape</span>
+              <span className="eyebrow hidden sm:inline">Your island, taking shape</span>
               <span className="rounded-full border border-line px-2.5 py-1 text-[10px] text-muted">
                 {game.phase.type.startsWith("setup")
-                  ? "Founding the island"
+                  ? "Setup"
                   : `Turn ${game.turnNumber}`}
               </span>
             </div>
             <div className="flex gap-3">
+              <button className="min-h-10 text-xs font-semibold text-muted" onClick={() => setDialog("reference")}>
+                Table guide
+              </button>
               {needsHandoff && (
                 <button
                   className="min-h-10 text-xs font-semibold text-muted"
@@ -914,25 +929,11 @@ export function App() {
               </button>
             </div>
           </div>
-          {computerPlayer && (
-            <p
-              role="status"
-              aria-label="Computer activity"
-              className="mb-5 rounded-xl bg-moss px-4 py-3 text-xs text-forest"
-            >
-              {computerPlayer.name}{" "}
-              {game.trade
-                ? "is considering the trade."
-                : game.phase.type === "discard"
-                  ? "is discarding resources."
-                  : "is playing automatically."}
-            </p>
-          )}
-          <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <div className="table-seats grid gap-2" style={{ gridTemplateColumns: `repeat(${game.players.length}, minmax(0, 1fr))` }}>
             {playerCards()}
           </div>
           <nav
-            className="mb-5 flex rounded-xl border border-line p-1 lg:hidden"
+            className="table-navigation flex rounded-xl border border-line p-1 lg:hidden"
             aria-label="Game views"
           >
             {(["hand", "board", "players"] as const).map((view) => (
@@ -951,29 +952,25 @@ export function App() {
             receipt={resourceReceipt?.playerId === viewer.id ? resourceReceipt : null}
             onDismiss={() => setResourceReceipt(null)}
           />
-          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_350px] xl:gap-9">
+          <div className="table-play-area">
             <section
-              className={`min-w-0 ${mobileView !== "board" ? "hidden lg:block" : ""}`}
+              className={`table-board min-w-0 ${mobileView !== "board" ? "hidden lg:flex" : "flex"}`}
               aria-label="Game board"
             >
-              <div className="mb-4 lg:hidden">
-                <h1 className="font-serif text-2xl">{instructionTitle}</h1>
-                <p className="mt-2 text-xs leading-6 text-muted">
+              <div className="board-instruction lg:hidden">
+                <h1 className="font-serif text-lg">{instructionTitle}</h1>
+                <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="text-xs leading-4 text-muted">
                   {instructionDescription}
                 </p>
               </div>
-              <div className="relative rounded-2xl border border-line bg-[#eeeee3]/60 p-2 sm:p-4">
-                <div className="flex items-center justify-between px-2 pt-2">
-                  <span className="eyebrow">The island</span>
-                  <span className="text-[10px] text-muted">
-                    Standard island / {game.players.length} settlers
-                  </span>
-                </div>
+              <div className="board-tablemat">
                 <Board
                   board={game.board}
                   players={game.players}
                   robberTileId={game.robberTileId}
                   producingTileIds={producingTileIds}
+                  rolledNumber={rolledNumber}
+                  fit
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
@@ -983,10 +980,10 @@ export function App() {
                     setError("");
                   }}
                 />
+                <div className="board-placement" aria-live="polite">
                 {selectedAction && selected ? (
                   <div
-                    className="mx-2 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-forest/30 bg-paper p-4"
-                    aria-live="polite"
+                    className="placement-confirmation"
                   >
                     <div>
                       <p className="text-sm font-semibold">
@@ -997,9 +994,6 @@ export function App() {
                             : buildMode === "city"
                               ? "Upgrade to a city?"
                               : "Settle here?"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted">
-                        Your choice is only a preview until confirmed.
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -1021,7 +1015,7 @@ export function App() {
                   (legalVertices.length > 0 ||
                     legalEdges.length > 0 ||
                     legalTiles.length > 0) && (
-                    <p className="mb-4 text-center text-xs text-forest">
+                    <p className="text-center text-xs text-forest">
                       Select a highlighted{" "}
                       {legalVertices.length
                         ? "intersection"
@@ -1032,15 +1026,16 @@ export function App() {
                     </p>
                   )
                 )}
+                </div>
                 {error && mobileView === "board" && (
                   <p
                     role="alert"
-                    className="mx-2 mb-4 text-sm text-clay lg:hidden"
+                    className="board-error text-sm text-clay lg:hidden"
                   >
                     {error}
                   </p>
                 )}
-                <div className="mx-2 mb-2 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                <div className="table-bank flex items-center justify-between gap-2 border-t border-line">
                   <span className="eyebrow">The bank</span>
                   <div className="flex gap-3 sm:gap-5">
                     {RESOURCES.map((resource) => (
@@ -1062,75 +1057,33 @@ export function App() {
                       </span>
                     ))}
                   </div>
-                  <span className="text-[10px] text-muted">
+                  <span className="hidden text-[10px] text-muted xl:inline">
                     {game.developmentDeck.length} development cards
                   </span>
                 </div>
               </div>
-              <div className="mt-5 grid gap-5 sm:grid-cols-2">
-                <section className="panel p-5">
-                  <h2 className="eyebrow mb-4">A little investment</h2>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                    {(
-                      ["road", "settlement", "city", "development"] as const
-                    ).map((piece) => (
-                      <div
-                        key={piece}
-                        className="flex flex-wrap items-center justify-between gap-1"
-                      >
-                        <span className="text-xs capitalize">{piece}</span>
-                        <Cost resources={COSTS[piece]} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-                <section className="panel p-5">
-                  <h2 className="eyebrow mb-3">Island stories</h2>
-                  <ol aria-label="Public activity" className="space-y-2">
-                    {game.log
-                      .slice(-3)
-                      .reverse()
-                      .map((entry, index) => (
-                        <li
-                          key={`${game.log.length}-${index}`}
-                          className="text-xs leading-5 text-muted"
-                        >
-                          {entry}
-                        </li>
-                      ))}
-                  </ol>
-                </section>
-              </div>
             </section>
 
             <aside
-              className={`min-w-0 ${mobileView !== "hand" ? "hidden lg:block" : ""}`}
+              className={`table-hand min-w-0 ${mobileView !== "hand" ? "hidden lg:flex" : "flex"}`}
               aria-label="Your hand and actions"
             >
-              <div className="rounded-2xl bg-forest p-5 text-white">
+              <div inert={handTaskOpen} className="turn-card rounded-2xl bg-forest text-white">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold uppercase tracking-[.17em] text-white/60">
-                    {isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
+                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
+                    {computerPlayer ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
                   </p>
-                  {game.dice && !rollPresentation && (
-                    <div aria-label={`Dice: ${game.dice[0]} and ${game.dice[1]}`} className="flex gap-1.5">
-                      {game.dice.map((value, index) => (
-                        <span key={index} className="flex h-7 w-7 items-center justify-center rounded-md bg-paper font-serif text-lg font-bold text-ink">
-                          {value}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
-                <h1 className="mt-3 font-serif text-[28px] leading-tight">
+                <h1 className="turn-title font-serif text-xl leading-tight">
                   {instructionTitle}
                 </h1>
-                <p className="mt-3 text-xs leading-6 text-white/75">
+                <p className="turn-description text-xs leading-4 text-white/75">
                   {instructionDescription}
                 </p>
+                <div className="turn-action">
                 {game.phase.type === "roll" && isActive && (
                   <button
-                    className="mt-5 flex min-h-12 w-full items-center justify-between rounded-xl bg-paper px-4 text-sm font-semibold text-forest hover:bg-white"
+                    className="flex min-h-11 w-full items-center justify-between rounded-xl bg-paper px-4 text-sm font-semibold text-forest hover:bg-white"
                     onClick={() => perform({ type: "roll" })}
                     disabled={rollBusy}
                   >
@@ -1139,7 +1092,7 @@ export function App() {
                 )}
                 {game.phase.type === "actions" && isActive && (
                   <button
-                    className="mt-5 w-full rounded-xl border border-white/25 py-3 text-xs font-semibold hover:bg-white/10"
+                    className="min-h-11 w-full rounded-xl border border-white/25 text-xs font-semibold hover:bg-white/10"
                     onClick={() => perform({ type: "end-turn" })}
                     disabled={rollBusy}
                   >
@@ -1147,19 +1100,20 @@ export function App() {
                     <span aria-hidden="true">&rarr;</span>
                   </button>
                 )}
+                </div>
               </div>
 
-              <section className="mt-5" aria-label="Private resources">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="eyebrow">{viewer.name}&apos;s hand</h2>
-                  <span className="text-[10px] text-muted">
-                    Only for your eyes / {resourceTotal(viewer.resources)} cards
-                  </span>
+              <section inert={handTaskOpen} className="hand-resources" aria-label="Private resources">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="eyebrow min-w-0 truncate">{viewer.name}&apos;s hand</h2>
+                  <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-forest tabular-nums">
+                    {resourceTotal(viewer.resources)} cards
+                  </strong>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                   {RESOURCES.map((resource) => (
                     <div
-                      className={`relative ${viewer.resources[resource] ? "" : "opacity-40"}`}
+                      className="relative"
                       key={resource}
                       title={`${viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`}
                     >
@@ -1171,15 +1125,20 @@ export function App() {
                           resource={resource}
                           count={viewer.resources[resource]}
                           iconClassName="h-8 w-8"
-                          className="aspect-[3/4] w-full"
+                          className="hand-resource-card w-full"
                         />
                         {(receivedResources?.[resource] ?? 0) > 0 && (
+                          <>
+                          <span className="resource-dealt-card" aria-hidden="true">
+                            <ResourceCard resource={resource} compact className="h-full w-full" />
+                          </span>
                           <span
                             aria-label={`Received ${receivedResources![resource]} ${RESOURCE_NAMES[resource]}`}
                             className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-paper bg-forest px-2 py-0.5 text-xs font-bold text-white shadow-sm"
                           >
                             +{receivedResources![resource]}
                           </span>
+                          </>
                         )}
                       </div>
                       <span className="sr-only">
@@ -1189,7 +1148,7 @@ export function App() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-moss/80 px-3 py-2.5">
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-moss/80 px-3 py-1.5">
                   <span className="text-[11px]">Your victory points</span>
                   <span className="text-xs font-semibold">
                     {getScore(game, viewer.id).public} public +{" "}
@@ -1201,7 +1160,8 @@ export function App() {
 
               {game.phase.type === "discard" &&
                 (game.phase.required[viewer.id] ?? 0) > 0 && (
-                  <section className="panel mt-5 p-4">
+                  <section className="hand-task panel p-4">
+                    <ResourceInventory resources={viewer.resources} />
                     <ResourceCardStepper
                       label="Return to the bank"
                       values={chosenResources}
@@ -1228,7 +1188,7 @@ export function App() {
                   </section>
                 )}
               {game.phase.type === "steal" && isActive && (
-                <section className="panel mt-5 space-y-2 p-4">
+                <section className="hand-task panel space-y-2 p-4">
                   <h2 className="eyebrow mb-3">
                     Choose a player to steal from
                   </h2>
@@ -1272,9 +1232,9 @@ export function App() {
                   </button>
                 )}
 
-              <section className="mt-5">
-                <h2 className="eyebrow mb-3">Build a little bigger</h2>
-                <div className="space-y-2">
+              <section inert={handTaskOpen} className="hand-building" aria-label="Build a little bigger">
+                <h2 className="eyebrow mb-2">Build a little bigger</h2>
+                <div className="build-options flex flex-col gap-2">
                   {(["road", "settlement", "city"] as const).map((piece) => {
                     const locations =
                       piece === "road"
@@ -1299,28 +1259,31 @@ export function App() {
                           !locations.length
                         }
                         aria-pressed={buildMode === piece}
-                        className={`flex min-h-14 w-full items-center justify-between rounded-xl border px-4 text-sm ${buildMode === piece ? "border-forest bg-moss" : "border-line bg-white/40"}`}
+                        className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${buildMode === piece ? "border-forest bg-moss" : "border-line bg-white/40"}`}
                         onClick={() => {
                           setBuildMode(buildMode === piece ? null : piece);
                           setSelected(null);
                           setMobileView("board");
                         }}
                       >
-                        <span className="capitalize">
-                          {piece === "city"
-                            ? "Upgrade to city"
-                            : `Build ${piece}`}
+                        <span className="flex min-w-0 items-center gap-2" style={{ color: viewer.color }}>
+                          <PieceIcon piece={piece} />
+                          <span className="font-semibold text-ink">
+                            {piece === "city"
+                              ? "Upgrade to city"
+                              : `Build ${piece}`}
+                          </span>
                         </span>
-                        <Cost resources={COSTS[piece]} />
+                        <span className="build-cost shrink-0"><Cost resources={COSTS[piece]} /></span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="mt-2 text-[10px] leading-5 text-muted">
+                <p className="sr-only">
                   Building needs resources, an available piece, and a legal
                   connection after your roll.
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
                     className="button-secondary px-2"
                     disabled={!normalActions}
@@ -1354,7 +1317,8 @@ export function App() {
                 </div>
               </section>
               <button
-                className="panel mt-4 flex min-h-14 w-full items-center justify-between px-4 text-left"
+                inert={handTaskOpen}
+                className="development-hand panel flex min-h-11 w-full items-center justify-between px-3 text-left"
                 onClick={() => {
                   setDevelopmentCardId(null);
                   setDialog("development");
@@ -1373,8 +1337,12 @@ export function App() {
               </button>
 
               {game.trade && (
-                <section className="panel mt-5 p-4" aria-label="Open trade">
+                <section className="hand-task panel p-4" aria-label="Open trade">
+                  <ResourceInventory resources={viewer.resources} />
                   <h2 className="font-serif text-xl">A deal on the table.</h2>
+                  <p className="mt-1 text-xs text-muted">
+                    {game.players.find(player => player.id === game.trade!.offeredBy)?.name} proposed this exchange.
+                  </p>
                   <p className="sr-only">
                     {game.players.find(
                       (player) => player.id === game.trade!.offeredBy,
@@ -1402,21 +1370,21 @@ export function App() {
                   <div className="my-4 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3.5">
                     <span className="flex flex-col items-center gap-1.5">
                       <CardStack
-                        resources={game.trade.give}
+                        resources={viewer.id === game.trade.offeredBy ? game.trade.give : game.trade.receive}
                         emptyText="Nothing offered"
                       />
                       <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
-                        Offered
+                        You give
                       </span>
                     </span>
                     <Arrow className="h-5 w-5 shrink-0 text-forest" />
                     <span className="flex flex-col items-center gap-1.5">
                       <CardStack
-                        resources={game.trade.receive}
+                        resources={viewer.id === game.trade.offeredBy ? game.trade.receive : game.trade.give}
                         emptyText="Nothing asked"
                       />
                       <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
-                        Wanted
+                        You receive
                       </span>
                     </span>
                   </div>
@@ -1516,9 +1484,14 @@ export function App() {
                       </button>
                     </div>
                   )}
+                  {needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
+                    <button className="button-secondary mt-4 w-full" onClick={() => passTo(controllingPlayer.id)}>
+                      Return to {controllingPlayer.name}
+                    </button>
+                  )}
                 </section>
               )}
-              {needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
+              {!game.trade && needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
                 <button
                   className="button-secondary mt-4 w-full"
                   onClick={() => passTo(controllingPlayer.id)}
@@ -1537,14 +1510,14 @@ export function App() {
             </aside>
             <section
               aria-label="Players and awards"
-              className={`space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
+              className={`table-players space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
             >
               {playerCards(true)}
             </section>
           </div>
         </main>
       ) : (
-        <main className="mx-auto max-w-5xl px-5 py-10">
+        <main className="computer-table">
           <div className="flex items-center justify-between gap-4">
             <h1 className="font-serif text-3xl">The island is in motion.</h1>
             <button className="min-h-10 text-xs text-muted" onClick={() => setDialog("restart")}>End game</button>
@@ -1554,15 +1527,44 @@ export function App() {
           </p>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{playerCards()}</div>
           <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} producingTileIds={producingTileIds} interactive={false} compact />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} producingTileIds={producingTileIds} rolledNumber={rolledNumber} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
         </main>
       )}
 
-      <footer className="mx-auto flex max-w-[1440px] flex-wrap justify-between gap-3 px-5 py-6 text-[9px] uppercase tracking-[.14em] text-muted sm:px-9 lg:px-12">
+      <footer className={`${game && !game.winnerId ? "hidden" : "flex"} mx-auto max-w-[1440px] flex-wrap justify-between gap-3 px-5 py-6 text-[9px] uppercase tracking-[.14em] text-muted sm:px-9 lg:px-12`}>
         <span>A tabletop state of mind.</span>
         <span>Catania / Solo &amp; pass-and-play / Wi-Fi play coming later</span>
       </footer>
+
+      {dialog === "reference" && game && (
+        <Dialog title="Around the table" onClose={() => setDialog(null)} wide>
+          <p className="mb-5 text-xs text-muted">
+            <span>Standard island / {game.players.length} settlers</span>
+            {" / "}{game.developmentDeck.length} development cards in the bank
+          </p>
+          <section>
+            <h2 className="eyebrow mb-4">A little investment</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {(["road", "settlement", "city", "development"] as const).map(piece => (
+                <div key={piece} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs capitalize">{piece}</span>
+                  <Cost resources={COSTS[piece]} />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="mt-6">
+            <h2 className="eyebrow mb-3">Island stories</h2>
+            <ol aria-label="Public activity" className="space-y-2">
+              {game.log.slice(-10).reverse().map((entry, index) => (
+                <li key={`${game.log.length}-${index}`} className="text-xs leading-5 text-muted">{entry}</li>
+              ))}
+            </ol>
+          </section>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">{playerCards(true)}</div>
+        </Dialog>
+      )}
 
       {dialog === "rules" && (
         <Dialog
@@ -1684,6 +1686,7 @@ export function App() {
       {confirmation && (
         <Dialog
           title={confirmation.title}
+          summary={viewer ? <ResourceInventory resources={viewer.resources} /> : undefined}
           onClose={() => {
             setConfirmation(null);
             setError("");
@@ -1719,6 +1722,7 @@ export function App() {
       {dialog === "trade" && game && viewer && (
         <Dialog
           title="A fair exchange"
+          summary={<ResourceInventory resources={viewer.resources} />}
           onClose={() => {
             setDialog(null);
             setError("");
@@ -1753,6 +1757,7 @@ export function App() {
                       resource={resource}
                       action="Give"
                       count={viewer.resources[resource]}
+                      countLabel="In hand"
                       caption={`${getTradeRatio(game, viewer.id, resource)}:1`}
                       selected={giveResource === resource}
                       disabled={
@@ -1775,7 +1780,8 @@ export function App() {
                       resource={resource}
                       action="Receive"
                       count={game.bank[resource]}
-                      caption="in bank"
+                      countLabel="In bank"
+                      caption="Take 1"
                       selected={receiveResource === resource}
                       disabled={game.bank[resource] < 1}
                       onClick={() => setReceiveResource(resource)}
@@ -1804,13 +1810,14 @@ export function App() {
                   className="h-13 w-9"
                 />
               </div>
+              {canExchange && (
+                <p role="status" aria-label="Hand after exchange" className="mb-4 text-xs leading-5 text-forest">
+                  After exchange: {viewer.resources[giveResource] - ratio} {RESOURCE_NAMES[giveResource]}, {viewer.resources[receiveResource] + 1} {RESOURCE_NAMES[receiveResource]} in your hand. Other cards stay the same.
+                </p>
+              )}
               <button
                 className="button-primary w-full"
-                disabled={
-                  giveResource === receiveResource ||
-                  viewer.resources[giveResource] < ratio ||
-                  game.bank[receiveResource] < 1
-                }
+                disabled={!canExchange}
                 onClick={() =>
                   perform({
                     type: "bank-trade",
@@ -1893,6 +1900,7 @@ export function App() {
       {dialog === "development" && game && viewer && (
         <Dialog
           title="A card up your sleeve"
+          summary={<ResourceInventory resources={viewer.resources} />}
           onClose={() => {
             setDialog(null);
             setError("");
@@ -1942,6 +1950,7 @@ export function App() {
                     label="Take from the bank"
                     values={chosenResources}
                     maximum={game.bank}
+                    maximumLabel="In bank"
                     onChange={setChosenResources}
                   />
                   <p className="mt-3 text-xs text-muted">

@@ -43,19 +43,36 @@ serves the source through Bun rather than reading `dist/`.
 6. Reach 10 victory points on your own turn. Inspect the revealed score breakdown
    and start a fresh rematch or return to the table.
 
+Gameplay fits the viewport without page scrolling. The board, dice tray, and
+placement controls keep their positions as rolls and turn notices update.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
-enlarge placement targets, then scroll or drag inside it. Keyboard users can
-select highlighted positions with Enter or Space.
+enlarge placement targets, then scroll or drag inside it. Short screens can scroll
+within the hand or player panel without moving the board. **Table guide** opens
+costs, public activity, and player details. Keyboard users can select highlighted
+positions with Enter or Space.
 
-Dice rolls settle before producing hexes light up and resource totals update.
-Gained resource cards slide into an on-screen collection tray, followed by a
-pulse and gain badges on the matching hand cards. The tray remains visible while
-scrolling or viewing the board and can be dismissed; it clears after a few seconds
-or immediately on private handoff. It shows actual gains for the revealed hand
+The hand shows large per-resource quantities and a total card count. Discard and
+trade panels keep your current cards visible; selection controls distinguish
+cards in hand (or in the bank), selected cards, and the amount remaining. Bank
+trades preview the resulting quantities, and player trades show what **you give**
+and **you receive**. Development-card dialogs and confirmations also show your
+current resources. These private summaries disappear during device handoffs.
+Player seats show public resource-card and development-card totals, never another
+player's resource breakdown. Build controls are vertical rows with road,
+settlement, and city icons alongside their costs.
+
+Dice rolls settle before matching number tokens light up and resource totals
+update. Robber-blocked matches have a muted, dashed token ring rather than a
+production glow; hex borders do not flash. Gained resource cards deal into an
+on-screen collection tray and animate over stationary hand cards, followed by
+gain badges and a glow. The tray remains visible while viewing the board and can
+be dismissed; it clears after a few seconds or immediately on private handoff.
+It shows actual gains for the revealed hand
 from starting settlements, dice, bank/player trades, theft, and development cards.
-A roll summary stays visible in every phone view until the next action. Computer
-turns wait for the roll sequence to finish. Sevens, robber blocking, and bank shortages are explained
-without revealing another player's resource breakdown. Reduced-motion settings
+A fixed-size roll summary stays visible in every phone view until the next action.
+Computer turns wait for the roll sequence to finish. Sevens, robber blocking,
+and bank shortages are explained without revealing another player's resource
+breakdown. Reduced-motion settings
 show the result, collection cards, and static highlights immediately, without
 animation delays.
 
@@ -111,6 +128,8 @@ allow, and verify that a handoff shows no
 private cards. Check zoom, keyboard placement, and end-game confirmation. Check
 the collection tray after a second starting settlement, a producing roll, and a
 bank trade in both Hand and Board views. Compare gain badges to resource totals,
-and repeat with the operating system's reduced-motion setting enabled.
+and repeat with the operating system's reduced-motion setting enabled. Check that
+rolls and placement previews leave the board stationary, matching numbers light
+up instead of hex borders, and **Table guide** opens without shifting the table.
 Viewport automation is not a claim of physical Android/iOS or local-network
 compatibility; real-device multiplayer verification remains deferred.

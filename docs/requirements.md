@@ -236,11 +236,14 @@ The host necessarily holds private game state in memory. Board-only means displa
 ## Usability Requirements
 
 - Support portrait player phones and landscape shared displays without clipped controls or page-level horizontal overflow. A zoomable board can pan within its own area.
+- Keep local gameplay within the viewport without page scrolling. Reserve stable board, dice, and placement regions so roll stages, computer notices, and previews do not shift the island. On short screens, hand/player panels and long dialogs may scroll internally; table reference information opens separately.
+- Keep the revealed player's current resource quantities visible in discard, trade, and development-card dialogs, including trade responses and confirmations. Distinguish current holdings or bank supply from selected and remaining amounts; bank exchanges preview the resulting quantities. Remove private summaries during handoff.
+- Show readable per-resource hand quantities and a total, plus each player's public resource-card and development-card totals without revealing opponents' card identities. Stack road, settlement, and city build controls vertically with distinct piece icons, labels, and costs.
 - Use large touch targets, readable resource labels, and selected-state indicators. Do not rely on color alone for player identity or valid positions.
 - Explain unavailable actions and required next steps. Require confirmation for board placement and resource transfers.
 - Provide keyboard-operable controls and visible focus. Honor reduced-motion preferences.
-- Show dice settling, actual production highlights, and private resource-gain feedback in sequence. Keep a roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
-- Animate actual resource gains from setup, dice, trades, theft, and development cards in an on-screen collection tray and the revealed hand. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
+- Show dice settling, matching number-token highlights rather than hex-border highlights, and private resource-gain feedback in sequence. Distinguish robber-blocked tokens from unblocked matches, and identify actual production separately. Keep a fixed-size roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
+- Animate actual resource gains from setup, dice, trades, theft, and development cards in an on-screen collection tray and over stationary revealed hand cards, with gain badges. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
 - Keep private details off the shared display, including notifications and reconnect overlays.
 - Do not require in-app camera access. The operating system's QR scanner opens the invite.
 
