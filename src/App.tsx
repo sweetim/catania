@@ -573,6 +573,8 @@ export function App() {
     return game.players.map((player, index) => {
       const score = scores[index]!;
       const isPublicScoreLeader = showPublicScoreLeaders && score.public === highestPublicScore;
+      const hasLargestArmy = game.awards.largestArmy === player.id;
+      const knightLabel = `${player.knightsPlayed} ${player.knightsPlayed === 1 ? "knight" : "knights"} played${hasLargestArmy ? "; Largest Army (+2 victory points)" : ""}`;
       return (
         <div
           key={player.id}
@@ -597,6 +599,11 @@ export function App() {
                 <strong>{player.developmentCards.length}</strong>
                 {detailed && <span className="text-[10px] text-muted">development</span>}
               </span>
+              <span role="img" aria-label={knightLabel} title={knightLabel} className={`player-card-stat ${hasLargestArmy ? "text-[#b58a2d]" : "text-forest"}`}>
+                <DevelopmentCardIcon kind="knight" />
+                <strong>{player.knightsPlayed}</strong>
+                {hasLargestArmy && <span className="rounded bg-[#b58a2d]/15 px-1 text-[10px] font-bold text-[#8b6425]">+2</span>}
+              </span>
             </div>
             <div className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${isPublicScoreLeader ? "text-[#8b6425]" : ""}`}>
               {isPublicScoreLeader && (
@@ -612,22 +619,16 @@ export function App() {
               <span className="text-[9px] text-muted">VP</span>
             </div>
           </div>
-          <div className={detailed ? "player-awards mt-3 border-t border-line pt-3 text-xs leading-6" : "mt-1 text-xs leading-6"}>
-            {detailed && (
+          {detailed && (
+            <div className="player-awards mt-3 border-t border-line pt-3 text-xs leading-6">
               <p>
                 {getLongestRoadLength(game, player.id)} connected roads{" "}
                 {game.awards.longestRoad === player.id && (
                   <strong className="text-ink"> / Longest Road +2</strong>
                 )}
               </p>
-            )}
-            <p>
-              {player.knightsPlayed} {player.knightsPlayed === 1 ? "knight" : "knights"} played{" "}
-              {game.awards.largestArmy === player.id && (
-                <strong className="text-ink"> / Largest Army +2</strong>
-              )}
-            </p>
-          </div>
+            </div>
+          )}
         </div>
       );
     });

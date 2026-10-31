@@ -112,8 +112,9 @@ confirmation omit that summary. The device-handoff picker shows human names and
 colors without detailed player cards; all private summaries disappear during handoff.
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
-breakdown. Player seats also show each player's played-Knight count, including in
-the compact desktop strip, with **Largest Army +2** beside the holder's count.
+breakdown. Player seats also show each player's played-Knight count as a shield
+icon and number alongside the card totals. The Largest Army holder has a gold
+shield and compact **+2** badge; tooltips and accessible labels explain both.
 Knights still in hand do not count: play at least three to qualify, and surpass
 the current holder to take the award. A gold crown and warm gold cell highlight
 mark the highest public VP

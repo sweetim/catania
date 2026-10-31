@@ -1474,7 +1474,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
     await expect(development).toHaveCount(0);
     await expect(developmentHand).toHaveCount(0);
     await showView(page, "players");
-    await expect(buyerSeat.getByText("1 knight played", { exact: true })).toBeVisible();
+    await expect(buyerSeat.getByRole("img", { name: "1 knight played", exact: true })).toBeVisible();
     await showView(page, "board");
     await expect(board.getByRole("button", { name: /^Move robber to / })).toHaveCount(18);
     await expect(board.getByRole("img", { name: /^Robber on / })).toHaveAttribute("aria-label", originalRobber!);
@@ -1549,7 +1549,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
     }
     await showView(page, "players");
     await buyerSeat.scrollIntoViewIfNeeded();
-    await expect(buyerSeat.getByText("0 knights played", { exact: true })).toBeVisible();
+    await expect(buyerSeat.getByRole("img", { name: "0 knights played", exact: true })).toBeVisible();
     await expect(buyerSeat.getByRole("img", { name: "1 development cards", exact: true })).toBeVisible();
     await showView(page, "hand");
   }
@@ -1596,7 +1596,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${state.players.find(player => player.id === buyerId)!.resources[resource]} ${RESOURCE_NAMES[resource]}`));
   await showView(page, "players");
   await buyerSeat.scrollIntoViewIfNeeded();
-  await expect(buyerSeat.getByText("1 knight played", { exact: true })).toBeVisible();
+  await expect(buyerSeat.getByRole("img", { name: "1 knight played", exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await noPageOverflow(page);
 });
@@ -1608,7 +1608,8 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
   const buyerName = state.players.find(player => player.id === buyerId)!.name;
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
   const buyerSeat = seats.locator(".player-seat").filter({ has: page.getByRole("group", { name: `${buyerName}'s card counts`, exact: true }) });
-  const army = buyerSeat.locator("p").filter({ hasText: /^\d+ knights? played/ });
+  const army = buyerSeat.getByRole("img", { name: /^\d+ knights? played/ });
+  const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
   // Nine purchases give three Knights. Keep them in hand, then play one on each subsequent turn.
   for (let turn = 0; turn <= 36; turn++) {
@@ -1643,13 +1644,20 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
       const holdsAward = buyer.knightsPlayed === 3;
       await showView(page, "players");
       await buyerSeat.scrollIntoViewIfNeeded();
-      await expect(army).toHaveText(`${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played${holdsAward ? " / Largest Army +2" : ""}`);
+      const label = `${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played${holdsAward ? "; Largest Army (+2 victory points)" : ""}`;
+      await expect(army).toHaveAccessibleName(label);
+      await expect(army).toHaveAttribute("title", label);
+      await expect(army.locator('svg[data-development-kind="knight"]')).toBeVisible();
+      await expect(army.locator("strong")).toHaveText(String(buyer.knightsPlayed));
+      await expect(army.getByText("+2", { exact: true })).toHaveCount(holdsAward ? 1 : 0);
       await expect(army).toBeInViewport({ ratio: 1 });
-      await expect(seats.getByText("/ Largest Army +2", { exact: true })).toHaveCount(holdsAward ? 1 : 0);
+      await expect(seats.getByRole("img", { name: /Largest Army/ })).toHaveCount(holdsAward ? 1 : 0);
+      await expect(buyerSeat.getByText(/knights? played|Largest Army/)).toHaveCount(0);
       await expect(buyerSeat.locator(".player-score > span")).toHaveText([holdsAward ? "4" : "2", "VP"]);
       if (turn === 27) {
         expect(buyer.developmentCards.filter(card => card.kind === "knight")).toHaveLength(3);
         expect(buyer.knightsPlayed).toBe(0);
+        if (await dismissCollection.isVisible()) await dismissCollection.click();
         await screenshot(page, testInfo, "three-knights-held-not-played", false);
       }
       await noPageOverflow(page);
@@ -1662,6 +1670,8 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
     }
   }
   expect(state.awards.largestArmy).toBe(buyerId);
+  if (await dismissCollection.isVisible()) await dismissCollection.click();
+  await expect(army).toHaveCSS("color", "rgb(181, 138, 45)");
   const viewports = isMobile
     ? [{ width: 390, height: 844 }, { width: 320, height: 568 }]
     : [{ width: 1440, height: 1000 }, { width: 1024, height: 768 }, { width: 1280, height: 480 }];
@@ -1669,6 +1679,7 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
     await page.setViewportSize(viewport);
     await buyerSeat.scrollIntoViewIfNeeded();
     await expect(army).toBeInViewport({ ratio: 1 });
+    await expect(army.getByText("+2", { exact: true })).toBeInViewport({ ratio: 1 });
     expect(await buyerSeat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await noPageOverflow(page);
     await screenshot(page, testInfo, `largest-army-player-seat-${viewport.width}`, false);

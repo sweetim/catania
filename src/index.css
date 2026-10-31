@@ -200,6 +200,7 @@
 .player-seat-active { outline: 2px solid #548b73; outline-offset: -2px; animation: player-turn-pulse 2400ms ease-in-out infinite; }
 .player-card-counts { display: flex; flex-shrink: 0; gap: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .player-card-stat { display: flex; align-items: center; gap: 4px; }
+.player-card-stat svg { width: 20px; height: 24px; }
 .player-card-stat strong { min-width: 2ch; color: var(--color-ink); font-size: 15px; }
 .player-card-counts-detailed { min-width: 0; flex-wrap: wrap; gap: 2px 12px; }
 .player-card-counts-detailed svg { width: 16px; height: 20px; }
