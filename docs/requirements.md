@@ -27,8 +27,12 @@ quotes equal-count prices for resource requests when useful to its build plan;
 it does not initiate player trades or use opponents' private hands to set prices.
 The active player can request cards without specifying payment, or create an exact
 offer. Human recipients use private handoffs to propose a price or accept/decline.
-The active player compares responses and confirms one exchange, or withdraws the
-request/offer. No cards move before confirmation; both inventories are rechecked
+The active player compares responses as give/receive cards and confirms one exchange,
+or withdraws the request/offer. Unaffordable prices show the exact missing quantities
+and disable completion. Change offer preserves the requested cards and opens an exact
+offer with payment limited to the player's hand. Canceling the edit leaves the current
+trade intact; submitting replaces it and clears prior responses.
+No cards move before confirmation; both inventories are rechecked
 and completed exchanges must give and receive different resources. The browser
 necessarily contains complete local state, so this is a
 friendly display-privacy convention rather than a security boundary.
@@ -189,6 +193,7 @@ This example is after a roll. Before rolling, Roll Dice is the primary action. D
 | Bank or port trade | Choose an exchange, show the applicable ratio and resulting hand, and confirm. Validate ownership of the port, resources, and bank supply. |
 | Buy development card | Display cost and confirm. Draw from the host-held deck and send the identity only to the buyer. |
 | Play development card | Select an eligible card, explain its effect, collect required selections, and confirm. Respect timing, per-turn restrictions, and the newly purchased card restriction. |
+| Cancel Knight | Before confirming its robber move, the active player may return the Knight to their hand and restore the played-Knight count, prior Largest Army ownership, development-card allowance, and previous turn phase. Clear any selected hex. Do not permit cancellation after the move, for a seven-triggered robber, or after an immediate Knight victory. Keep this action distinct from cancelling only a tile preview. |
 | Discard after seven | Privately show the required discard count, select exact resources, and confirm. Do not advance the robber step until all required discards are resolved. |
 | Move robber | Select a different legal tile and an eligible victim if one exists. Resolve a random theft; only the involved players learn the transferred resource identity. |
 | End turn | Enable only after mandatory actions are complete. Clear unfinished offers and advance the active player. |
@@ -241,11 +246,11 @@ The host necessarily holds private game state in memory. Board-only means displa
 ## Usability Requirements
 
 - Support portrait player phones and landscape shared displays without clipped controls or page-level horizontal overflow. A zoomable board can pan within its own area.
-- Keep local gameplay within the viewport without page scrolling. Keep board and dice regions stable so roll stages, computer notices, and previews do not shift the island. Dock the dice tray and roll/end-turn controls at the bottom of the right-hand action sidebar on desktop, with other sidebar content scrolling above them and the shared bank above the sidebar. On phones, keep turn controls at the bottom of Hand and the dice summary above the bank across all game views. On short screens, hand/player panels and long dialogs may scroll internally; table reference information opens separately.
+- Keep local gameplay within the viewport without page scrolling. Keep board and dice regions stable so roll stages, computer notices, and previews do not shift the island. Dock the dice tray, turn-status card, and roll/end-turn controls at the bottom of the right-hand action sidebar on desktop, with the status card directly above the buttons. Keep both buttons visible in fixed positions and disable unavailable actions. Other sidebar content scrolls vertically without horizontal overflow. Keep the shared bank above the sidebar and let the board fill the full height beside both. On phones, keep the turn-status card and controls at the bottom of Hand and the dice summary above the bank across all game views. On short screens, hand/player panels and long dialogs may scroll internally; table reference information opens separately.
 - Keep the revealed player's current resource quantities visible in discard, trade, and development-card dialogs, including trade responses and confirmations. Use card quantity controls and one discard progress summary rather than repeating owned/selected/remaining captions for every resource; retain per-resource availability and remaining amounts in accessible descriptions. Bank exchanges preview the resulting quantities. Remove private summaries during handoff.
 - Show readable per-resource hand quantities and a total, plus each player's public resource-card and development-card totals as compact icon-and-number badges with full labels in player details and accessible names. Never reveal opponents' card identities. Stack road, settlement, city, and development-card purchase controls vertically with distinct icons, labels, and costs. The development-card row shows one wool, one grain, and one ore; place a full-width trade button below the stack.
 - Use large touch targets, readable resource labels, and selected-state indicators. Do not rely on color alone for player identity or valid positions.
-- Show the revealed player's owned development cards as a vertical stack, with a distinct icon, name, and turn status or hidden point for each card. Keep duplicate cards separate; selecting a row opens that card in the development dialog without playing it. Preserve play restrictions and remove the stack during private handoff.
+- Show the revealed player's owned development cards as a vertical stack, with a distinct icon, name, and description below the title for each card. Hide the entire section when the player has no development cards. Omit "In your hand" and "New this turn" labels from the stack and development dialog. Keep duplicate cards separate; selecting a row opens that card in the development dialog without playing it. Preserve play restrictions and remove the stack during private handoff.
 - Explain unavailable actions and required next steps. Require confirmation for board placement and resource transfers. Place board confirmation beside the selected intersection, road, or hex without resizing the map; keep it inside the visible map during zoom/pan. Support keyboard confirmation and Escape cancellation with focus restored to the selected target.
 - Provide keyboard-operable controls and visible focus. Honor reduced-motion preferences.
 - Show dice settling, matching number-token highlights rather than hex-border highlights, and private resource-gain feedback in sequence. Distinguish robber-blocked tokens from unblocked matches, and identify actual production separately. Keep a fixed-size roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.

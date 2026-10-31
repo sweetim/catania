@@ -41,21 +41,29 @@ serves the source through Bun rather than reading `dist/`.
 5. For a player trade, use **Request cards** to ask for what you need and let other
    players propose a price, or choose **Exact offer** to specify both sides.
    AI responds automatically; pass the device for human responses. Compare prices
-   and confirm one exchange. No cards move until the active player confirms;
-   withdraw the request or offer to reject every response.
+   as **You give / You receive** cards and confirm one exchange. Unaffordable
+   prices show the exact missing cards and cannot be completed. Use **Change offer**
+   to keep the requested cards and choose payment from your hand. Closing the editor
+   keeps the original trade; submitting replaces it and asks for new responses.
+   No cards move until the active player confirms; withdraw to reject every response.
 6. Reach 10 victory points on your own turn. Inspect the revealed score breakdown
    and start a fresh rematch or return to the table.
 
 Gameplay fits the viewport without page scrolling. The board and dice tray stay
 in place as rolls and turn notices update. On desktop, the dice tray and turn
 controls sit at the bottom of the right-hand action sidebar; its other content
-scrolls above them. The shared bank stays above the sidebar. On phones, turn
-controls stay at the bottom of **Hand**, while the dice summary and bank remain
-above the selected view, visible across all three game views.
+scrolls vertically above them without horizontal scrolling. The turn-status card
+sits directly above the persistent **Roll the dice** and **End turn** buttons,
+which stay in place and become disabled when unavailable. The shared bank stays
+above the sidebar, with the board filling the full height beside both. On phones,
+the turn-status card and controls stay at the bottom of **Hand**, while the dice
+summary and bank remain above the selected view, visible across all three game views.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. Short screens can scroll
-within the hand or player panel without moving the board. The header's **Game**
-menu contains **Table guide** (costs, public activity, and player details),
+within the hand or player panel without moving the board. On very short windows,
+the entire sidebar scrolls internally so the status card, turn controls, and hand
+tasks remain reachable. The header's **Game** menu contains **Table guide**
+(costs, public activity, and player details),
 **How to play**, and **Pass device** when multiple humans have a hand revealed.
 **End game** sits below a divider and still requires confirmation. The turn card
 shows **Setup** or the current turn number. Keyboard users can select highlighted
@@ -78,8 +86,17 @@ breakdown. Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.
 Owned development cards appear below as a vertical stack, one row per card with
-a distinct card-type icon and its turn status or hidden point. Select a row to
-open that card in the existing dialog; playing still requires confirmation.
+a distinct card-type icon and a description below its title. The hand and card
+dialog omit the "In your hand" and "New this turn" labels. Select a row to open
+that card in the existing dialog; playing still requires confirmation and
+action cards purchased this turn remain unavailable. The entire owned-card
+section is hidden when your hand has no development cards.
+After **Confirm Knight**, use **Cancel Knight** in the turn card or phone Board
+prompt to return the card before confirming the robber move. This restores the
+played-Knight count, Largest Army ownership, development-card allowance, and
+previous turn phase. The map's **Cancel** or Escape only clears the selected hex.
+Cancellation is unavailable after confirming the move, for a robber triggered
+by seven, or when the Knight has already won the game.
 
 Dice rolls settle before matching number tokens light up and resource totals
 update. Robber-blocked matches have a muted, dashed token ring rather than a

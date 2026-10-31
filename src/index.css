@@ -5,7 +5,7 @@
   --color-ink: #253b36;
   --color-muted: #6d766c;
   --color-line: #deded0;
-  --color-forest: #315e49;
+  --color-forest: #b0cdc1;
   --color-moss: #e9eddf;
   --color-clay: #bb6549;
   --font-serif:
@@ -151,13 +151,17 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   flex-direction: column;
   gap: 12px;
+  padding: 0 4px 4px;
   overflow: auto;
+  scroll-padding-block: 4px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 .hand-content > *, .hand-dice { flex-shrink: 0; }
+.hand-dice { display: flex; flex-direction: column; gap: 8px; }
 .hand-content:has(.hand-task) { overflow: hidden; }
 .hand-content:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
 .hand-content > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
@@ -166,7 +170,7 @@
 .turn-owner { height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-title { height: 26px; margin-top: 4px; overflow: auto; }
 .turn-description { height: 32px; overflow: auto; margin-top: 4px; }
-.turn-action { height: 44px; }
+.turn-action { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; height: 44px; }
 .hand-resource-card {
   height: 76px;
   box-shadow: 0 2px 0 #e9e0c9, 0 3px 0 #b7aa8e, 0 5px 7px #283d3326;
@@ -228,12 +232,14 @@
 .number-token-blocked { stroke-dasharray: 3 3; }
 
 @media (min-width: 1024px) {
-  .game-table { padding: 8px 20px 12px; }
-  .table-seats { display: grid; }
+  .game-table { display: grid; grid-template-columns: minmax(0, 1fr) 350px; grid-template-rows: auto 64px minmax(0, 1fr); column-gap: 16px; padding: 8px 20px 12px; }
+  .table-seats { display: grid; grid-column: 1 / -1; }
   .table-seats .player-seat { padding: 7px 12px; }
-  .table-play-area { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
+  .table-play-area { display: contents; }
+  .table-board { grid-column: 1; grid-row: 2 / 4; }
+  .table-hand { grid-column: 2; grid-row: 3; }
   .table-feedback { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
-  .game-table > .table-feedback > .bank-tray { grid-column: 2; }
+  .game-table > .table-feedback { grid-column: 2; grid-row: 2; grid-template-columns: minmax(0, 1fr); }
   .bank-tray { height: 64px; padding-inline: 12px; }
   .roll-summary { height: 64px; }
   .roll-summary-content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr); }
@@ -244,7 +250,6 @@
   .hand-dice .roll-summary-content { grid-template-columns: minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr) 32px; }
   .hand-dice .roll-summary-private { grid-area: 3 / 1; text-align: left; }
   .hand-dice .roll-summary-details { grid-area: 2 / 1; }
-  .hand-dice .turn-action { margin-top: 8px; }
   .board-tablemat { padding: 12px; }
 }
 
@@ -272,6 +277,13 @@
   .board-surface-fit .board-controls { height: 52px; padding-block: 4px; }
 }
 
+@media (max-height: 600px) {
+  .table-hand { overflow: auto; scroll-padding-block: 4px; scrollbar-width: thin; }
+  .hand-content { flex: none; overflow: visible; }
+  .hand-content:has(.hand-task) { overflow: visible; }
+  .hand-task { position: static; }
+}
+
 @keyframes token-glow {
   0% { opacity: 0.35; }
   45% { opacity: 1; filter: drop-shadow(0 0 5px #e7ba43); }
@@ -281,7 +293,7 @@
 .resource-collection {
   position: fixed;
   z-index: 40;
-  bottom: max(180px, env(safe-area-inset-bottom));
+  bottom: max(196px, env(safe-area-inset-bottom));
   left: 50%;
   width: calc(100% - 2rem);
   max-width: 24rem;
@@ -293,10 +305,14 @@
   .resource-collection {
     left: auto;
     right: max(30px, calc((100vw - 1560px) / 2 + 10px));
-    bottom: 196px;
+    bottom: 312px;
     width: 330px;
     transform: none;
   }
+}
+
+@media (max-height: 600px) {
+  .resource-collection { top: 56px; bottom: auto; }
 }
 
 .resource-collection-card {

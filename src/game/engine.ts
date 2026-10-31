@@ -304,6 +304,17 @@ export function applyAction(
       state.log.push(`${player.name} discards ${required} resource cards.`);
       if (Object.keys(state.phase.required).length === 0) state.phase = { type: "robber", returnPhase: "actions" };
     })
+    .with({ type: "cancel-knight" }, () => {
+      requireRule(state.phase.type === "robber" && state.phase.pendingKnight, "There is no Knight to cancel before moving the robber.");
+      const { pendingKnight, returnPhase } = state.phase;
+      player.developmentCards.splice(pendingKnight.cardIndex, 0, pendingKnight.card);
+      player.knightsPlayed--;
+      state.developmentPlayed = false;
+      // Recomputing a tie alone would let the cancelled Knight retain Largest Army.
+      state.awards.largestArmy = pendingKnight.previousLargestArmy;
+      state.phase = { type: returnPhase };
+      state.log.push(`${player.name} cancels Knight.`);
+    })
     .with({ type: "move-robber" }, action => {
       requireRule(state.phase.type === "robber", "Move the robber only after a seven or a Knight card.");
       const tile = state.board.tiles.find(tile => tile.id === action.tileId);
@@ -426,7 +437,12 @@ export function applyAction(
       match(card.kind)
         .with("knight", () => {
           player.knightsPlayed++;
-          state.phase = { type: "robber", returnPhase };
+          state.phase = {
+            type: "robber", returnPhase,
+            pendingKnight: {
+              card, cardIndex: player.developmentCards.indexOf(card), previousLargestArmy: state.awards.largestArmy,
+            },
+          };
         })
         .with("road-building", () => {
           requireRule(pieceCount(state, playerId, "road") < 15, "You need at least one road piece remaining to play Road Building.");

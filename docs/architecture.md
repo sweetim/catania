@@ -28,6 +28,10 @@ randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.
 All purchases and placements pass through the engine, including local actions.
 Human-selected board positions are previews until confirmed; computer actions
 are applied automatically through the same rules.
+Knight-triggered robber phases retain the played card, its hand position, and
+previous Largest Army holder for the validated `cancel-knight` action. Confirming
+the robber move drops this cancellation state; immediate Knight victories remain
+final. Tile-preview cancellation does not undo a Knight.
 
 Profiles carry a human/computer control type through randomized turn order. A
 pure computer chooser returns one engine action at a time, including off-turn

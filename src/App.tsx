@@ -75,11 +75,6 @@ const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
     "Name a resource. Every other player gives you all of that resource from their hand.",
 };
 
-function describeResources(resources: Resources) {
-  return RESOURCES.filter(resource => resources[resource] > 0)
-    .map(resource => `${resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ");
-}
-
 function phaseTitle(state: GameState) {
   return match(state.phase)
     .with({ type: "setup-settlement" }, () => "Find a place to call home.")
@@ -175,7 +170,8 @@ export function App() {
   const [confirmation, setConfirmation] = useState<{
     action: GameAction;
     title: string;
-    description: string;
+    description?: string;
+    exchange?: { give: Resources; receive: Resources };
   } | null>(null);
   const [error, setError] = useState("");
   const [tradeMode, setTradeMode] = useState<"bank" | "players">("bank");
@@ -464,6 +460,7 @@ export function App() {
   );
   const isActive = Boolean(viewer && viewer.id === activePlayer?.id);
   const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
+  const canCancelKnight = isActive && !rollBusy && game?.phase.type === "robber" && Boolean(game.phase.pendingKnight);
   const producingTileIds = rollPresentation && rollPresentation.stage !== "rolling"
     ? rollPresentation.outcome.producingTileIds : [];
   const rolledNumber = rollPresentation && rollPresentation.stage !== "rolling"
@@ -1011,11 +1008,18 @@ export function App() {
               className={`table-board min-w-0 ${mobileView !== "board" ? "hidden lg:flex" : "flex"}`}
               aria-label="Game board"
             >
-              <div className="board-instruction lg:hidden">
-                <h1 className="font-serif text-lg">{instructionTitle}</h1>
-                <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="text-xs leading-4 text-muted">
-                  {instructionDescription}
-                </p>
+              <div className="board-instruction flex items-start gap-2 lg:hidden">
+                <div className="min-w-0 flex-1">
+                  <h1 className="font-serif text-lg">{instructionTitle}</h1>
+                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="text-xs leading-4 text-muted">
+                    {instructionDescription}
+                  </p>
+                </div>
+                {canCancelKnight && (
+                  <button className="button-secondary shrink-0 px-3 text-xs" onClick={() => perform({ type: "cancel-knight" })}>
+                    Cancel Knight
+                  </button>
+                )}
               </div>
               <div className="board-tablemat">
                 <Board
@@ -1061,23 +1065,6 @@ export function App() {
               aria-label="Your hand and actions"
             >
               <div className="hand-content">
-              <div inert={handTaskOpen} className="turn-card rounded-2xl bg-forest text-white">
-                <div className="flex items-center justify-between gap-2">
-                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
-                    {computerPlayer ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
-                  </p>
-                  <span className="shrink-0 rounded-full border border-white/25 px-2 text-[10px] text-white/75">
-                    {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
-                  </span>
-                </div>
-                <h1 className="turn-title font-serif text-xl leading-tight">
-                  {instructionTitle}
-                </h1>
-                <p className="turn-description text-xs leading-4 text-white/75">
-                  {instructionDescription}
-                </p>
-              </div>
-
               <section inert={handTaskOpen} className="hand-resources" aria-label="Private resources">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="eyebrow min-w-0 truncate">{viewer.name}&apos;s hand</h2>
@@ -1295,7 +1282,7 @@ export function App() {
                   Make a trade
                 </button>
               </section>
-              <section
+              {viewer.developmentCards.length > 0 && <section
                 inert={handTaskOpen}
                 className="development-hand"
                 aria-label="Your development cards"
@@ -1306,88 +1293,59 @@ export function App() {
                     {viewer.developmentCards.length}
                   </span>
                 </div>
-                {!viewer.developmentCards.length ? (
-                  <p className="text-xs leading-6 text-muted">
-                    Your next big idea is waiting. Buy a development card for one
-                    wool, one grain, and one ore after rolling on your turn.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {viewer.developmentCards.map((card) => (
-                      <li key={card.id}>
-                        <button
-                          className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-line bg-white/40 px-3 py-2 text-left hover:bg-moss/60"
-                          aria-haspopup="dialog"
-                          onClick={() => {
-                            setDevelopmentCardId(card.id);
-                            setChosenResources(emptyResources());
-                            setChosenResource("wood");
-                            setDialog("development");
-                            setError("");
-                          }}
-                        >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss text-forest">
-                            <DevelopmentCardIcon kind={card.kind} />
+                <ul className="flex flex-col gap-2">
+                  {viewer.developmentCards.map((card) => (
+                    <li key={card.id}>
+                      <button
+                        className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-line bg-white/40 px-3 py-2 text-left hover:bg-moss/60"
+                        aria-haspopup="dialog"
+                        onClick={() => {
+                          setDevelopmentCardId(card.id);
+                          setChosenResources(emptyResources());
+                          setChosenResource("wood");
+                          setDialog("development");
+                          setError("");
+                        }}
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss text-forest">
+                          <DevelopmentCardIcon kind={card.kind} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold">{DEVELOPMENT_NAMES[card.kind]}</span>
+                          <span className="mt-1 block text-xs leading-5 text-muted">
+                            {DEVELOPMENT_DESCRIPTIONS[card.kind]}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold">{DEVELOPMENT_NAMES[card.kind]}</span>
-                            <span className="block text-[10px] text-muted">
-                              {card.kind === "victory-point"
-                                ? "+1 hidden point"
-                                : card.purchasedTurn === game.turnNumber
-                                  ? "New this turn"
-                                  : "In your hand"}
-                            </span>
-                          </span>
-                          <Arrow className="h-4 w-4 shrink-0 text-muted" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+                        </span>
+                        <Arrow className="h-4 w-4 shrink-0 text-muted" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>}
 
               {game.trade && (
                 <section className="hand-task panel p-4" aria-label="Open trade">
                   <ResourceInventory resources={viewer.resources} />
-                  <h2 className="font-serif text-xl">{game.trade.give ? "A deal on the table." : "A request on the table."}</h2>
-                  <p className="mt-1 text-xs text-muted">
-                    {game.players.find(player => player.id === game.trade!.offeredBy)?.name}{" "}
-                    {game.trade.give ? "proposed this exchange." : "is asking for cards. Choose a price before any cards move."}
-                  </p>
-                  <p className="sr-only">
-                    {game.players.find(
-                      (player) => player.id === game.trade!.offeredBy,
-                    )?.name}{" "}
-                    {game.trade.give ? `offers ${describeResources(game.trade.give)} for` : "requests"}{" "}
-                    {describeResources(game.trade.receive)}.
-                  </p>
-                  {game.trade.give ? <div className="my-4 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3.5">
-                    <span className="flex flex-col items-center gap-1.5">
+                  <h2 className="font-serif text-xl">{game.trade.give ? "Trade offer" : "Trade request"}</h2>
+                  {viewer.id !== game.trade.offeredBy && <p className="mt-1 text-xs text-muted">
+                    From {game.players.find(player => player.id === game.trade!.offeredBy)?.name}
+                  </p>}
+                  <div className="my-3 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3">
+                    {game.trade.give ? <>
                       <CardStack
+                        label="You give"
                         resources={viewer.id === game.trade.offeredBy ? game.trade.give : game.trade.receive}
-                        emptyText="Nothing offered"
                       />
-                      <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
-                        You give
-                      </span>
-                    </span>
-                    <Arrow className="h-5 w-5 shrink-0 text-forest" />
-                    <span className="flex flex-col items-center gap-1.5">
+                      <Arrow className="h-5 w-5 shrink-0 text-forest" />
                       <CardStack
+                        label="You receive"
                         resources={viewer.id === game.trade.offeredBy ? game.trade.receive : game.trade.give}
-                        emptyText="Nothing asked"
                       />
-                      <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
-                        You receive
-                      </span>
-                    </span>
-                  </div> : <div className="my-4 flex flex-col items-center gap-2 rounded-xl bg-moss/70 p-3.5">
-                    <CardStack resources={game.trade.receive} />
-                    <span className="text-xs font-semibold">
-                      {viewer.id === game.trade.offeredBy ? "You ask for" : "You give"}: {describeResources(game.trade.receive)}
-                    </span>
-                  </div>}
+                    </> : <CardStack
+                      label={viewer.id === game.trade.offeredBy ? "You receive" : "You give"}
+                      resources={game.trade.receive}
+                    />}
+                  </div>
                   {viewer.id === game.trade.offeredBy ? (
                     <div className="space-y-2">
                       {game.players
@@ -1396,8 +1354,12 @@ export function App() {
                           const response =
                             game.trade!.responses[player.id];
                           const status =
-                            response ? game.trade!.give ? "accepted" : "price proposed"
+                            response ? game.trade!.give ? "accepted" : null
                               : response === false ? "declined" : "not answered";
+                          const missingCards = response ? RESOURCES
+                            .filter(resource => response[resource] > viewer.resources[resource])
+                            .map(resource => `${response[resource] - viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`)
+                            .join(", ") : "";
                           return (
                             <div
                               key={player.id}
@@ -1414,53 +1376,70 @@ export function App() {
                                   {player.name}
                                 </span>
                               </span>
-                              <span className="flex flex-wrap items-center gap-2">
-                                <span
-                                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                              {status && <span
+                                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                              >
+                                {status}
+                              </span>}
+                              {response ? (
+                                <div className="flex w-full flex-wrap items-center justify-between gap-3 pt-1">
+                                  {!game.trade!.give && <CardStack label="You give" resources={response} />}
+                                  <div className="ml-auto flex min-w-0 max-w-full flex-col items-end gap-1.5">
+                                    <button
+                                      className="button-primary !min-h-11 !px-3 !text-xs"
+                                      disabled={!canAfford(response)}
+                                      aria-describedby={missingCards ? `trade-missing-${player.id}` : undefined}
+                                      onClick={() =>
+                                        setConfirmation({
+                                          action: {
+                                            type: "complete-trade",
+                                            playerId: player.id,
+                                          },
+                                          title: `Trade with ${player.name}`,
+                                          exchange: { give: response, receive: game.trade!.receive },
+                                        })
+                                      }
+                                    >
+                                      Complete trade
+                                    </button>
+                                    {missingCards && <p id={`trade-missing-${player.id}`} className="text-right text-xs text-clay">
+                                      Missing {missingCards}
+                                    </p>}
+                                  </div>
+                                </div>
+                              ) : player.control === "human" ? (
+                                <button
+                                  className="min-h-11 text-xs font-semibold underline"
+                                  onClick={() => passTo(player.id)}
                                 >
-                                  {status}
-                                </span>
-                                {response ? (
-                                  <button
-                                    className="button-secondary !min-h-8 !px-2.5 !py-1 !text-xs"
-                                    disabled={!canAfford(response)}
-                                    onClick={() =>
-                                      setConfirmation({
-                                        action: {
-                                          type: "complete-trade",
-                                          playerId: player.id,
-                                        },
-                                        title: `Trade with ${player.name}`,
-                                        description: `You give ${describeResources(response)} and receive ${describeResources(game.trade!.receive)}. Both players' resources will be checked again before the transfer.`,
-                                      })
-                                    }
-                                  >
-                                    Complete trade
-                                  </button>
-                                ) : player.control === "human" ? (
-                                  <button
-                                    className="min-h-8 text-xs font-semibold underline"
-                                    onClick={() => passTo(player.id)}
-                                  >
-                                    Pass to {player.name}
-                                  </button>
-                                ) : null}
-                              </span>
-                              {response && !game.trade!.give && (
-                                <p className="w-full text-xs leading-5 text-muted">
-                                  You give: {describeResources(response)}.
-                                  {!canAfford(response) && " You do not have these cards."}
-                                </p>
-                              )}
+                                  Pass to {player.name}
+                                </button>
+                              ) : null}
                             </div>
                           );
                         })}
-                      <button
-                        className="mt-2 text-xs text-clay underline"
-                        onClick={() => perform({ type: "cancel-trade" })}
-                      >
-                        {game.trade.give ? "Withdraw offer" : "Withdraw request"}
-                      </button>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <button
+                          className="button-secondary !min-h-11 !px-3 !text-xs"
+                          aria-haspopup="dialog"
+                          onClick={() => {
+                            setTradeMode("players");
+                            setPlayerTradeMode("offer");
+                            setGiveResources(game.trade!.give ?? emptyResources());
+                            setReceiveResources(game.trade!.receive);
+                            setDialog("trade");
+                            setError("");
+                          }}
+                        >
+                          Change offer
+                        </button>
+                        <button
+                          className="min-h-11 text-xs text-clay underline"
+                          onClick={() => perform({ type: "cancel-trade" })}
+                        >
+                          {game.trade.give ? "Withdraw offer" : "Withdraw request"}
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -1468,7 +1447,7 @@ export function App() {
                       <div className="mb-4 space-y-3">
                         <ResourceCardStepper label="You want in return" values={chosenResources} onChange={setChosenResources} />
                         <p className="text-xs leading-5 text-muted">
-                          Name your price using different resources. The requesting player decides whether to accept.
+                          Choose different cards in return.
                         </p>
                         {!canAfford(game.trade.receive) && (
                           <p className="text-xs text-clay">You do not have all the requested cards to offer this trade.</p>
@@ -1535,26 +1514,46 @@ export function App() {
                 <div className="hidden lg:block">
                   <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
                 </div>
-                <div inert={handTaskOpen} className="turn-action">
-                  {game.phase.type === "roll" && isActive && (
-                    <button
-                      className="button-primary h-11 w-full justify-between px-4 py-0"
-                      onClick={() => perform({ type: "roll" })}
-                      disabled={rollBusy}
-                    >
-                      Roll the dice <Arrow />
-                    </button>
-                  )}
-                  {game.phase.type === "actions" && isActive && (
-                    <button
-                      className="button-secondary h-11 w-full py-0 text-xs"
-                      onClick={() => perform({ type: "end-turn" })}
-                      disabled={rollBusy}
-                    >
-                      {needsHandoff ? "End turn & pass device" : "End turn"}{" "}
-                      <span aria-hidden="true">&rarr;</span>
-                    </button>
-                  )}
+                <div className="turn-card rounded-2xl bg-forest text-white">
+                  <div className="flex items-center justify-between gap-2">
+                    <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
+                      {computerPlayer ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
+                    </p>
+                    <span className="shrink-0 rounded-full border border-white/25 px-2 text-[10px] text-white/75">
+                      {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="turn-title font-serif text-xl leading-tight">
+                        {instructionTitle}
+                      </h1>
+                      <p className="turn-description text-xs leading-4 text-white/75">
+                        {instructionDescription}
+                      </p>
+                    </div>
+                    {canCancelKnight && (
+                      <button className="button-secondary shrink-0 px-3 text-xs" onClick={() => perform({ type: "cancel-knight" })}>
+                        Cancel Knight
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="turn-action">
+                  <button
+                    className="button-primary h-11 min-w-0 px-2 py-0"
+                    onClick={() => perform({ type: "roll" })}
+                    disabled={game.phase.type !== "roll" || !isActive || rollBusy || handTaskOpen}
+                  >
+                    Roll the dice
+                  </button>
+                  <button
+                    className="button-secondary h-11 min-w-0 px-2 py-0 text-xs leading-4"
+                    onClick={() => perform({ type: "end-turn" })}
+                    disabled={!normalActions || handTaskOpen}
+                  >
+                    {needsHandoff ? "End turn & pass device" : "End turn"}
+                  </button>
                 </div>
               </div>
             </aside>
@@ -1745,9 +1744,13 @@ export function App() {
             setError("");
           }}
         >
-          <p className="text-sm leading-7 text-muted">
+          {confirmation.exchange ? <div className="flex items-center justify-center gap-4 rounded-xl bg-moss p-4">
+            <CardStack label="You give" resources={confirmation.exchange.give} />
+            <Arrow className="h-5 w-5 shrink-0 text-forest" />
+            <CardStack label="You receive" resources={confirmation.exchange.receive} />
+          </div> : <p className="text-sm leading-7 text-muted">
             {confirmation.description}
-          </p>
+          </p>}
           {error && (
             <p role="alert" className="mt-3 text-sm text-clay">
               {error}
@@ -1929,9 +1932,9 @@ export function App() {
                 />
               </div>
               <p className="my-4 text-xs leading-6 text-muted">
-                {playerTradeMode === "request" && "Ask for the cards you need. Other players name their price; you choose whether to trade. "}
-                Computers respond automatically. With multiple humans, pass the
-                device for private responses. No cards move until you confirm one exchange.
+                {playerTradeMode === "request"
+                  ? "Players name a price. You choose whether to trade."
+                  : "No cards move until you confirm a trade."}
               </p>
               <button
                 className="button-primary w-full"
@@ -1991,13 +1994,9 @@ export function App() {
                     <span className="text-forest"><DevelopmentCardIcon kind={card.kind} /></span>
                     {DEVELOPMENT_NAMES[card.kind]}
                   </span>
-                  <span className="text-[10px] text-muted">
-                    {card.kind === "victory-point"
-                      ? "+1 hidden point"
-                      : card.purchasedTurn === game.turnNumber
-                        ? "New this turn"
-                        : "In your hand"}
-                  </span>
+                  {card.kind === "victory-point" && (
+                    <span className="text-[10px] text-muted">+1 hidden point</span>
+                  )}
                 </span>
                 <span className="mt-2 block text-xs leading-6 text-muted">
                   {DEVELOPMENT_DESCRIPTIONS[card.kind]}

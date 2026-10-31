@@ -676,7 +676,7 @@ describe("development cards", () => {
     const target = state.board.tiles.find(tile => tile.id !== state.robberTileId)!;
     state.board.vertices.find(vertex => vertex.id === target.vertexIds[0])!.building = { playerId: secondPlayer, kind: "settlement" };
     state = applyAction(state, firstPlayer, { type: "play-development", cardId: knight });
-    expect(state.phase).toEqual({ type: "robber", returnPhase: "roll" });
+    expect(state.phase).toMatchObject({ type: "robber", returnPhase: "roll" });
     expect(state.players[0]!.knightsPlayed).toBe(1);
     reject(state, { type: "roll" }, "roll once");
     reject(state, { type: "play-development", cardId: secondKnight }, "mandatory choices");
@@ -699,7 +699,88 @@ describe("development cards", () => {
     const target = state.board.tiles.find(tile => tile.id !== state.robberTileId)!;
     state = applyAction(state, firstPlayer, { type: "move-robber", tileId: target.id });
     state = applyAction(state, firstPlayer, { type: "play-development", cardId: knight });
-    expect(state.phase).toEqual({ type: "robber", returnPhase: "actions" });
+    expect(state.phase).toMatchObject({ type: "robber", returnPhase: "actions" });
+  });
+
+  test.each(["roll", "actions"] as const)("cancel Knight restores the hand and %s phase before moving the robber", phase => {
+    const original = actionState();
+    original.phase = { type: phase };
+    original.dice = phase === "actions" ? [2, 3] : null;
+    card(original, "victory-point");
+    const knight = card(original, "knight");
+    const monopoly = card(original, "monopoly");
+    const pending = applyAction(original, firstPlayer, { type: "play-development", cardId: knight });
+    const beforeCancel = structuredClone(pending);
+    const restored = applyAction(pending, firstPlayer, { type: "cancel-knight" });
+    expect(pending).toEqual(beforeCancel);
+    expect({ ...restored, log: original.log }).toEqual(original);
+    expect(restored.log.at(-1)).toBe("Ada cancels Knight.");
+    reject(restored, { type: "cancel-knight" }, "no Knight");
+    const replayed = applyAction(restored, firstPlayer, { type: "play-development", cardId: knight });
+    expect(replayed.players[0]!.knightsPlayed).toBe(1);
+    expect(replayed.developmentPlayed).toBe(true);
+    const different = applyAction(restored, firstPlayer, { type: "play-development", cardId: monopoly, resource: "ore" });
+    expect(different.players[0]!.developmentCards.some(card => card.id === knight)).toBe(true);
+    expect(different.developmentPlayed).toBe(true);
+    assertConservation(restored);
+  });
+
+  test.each([null, firstPlayer, secondPlayer])("cancel Knight restores Largest Army to %s, including a previous tied holder", previousHolder => {
+    const original = actionState();
+    original.players[0]!.knightsPlayed = previousHolder === null ? 2 : 3;
+    original.players[1]!.knightsPlayed = previousHolder === null ? 2 : 3;
+    original.awards.largestArmy = previousHolder;
+    const knight = card(original, "knight");
+    const pending = applyAction(original, firstPlayer, { type: "play-development", cardId: knight });
+    expect(pending.awards.largestArmy).toBe(firstPlayer);
+    const restored = applyAction(pending, firstPlayer, { type: "cancel-knight" });
+    expect(restored.awards).toEqual(original.awards);
+    expect(restored.players).toEqual(original.players);
+    expect(getScore(restored, firstPlayer)).toEqual(getScore(original, firstPlayer));
+    expect(getScore(restored, secondPlayer)).toEqual(getScore(original, secondPlayer));
+  });
+
+  test("cancel Knight rejects other players, ordinary robber moves, and other development effects", () => {
+    const original = actionState();
+    const knight = card(original, "knight");
+    const pending = applyAction(original, firstPlayer, { type: "play-development", cardId: knight });
+    reject(pending, { type: "cancel-knight" }, "Wait for your turn", secondPlayer);
+    original.phase = { type: "roll" };
+    let diceIndex = 0;
+    const seven = applyAction(original, firstPlayer, { type: "roll" }, () => ([3, 4][diceIndex++]! - 0.5) / 6);
+    expect(seven.phase.type).toBe("robber");
+    reject(seven, { type: "cancel-knight" }, "no Knight");
+    give(original, secondPlayer, { wood: 8 });
+    diceIndex = 0;
+    const discard = applyAction(original, firstPlayer, { type: "roll" }, () => ([3, 4][diceIndex++]! - 0.5) / 6);
+    reject(discard, { type: "cancel-knight" }, "no Knight");
+    const afterDiscard = applyAction(discard, secondPlayer, { type: "discard", resources: resources({ wood: 4 }) });
+    reject(afterDiscard, { type: "cancel-knight" }, "no Knight");
+    original.phase = { type: "road-building", remaining: 2, returnPhase: "roll" };
+    reject(original, { type: "cancel-knight" }, "no Knight");
+  });
+
+  test.each([false, true])("cancel Knight is unavailable after confirming a robber move (victim: %s)", hasVictim => {
+    const original = actionState();
+    const knight = card(original, "knight");
+    const target = original.board.tiles.find(tile => tile.id !== original.robberTileId)!;
+    if (hasVictim) {
+      original.board.vertices.find(vertex => vertex.id === target.vertexIds[0])!.building = { playerId: secondPlayer, kind: "settlement" };
+      give(original, secondPlayer, { wood: 1 });
+    }
+    const pending = applyAction(original, firstPlayer, { type: "play-development", cardId: knight });
+    reject(pending, { type: "move-robber", tileId: original.robberTileId }, "different land hex");
+    expect(applyAction(pending, firstPlayer, { type: "cancel-knight" }).players).toEqual(original.players);
+    let committed = applyAction(pending, firstPlayer, { type: "move-robber", tileId: target.id });
+    expect(committed.phase.type).toBe(hasVictim ? "steal" : "actions");
+    reject(committed, { type: "cancel-knight" }, "no Knight");
+    if (hasVictim) {
+      committed = applyAction(committed, firstPlayer, { type: "steal", playerId: secondPlayer }, () => 0);
+      reject(committed, { type: "cancel-knight" }, "no Knight");
+    }
+    expect(committed.players[0]!.developmentCards).toHaveLength(0);
+    expect(committed.players[0]!.knightsPlayed).toBe(1);
+    expect(committed.developmentPlayed).toBe(true);
   });
 
   test("Year of Plenty takes exactly two available cards of the same or different resources, even before rolling", () => {
@@ -970,6 +1051,7 @@ describe("victory, turns and atomic validation", () => {
     expect(state.winnerId).toBe(firstPlayer);
     expect(state.dice).toBeNull();
     expect(state.phase.type).toBe("finished");
+    reject(state, { type: "cancel-knight" }, "game is finished");
   });
 
   test("off-turn road award does not win until that player's turn begins, before rolling", () => {

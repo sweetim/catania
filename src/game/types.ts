@@ -48,7 +48,15 @@ export type GamePhase =
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }
-  | { type: "robber"; returnPhase: "roll" | "actions" }
+  | {
+      type: "robber";
+      returnPhase: "roll" | "actions";
+      pendingKnight?: {
+        card: Player["developmentCards"][number];
+        cardIndex: number;
+        previousLargestArmy: string | null;
+      };
+    }
   | { type: "steal"; victimIds: string[]; returnPhase: "roll" | "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" }
   | { type: "finished" };
@@ -84,6 +92,7 @@ export type GameAction =
   | { type: "end-turn" }
   | { type: "discard"; resources: Resources }
   | { type: "move-robber"; tileId: string }
+  | { type: "cancel-knight" }
   | { type: "steal"; playerId: string }
   | { type: "bank-trade"; give: Resource; receive: Resource }
   | { type: "offer-trade"; give: Resources; receive: Resources }

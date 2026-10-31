@@ -442,9 +442,11 @@ export function ResourceCardStepper({
 export function CardStack({
   resources,
   emptyText = "No cards",
+  label,
 }: {
   resources: Resources;
   emptyText?: string;
+  label?: string;
 }) {
   const entries = (Object.keys(RESOURCE_NAMES) as Resource[]).filter(
     (resource) => resources[resource] > 0,
@@ -457,17 +459,24 @@ export function CardStack({
     );
   }
   return (
-    <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
-      {entries.map((resource) => (
-        <ResourceCard
-          key={resource}
-          resource={resource}
-          count={resources[resource]}
-          compact
-          iconClassName="h-5 w-5"
-          className="h-13 w-9"
-        />
-      ))}
+    <span
+      role={label ? "img" : undefined}
+      aria-label={label ? `${label}: ${entries.map(resource => `${resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}` : undefined}
+      className="inline-flex min-w-0 flex-col items-center gap-2"
+    >
+      {label && <span className="text-[10px] font-semibold uppercase tracking-[.1em] text-muted">{label}</span>}
+      <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+        {entries.map((resource) => (
+          <ResourceCard
+            key={resource}
+            resource={resource}
+            count={resources[resource]}
+            compact
+            iconClassName="h-5 w-5"
+            className="h-13 w-9"
+          />
+        ))}
+      </span>
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { applyAction, COSTS, createGame, emptyResources, getTradeRatio, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal } from "../../src/game/engine";
+import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 
@@ -45,6 +46,9 @@ async function noPageOverflow(page: Page) {
     left: window.scrollX,
     top: window.scrollY,
   }))).toEqual({ horizontal: false, vertical: false, left: 0, top: 0 });
+  expect(await page.locator(".hand-content:visible").evaluateAll(elements => elements.every(element =>
+    element.scrollWidth <= element.clientWidth && element.scrollLeft === 0,
+  )), "Sidebar fits without horizontal scrolling").toBe(true);
 }
 
 async function boardFrame(page: Page) {
@@ -178,6 +182,17 @@ async function expectResourceSelection(fieldset: Locator, resource: Resource, se
     : `In hand ${owned}. Selected ${selected}. Remaining ${owned - selected}.`);
   await expect(selection.getByText(/^(In hand|In bank|Selected|Remaining)\b/)).toHaveCount(0);
   return selection;
+}
+
+async function expectTradeCards(context: Locator, label: "You give" | "You receive", resources: Resources) {
+  const entries = RESOURCES.filter(resource => resources[resource] > 0);
+  const cards = context.getByRole("img", {
+    name: `${label}: ${entries.map(resource => `${resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}`,
+    exact: true,
+  });
+  await expect(cards).toBeVisible();
+  await expect(cards.getByText(label, { exact: true })).toBeVisible();
+  await expect(cards.locator("strong")).toHaveText(entries.map(resource => String(resources[resource])));
 }
 
 async function expectPublicCardCounts(page: Page, state: GameState) {
@@ -319,9 +334,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await showView(page, "hand");
   await expect(page.getByRole("region", { name: "Private resources" })).toContainText("2 public + 0 hidden = 2");
   const development = page.getByRole("region", { name: "Your development cards", exact: true });
-  await expect(development).toContainText("Your next big idea is waiting.");
-  await expect(development).toContainText("one wool, one grain, and one ore");
-  await expect(development.getByRole("button")).toHaveCount(0);
+  await expect(development).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
   const diceLabel = await page.getByRole("img", { name: /^Dice: / }).getAttribute("aria-label");
@@ -347,7 +360,8 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
     }
   }
   await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Roll the dice", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeEnabled();
   await noHorizontalOverflow(page);
   await screenshot(page, testInfo, "first-turn-hand");
@@ -391,7 +405,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await page.getByRole("dialog", { name: "Pass the device", exact: true }).getByRole("button", { name: firstRound[2]!, exact: true }).click();
   expect(await revealHand(page)).toBe(firstRound[2]);
   await showView(page, "hand");
-  await expect(page.getByRole("button", { name: "Roll the dice", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: `Return to ${firstRound[1]}`, exact: true }).click();
   expect(await revealHand(page)).toBe(firstRound[1]);
@@ -486,7 +500,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
   await revealHand(page);
   const board = page.getByRole("region", { name: "Game board", exact: true });
   const map = board.getByRole("region", { name: /^Island map\./ });
-  const viewports = isMobile ? [{ width: 320, height: 844 }, { width: 390, height: 667 }] : [{ width: 1280, height: 720 }];
+  const viewports = isMobile ? [{ width: 320, height: 844 }, { width: 390, height: 667 }] : [{ width: 1280, height: 720 }, { width: 1024, height: 768 }];
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await showView(page, "board");
@@ -504,15 +518,17 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
     await expectBoardFrame(page, initialFrame);
     const boardBounds = await board.boundingBox();
     const diceBounds = await page.getByRole("region", { name: "Dice tray", exact: true }).boundingBox();
-    expect(bankFrame!.y + bankFrame!.height).toBeLessThanOrEqual(boardBounds!.y);
     if (isMobile) {
+      expect(bankFrame!.y + bankFrame!.height).toBeLessThanOrEqual(boardBounds!.y);
       expect(bankFrame!.y).toBeGreaterThanOrEqual(diceBounds!.y + diceBounds!.height);
     } else {
       const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
       await expect(sidebar.getByRole("region", { name: "Dice tray", exact: true })).toBeInViewport({ ratio: 1 });
       const sidebarBounds = (await sidebar.boundingBox())!;
+      expect(boardBounds!.y).toBe(bankFrame!.y);
+      expect(boardBounds!.y + boardBounds!.height).toBe(sidebarBounds.y + sidebarBounds.height);
       expect(sidebarBounds.x).toBeGreaterThanOrEqual(boardBounds!.x + boardBounds!.width);
-      expect(diceBounds!.y).toBeGreaterThan(sidebarBounds.y + sidebarBounds.height / 2);
+      expect(diceBounds!.y).toBeGreaterThan(sidebarBounds.y);
       expect(diceBounds!.x).toBeGreaterThanOrEqual(sidebarBounds.x);
       expect(diceBounds!.x + diceBounds!.width).toBeLessThanOrEqual(sidebarBounds.x + sidebarBounds.width);
     }
@@ -660,18 +676,23 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
     expect(tradeGeometry.x).toBe(tradeGeometry.stackLeft);
     expect(tradeGeometry.width).toBe(tradeGeometry.stackWidth);
     expect(tradeGeometry.y).toBeGreaterThanOrEqual(tradeGeometry.stackBottom);
-    await buildOptions.scrollIntoViewIfNeeded();
-    await expect(buildOptions).toBeInViewport({ ratio: 1 });
-    await noPageOverflow(page);
-    await screenshot(page, testInfo, `vertical-build-rows-${artifact}`, false);
-    for (const control of [page.getByRole("region", { name: "Your development cards", exact: true }), trade]) {
+    for (const control of await buildOptions.getByRole("button").all()) {
       await control.scrollIntoViewIfNeeded();
       await expect(control).toBeInViewport({ ratio: 1 });
-      await noPageOverflow(page);
     }
+    await noPageOverflow(page);
+    await screenshot(page, testInfo, `vertical-build-rows-${artifact}`, false);
+    await expect(page.getByRole("region", { name: "Your development cards", exact: true })).toHaveCount(0);
+    await trade.scrollIntoViewIfNeeded();
+    await expect(trade).toBeInViewport({ ratio: 1 });
+    await noPageOverflow(page);
     expect(await page.getByRole("complementary", { name: "Your hand and actions", exact: true }).locator(".hand-content").evaluate(element =>
       element.scrollHeight > element.clientHeight && element.scrollTop > 0,
     )).toBe(true);
+    for (const name of ["Roll the dice", "End turn & pass device"]) {
+      await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+    }
     await screenshot(page, testInfo, `accessible-hand-${artifact}`, false);
   }
 });
@@ -787,8 +808,10 @@ test("development card purchase requires resources and keyboard confirmation", a
   }
   const beforePurchase = state.players.find(player => player.id === buyerId)!;
   await expect(buy).toBeEnabled();
-  await expect(developmentHand.getByText("0", { exact: true })).toBeVisible();
-  await expect(developmentHand.getByRole("listitem")).toHaveCount(0);
+  await expect(developmentHand).toHaveCount(0);
+  await expect(page.getByText("Your next big idea is waiting.", { exact: false })).toHaveCount(0);
+  await buy.scrollIntoViewIfNeeded();
+  await screenshot(page, testInfo, "empty-development-hand", false);
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource]} ${RESOURCE_NAMES[resource]}`));
   await buy.focus();
   await page.keyboard.press("Enter");
@@ -802,7 +825,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   await expect(confirmation).toHaveCount(0);
   await expect(buy).toBeFocused();
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource]} ${RESOURCE_NAMES[resource]}`));
-  await expect(developmentHand.getByRole("listitem")).toHaveCount(0);
+  await expect(developmentHand).toHaveCount(0);
   await expectResourceBank(page, state.bank);
 
   await page.keyboard.press("Space");
@@ -812,7 +835,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   await expect(confirmation).toHaveCount(0);
   await expect(buy).toBeFocused();
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource]} ${RESOURCE_NAMES[resource]}`));
-  await expect(developmentHand.getByRole("listitem")).toHaveCount(0);
+  await expect(developmentHand).toHaveCount(0);
 
   await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
@@ -824,7 +847,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource] - COSTS.development[resource]} ${RESOURCE_NAMES[resource]}`));
   await expect(developmentHand.getByText("1", { exact: true })).toBeVisible();
   await expect(developmentHand.getByRole("listitem")).toHaveCount(1);
-  const knight = developmentHand.getByRole("button", { name: "Knight New this turn", exact: true });
+  const knight = developmentHand.getByRole("button", { name: /^Knight Move the robber/ });
   await expect(knight.locator('svg[data-development-kind="knight"]')).toBeVisible();
   await knight.focus();
   await page.keyboard.press("Enter");
@@ -842,7 +865,199 @@ test("development card purchase requires resources and keyboard confirmation", a
   await noPageOverflow(page);
 });
 
-test("owned development cards stack vertically with distinct icons and direct selection", async ({ page, isMobile }, testInfo) => {
+test("Cancel Knight restores the card and turn until the robber move is confirmed", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  let state = await prepareRollGame(page);
+  const buyerId = state.activePlayerId;
+  const buyerName = state.players.find(player => player.id === buyerId)!.name;
+  const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
+  const endTurn = page.getByRole("button", { name: "End turn & pass device", exact: true });
+  const developmentHand = page.getByRole("region", { name: "Your development cards", exact: true, includeHidden: true });
+  const knight = developmentHand.getByRole("button", { name: /^Knight Move the robber/ });
+  const development = page.getByRole("dialog", { name: "A card up your sleeve", exact: true });
+  const cancelKnight = page.getByRole("button", { name: "Cancel Knight", exact: true });
+  const board = page.getByRole("region", { name: "Game board", exact: true });
+  const placement = page.getByRole("group", { name: "Placement confirmation", exact: true, includeHidden: true });
+  const rolls: [number, number][] = [[1, 2], [2, 6], [1, 1], [1, 1]];
+  for (const [turn, dice] of rolls.entries()) {
+    await chooseDice(page, dice);
+    await roll.click();
+    let diceIndex = 0;
+    state = applyAction(state, state.activePlayerId, { type: "roll" }, () => (dice[diceIndex++]! - 0.5) / 6);
+    await expect(endTurn).toBeEnabled();
+    if (turn < 3) {
+      await endTurn.click();
+      state = applyAction(state, state.activePlayerId, { type: "end-turn" });
+      await revealHand(page);
+    }
+  }
+  expect(state.activePlayerId).toBe(buyerId);
+  await page.getByRole("button", { name: "Buy a card 1 Wool 1 Grain 1 Ore", exact: true }).click();
+  await page.getByRole("dialog", { name: "Invest in a development card", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
+  state = applyAction(state, buyerId, { type: "buy-development" });
+  const card = state.players.find(player => player.id === buyerId)!.developmentCards[0]!;
+  expect(card.kind).toBe("knight");
+  for (let turn = 0; turn < 3; turn++) {
+    await endTurn.click();
+    state = applyAction(state, state.activePlayerId, { type: "end-turn" });
+    await revealHand(page);
+    if (turn < 2) {
+      await chooseDice(page, [1, 1]);
+      await roll.click();
+      state = applyAction(state, state.activePlayerId, { type: "roll" }, () => 0);
+      await expect(endTurn).toBeEnabled();
+    }
+  }
+  expect(state.activePlayerId).toBe(buyerId);
+  expect(state.turnNumber).toBeGreaterThan(card.purchasedTurn);
+  await showView(page, "board");
+  const initialFrame = await boardFrame(page);
+  const originalRobber = await board.getByRole("img", { name: /^Robber on / }).getAttribute("aria-label");
+  const destination = state.board.tiles.find(tile => tile.id !== state.robberTileId && tile.vertexIds.some(vertexId => {
+    const ownerId = state.board.vertices.find(vertex => vertex.id === vertexId)!.building?.playerId;
+    return state.players.some(player => player.id === ownerId && player.id !== buyerId && resourceTotal(player.resources) > 0);
+  }))!;
+  const targetIndex = state.board.tiles.filter(tile => tile.id !== state.robberTileId).indexOf(destination);
+  const robberTarget = board.getByRole("button", { name: /^Move robber to / }).nth(targetIndex);
+  const defaultViewport = page.viewportSize()!;
+
+  for (const returnPhase of ["roll", "actions"] as const) {
+    await showView(page, "hand");
+    if (returnPhase === "actions") {
+      await chooseDice(page, [1, 1]);
+      await roll.click();
+      state = applyAction(state, buyerId, { type: "roll" }, () => 0);
+      await expect(endTurn).toBeEnabled();
+    }
+    await knight.click();
+    await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
+    await development.getByRole("button", { name: "Confirm Knight", exact: true }).click();
+    state = applyAction(state, buyerId, { type: "play-development", cardId: card.id });
+    await expect(development).toHaveCount(0);
+    await expect(developmentHand).toHaveCount(0);
+    await showView(page, "board");
+    await expect(board.getByRole("button", { name: /^Move robber to / })).toHaveCount(18);
+    await expect(board.getByRole("img", { name: /^Robber on / })).toHaveAttribute("aria-label", originalRobber!);
+    await expect(cancelKnight).toBeInViewport({ ratio: 1 });
+    await expectBoardFrame(page, initialFrame);
+
+    if (returnPhase === "roll") {
+      await screenshot(page, testInfo, "cancel-knight-before-roll", false);
+      await page.setViewportSize(isMobile ? { width: 390, height: 667 } : { width: 1280, height: 480 });
+      await boardFrame(page);
+      await cancelKnight.scrollIntoViewIfNeeded();
+      await expect(cancelKnight).toBeInViewport({ ratio: 1 });
+      await screenshot(page, testInfo, "cancel-knight-short-board", false);
+      await showView(page, "hand");
+      await cancelKnight.scrollIntoViewIfNeeded();
+      await expect(cancelKnight).toBeInViewport({ ratio: 1 });
+      await expect(roll).toBeDisabled();
+      await expect(endTurn).toBeDisabled();
+      await noPageOverflow(page);
+      await screenshot(page, testInfo, "cancel-knight-short-hand", false);
+      await page.setViewportSize(defaultViewport);
+      await showView(page, "board");
+    } else {
+      // Cancelling only the tile preview must not undo the played Knight.
+      for (const dismissal of ["Cancel", "Escape"]) {
+        await robberTarget.click();
+        const confirmation = await expectPlacementConfirmation(page, robberTarget, destination.id);
+        if (dismissal === "Cancel") await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+        else await page.keyboard.press("Escape");
+        await expect(placement).toHaveCount(0);
+        await expect(robberTarget).toHaveAttribute("aria-pressed", "false");
+        await expect(robberTarget).toBeFocused();
+        await expect(cancelKnight).toBeInViewport({ ratio: 1 });
+        await expect(developmentHand).toHaveCount(0);
+        await expect(board.getByRole("img", { name: /^Robber on / })).toHaveAttribute("aria-label", originalRobber!);
+        await expectBoardFrame(page, initialFrame);
+      }
+      await robberTarget.click();
+      await expectPlacementConfirmation(page, robberTarget, destination.id);
+      await screenshot(page, testInfo, "cancel-knight-selected-robber", false);
+      await showView(page, "hand");
+      await expect(cancelKnight).toBeInViewport({ ratio: 1 });
+      await expect(roll).toBeDisabled();
+      await expect(endTurn).toBeDisabled();
+      await noPageOverflow(page);
+      await screenshot(page, testInfo, "cancel-knight-hand", false);
+    }
+
+    await cancelKnight.focus();
+    await expect(cancelKnight).toBeFocused();
+    await page.keyboard.press(returnPhase === "roll" ? "Space" : "Enter");
+    state = applyAction(state, buyerId, { type: "cancel-knight" });
+    await expect(page.getByRole("button", { name: "Cancel Knight", exact: true, includeHidden: true })).toHaveCount(0);
+    await expect(placement).toHaveCount(0);
+    await showView(page, "board");
+    await expect(board.getByRole("button", { name: /^Move robber to / })).toHaveCount(0);
+    await expect(board.getByRole("img", { name: /^Robber on / })).toHaveAttribute("aria-label", originalRobber!);
+    await expectBoardFrame(page, initialFrame);
+    await showView(page, "hand");
+    await knight.scrollIntoViewIfNeeded();
+    await expect(knight).toBeVisible();
+    await expect(developmentHand.getByRole("listitem")).toHaveCount(1);
+    if (returnPhase === "roll") {
+      await expect(roll).toBeEnabled();
+      await expect(endTurn).toBeDisabled();
+    } else {
+      await expect(roll).toBeDisabled();
+      await expect(endTurn).toBeEnabled();
+    }
+    await chooseGameOption(page, "Table guide");
+    const guide = page.getByRole("dialog", { name: "Around the table", exact: true });
+    const buyer = guide.locator(".player-seat").filter({ has: page.getByRole("group", { name: `${buyerName}'s card counts`, exact: true }) });
+    await expect(buyer.getByText("0 knights played", { exact: true })).toBeVisible();
+    await expect(buyer.getByRole("img", { name: "1 development cards", exact: true })).toBeVisible();
+    await guide.getByRole("button", { name: "Close dialog", exact: true }).click();
+  }
+
+  await knight.click();
+  await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
+  await development.getByRole("button", { name: "Confirm Knight", exact: true }).click();
+  state = applyAction(state, buyerId, { type: "play-development", cardId: card.id });
+  await showView(page, "board");
+  await expect(placement).toHaveCount(0);
+  await expect(robberTarget).toHaveAttribute("aria-pressed", "false");
+  await robberTarget.click();
+  const confirmation = await expectPlacementConfirmation(page, robberTarget, destination.id);
+  await confirmation.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  state = applyAction(state, buyerId, { type: "move-robber", tileId: destination.id });
+  expect(state.phase.type).toBe("steal");
+  if (state.phase.type !== "steal") throw new Error("The chosen robber tile must have a victim");
+  const victim = state.players.find(player => state.phase.type === "steal" && state.phase.victimIds.includes(player.id) && resourceTotal(player.resources) > 0)!;
+  await expect(page.getByRole("button", { name: "Cancel Knight", exact: true, includeHidden: true })).toHaveCount(0);
+  await showView(page, "board");
+  await expect(board.getByRole("img", { name: /^Robber on / })).toHaveAccessibleName(`Robber on ${destination.terrain}${destination.number === null ? "" : ` ${destination.number}`}; production blocked`);
+  await expect(placement).toHaveCount(0);
+  await expectBoardFrame(page, initialFrame);
+  await showView(page, "hand");
+  await expect(developmentHand).toHaveCount(0);
+  await expect(endTurn).toBeDisabled();
+  const victims = page.locator("section").filter({ has: page.getByRole("heading", { name: "Choose a player to steal from", exact: true }) });
+  await expect(victims).toBeVisible();
+  await screenshot(page, testInfo, "knight-theft-pending", false);
+  await victims.getByRole("button", { name: `${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
+  await chooseDice(page, [1, 1]);
+  await page.getByRole("dialog", { name: "Confirm theft", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
+  state = applyAction(state, buyerId, { type: "steal", playerId: victim.id }, () => 0.5 / 6);
+  await expect(victims).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Cancel Knight", exact: true, includeHidden: true })).toHaveCount(0);
+  await expect(developmentHand).toHaveCount(0);
+  await expect(endTurn).toBeEnabled();
+  await expect(roll).toBeDisabled();
+  const resourceCounts = page.getByRole("region", { name: "Private resources", exact: true }).getByText(/^\d+ (Wood|Brick|Wool|Grain|Ore)$/);
+  await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${state.players.find(player => player.id === buyerId)!.resources[resource]} ${RESOURCE_NAMES[resource]}`));
+  await chooseGameOption(page, "Table guide");
+  const guide = page.getByRole("dialog", { name: "Around the table", exact: true });
+  const buyer = guide.locator(".player-seat").filter({ has: page.getByRole("group", { name: `${buyerName}'s card counts`, exact: true }) });
+  await expect(buyer.getByText("1 knights played", { exact: true })).toBeVisible();
+  await guide.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await noPageOverflow(page);
+});
+
+test("owned development cards stack vertically with descriptions, distinct icons and direct selection", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   const buyerId = state.activePlayerId;
@@ -851,6 +1066,13 @@ test("owned development cards stack vertically with distinct icons and direct se
   const cardNames = {
     knight: "Knight", "victory-point": "Victory point", "road-building": "Road building",
     "year-of-plenty": "Year of plenty", monopoly: "Monopoly",
+  };
+  const cardDescriptions = {
+    knight: "Move the robber and steal one random resource from an adjacent opponent. Three knights can earn Largest Army.",
+    "victory-point": "One hidden victory point. Counted automatically toward your ten points on your turn, including when purchased.",
+    "road-building": "Place two roads for free, following the usual connection and piece-limit rules.",
+    "year-of-plenty": "Choose two resources from the bank, or all that remain if fewer than two are available.",
+    monopoly: "Name a resource. Every other player gives you all of that resource from their hand.",
   };
   // These rolls fund one purchase each round. The first eight cards cover every kind and duplicates.
   const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
@@ -881,6 +1103,7 @@ test("owned development cards stack vertically with distinct icons and direct se
   const rows = developmentHand.getByRole("listitem").getByRole("button");
   await expect(rows).toHaveCount(8);
   await expect(developmentHand.getByText("8", { exact: true })).toBeVisible();
+  await expect(developmentHand.getByText(/^(In your hand|New this turn)$/)).toHaveCount(0);
   const icons = rows.locator("svg[data-development-kind]");
   expect(await icons.evaluateAll(elements => new Set(elements.map(element => element.innerHTML)).size)).toBe(5);
   for (const viewport of isMobile ? [{ width: 390, height: 844 }, { width: 320, height: 844 }] : [{ width: 1280, height: 720 }]) {
@@ -898,6 +1121,15 @@ test("owned development cards stack vertically with distinct icons and direct se
       await expect(rows.nth(index)).toBeInViewport({ ratio: 1 });
       await expect(icons.nth(index)).toHaveAttribute("aria-hidden", "true");
       await expect(icons.nth(index)).toHaveAttribute("data-development-kind", buyer.developmentCards[index]!.kind);
+      const kind = buyer.developmentCards[index]!.kind;
+      const title = rows.nth(index).getByText(cardNames[kind], { exact: true });
+      const description = rows.nth(index).getByText(cardDescriptions[kind], { exact: true });
+      await expect(description).toBeInViewport({ ratio: 1 });
+      const titleBounds = (await title.boundingBox())!;
+      const descriptionBounds = (await description.boundingBox())!;
+      expect(descriptionBounds.y).toBeGreaterThanOrEqual(titleBounds.y + titleBounds.height);
+      expect(descriptionBounds.x).toBe(titleBounds.x);
+      expect(descriptionBounds.x + descriptionBounds.width).toBeLessThanOrEqual(bounds.x + bounds.width);
     }
     await noPageOverflow(page);
     await screenshot(page, testInfo, `development-stack-bottom-${viewport.width}`, false);
@@ -907,13 +1139,15 @@ test("owned development cards stack vertically with distinct icons and direct se
   }
   for (const [index, card] of buyer.developmentCards.entries()) {
     const row = rows.nth(index);
-    await expect(row).toHaveAccessibleName(`${cardNames[card.kind]} ${card.kind === "victory-point" ? "+1 hidden point" : card.purchasedTurn === state.turnNumber ? "New this turn" : "In your hand"}`);
+    await expect(row).toHaveAccessibleName(`${cardNames[card.kind]} ${cardDescriptions[card.kind]}`);
     await row.focus();
     await page.keyboard.press("Enter");
     await expectResourceInventory(development, buyer.resources);
     await expect(development.getByRole("button", { pressed: true })).toHaveCount(1);
     await expect(development.getByRole("button", { pressed: true }).locator("svg[data-development-kind]")).toHaveAttribute("data-development-kind", card.kind);
     await expect(development.getByRole("button", { pressed: true })).toContainText(cardNames[card.kind]);
+    await expect(development.getByRole("button", { pressed: true })).toContainText(cardDescriptions[card.kind]);
+    await expect(development.getByText(/^(In your hand|New this turn)$/)).toHaveCount(0);
     const confirm = development.getByRole("button", { name: `Confirm ${cardNames[card.kind]}`, exact: true });
     if (card.kind === "victory-point") {
       await expect(development.getByRole("button", { name: /^Confirm / })).toHaveCount(0);
@@ -927,7 +1161,7 @@ test("owned development cards stack vertically with distinct icons and direct se
     await expect(row).toBeFocused();
     await expect(rows).toHaveCount(8);
   }
-  const plenty = developmentHand.getByRole("button", { name: "Year of plenty In your hand", exact: true }).last();
+  const plenty = developmentHand.getByRole("button", { name: /^Year of plenty Choose two resources/ }).last();
   await plenty.click();
   await development.getByRole("button", { name: "Add Grain to Take from the bank", exact: true }).click();
   await page.keyboard.press("Escape");
@@ -938,15 +1172,14 @@ test("owned development cards stack vertically with distinct icons and direct se
   await development.getByRole("button", { name: "Confirm Year of plenty", exact: true }).click();
   await expect(development).toHaveCount(0);
   await expect(rows).toHaveCount(7);
-  await expect(developmentHand.getByRole("button", { name: "Year of plenty In your hand", exact: true })).toHaveCount(1);
-  await developmentHand.getByRole("button", { name: "Knight In your hand", exact: true }).first().click();
+  await expect(developmentHand.getByRole("button", { name: /^Year of plenty Choose two resources/ })).toHaveCount(1);
+  await developmentHand.getByRole("button", { name: /^Knight Move the robber/ }).first().click();
   await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
   await privateHandIsAbsent(page);
   await revealHand(page);
-  await expect(developmentHand.getByRole("listitem")).toHaveCount(0);
-  await expect(developmentHand).toContainText("Your next big idea is waiting.");
+  await expect(developmentHand).toHaveCount(0);
   await noPageOverflow(page);
 });
 
@@ -1015,17 +1248,28 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     const handFrame = await privateResources.boundingBox();
     const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
     const rollButton = sidebar.getByRole("button", { name: "Roll the dice", exact: true });
+    const endTurnButton = sidebar.getByRole("button", { name: "End turn & pass device", exact: true });
+    const turnCard = sidebar.locator(".turn-card");
     await expect(rollButton).toBeInViewport({ ratio: 1 });
+    await expect(endTurnButton).toBeInViewport({ ratio: 1 });
+    await expect(endTurnButton).toBeDisabled();
+    await expect(turnCard).toBeInViewport({ ratio: 1 });
     const rollButtonFrame = (await rollButton.boundingBox())!;
+    const endTurnButtonFrame = (await endTurnButton.boundingBox())!;
+    const turnCardFrame = (await turnCard.boundingBox())!;
+    expect(turnCardFrame.y + turnCardFrame.height).toBeLessThanOrEqual(rollButtonFrame.y);
+    expect(rollButtonFrame.y - turnCardFrame.y - turnCardFrame.height).toBeLessThanOrEqual(8);
+    expect(endTurnButtonFrame.y).toBe(rollButtonFrame.y);
     const sidebarFrame = (await sidebar.boundingBox())!;
     expect(sidebarFrame.y + sidebarFrame.height - rollButtonFrame.y - rollButtonFrame.height).toBeLessThanOrEqual(12);
-    await sidebar.getByRole("region", { name: "Your development cards", exact: true }).scrollIntoViewIfNeeded();
+    await sidebar.getByRole("button", { name: "Make a trade", exact: true }).scrollIntoViewIfNeeded();
     expect(await rollButton.boundingBox()).toEqual(rollButtonFrame);
+    expect(await turnCard.boundingBox()).toEqual(turnCardFrame);
     if (!isMobile) {
       const sidebarDice = sidebar.getByRole("region", { name: "Dice tray", exact: true });
       await expect(sidebarDice).toBeInViewport({ ratio: 1 });
       const diceFrame = (await sidebarDice.boundingBox())!;
-      expect(diceFrame.y + diceFrame.height).toBeLessThanOrEqual(rollButtonFrame.y);
+      expect(diceFrame.y + diceFrame.height).toBeLessThanOrEqual(turnCardFrame.y);
     }
     await sidebar.locator(".hand-content").evaluate(element => element.scrollTo({ top: 0 }));
     expect(await privateResources.boundingBox()).toEqual(handFrame);
@@ -1115,7 +1359,12 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await screenshot(page, testInfo, "roll-receipt");
     if (reducedMotion === "no-preference") await page.clock.runFor(700);
     await expect(summary).toHaveAttribute("data-stage", "complete");
-    expect(await sidebar.getByRole("button", { name: "End turn & pass device", exact: true }).boundingBox()).toEqual(rollButtonFrame);
+    await expect(rollButton).toBeDisabled();
+    await expect(rollButton).toBeInViewport({ ratio: 1 });
+    await expect(endTurnButton).toBeEnabled();
+    expect(await rollButton.boundingBox()).toEqual(rollButtonFrame);
+    expect(await endTurnButton.boundingBox()).toEqual(endTurnButtonFrame);
+    expect(await turnCard.boundingBox()).toEqual(turnCardFrame);
     await showView(page, "board");
     await expectBoardFrame(page, idleFrame);
     await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
@@ -1146,6 +1395,9 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     }
     await expect(summary).toHaveAttribute("data-stage", "complete");
     await expect(page.getByRole("status", { name: "Roll announcement" })).toContainText("No resources produced. Resolve any discards, then move the robber.");
+    await showView(page, "hand");
+    await expect(rollButton).toBeDisabled();
+    await expect(endTurnButton).toBeDisabled();
     await expect(highlights).toHaveCount(0);
     await expect(numberHighlights).toHaveCount(0);
     await expect(collection).toHaveCount(0);
@@ -1154,6 +1406,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(summary).toBeVisible();
     await expect(page.getByRole("button", { name: /^Move robber to / })).toHaveCount(18);
     await expectBoardFrame(page, idleFrame);
+    await expect(page.getByRole("button", { name: "Cancel Knight", exact: true, includeHidden: true })).toHaveCount(0);
     const robberTarget = page.getByRole("button", { name: /^Move robber to / }).first();
     const robberDestination = state.board.tiles.find(candidate => candidate.id !== state.robberTileId)!;
     await robberTarget.focus();
@@ -1170,6 +1423,53 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expectBoardFrame(page, idleFrame);
   });
 }
+
+test("very short windows keep hand tasks and turn controls reachable", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
+  await prepareRollGame(page);
+  await page.setViewportSize(isMobile ? { width: 844, height: 390 } : { width: 1280, height: 480 });
+  await showView(page, "hand");
+  const collection = page.getByRole("region", { name: "Resource collection" });
+  await expect(collection).toBeInViewport({ ratio: 1 });
+  await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+  const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
+  const rollButton = sidebar.getByRole("button", { name: "Roll the dice", exact: true });
+  const endTurnButton = sidebar.getByRole("button", { name: "End turn & pass device", exact: true });
+  await rollButton.scrollIntoViewIfNeeded();
+  await expect(rollButton).toBeInViewport({ ratio: 1 });
+  await expect(endTurnButton).toBeInViewport({ ratio: 1 });
+  const statusBounds = (await sidebar.locator(".turn-card").boundingBox())!;
+  expect(statusBounds.y + statusBounds.height).toBeLessThanOrEqual((await rollButton.boundingBox())!.y);
+  await noPageOverflow(page);
+  expect(await sidebar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await screenshot(page, testInfo, "short-window-turn-controls", false);
+
+  await chooseDice(page, [1, 1]);
+  await rollButton.click();
+  await expect(rollButton).toBeDisabled();
+  await expect(endTurnButton).toBeEnabled();
+  await page.getByRole("button", { name: "Make a trade", exact: true }).click();
+  const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
+  await trade.getByRole("button", { name: "Player trade", exact: true }).click();
+  await trade.getByRole("button", { name: "Add Ore to You ask for", exact: true }).click();
+  await trade.getByRole("button", { name: "Ask for these cards", exact: true }).click();
+  const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
+  const withdraw = openTrade.getByRole("button", { name: "Withdraw request", exact: true });
+  await withdraw.scrollIntoViewIfNeeded();
+  await expect(withdraw).toBeInViewport({ ratio: 1 });
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "short-window-trade", false);
+  await rollButton.scrollIntoViewIfNeeded();
+  await expect(rollButton).toBeInViewport({ ratio: 1 });
+  await expect(endTurnButton).toBeInViewport({ ratio: 1 });
+  await expect(rollButton).toBeDisabled();
+  await expect(endTurnButton).toBeDisabled();
+  await withdraw.click();
+  await expect(openTrade).toHaveCount(0);
+  await expect(endTurnButton).toBeEnabled();
+});
 
 test("request-first trades compare prices and only exchange cards after confirmation", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1197,12 +1497,14 @@ test("request-first trades compare prices and only exchange cards after confirma
   state = applyAction(state, requester.id, { type: "request-trade", receive: { ...emptyResources(), ore: 1 } });
 
   const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
-  await expect(openTrade).toContainText("You ask for: 1 Ore");
+  await expect(openTrade.getByRole("heading", { name: "Trade request", exact: true })).toBeVisible();
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), ore: 1 });
   await expect(openTrade.getByRole("button", { name: "Complete trade", exact: true })).toHaveCount(0);
   await openTrade.getByRole("button", { name: "Pass to Jordan", exact: true }).click();
   expect(await revealHand(page)).toBe(responder.name);
   await expectResourceInventory(openTrade, responder.resources);
-  await expect(openTrade).toContainText("You give: 1 Ore");
+  await expectTradeCards(openTrade, "You give", { ...emptyResources(), ore: 1 });
+  await expect(openTrade.getByRole("button", { name: "Change offer", exact: true })).toHaveCount(0);
   const propose = openTrade.getByRole("button", { name: "Propose price", exact: true });
   await expect(propose).toBeDisabled();
   await openTrade.getByRole("button", { name: "Add Ore to You want in return", exact: true }).click();
@@ -1223,28 +1525,111 @@ test("request-first trades compare prices and only exchange cards after confirma
   expect(await revealHand(page)).toBe(otherResponder.name);
   await expectResourceInventory(openTrade, otherResponder.resources);
   await expectResourceSelection(openTrade.getByRole("group", { name: "You want in return", exact: true }), "wood", 0);
+  for (let count = 0; count < 3; count++) await openTrade.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
   await openTrade.getByRole("button", { name: "Add Grain to You want in return", exact: true }).click();
   await propose.click();
-  state = applyAction(state, otherResponder.id, { type: "propose-trade", price: { ...emptyResources(), grain: 1 } });
+  state = applyAction(state, otherResponder.id, { type: "propose-trade", price: { ...emptyResources(), wood: 3, grain: 1 } });
   expect(await revealHand(page)).toBe(requester.name);
   await expectResourceInventory(openTrade, requester.resources);
   const affordable = openTrade.getByRole("group", { name: "Jordan's trade response", exact: true });
   const unaffordable = openTrade.getByRole("group", { name: "Alex's trade response", exact: true });
-  await expect(affordable).toContainText("You give: 2 Wood.");
-  await expect(unaffordable).toContainText("You give: 1 Grain. You do not have these cards.");
-  await expect(unaffordable.getByRole("button", { name: "Complete trade", exact: true })).toBeDisabled();
+  await expectTradeCards(affordable, "You give", { ...emptyResources(), wood: 2 });
+  await expectTradeCards(unaffordable, "You give", { ...emptyResources(), wood: 3, grain: 1 });
+  expect(requester.resources.wood).toBe(2);
+  const missing = unaffordable.getByText("Missing 1 Wood, 1 Grain", { exact: true });
+  await expect(missing).toBeVisible();
+  const unavailable = unaffordable.getByRole("button", { name: "Complete trade", exact: true });
+  await expect(unavailable).toBeDisabled();
+  await expect(unavailable).toHaveAttribute("aria-describedby", (await missing.getAttribute("id"))!);
+  await expect(unavailable).toHaveAccessibleDescription("Missing 1 Wood, 1 Grain");
+  await expect(openTrade.getByText(/price proposed|You do not have these cards|You ask for:/)).toHaveCount(0);
   const complete = affordable.getByRole("button", { name: "Complete trade", exact: true });
   await expect(complete).toBeEnabled();
   await complete.scrollIntoViewIfNeeded();
   await noPageOverflow(page);
   await screenshot(page, testInfo, "compare-trade-prices", false);
+
+  const responses = await openTrade.getByRole("group", { name: /'s trade response$/ }).allTextContents();
+  const change = openTrade.getByRole("button", { name: "Change offer", exact: true });
+  await change.focus();
+  await page.keyboard.press("Enter");
+  await expect(trade.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
+  await expect(trade.getByRole("button", { name: "Player trade", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(trade.getByRole("button", { name: "Exact offer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expectResourceInventory(trade, requester.resources);
+  const offeredCards = trade.getByRole("group", { name: "You offer", exact: true });
+  const requestedCards = trade.getByRole("group", { name: "You ask for", exact: true });
+  const submitOffer = trade.getByRole("button", { name: "Put the offer on the table", exact: true });
+  await expect(submitOffer).toBeDisabled();
+  for (const resource of RESOURCES) {
+    await expectResourceSelection(requestedCards, resource, resource === "ore" ? 1 : 0);
+    const selection = await expectResourceSelection(offeredCards, resource, 0, requester.resources[resource]);
+    const add = selection.getByRole("button", { name: `Add ${RESOURCE_NAMES[resource]} to You offer`, exact: true });
+    await expect(selection.getByRole("button", { name: `Remove ${RESOURCE_NAMES[resource]} from You offer`, exact: true })).toBeDisabled();
+    for (let count = 0; count < requester.resources[resource]; count++) await add.click();
+    await expect(add).toBeDisabled();
+    await expectResourceSelection(offeredCards, resource, requester.resources[resource], requester.resources[resource]);
+  }
+  await noPageOverflow(page);
+  await page.keyboard.press("Escape");
+  await expect(trade).toHaveCount(0);
+  await expect(change).toBeFocused();
+  await expect(openTrade.getByRole("group", { name: /'s trade response$/ })).toHaveText(responses);
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), ore: 1 });
+  await expectResourceInventory(openTrade, requester.resources);
+  await expectResourceBank(page, state.bank);
+  await expect(complete).toBeEnabled();
+  await expect(unavailable).toBeDisabled();
+
+  await page.keyboard.press("Space");
+  await expectResourceSelection(offeredCards, "wood", 0, requester.resources.wood);
+  await trade.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(change).toBeFocused();
+  await expect(openTrade.getByRole("group", { name: /'s trade response$/ })).toHaveText(responses);
+  await page.keyboard.press("Enter");
+  for (let count = 0; count < 2; count++) await offeredCards.getByRole("button", { name: "Add Wood to You offer", exact: true }).click();
+  await expect(submitOffer).toBeEnabled();
+  await submitOffer.scrollIntoViewIfNeeded();
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "change-request-exact-offer", false);
+  await submitOffer.click();
+  state = applyAction(state, requester.id, { type: "offer-trade", give: { ...emptyResources(), wood: 2 }, receive: { ...emptyResources(), ore: 1 } });
+  await expect(openTrade.getByRole("heading", { name: "Trade offer", exact: true })).toBeVisible();
+  await expectTradeCards(openTrade, "You give", { ...emptyResources(), wood: 2 });
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), ore: 1 });
+  await expect(openTrade.getByText("not answered", { exact: true })).toHaveCount(2);
+  await expect(openTrade.getByRole("button", { name: "Complete trade", exact: true })).toHaveCount(0);
+  await expect(openTrade.getByText(/^Missing /)).toHaveCount(0);
+  await expectResourceInventory(openTrade, requester.resources);
+  await expectResourceBank(page, state.bank);
+
+  await change.click();
+  for (const resource of RESOURCES) {
+    await expectResourceSelection(offeredCards, resource, resource === "wood" ? 2 : 0, requester.resources[resource]);
+    await expectResourceSelection(requestedCards, resource, resource === "ore" ? 1 : 0);
+  }
+  await offeredCards.getByRole("button", { name: "Remove Wood from You offer", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(change).toBeFocused();
+  await expectTradeCards(openTrade, "You give", { ...emptyResources(), wood: 2 });
+  await expect(openTrade.getByText("not answered", { exact: true })).toHaveCount(2);
+  await openTrade.getByRole("button", { name: "Pass to Jordan", exact: true }).click();
+  expect(await revealHand(page)).toBe(responder.name);
+  await expectTradeCards(openTrade, "You give", { ...emptyResources(), ore: 1 });
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), wood: 2 });
+  await openTrade.getByRole("button", { name: "Accept offer", exact: true }).click();
+  state = applyAction(state, responder.id, { type: "respond-trade", accept: true });
+  expect(await revealHand(page)).toBe(requester.name);
+  await expect(affordable.getByText("accepted", { exact: true })).toBeVisible();
   await complete.click();
   const confirmation = page.getByRole("dialog", { name: "Trade with Jordan", exact: true });
-  await expect(confirmation).toContainText("You give 2 Wood and receive 1 Ore.");
+  await expectTradeCards(confirmation, "You give", { ...emptyResources(), wood: 2 });
+  await expectTradeCards(confirmation, "You receive", { ...emptyResources(), ore: 1 });
   await expectResourceInventory(confirmation, requester.resources);
   await screenshot(page, testInfo, "request-trade-confirmation", false);
   await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expectResourceInventory(openTrade, requester.resources);
+  await expectResourceBank(page, state.bank);
   await complete.click();
   await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
   state = applyAction(state, requester.id, { type: "complete-trade", playerId: responder.id });
@@ -1256,6 +1641,7 @@ test("request-first trades compare prices and only exchange cards after confirma
   await expectResourceBank(page, state.bank);
 
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
+  await trade.getByRole("button", { name: "Request cards", exact: true }).click();
   await trade.getByRole("button", { name: "Add Ore to You ask for", exact: true }).click();
   await ask.click();
   await openTrade.getByRole("button", { name: "Pass to Jordan", exact: true }).click();
@@ -1517,7 +1903,7 @@ test("ending an in-flight roll cancels its result before a new game", async ({ p
 
 async function resolveHumanRoll(page: Page) {
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
-  const endTurn = page.getByRole("button", { name: /^End turn/ });
+  const endTurn = page.getByRole("button", { name: /^End turn/ }).and(page.locator(":enabled"));
   const discard = page.getByRole("button", { name: "Confirm discard", exact: true });
   const robber = page.getByRole("button", { name: /^Move robber to / }).first();
   const victims = page.locator("section").filter({ has: page.getByRole("heading", { name: "Choose a player to steal from", exact: true }) });
@@ -1549,6 +1935,142 @@ async function resolveHumanRoll(page: Page) {
   await expect(endTurn).toBeVisible();
 }
 
+test("solo trade quotes show missing cards and complete an affordable exchange with keyboard confirmation", async ({ page }, testInfo) => {
+  const browserErrors: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("requestfailed", request => browserErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await seedGameRandomness(page);
+  let seed = 1;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  let state = createGame(["Alex", "Computer 1", "Computer 2"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: index === 0 ? "human" as const : "computer" as const,
+  })), random);
+  const requesterId = state.players.find(player => player.control === "human")!.id;
+  // Mirror real computer setup and turns, including a theft, without injecting game state into the browser.
+  for (let step = 0; step < 40 && !(state.activePlayerId === requesterId && state.phase.type === "roll"); step++) {
+    const action = state.activePlayerId !== requesterId ? chooseComputerAction(state, state.activePlayerId)
+      : state.phase.type === "setup-settlement"
+        ? { type: "place-settlement" as const, vertexId: legalSettlementVertices(state, requesterId)[0]! }
+        : { type: "place-road" as const, edgeId: legalRoadEdges(state, requesterId)[0]! };
+    expect(action).not.toBeNull();
+    state = applyAction(state, state.activePlayerId, action!, random);
+  }
+  expect(state.activePlayerId).toBe(requesterId);
+  expect(state.phase.type).toBe("roll");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  for (let placement = 0; placement < 2; placement++) await placeStartingPieces(page);
+  await showView(page, "hand");
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
+  await chooseDice(page, [1, 3]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  let diceIndex = 0;
+  state = applyAction(state, requesterId, { type: "roll" }, () => ([1, 3][diceIndex++]! - 0.5) / 6);
+  const requester = state.players.find(player => player.id === requesterId)!;
+  expect(requester.resources).toEqual({ ...emptyResources(), wood: 1 });
+  const bankBefore = { ...state.bank };
+  await expectResourceBank(page, bankBefore);
+  await page.getByRole("button", { name: "Make a trade", exact: true }).click();
+  const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
+  await expectResourceInventory(trade, requester.resources);
+  await trade.getByRole("button", { name: "Player trade", exact: true }).click();
+  await trade.getByRole("button", { name: "Add Ore to You ask for", exact: true }).click();
+  await trade.getByRole("button", { name: "Ask for these cards", exact: true }).click();
+  state = applyAction(state, requesterId, { type: "request-trade", receive: { ...emptyResources(), ore: 1 } });
+  for (const player of state.players.filter(player => player.control === "computer")) {
+    const response = chooseComputerAction(state, player.id);
+    expect(response?.type).toBe("propose-trade");
+    state = applyAction(state, player.id, response!);
+  }
+  const unavailablePlayer = state.players.find(player => player.name === "Computer 1")!;
+  const affordablePlayer = state.players.find(player => player.name === "Computer 2")!;
+  expect(state.trade!.responses[unavailablePlayer.id]).toEqual({ ...emptyResources(), brick: 1 });
+  expect(state.trade!.responses[affordablePlayer.id]).toEqual({ ...emptyResources(), wood: 1 });
+  const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
+  await expect(openTrade).not.toContainText("not answered", { timeout: 10_000 });
+  await expect(openTrade.getByRole("heading", { name: "Trade request", exact: true })).toBeVisible();
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), ore: 1 });
+  await expect(openTrade.getByText(/price proposed|You do not have these cards|You ask for:/)).toHaveCount(0);
+  await expectResourceInventory(openTrade, requester.resources);
+  await expectResourceBank(page, bankBefore);
+  const unaffordable = openTrade.getByRole("group", { name: "Computer 1's trade response", exact: true });
+  const affordable = openTrade.getByRole("group", { name: "Computer 2's trade response", exact: true });
+  await expectTradeCards(unaffordable, "You give", { ...emptyResources(), brick: 1 });
+  await expectTradeCards(affordable, "You give", { ...emptyResources(), wood: 1 });
+  const unavailable = unaffordable.getByRole("button", { name: "Complete trade", exact: true });
+  const missing = unaffordable.getByText("Missing 1 Brick", { exact: true });
+  await expect(unavailable).toBeDisabled();
+  await expect(missing).toBeVisible();
+  await expect(unavailable).toHaveAttribute("aria-describedby", (await missing.getAttribute("id"))!);
+  await expect(unavailable).toHaveAccessibleDescription("Missing 1 Brick");
+  await missing.scrollIntoViewIfNeeded();
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "solo-trade-missing-cards", false);
+  const complete = affordable.getByRole("button", { name: "Complete trade", exact: true });
+  await expect(complete).toBeEnabled();
+  await expect(complete).not.toHaveAttribute("aria-describedby");
+  await expect(affordable.getByText(/^Missing /)).toHaveCount(0);
+  await complete.scrollIntoViewIfNeeded();
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "solo-trade-affordable", false);
+  await expect(page.getByRole("button", { name: /Reveal my hand|Pass to Computer|Pass device|Return to /, includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^Computer \d+'s hand$/, includeHidden: true })).toHaveCount(0);
+
+  const responses = await openTrade.getByRole("group", { name: /'s trade response$/ }).allTextContents();
+  const resourceCounts = page.getByRole("region", { name: "Private resources", exact: true, includeHidden: true }).getByText(/^\d+ (Wood|Brick|Wool|Grain|Ore)$/);
+  const countsBefore = RESOURCES.map(resource => `${requester.resources[resource]} ${RESOURCE_NAMES[resource]}`);
+  await complete.focus();
+  await page.keyboard.press("Enter");
+  const confirmation = page.getByRole("dialog", { name: "Trade with Computer 2", exact: true });
+  await expect(confirmation.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
+  await expectTradeCards(confirmation, "You give", { ...emptyResources(), wood: 1 });
+  await expectTradeCards(confirmation, "You receive", { ...emptyResources(), ore: 1 });
+  await expect(confirmation.getByText("You give 1 Wood and receive 1 Ore.", { exact: true })).toHaveCount(0);
+  await expectResourceInventory(confirmation, requester.resources);
+  await expect(resourceCounts).toHaveText(countsBefore);
+  const bank = page.getByRole("region", { name: "Resource bank", exact: true, includeHidden: true });
+  for (const resource of RESOURCES) {
+    await expect(bank.getByRole("listitem", {
+      name: `${RESOURCE_NAMES[resource]}: ${bankBefore[resource]} in bank`, exact: true, includeHidden: true,
+    })).toHaveCount(1);
+  }
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "solo-trade-confirmation", false);
+  await page.keyboard.press("Escape");
+  await expect(confirmation).toHaveCount(0);
+  await expect(complete).toBeFocused();
+  await expect(openTrade.getByRole("group", { name: /'s trade response$/ })).toHaveText(responses);
+  await expectResourceInventory(openTrade, requester.resources);
+  await expect(resourceCounts).toHaveText(countsBefore);
+  await expectResourceBank(page, bankBefore);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await expect(confirmation.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  state = applyAction(state, requesterId, { type: "complete-trade", playerId: affordablePlayer.id });
+  expect(state.bank).toEqual(bankBefore);
+  await expect(confirmation).toHaveCount(0);
+  await expect(openTrade).toHaveCount(0);
+  await expect(resourceCounts).toHaveText(RESOURCES.map(resource =>
+    `${state.players.find(player => player.id === requesterId)!.resources[resource]} ${RESOURCE_NAMES[resource]}`,
+  ));
+  await expectResourceBank(page, bankBefore);
+  await expectPublicCardCounts(page, state);
+  await expect(page.getByRole("heading", { name: /^Computer \d+'s hand$/, includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await noPageOverflow(page);
+  expect(browserErrors).toEqual([]);
+});
+
 test("solo AI setup, automatic trade responses and turns never require hand reveals", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
@@ -1571,7 +2093,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   }
   await expect(page.getByRole("img", { name: /'s road at /, includeHidden: true })).toHaveCount(6, { timeout: 15_000 });
   await showView(page, "hand");
-  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 15_000 });
   await resolveHumanRoll(page);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
   const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
@@ -1593,7 +2115,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await trade.getByRole("button", { name: "Add Wood to You ask for", exact: true }).click();
   await trade.getByRole("button", { name: "Ask for these cards", exact: true }).click();
   await expect(offer).not.toContainText("not answered", { timeout: 10_000 });
-  await expect(offer.getByText("price proposed", { exact: true }).or(offer.getByText("declined", { exact: true }))).toHaveCount(2);
+  await expect(offer.getByRole("button", { name: "Complete trade", exact: true }).or(offer.getByText("declined", { exact: true }))).toHaveCount(2);
+  await expect(offer.getByText("price proposed", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Pass to Computer/, includeHidden: true })).toHaveCount(0);
   await screenshot(page, testInfo, "solo-request-responses");
   await page.getByRole("button", { name: "Withdraw request", exact: true }).click();
@@ -1604,6 +2127,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await showView(page, "hand");
   await page.getByRole("button", { name: "End turn", exact: true }).click();
   await expect(page.getByRole("status", { name: "Computer activity" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "End turn", exact: true })).toBeDisabled();
   await expect(page.getByRole("region", { name: "Private resources" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Reveal my hand|Pass device|Return to /, includeHidden: true })).toHaveCount(0);
   await showView(page, "board");
@@ -1629,7 +2154,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("heading", { name: /^Computer \d+'s hand$/, includeHidden: true })).toHaveCount(0);
   await showView(page, "hand");
   await page.clock.resume();
-  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: "Computer activity", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
