@@ -109,7 +109,6 @@
 .bank-tray { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 58px; padding: 8px; border: 1px solid #d3c8ad; border-radius: 14px; background: #eee7d6; }
 .bank-tray .eyebrow { font-size: 9px; }
 .bank-supply { display: flex; align-items: center; gap: 6px; }
-.bank-card .resource-count { min-width: 21px; height: 20px; top: -2px; right: -2px; font-size: 12px; }
 .bank-development { display: flex; flex: none; flex-direction: column; align-items: center; justify-content: center; width: 30px; height: 40px; border: 1px solid #c2ad7c; border-radius: 8px; background: #faf4e4; color: #947231; font-size: 12px; line-height: 12px; font-variant-numeric: tabular-nums; }
 .bank-development svg { width: 18px; height: 20px; }
 .table-play-area { flex: 1; min-height: 0; min-width: 0; display: grid; }
@@ -197,10 +196,12 @@
 .build-cost > span { gap: 3px; }
 .build-cost > span > span { width: 24px; height: 32px; }
 .build-options button:disabled { opacity: 0.65; }
+.player-seat-leading { border-color: #b58a2d; background: linear-gradient(115deg, #fff6dc, #f2e1b5); box-shadow: inset 3px 0 #b58a2d, inset 0 1px #fffaf0, 0 3px 9px #8b642524; }
+.player-seat-active { outline: 2px solid #548b73; outline-offset: -2px; animation: player-turn-pulse 2400ms ease-in-out infinite; }
 .player-card-counts { display: flex; flex-shrink: 0; gap: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .player-card-stat { display: flex; align-items: center; gap: 4px; }
 .player-card-stat strong { min-width: 2ch; color: var(--color-ink); font-size: 15px; }
-.player-card-counts-detailed { flex-direction: column; gap: 2px; }
+.player-card-counts-detailed { min-width: 0; flex-wrap: wrap; gap: 2px 12px; }
 .player-card-counts-detailed svg { width: 16px; height: 20px; }
 .table-players { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .table-players .player-seat { padding: 10px 14px; }
@@ -253,6 +254,12 @@
   .computer-table .roll-summary { height: 64px; }
   .computer-table .roll-summary-dice .roll-die { width: 44px; height: 44px; }
   .board-tablemat { padding: 12px; }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .table-seats .player-card-counts { flex-direction: column; gap: 0; }
+  .table-seats .player-card-stat strong { min-width: 1ch; }
+  .table-seats .player-card-stat svg { width: 16px; height: 20px; }
 }
 
 @media (max-height: 850px) {
@@ -344,6 +351,11 @@
   inset: 0;
   pointer-events: none;
   animation: resource-deal 1000ms 150ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes player-turn-pulse {
+  0%, 100% { outline-color: #548b7340; }
+  50% { outline-color: #548b73; }
 }
 
 @keyframes dice-tumble {

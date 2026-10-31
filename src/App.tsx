@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { Board } from "./components/Board";
 import { RollSummary, type RollStage } from "./components/RollSummary";
@@ -65,7 +65,7 @@ const DEVELOPMENT_NAMES: Record<DevelopmentKind, string> = {
 };
 const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
   knight:
-    "Move the robber and steal one random resource from an adjacent opponent. Three knights can earn Largest Army.",
+    "Move the robber and steal one random resource from an adjacent opponent. Only played Knights count toward Largest Army (+2 points): at least three, and more than the current holder.",
   "victory-point":
     "One hidden victory point. Counted automatically toward your ten points on your turn, including when purchased.",
   "road-building":
@@ -162,7 +162,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "rules" | "reference" | "settings" | "trade" | "development" | "players" | "restart" | null
+    "help" | "settings" | "trade" | "development" | "players" | "restart" | null
   >(null);
   const gameMenu = useRef<HTMLDetailsElement>(null);
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
@@ -303,14 +303,14 @@ export function App() {
     return () => document.removeEventListener("pointerdown", dismissMenu);
   }, []);
 
-  function openGameDialog(nextDialog: "rules" | "reference" | "settings" | "players" | "restart") {
+  function openGameDialog(nextDialog: "help" | "settings" | "players" | "restart") {
     if (gameMenu.current) {
       gameMenu.current.open = false;
       // Dialogs restore focus to the visible opener, not a hidden menu item.
       gameMenu.current.querySelector("summary")?.focus();
     }
     setDialog(nextDialog);
-    if (nextDialog === "rules") setError("");
+    if (nextDialog === "help") setError("");
   }
 
   function startGame(selectedBoard?: GameState["board"]) {
@@ -505,6 +505,23 @@ export function App() {
           (resource) => viewer.resources[resource] >= cost[resource],
         ),
     );
+  const settlementUnavailable = !game || !viewer ? null
+    : !isActive ? "Wait for your turn to build a settlement."
+    : rollBusy ? "Wait for the dice roll to finish before building a settlement."
+    : game.phase.type !== "actions"
+      ? match(game.phase)
+          .with({ type: "roll" }, () => "Roll the dice before building a settlement.")
+          .with({ type: "setup-settlement" }, { type: "setup-road" }, () => "Place your starting pieces on the highlighted board locations first.")
+          .with({ type: "finished" }, () => "The game has ended.")
+          .otherwise(() => "Finish the current action before building a settlement.")
+    : game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement").length >= 5
+      ? "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece."
+    : !canAfford(COSTS.settlement)
+      ? `Missing ${RESOURCES.filter(resource => viewer.resources[resource] < COSTS.settlement[resource])
+          .map(resource => `${COSTS.settlement[resource] - viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}. Collect or trade for these resources.`
+    : !legalSettlementVertices(game, viewer.id).length
+      ? "No legal location. Connect your road to an empty intersection at least two edges from any settlement or city."
+    : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-settlement" || buildMode === "settlement"
@@ -550,27 +567,26 @@ export function App() {
 
   function playerCards(detailed = false) {
     if (!game) return null;
+    const scores = game.players.map(player => getScore(game, player.id));
+    const highestPublicScore = Math.max(...scores.map(score => score.public));
+    const showPublicScoreLeaders = scores.some(score => score.public < highestPublicScore);
     return game.players.map((player, index) => {
-      const score = getScore(game, player.id);
+      const score = scores[index]!;
+      const isPublicScoreLeader = showPublicScoreLeaders && score.public === highestPublicScore;
       return (
         <div
           key={player.id}
-          className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${game.activePlayerId === player.id ? "border-forest/40 bg-moss/80" : "border-line bg-white/30"}`}
+          className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${game.activePlayerId === player.id ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${isPublicScoreLeader ? "player-seat-leading" : ""}`}
         >
-          <div className="flex items-center gap-2.5">
+          <div className={detailed ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
             <span
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
               style={{ background: player.color }}
             >
               {index + 1}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{player.name}</p>
-              <p className="mt-0.5 h-4 truncate text-[10px] text-muted">
-                {game.activePlayerId === player.id ? player.id === viewerId ? "Your turn" : "Playing" : ""}
-              </p>
-            </div>
-            <div role="group" aria-label={`${player.name}'s card counts`} className={`player-card-counts ${detailed ? "player-card-counts-detailed" : ""}`}>
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold">{player.name}</p>
+            <div role="group" aria-label={`${player.name}'s card counts`} className={`player-card-counts ${detailed ? "player-card-counts-detailed col-span-2 col-start-2 row-start-2" : ""}`}>
               <span role="img" aria-label={`${resourceTotal(player.resources)} resource cards`} title={`${resourceTotal(player.resources)} resource cards`} className="player-card-stat text-forest">
                 <CardTypeIcon kind="resource" />
                 <strong>{resourceTotal(player.resources)}</strong>
@@ -582,31 +598,36 @@ export function App() {
                 {detailed && <span className="text-[10px] text-muted">development</span>}
               </span>
             </div>
-            <div className="text-right">
+            <div className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${isPublicScoreLeader ? "text-[#8b6425]" : ""}`}>
+              {isPublicScoreLeader && (
+                <svg role="img" aria-label="Public VP leader" viewBox="0 0 24 24" className="size-4 shrink-0 text-[#b58a2d]" fill="currentColor">
+                  <title>Highest public victory points</title>
+                  <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
+                  <path d="M5 21h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
               <span className="font-serif text-2xl">
                 {game.winnerId ? score.total : score.public}
               </span>
-              <span className="ml-1 text-[9px] text-muted">VP</span>
+              <span className="text-[9px] text-muted">VP</span>
             </div>
           </div>
-          {detailed && (
-            <>
-              <div className="player-awards mt-3 border-t border-line pt-3 text-xs leading-6">
-                <p>
-                  {getLongestRoadLength(game, player.id)} connected roads{" "}
-                  {game.awards.longestRoad === player.id && (
-                    <strong className="text-ink"> / Longest Road +2</strong>
-                  )}
-                </p>
-                <p>
-                  {player.knightsPlayed} knights played{" "}
-                  {game.awards.largestArmy === player.id && (
-                    <strong className="text-ink"> / Largest Army +2</strong>
-                  )}
-                </p>
-              </div>
-            </>
-          )}
+          <div className={detailed ? "player-awards mt-3 border-t border-line pt-3 text-xs leading-6" : "mt-1 text-xs leading-6"}>
+            {detailed && (
+              <p>
+                {getLongestRoadLength(game, player.id)} connected roads{" "}
+                {game.awards.longestRoad === player.id && (
+                  <strong className="text-ink"> / Longest Road +2</strong>
+                )}
+              </p>
+            )}
+            <p>
+              {player.knightsPlayed} {player.knightsPlayed === 1 ? "knight" : "knights"} played{" "}
+              {game.awards.largestArmy === player.id && (
+                <strong className="text-ink"> / Largest Army +2</strong>
+              )}
+            </p>
+          </div>
         </div>
       );
     });
@@ -644,11 +665,8 @@ export function App() {
               </svg>
             </summary>
             <div id="game-menu" role="group" aria-label="Game menu" className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl">
-              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("reference")}>
-                Table guide
-              </button>
-              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("rules")}>
-                How to play
+              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("help")}>
+                Help
               </button>
               <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("settings")}>
                 Settings
@@ -669,12 +687,12 @@ export function App() {
           <button
             className="text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
             onClick={() => {
-              setDialog("rules");
+              setDialog("help");
               setError("");
             }}
           >
-            How to play{" "}
-            <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
+            Help{" "}
+            <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
               ?
             </span>
           </button>
@@ -1226,40 +1244,48 @@ export function App() {
                         : piece === "city"
                           ? legalCityVertices(game, viewer.id)
                           : legalSettlementVertices(game, viewer.id);
-                    const unavailable = !normalActions
+                    const explanation = piece === "settlement" ? settlementUnavailable : null;
+                    const unavailable = explanation ?? (!normalActions
                       ? "Available after rolling on your turn."
                       : !canAfford(COSTS[piece])
                         ? "You need more resources."
                         : !locations.length
                           ? "No legal position or no pieces remaining."
-                          : "Select a location on the board.";
+                          : "Select a location on the board.");
                     return (
-                      <button
-                        key={piece}
-                        title={unavailable}
-                        disabled={
-                          !normalActions ||
-                          !canAfford(COSTS[piece]) ||
-                          !locations.length
-                        }
-                        aria-pressed={buildMode === piece}
-                        className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${buildMode === piece ? "border-forest bg-moss" : "border-line bg-white/40"}`}
-                        onClick={() => {
-                          setBuildMode(buildMode === piece ? null : piece);
-                          setSelected(null);
-                          setMobileView("board");
-                        }}
-                      >
-                        <span className="flex min-w-0 items-center gap-2" style={{ color: viewer.color }}>
-                          <PieceIcon piece={piece} />
-                          <span className="font-semibold text-ink">
-                            {piece === "city"
-                              ? "Upgrade to city"
-                              : `Build ${piece}`}
+                      <Fragment key={piece}>
+                        <button
+                          title={unavailable}
+                          disabled={
+                            !normalActions ||
+                            !canAfford(COSTS[piece]) ||
+                            !locations.length
+                          }
+                          aria-pressed={buildMode === piece}
+                          aria-describedby={explanation ? "settlement-build-explanation" : undefined}
+                          className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${buildMode === piece ? "border-forest bg-moss" : "border-line bg-white/40"}`}
+                          onClick={() => {
+                            setBuildMode(buildMode === piece ? null : piece);
+                            setSelected(null);
+                            setMobileView("board");
+                          }}
+                        >
+                          <span className="flex min-w-0 items-center gap-2" style={{ color: viewer.color }}>
+                            <PieceIcon piece={piece} />
+                            <span className="font-semibold text-ink">
+                              {piece === "city"
+                                ? "Upgrade to city"
+                                : `Build ${piece}`}
+                            </span>
                           </span>
-                        </span>
-                        <span className="build-cost shrink-0"><Cost resources={COSTS[piece]} /></span>
-                      </button>
+                          <span className="build-cost shrink-0"><Cost resources={COSTS[piece]} /></span>
+                        </button>
+                        {explanation && (
+                          <p id="settlement-build-explanation" className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">
+                            {explanation}
+                          </p>
+                        )}
+                      </Fragment>
                     );
                   })}
                   <button
@@ -1316,32 +1342,41 @@ export function App() {
                   </span>
                 </div>
                 <ul className="flex flex-col gap-2">
-                  {viewer.developmentCards.map((card) => (
-                    <li key={card.id}>
-                      <button
-                        className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-line bg-white/40 px-3 py-2 text-left hover:bg-moss/60"
-                        aria-haspopup="dialog"
-                        onClick={() => {
-                          setDevelopmentCardId(card.id);
-                          setChosenResources(emptyResources());
-                          setChosenResource("wood");
-                          setDialog("development");
-                          setError("");
-                        }}
-                      >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss text-forest">
-                          <DevelopmentCardIcon kind={card.kind} />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold">{DEVELOPMENT_NAMES[card.kind]}</span>
-                          <span className="mt-1 block text-xs leading-5 text-muted">
-                            {DEVELOPMENT_DESCRIPTIONS[card.kind]}
+                  {[...new Set(viewer.developmentCards.map(card => card.kind))].map(kind => {
+                    const cards = viewer.developmentCards.filter(card => card.kind === kind);
+                    const card = cards.find(card => card.purchasedTurn < game.turnNumber) ?? cards[0]!;
+                    return (
+                      <li key={kind}>
+                        <button
+                          className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-line bg-white/40 px-3 py-2 text-left hover:bg-moss/60"
+                          aria-haspopup="dialog"
+                          onClick={() => {
+                            setDevelopmentCardId(card.id);
+                            setChosenResources(emptyResources());
+                            setChosenResource("wood");
+                            setDialog("development");
+                            setError("");
+                          }}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss text-forest">
+                            <DevelopmentCardIcon kind={kind} />
                           </span>
-                        </span>
-                        <Arrow className="h-4 w-4 shrink-0 text-muted" />
-                      </button>
-                    </li>
-                  ))}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold">{DEVELOPMENT_NAMES[kind]}</span>
+                              <span className="shrink-0 rounded-md bg-moss px-2 py-1 text-xs tabular-nums">
+                                {cards.length}<span className="sr-only"> {cards.length === 1 ? "card" : "cards"}</span>
+                              </span>
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-muted">
+                              {DEVELOPMENT_DESCRIPTIONS[kind]}
+                            </span>
+                          </span>
+                          <Arrow className="h-4 w-4 shrink-0 text-muted" />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>}
 
@@ -1629,95 +1664,141 @@ export function App() {
         </Dialog>
       )}
 
-      {dialog === "reference" && game && (
-        <Dialog title="Around the table" onClose={() => setDialog(null)} wide>
-          <p className="mb-5 text-xs text-muted">
-            <span>Standard island / {game.players.length} settlers</span>
-            {" / "}{game.developmentDeck.length} development cards in the bank
-          </p>
-          <section>
-            <h2 className="eyebrow mb-4">A little investment</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {(["road", "settlement", "city", "development"] as const).map(piece => (
-                <div key={piece} className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs capitalize">{piece}</span>
-                  <Cost resources={COSTS[piece]} />
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="mt-6">
-            <h2 className="eyebrow mb-3">Island stories</h2>
-            <ol aria-label="Public activity" className="space-y-2">
-              {game.log.slice(-10).reverse().map((entry, index) => (
-                <li key={`${game.log.length}-${index}`} className="text-xs leading-5 text-muted">{entry}</li>
-              ))}
-            </ol>
-          </section>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">{playerCards(true)}</div>
-        </Dialog>
-      )}
-
-      {dialog === "rules" && (
-        <Dialog
-          title="A little guide to the island"
-          onClose={() => setDialog(null)}
-          wide
-        >
-          <div className="space-y-5 text-sm leading-7 text-muted">
+      {dialog === "help" && (
+        <Dialog title="Help" onClose={() => setDialog(null)} wide>
+          <div className="space-y-8 text-sm leading-7 text-muted">
             <p className="font-serif text-xl text-ink">
               Good neighbors. Clever trades. Ten victory points.
             </p>
-            <p>
-              <strong className="text-ink">Start with a home.</strong> Each
-              player places a settlement and an adjoining road in order, then
-              again in reverse. Your second settlement grants one resource from
-              each neighboring non-desert hex. Settlements must be at least two
-              edges apart.
-            </p>
-            <p>
-              <strong className="text-ink">Let the island provide.</strong> On
-              your turn, roll the dice. Matching hexes produce one resource for
-              each settlement, or two for each city. A robber blocks its hex. On
-              a seven, hands over seven cards discard half, rounded down; then
-              move the robber and steal from an eligible neighbor.
-            </p>
-            <p>
-              <strong className="text-ink">Trade. Build. Repeat.</strong> After
-              rolling, request cards and let other players name their price, make
-              an exact offer, or trade with the bank (4:1). You confirm one player
-              exchange before any cards move. A settlement
-              at a generic port improves the rate to 3:1; a matching resource
-              port makes it 2:1. Build roads, new settlements, cities, or buy a
-              development card. Each player has 15 roads, 5 settlements, and 4
-              cities.
-            </p>
-            <p>
-              <strong className="text-ink">A card up your sleeve.</strong> Play
-              at most one action development card per turn, including before
-              rolling, but not on the turn you bought it. Knights move the
-              robber, Road Building places two roads, Year of Plenty takes two
-              bank resources, and Monopoly takes all of one resource from
-              opponents. Victory-point cards count automatically, including on
-              purchase.
-            </p>
-            <p>
-              <strong className="text-ink">Make it to ten.</strong> A settlement
-              is 1 point, a city 2, and a hidden victory-point card 1. Longest
-              Road (at least five connected roads) and Largest Army (at least
-              three played knights) are worth 2 each. Ties stay with the current
-              holder. Reach 10 on your own turn to win.
-            </p>
-            <div className="rounded-xl bg-moss p-4">
-              <strong className="text-ink">One device, a whole table.</strong>{" "}
-              Play solo against local AI with your hand always visible, or choose
-              multiple humans and pass the device before revealing each hand.
-              Computer hands cannot be opened. AI handles its own turns and trade
-              responses, including prices for your requests; it uses bank and port
-              trades but does not initiate player trades. This
-              is a friendly local game, not a secure multiplayer room. Games
-              live only in this tab: refreshing or closing it ends the game.
-            </div>
+            <section aria-labelledby="help-how-to-play">
+              <h3 id="help-how-to-play" className="mb-4 font-serif text-2xl text-ink">How to play</h3>
+              <ol className="list-decimal space-y-3 pl-5">
+                <li>
+                  <strong className="text-ink">Settle the island.</strong> Choose three or four players,
+                  with computers filling any non-human seats. Turn order is randomized. Each player
+                  places a free settlement and adjoining road in order, then again in reverse.
+                  Your second settlement grants one resource from each neighboring non-desert hex.
+                </li>
+                <li>
+                  <strong className="text-ink">Roll and gather.</strong> Roll two dice once on your turn.
+                  All players collect from matching hexes. Resolve any discards, robber moves, and
+                  theft before continuing. An eligible development card can be played before or after rolling.
+                </li>
+                <li>
+                  <strong className="text-ink">Trade, build, and pass.</strong> After rolling, trade,
+                  build, and buy cards in any order while you have the resources. Select a highlighted
+                  location on the board, then confirm the placement; Cancel or Escape clears the preview.
+                  Finish required choices before ending your turn. Reach 10 points on your own turn to win.
+                </li>
+              </ol>
+            </section>
+
+            <section aria-labelledby="help-builds">
+              <h3 id="help-builds" className="mb-4 font-serif text-2xl text-ink">Builds and costs</h3>
+              <p className="mb-4">Pay these resources to the bank after rolling. You need a legal location and an available piece to build.</p>
+              <ul aria-label="Available builds and purchases" className="grid gap-3 sm:grid-cols-2">
+                {([
+                  { piece: "road", name: "Road", description: "Connect an empty edge to your own road, settlement, or city. You cannot extend through an opponent's building. Roads earn no points by themselves. Limit: 15 roads." },
+                  { piece: "settlement", name: "Settlement", description: "Build on an empty intersection beside your road, at least two edges from every settlement or city. Worth 1 point; produces 1 resource per matching neighboring hex. Limit: 5 settlements." },
+                  { piece: "city", name: "City", description: "Upgrade one of your settlements, returning its piece to your supply. Worth 2 points total; produces 2 resources per matching neighboring hex. Limit: 4 cities." },
+                  { piece: "development", name: "Development card", description: "Draw a hidden card from the shuffled deck. There are 25 cards; purchases stop when the deck is empty. Cards cannot be traded." },
+                ] as const).map(({ piece, name, description }) => (
+                  <li key={piece} className="min-w-0 rounded-xl border border-line bg-white/30 p-4">
+                    <div className="mb-3 flex items-center gap-3 text-forest">
+                      {piece === "development" ? <CardTypeIcon kind="development" /> : <PieceIcon piece={piece} />}
+                      <h4 className="font-semibold text-ink">{name}</h4>
+                    </div>
+                    <Cost resources={COSTS[piece]} />
+                    <p className="mt-3 text-xs leading-6">{description}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section aria-labelledby="help-development-cards">
+              <h3 id="help-development-cards" className="mb-4 font-serif text-2xl text-ink">Development cards</h3>
+              <p className="mb-4">
+                All five card types are shown here, whether or not you own them. Counts show the starting
+                deck, not the cards remaining. Play at most one action
+                development card per turn, never on the turn you bought it. Finish mandatory choices
+                before playing a card. Victory-point cards count automatically and do not use this allowance.
+              </p>
+              <ul aria-label="All development cards" className="space-y-3">
+                {([
+                  ["knight", 14], ["victory-point", 5], ["road-building", 2],
+                  ["year-of-plenty", 2], ["monopoly", 2],
+                ] as const).map(([kind, count]) => (
+                  <li key={kind} className="flex gap-3 rounded-xl border border-line bg-white/30 p-4">
+                    <span className="text-forest"><DevelopmentCardIcon kind={kind} /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                        <h4 className="font-semibold text-ink">{DEVELOPMENT_NAMES[kind]}</h4>
+                        <span className="rounded-md bg-moss px-2 py-0.5 text-xs font-semibold text-ink">{count} in starting deck</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-6">{DEVELOPMENT_DESCRIPTIONS[kind]}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-xs leading-6">
+                Knight does not trigger discards. You may cancel it before confirming the
+                robber move, unless it has already won the game. Road building needs a remaining road
+                piece and stops early if no legal placements remain. Year of plenty can take two of the
+                same resource, but cannot be played with an empty bank. Played action cards leave your hand.
+              </p>
+            </section>
+
+            <section aria-labelledby="help-rules" className="space-y-4">
+              <h3 id="help-rules" className="font-serif text-2xl text-ink">Game rules</h3>
+              <p>
+                <strong className="text-ink">Resources and production.</strong> Forests produce wood,
+                hills brick, pastures wool, fields grain, and mountains ore. The desert produces nothing.
+                On a matching dice total, each adjacent settlement receives one resource and each city two,
+                unless the robber blocks that hex. The bank starts with 19 of each resource. If it cannot
+                satisfy all claims for a resource and multiple players need it, nobody receives that resource
+                this roll. If only one player needs it, they take what remains. Other resources still produce normally.
+              </p>
+              <p>
+                <strong className="text-ink">Seven and the robber.</strong> A seven produces no resources.
+                Every player with more than seven resource cards chooses half, rounded down, to return
+                to the bank; development cards do not count. After all discards, the active player moves
+                the robber to a different hex, including the desert, and chooses one opponent with an
+                adjacent settlement or city to steal one random resource from. An empty hand gives nothing;
+                if no opponent is adjacent, skip theft. The robber stays and blocks production until moved again.
+              </p>
+              <p>
+                <strong className="text-ink">Trading and ports.</strong> After rolling, the active player
+                can exchange four of one resource for one different resource available in the bank (4:1).
+                Their settlement or city on a generic port improves this to 3:1; a matching resource port
+                allows 2:1 for that resource. Player trades must involve the active player. Request cards
+                and compare prices, or make an exact offer. Both sides must give resources, with no resource
+                appearing on both sides. No gifts or development-card trades. Nothing moves until the active
+                player confirms one exchange and both players still have the cards.
+              </p>
+              <p>
+                <strong className="text-ink">Points and victory.</strong> Each settlement is 1 point,
+                each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are
+                worth 2 points each. Reach at least 10 on your own turn to win, including cards bought
+                that turn. Opponents see only your public score until the game ends.
+              </p>
+              <p>
+                <strong className="text-ink">Longest Road and Largest Army.</strong> Longest Road needs
+                at least five roads in one continuous trail, not your total network. Count each road once;
+                loops can count, branches do not all add together, and an opponent's building interrupts
+                the trail. Largest Army needs at least three played Knights. For either award, the highest
+                qualifying player holds it. A tie stays with the current holder if they are among the leaders;
+                otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.
+              </p>
+              <div className="rounded-xl bg-moss p-4">
+                <strong className="text-ink">One device, a whole table.</strong> Play solo against local
+                AI with your hand always visible, or pass the device before revealing each human's hand.
+                Computer hands cannot be opened. AI handles its own turns and trade responses, including
+                prices for requests; it uses bank and port trades but does not initiate player trades.
+                This is a friendly local game, not a secure multiplayer room. Games live only in this tab:
+                refreshing or closing it ends the game.
+              </div>
+            </section>
+
           </div>
         </Dialog>
       )}

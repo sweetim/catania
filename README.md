@@ -39,7 +39,7 @@ serves the source through Bun rather than reading `dist/`.
 3. Place a settlement and road in forward order, then in reverse order. Your
    placements are previewed before confirmation; AI places its own pieces automatically.
 4. Roll, gather resources, build, trade, and play eligible development cards.
-   The **How to play** guide and on-screen costs explain the rules.
+   **Help** and on-screen costs explain the rules.
 5. For a player trade, use **Request cards** to ask for what you need and let other
    players propose a price, or choose **Exact offer** to specify both sides.
    AI responds automatically; pass the device for human responses. Compare prices
@@ -65,19 +65,30 @@ card without a repeated turn-owner label, and the persistent **Roll the dice** a
 The board fills the full height beside all three panels. On phones,
 the turn-status card and controls stay at the bottom of **Hand**, while the dice
 summary and bank remain above the selected view, visible across all three game views.
+Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains
 only zoom and reset controls, without instruction or legend text. Short screens can scroll
 within the hand or player panel without moving the board. On very short windows,
 the entire sidebar scrolls internally so the status card, turn controls, and hand
-tasks remain reachable. The header's **Game** menu contains **Table guide**
-(costs, public activity, and player details),
-**How to play**, **Settings**, and **Pass device** when multiple humans have a hand revealed.
+tasks remain reachable. The header's **Game** menu contains **Help**, **Settings**,
+and **Pass device** when multiple humans have a hand revealed.
 **End game** sits below a divider and still requires confirmation. The turn header
 shows **Setup** or the current turn number. Keyboard users can select highlighted
 positions with Enter or Space. Confirm/Cancel appears beside the selected piece
 or hex, stays inside the map, and follows zoom and pan. Confirm is focused for
 keyboard use; Escape cancels and returns focus to the selected location.
+
+**Help** combines how to play, every build and purchase with costs and piece limits,
+all five development-card types with their effects, timing, and starting deck counts,
+and the game rules
+for production, trading, the robber, scoring, and awards. This reference is available
+before play and on the results screen through the header's **Help** button, and during
+play through **Game > Help**, even with an empty hand. Each card type shows its
+original supply: 14 Knights, 5 Victory points, and 2 each of Road building, Year of
+plenty, and Monopoly. These are not live remaining counts. Help contains no current
+table activity or player details. The dialog scrolls internally and
+supports Escape to close and restore focus to its opener.
 
 Small crosses mark empty corners next to any settlement or city where the distance
 rule prevents a new settlement. **Game > Settings > Show blocked settlement locations**
@@ -101,15 +112,33 @@ confirmation omit that summary. The device-handoff picker shows human names and
 colors without detailed player cards; all private summaries disappear during handoff.
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
-breakdown. Build controls are vertical rows with road, settlement, city, and
+breakdown. Player seats also show each player's played-Knight count, including in
+the compact desktop strip, with **Largest Army +2** beside the holder's count.
+Knights still in hand do not count: play at least three to qualify, and surpass
+the current holder to take the award. A gold crown and warm gold cell highlight
+mark the highest public VP
+score, shared by tied leaders unless everyone is tied. Names are vertically centered
+beside their avatars, without a repeated turn-status line or dot. The active cell
+has a gentle border pulse that becomes a static outline with reduced motion enabled;
+it moves to the next player's cell when the turn changes without moving the layout.
+The separate turn controls also identify the active player. Hidden victory-point
+cards do not affect the crowns or cell highlights.
+Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.
-Owned development cards appear below as a vertical stack, one row per card with
-a distinct card-type icon and a description below its title. The hand and card
+When **Build settlement** is unavailable, a visible explanation beneath it names
+the turn or phase restriction, missing resources, exhausted settlement pieces, or
+lack of a legal location. Using all five settlements prompts a city upgrade to
+free a piece; location guidance explains road connections and the distance rule.
+These explanations are also associated with the button for screen readers.
+Owned development cards appear below as a vertical stack, one row per card type
+with a quantity badge, a distinct icon, and a description below its title. The
+section heading counts all owned cards, including duplicates. The hand and card
 dialog omit the "In your hand" and "New this turn" labels. Select a row to open
-that card in the existing dialog; playing still requires confirmation and
-action cards purchased this turn remain unavailable. The entire owned-card
-section is hidden when your hand has no development cards.
+an older copy first when available in the existing, individual-card dialog;
+playing still requires confirmation and action cards purchased this turn remain
+unavailable. The entire owned-card section is hidden when your hand has no
+development cards.
 After **Confirm Knight**, use **Cancel Knight** in the turn card or phone Board
 prompt to return the card before confirming the robber move. This restores the
 played-Knight count, Largest Army ownership, development-card allowance, and
@@ -194,7 +223,9 @@ the collection tray after a second starting settlement, a producing roll, and a
 bank trade in both Hand and Board views. Compare gain badges to resource totals,
 and repeat with the operating system's reduced-motion setting enabled. Check that
 rolls and placement previews leave the board stationary, matching numbers light
-up instead of hex borders, and **Game > Table guide** opens without shifting the table.
+up instead of hex borders, and **Game > Help** opens without shifting the table.
+Check all build costs and five development-card types in Help before starting a game
+and with an empty hand, then scroll to the rules and current table on desktop and mobile.
 Check that the Game menu closes with Escape or an outside click, and that closing
 its dialogs returns focus to **Game**.
 Viewport automation is not a claim of physical Android/iOS or local-network

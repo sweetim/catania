@@ -214,7 +214,12 @@ export function BankSupply({ resources, developmentCards }: { resources: Resourc
       <ul className="bank-supply" aria-label="Bank resources">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
           <li key={resource} aria-label={`${RESOURCE_NAMES[resource]}: ${resources[resource]} in bank`} title={`${resources[resource]} ${RESOURCE_NAMES[resource]} in bank`}>
-            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-4 w-4" className="bank-card h-10 w-8" />
+            <span aria-hidden="true" className="bank-card inline-flex h-10 w-8 rounded-xl p-[3px] shadow-sm" style={{ background: RESOURCE_COLORS[resource] }}>
+              <span className="flex h-full w-full flex-col items-center justify-center gap-px rounded-lg border border-white/50 text-white">
+                <ResourceIcon resource={resource} className="h-4 w-4" />
+                <strong className="w-full rounded-sm bg-paper/95 text-center text-xs font-bold leading-3 text-ink tabular-nums">{resources[resource]}</strong>
+              </span>
+            </span>
           </li>
         ))}
       </ul>
