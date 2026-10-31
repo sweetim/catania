@@ -581,7 +581,10 @@ export function App() {
       const score = scores[index]!;
       const isPublicScoreLeader = showPublicScoreLeaders && score.public === highestPublicScore;
       const hasLargestArmy = game.awards.largestArmy === player.id;
+      const hasLongestRoad = game.awards.longestRoad === player.id;
       const knightLabel = `${player.knightsPlayed} ${player.knightsPlayed === 1 ? "knight" : "knights"} played`;
+      const roadLength = getLongestRoadLength(game, player.id);
+      const roadLabel = `${roadLength} connected ${roadLength === 1 ? "road" : "roads"}`;
       return (
         <div
           key={player.id}
@@ -606,10 +609,14 @@ export function App() {
                 <strong>{player.developmentCards.length}</strong>
                 {detailed && <span className="text-[10px] text-muted">development</span>}
               </span>
+              <span role="img" aria-label={knightLabel} title={knightLabel} className="player-card-stat text-forest">
+                <DevelopmentCardIcon kind="knight" />
+                <strong>{player.knightsPlayed}</strong>
+              </span>
               <span className="flex items-center gap-2.5">
-                <span role="img" aria-label={knightLabel} title={knightLabel} className="player-card-stat text-forest">
-                  <DevelopmentCardIcon kind="knight" />
-                  <strong>{player.knightsPlayed}</strong>
+                <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-forest">
+                  <PieceIcon piece="road" />
+                  <strong>{roadLength}</strong>
                 </span>
                 {hasLargestArmy && (
                   <svg role="img" aria-label="Largest Army (+2 victory points)" viewBox="0 0 24 28" className="shrink-0 text-[#b58a2d]" fill="none">
@@ -617,6 +624,11 @@ export function App() {
                     <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
                     <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
+                )}
+                {hasLongestRoad && (
+                  <span role="img" aria-label="Longest Road (+2 victory points)" title="Longest Road (+2 victory points)" className="shrink-0 text-[#b58a2d]">
+                    <PieceIcon piece="road" />
+                  </span>
                 )}
               </span>
             </div>
@@ -636,12 +648,7 @@ export function App() {
           </div>
           {detailed && (
             <div className="player-awards mt-3 border-t border-line pt-3 text-xs leading-6">
-              <p>
-                {getLongestRoadLength(game, player.id)} connected roads{" "}
-                {game.awards.longestRoad === player.id && (
-                  <strong className="text-ink"> / Longest Road +2</strong>
-                )}
-              </p>
+              <p>{roadLabel}</p>
             </div>
           )}
         </div>

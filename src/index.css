@@ -258,7 +258,7 @@
 @media (min-width: 1024px) {
   .game-table { display: grid; grid-template-columns: minmax(0, 1fr) 350px; grid-template-rows: auto 64px minmax(0, 1fr); column-gap: 16px; padding: 8px 20px 12px; }
   .table-seats { display: grid; grid-column: 1 / -1; }
-  .table-seats .player-seat { padding: 7px 12px; }
+  .table-seats .player-seat { padding: 7px 12px; container-type: inline-size; }
   .table-play-area { display: contents; }
   .table-board { grid-column: 1; grid-row: 2 / 4; }
   .table-hand { grid-column: 2; grid-row: 3; gap: 12px; margin-top: 4px; }
@@ -271,7 +271,7 @@
   .board-tablemat { padding: 12px; }
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
+@container (max-width: 420px) {
   .table-seats .player-card-counts { flex-direction: column; gap: 4px; }
   .table-seats .player-card-counts svg, .table-seats .player-score svg { width: 16px; height: 20px; }
 }

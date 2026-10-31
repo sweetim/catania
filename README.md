@@ -125,9 +125,11 @@ colors without detailed player cards; all private summaries disappear during han
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
 breakdown. Player seats also show each player's played-Knight count as a shield
-icon and number alongside the card totals, with matching icon sizes and gaps.
-A gold crossed-swords icon marks Largest Army; its tooltip and accessible label
-include the award's two victory points without adding a text badge.
+icon and number, followed by a road icon and their longest connected-road count,
+including zero, on desktop and phones. These use matching icon sizes and gaps.
+A gold crossed-swords icon marks Largest Army, and a matching gold road icon marks
+Longest Road. Each tooltip and accessible label includes the award's two victory
+points without adding a text badge. Player details retain the connected-road count.
 Knights still in hand do not count: play at least three to qualify, and surpass
 the current holder to take the award. A gold crown and warm gold cell highlight
 mark the highest public VP

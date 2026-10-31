@@ -959,18 +959,35 @@ test("player score crowns, cell highlights and active-turn borders follow public
   await expectResourceBank(page, { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 });
   await showView(page, "players");
   await expect(seats.getByRole("img", { name: "Public VP leader", exact: true })).toHaveCount(0);
+  await expect(seats.getByRole("img", { name: "0 connected roads", exact: true })).toHaveCount(4);
+  await expect(seats.locator('.player-card-stat[aria-label="0 connected roads"] strong')).toHaveText(["0", "0", "0", "0"]);
   await expect(seats.locator(".player-seat-leading")).toHaveCount(0);
   await expect(seats.locator(".player-seat-active")).toHaveCount(1);
   for (let placement = 0; placement < 8; placement++) {
     if (placement !== 0 && placement !== 4) currentPlayer = await revealHand(page);
     if (placement === 1) {
       await showView(page, "players");
+      await expect(seats.getByRole("img", { name: "1 connected road", exact: true })).toHaveCount(1);
+      await expect(seats.getByRole("img", { name: "0 connected roads", exact: true })).toHaveCount(3);
       const activeSeat = seats.locator(".player-seat").filter({ has: page.getByText(currentPlayer, { exact: true }) });
       await expect(activeSeat).not.toHaveClass(/player-seat-leading/);
       await expect(activeSeat.getByText(/^(Your turn|Playing)$/)).toHaveCount(0);
       await expect(seats.locator(".player-seat-leading")).toHaveCount(1);
       await activeSeat.scrollIntoViewIfNeeded();
       await screenshot(page, testInfo, "leader-and-active-player", false);
+      if (!isMobile) {
+        for (const width of [1280, 1440, 1920, 1024]) {
+          await page.setViewportSize({ width, height: 768 });
+          for (const name of names) {
+            const seat = seats.locator(".player-seat").filter({ has: page.getByText(name, { exact: true }) });
+            await expect(seat.getByRole("img", { name: /^\d+ connected roads?$/ })).toBeInViewport({ ratio: 1 });
+            expect(await seat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+            expect(await seat.getByText(name, { exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+          }
+          await noPageOverflow(page);
+          await screenshot(page, testInfo, `four-player-road-counts-${width}`, false);
+        }
+      }
     }
     await showView(page, "board");
     await page.getByRole("button", { name: /^Place settlement at/ }).first().click();
@@ -1920,7 +1937,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
   await noPageOverflow(page);
 });
 
-test("played Knight counts distinguish held cards and show Largest Army in player seats", async ({ page, isMobile }, testInfo) => {
+test("played Knight and connected road counts show Largest Army and Longest Road in player seats", async ({ page, isMobile }, testInfo) => {
   test.slow();
   const browserErrors: string[] = [];
   page.on("pageerror", error => browserErrors.push(error.message));
@@ -1935,9 +1952,18 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
   const buyerSeat = seats.locator(".player-seat").filter({ has: page.getByRole("group", { name: `${buyerName}'s card counts`, exact: true }) });
   const army = buyerSeat.getByRole("img", { name: /^\d+ knights? played/ });
+  const roads = buyerSeat.getByRole("img", { name: /^\d+ connected roads?$/ });
   const largestArmy = buyerSeat.getByRole("img", { name: "Largest Army (+2 victory points)", exact: true });
+  const longestRoad = buyerSeat.getByRole("img", { name: "Longest Road (+2 victory points)", exact: true });
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
+  await showView(page, "players");
+  // Each player has two disconnected starting roads, so their longest road is only one.
+  for (const player of state.players) {
+    expect(state.board.edges.filter(edge => edge.playerId === player.id)).toHaveLength(2);
+    const counts = seats.getByRole("group", { name: `${player.name}'s card counts`, exact: true });
+    await expect(counts.getByRole("img", { name: "1 connected road", exact: true }).locator("strong")).toHaveText("1");
+  }
   // Nine purchases give three Knights. Keep them in hand, then play one on each subsequent turn.
   for (let turn = 0; turn <= 36; turn++) {
     await showView(page, "hand");
@@ -2000,6 +2026,46 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
   if (await dismissCollection.isVisible()) await dismissCollection.click();
   await expect(largestArmy).toHaveCSS("color", "rgb(181, 138, 45)");
   await expect(largestArmy.locator("title")).toHaveText("Largest Army (+2 victory points)");
+  await expect(seats.getByRole("img", { name: "Longest Road (+2 victory points)", exact: true })).toHaveCount(0);
+  await screenshot(page, testInfo, "largest-army-player-seat", false);
+
+  // Trade earned resources for bricks, then extend a starting road to five connected roads.
+  await showView(page, "hand");
+  for (const resource of ["wood", "wood", "wool", "grain"] as const) {
+    await page.getByRole("button", { name: "Make a trade", exact: true }).click();
+    const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
+    await trade.getByRole("button", { name: `Give ${RESOURCE_NAMES[resource]}`, exact: true }).click();
+    await trade.getByRole("button", { name: "Receive Brick", exact: true }).click();
+    await trade.getByRole("button", { name: "Confirm exchange", exact: true }).click();
+    state = applyAction(state, buyerId, { type: "bank-trade", give: resource, receive: "brick" });
+  }
+  for (const [index, location] of [5, 4, 18, 17].entries()) {
+    await showView(page, "hand");
+    await page.getByRole("button", { name: /^Build road\b/ }).click();
+    await showView(page, "board");
+    await page.getByRole("button", { name: `Build road at edge-${location}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, buyerId, { type: "place-road", edgeId: `edge-${location}` });
+    await showView(page, "players");
+    await expect(roads).toHaveAccessibleName(`${index + 2} connected roads`);
+    await expect(roads).toHaveAttribute("title", `${index + 2} connected roads`);
+    await expect(roads.locator("strong")).toHaveText(String(index + 2));
+    await expect(seats.getByRole("img", { name: "1 connected road", exact: true })).toHaveCount(2);
+    const holdsLongestRoad = location === 17;
+    expect(state.awards.longestRoad).toBe(holdsLongestRoad ? buyerId : null);
+    await expect(longestRoad).toHaveCount(holdsLongestRoad ? 1 : 0);
+    await expect(seats.getByRole("img", { name: "Longest Road (+2 victory points)", exact: true })).toHaveCount(holdsLongestRoad ? 1 : 0);
+    await expect(largestArmy).toBeVisible();
+    await expect(buyerSeat.locator(".player-score > span")).toHaveText([holdsLongestRoad ? "6" : "4", "VP"]);
+  }
+  await expect(longestRoad).toHaveAttribute("title", "Longest Road (+2 victory points)");
+  await expect(longestRoad).toHaveCSS("color", "rgb(181, 138, 45)");
+  await expect(longestRoad.locator('svg[data-piece="road"]')).toBeVisible();
+  await expect(roads.locator('svg[data-piece="road"]')).toBeVisible();
+  await expect(roads).toHaveCSS("color", await army.evaluate(element => getComputedStyle(element).color));
+  expect(await buyerSeat.innerText()).not.toMatch(/Longest Road|Largest Army|\+2/);
+  if (isMobile) await expect(buyerSeat.locator(".player-awards")).toHaveText("5 connected roads");
+  if (await dismissCollection.isVisible()) await dismissCollection.click();
   const viewports = isMobile
     ? [{ width: 390, height: 844 }, { width: 320, height: 568 }]
     : [{ width: 1440, height: 1000 }, { width: 1024, height: 768 }, { width: 1280, height: 480 }];
@@ -2007,25 +2073,29 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
     await page.setViewportSize(viewport);
     await buyerSeat.scrollIntoViewIfNeeded();
     await expect(army).toBeInViewport({ ratio: 1 });
+    await expect(roads).toBeInViewport({ ratio: 1 });
     await expect(largestArmy).toBeInViewport({ ratio: 1 });
+    await expect(longestRoad).toBeInViewport({ ratio: 1 });
     const iconSizes = await buyerSeat.locator(".player-card-counts svg, .player-score svg").evaluateAll(elements => elements.map(element => {
       const { width, height } = element.getBoundingClientRect();
       return { width, height };
     }));
-    expect(iconSizes).toHaveLength(5);
+    expect(iconSizes).toHaveLength(7);
     for (const size of iconSizes) expect(size).toEqual(iconSizes[0]);
     const countGaps = await buyerSeat.locator(".player-card-stat").evaluateAll(elements => elements.map(element => {
       const icon = element.querySelector("svg")!.getBoundingClientRect();
       const count = element.querySelector("strong")!.getBoundingClientRect();
       return count.x - icon.right;
     }));
-    expect(countGaps).toEqual([4, 4, 4]);
-    const knightBounds = (await army.boundingBox())!;
+    expect(countGaps).toEqual([4, 4, 4, 4]);
+    const countBounds = (await roads.boundingBox())!;
     const awardBounds = (await largestArmy.boundingBox())!;
-    expect(awardBounds.x - knightBounds.x - knightBounds.width).toBeCloseTo(10);
+    expect(awardBounds.x - countBounds.x - countBounds.width).toBeCloseTo(10);
+    const roadBounds = (await longestRoad.boundingBox())!;
+    expect(roadBounds.x - awardBounds.x - awardBounds.width).toBeCloseTo(10);
     expect(await buyerSeat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await noPageOverflow(page);
-    await screenshot(page, testInfo, `largest-army-player-seat-${viewport.width}`, false);
+    await screenshot(page, testInfo, `player-awards-${viewport.width}`, false);
   }
   expect(browserErrors).toEqual([]);
 });
