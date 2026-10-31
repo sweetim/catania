@@ -56,6 +56,8 @@ async function boardFrame(page: Page) {
   const board = page.getByRole("region", { name: "Game board", exact: true });
   await expect(board).toBeInViewport({ ratio: 1 });
   await expect(board.locator(".board-map")).toBeInViewport({ ratio: 1 });
+  await expect(board.locator(".board-controls")).toHaveText(/^\s*-\s*\d+%\s*\+\s*$/);
+  await expect(board.getByRole("group", { name: "Map zoom controls", exact: true })).toBeInViewport({ ratio: 1 });
   await noPageOverflow(page);
   const frame = await board.locator(".board-surface, .board-viewport, .board-map").evaluateAll(elements => elements.map(element => {
     const { x, y, width, height } = element.getBoundingClientRect();

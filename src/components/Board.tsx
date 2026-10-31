@@ -276,14 +276,6 @@ export function Board({
     };
   }
 
-  const instruction = legalTiles.size
-    ? "Choose a hex for the robber"
-    : legalEdges.size
-      ? "Choose a marked road"
-      : legalVertices.size
-        ? "Choose a marked corner"
-        : "An island of possibilities";
-
   return (
     <div
       ref={surfaceReference}
@@ -1321,27 +1313,8 @@ export function Board({
         </div>
       )}
       <div
-        className={`board-controls flex min-w-0 shrink-0 items-center justify-between gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+        className={`board-controls flex min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
-        <div className="min-w-0">
-          <p className="text-[10px] font-medium leading-4 text-[#5c6b59] sm:text-xs">
-            {instruction}
-          </p>
-          {blockedVertices.length > 0 ? (
-            <p className="hidden items-center gap-1 text-[10px] leading-3 text-[#775f55] sm:flex">
-              <svg aria-hidden="true" className="size-3 shrink-0" viewBox="-6 -6 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M-3.5-3.5 3.5 3.5M-3.5 3.5 3.5-3.5" />
-              </svg>
-              <span>Too close<span className="sr-only"> to another settlement or city to build</span></span>
-            </p>
-          ) : !compact && (
-            <p className="hidden text-[10px] leading-4 text-[#8a927f] sm:block">
-              {zoom > 1
-                ? "Drag or scroll to explore"
-                : "Zoom in for a closer look"}
-            </p>
-          )}
-        </div>
         <div
           className="flex shrink-0 items-center gap-1"
           role="group"

@@ -128,7 +128,6 @@
   box-shadow: inset 0 1px #fffaf0, 0 3px 0 #d0c5ae, 0 8px 24px #423d2810;
 }
 .board-surface-fit .board-controls { flex: none; height: 60px; padding: 6px 10px; }
-.board-surface-fit .board-controls > div:first-child { min-width: 0; max-height: 100%; overflow: auto; }
 .placement-confirmation { position: absolute; z-index: 30; width: min(230px, calc(100% - 16px)); box-sizing: border-box; margin: 0; padding: 12px; border: 1px solid #76937c; border-radius: 12px; background: #fffaf0; box-shadow: 0 5px 20px #253b3633; overflow: auto; }
 .placement-confirmation p { margin: 0 0 8px; font-size: 12px; font-weight: 600; line-height: 16px; }
 .placement-confirmation > div { display: flex; gap: 8px; }

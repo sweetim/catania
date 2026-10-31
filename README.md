@@ -66,7 +66,8 @@ The board fills the full height beside all three panels. On phones,
 the turn-status card and controls stay at the bottom of **Hand**, while the dice
 summary and bank remain above the selected view, visible across all three game views.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
-enlarge placement targets, then scroll or drag inside it. Short screens can scroll
+enlarge placement targets, then scroll or drag inside it. The board footer contains
+only zoom and reset controls, without instruction or legend text. Short screens can scroll
 within the hand or player panel without moving the board. On very short windows,
 the entire sidebar scrolls internally so the status card, turn controls, and hand
 tasks remain reachable. The header's **Game** menu contains **Table guide**
