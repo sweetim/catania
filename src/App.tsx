@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { match } from "ts-pattern";
 import { Board } from "./components/Board";
+import { RollSummary, type RollStage } from "./components/RollSummary";
+import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
 import {
   Arrow,
+  CardStack,
   Cost,
   Dialog,
   Logo,
   RESOURCE_COLORS,
   RESOURCE_NAMES,
+  ResourceCard,
+  ResourceCardStepper,
   ResourceIcon,
-  ResourcePicker,
+  SelectableResourceCard,
 } from "./components/GameUi";
 import { createBoard } from "./game/board";
+import { chooseComputerAction, getController } from "./game/computer";
 import {
   applyAction,
   COSTS,
@@ -30,9 +36,19 @@ import type {
   DevelopmentKind,
   GameAction,
   GameState,
+  Player,
   Resource,
 } from "./game/types";
 import "./index.css";
+import { getRollOutcome, type RollOutcome } from "./rollPresentation";
+import { getResourceGains } from "./resourceReceipt";
+
+type RollPresentation = {
+  outcome: RollOutcome;
+  next: GameState;
+  automatic: boolean;
+  stage: RollStage;
+};
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
 const DEVELOPMENT_NAMES: Record<DevelopmentKind, string> = {
@@ -54,15 +70,6 @@ const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
   monopoly:
     "Name a resource. Every other player gives you all of that resource from their hand.",
 };
-
-function controller(state: GameState) {
-  return state.phase.type === "discard"
-    ? (Object.keys(state.phase.required).find(
-        (playerId) =>
-          state.phase.type === "discard" && state.phase.required[playerId]! > 0,
-      ) ?? state.activePlayerId)
-    : state.activePlayerId;
-}
 
 function phaseTitle(state: GameState) {
   return match(state.phase)
@@ -131,7 +138,14 @@ export function App() {
   const [preview, setPreview] = useState(() => createBoard());
   const [names, setNames] = useState(["Alex", "Sam", "Jordan", "Robin"]);
   const [playerCount, setPlayerCount] = useState(3);
+  const [humanCount, setHumanCount] = useState(1);
   const [game, setGame] = useState<GameState | null>(null);
+  const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
+  const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  const rollBusy = Boolean(rollPresentation && rollPresentation.stage !== "complete");
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
@@ -163,6 +177,86 @@ export function App() {
   const [developmentCardId, setDevelopmentCardId] = useState<string | null>(
     null,
   );
+  const humanPlayers =
+    game?.players.filter((player) => player.control === "human") ?? [];
+  const needsHandoff = humanPlayers.length > 1;
+  const controllingPlayer = game?.players.find(
+    (player) => player.id === getController(game),
+  );
+  const computerPlayer =
+    game && !game.winnerId
+      ? game.players.find(
+          (player) =>
+            player.control === "computer" &&
+            game.trade &&
+            game.trade.offeredBy !== player.id &&
+            game.trade.responses[player.id] === undefined,
+        ) ??
+        (controllingPlayer?.control === "computer" ? controllingPlayer : undefined)
+      : undefined;
+
+  const takeComputerTurn = useEffectEvent(
+    (expectedGame: GameState, playerId: string) => {
+      if (game !== expectedGame || rollBusy) return;
+      try {
+        const action = chooseComputerAction(game, playerId);
+        if (action) presentAction(applyAction(game, playerId, action), action, true);
+      } catch (failure) {
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "The computer could not finish its move.",
+        );
+      }
+    },
+  );
+
+  useEffect(() => {
+    if (!game || !computerPlayer || rollBusy || dialog === "restart") return;
+    const timeout = window.setTimeout(
+      () => takeComputerTurn(game, computerPlayer.id),
+      450,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [game, computerPlayer?.id, rollBusy, dialog === "restart"]);
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(preference.matches);
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
+
+  const advanceRollPresentation = useEffectEvent((expected: RollPresentation) => {
+    if (rollPresentation !== expected) return;
+    const stage = reducedMotion ? "complete" : match(expected.stage)
+      .with("rolling", () => "production" as const)
+      .with("production", () => "received" as const)
+      .with("received", "complete", () => "complete" as const)
+      .exhaustive();
+    setRollPresentation({ ...expected, stage });
+    if ((expected.stage === "rolling" || expected.stage === "production") && stage !== "production") {
+      advanceGame(expected.next, expected.automatic);
+    }
+  });
+
+  useEffect(() => {
+    if (!rollPresentation || rollPresentation.stage === "complete" || dialog === "restart") return;
+    // Timers also finish when CSS motion is disabled; animationend is not required.
+    const duration = reducedMotion ? 0 : match(rollPresentation.stage)
+      .with("rolling", () => 500)
+      .with("production", () => 300)
+      .with("received", () => 700)
+      .exhaustive();
+    const timeout = window.setTimeout(() => advanceRollPresentation(rollPresentation), duration);
+    return () => window.clearTimeout(timeout);
+  }, [rollPresentation, reducedMotion, dialog === "restart"]);
+
+  useEffect(() => {
+    if (!resourceReceipt) return;
+    const timeout = window.setTimeout(() => setResourceReceipt(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [resourceReceipt]);
 
   useEffect(() => {
     if (!game || game.winnerId) return;
@@ -176,10 +270,15 @@ export function App() {
 
   function startGame() {
     try {
-      const profiles = names.slice(0, playerCount).map((name, index) => ({
-        name: name.trim() || `Player ${index + 1}`,
-        color: PLAYER_COLORS[index]!,
-      }));
+      const profiles = names.slice(0, playerCount).map(
+        (name, index): Pick<Player, "name" | "color" | "control"> => ({
+          name: index < humanCount
+            ? name.trim() || `Player ${index + 1}`
+            : `Computer ${index - humanCount + 1}`,
+          color: PLAYER_COLORS[index]!,
+          control: index < humanCount ? "human" : "computer",
+        }),
+      );
       if (
         new Set(profiles.map((profile) => profile.name.toLowerCase())).size !==
         profiles.length
@@ -189,10 +288,26 @@ export function App() {
         );
       }
       const next = createGame(profiles);
+      setRollPresentation(null);
+      setResourceReceipt(null);
       setGame(next);
-      setViewerId(null);
-      setHandoffTarget(controller(next));
+      const firstHuman = next.players.find(
+        (player) => player.control === "human",
+      )!;
+      const firstController = next.players.find(
+        (player) => player.id === getController(next),
+      )!;
+      setViewerId(humanCount === 1 ? firstHuman.id : null);
+      setHandoffTarget(
+        humanCount > 1 && firstController.control === "human"
+          ? firstController.id
+          : null,
+      );
       setDialog(null);
+      setConfirmation(null);
+      setChosenResources(emptyResources());
+      setDevelopmentCardId(null);
+      setMobileView("board");
       setError("");
       setSelected(null);
       setBuildMode(null);
@@ -206,7 +321,12 @@ export function App() {
   }
 
   function passTo(playerId: string) {
+    if (!needsHandoff || !humanPlayers.some((player) => player.id === playerId)) {
+      return;
+    }
     setViewerId(null);
+    setRollPresentation(null);
+    setResourceReceipt(null);
     setHandoffTarget(playerId);
     setDialog(null);
     setConfirmation(null);
@@ -217,11 +337,73 @@ export function App() {
     setChosenResources(emptyResources());
   }
 
+  function advanceGame(next: GameState, automatic = false) {
+    if (game && viewerId) {
+      const previousPlayer = game.players.find(player => player.id === viewerId)!;
+      const nextPlayer = next.players.find(player => player.id === viewerId)!;
+      const gains = getResourceGains(previousPlayer.resources, nextPlayer.resources);
+      if (resourceTotal(gains) > 0) {
+        setResourceReceipt(previous => ({ id: (previous?.id ?? 0) + 1, playerId: viewerId, gains }));
+      }
+    }
+    setGame(next);
+    if (next.winnerId) {
+      setRollPresentation(null);
+      setResourceReceipt(null);
+      setViewerId(null);
+      setHandoffTarget(null);
+      setDialog(null);
+      setConfirmation(null);
+      return;
+    }
+    const nextController = getController(next);
+    const controllerChanged = game && getController(game) !== nextController;
+    // Off-turn computer trade responses must not interrupt a human's private input.
+    if (automatic && !controllerChanged) return;
+    if (needsHandoff && nextController !== viewerId) {
+      const nextPlayer = next.players.find(
+        (player) => player.id === nextController,
+      )!;
+      if (nextPlayer.control === "human") {
+        passTo(nextController);
+      } else {
+        setViewerId(null);
+        setResourceReceipt(null);
+        setHandoffTarget(null);
+        setDialog(null);
+        setConfirmation(null);
+      }
+    }
+    if (game?.phase.type === "roll" && next.phase.type === "actions") return;
+    setMobileView(
+      ["setup-settlement", "setup-road", "road-building", "robber"].includes(
+        next.phase.type,
+      )
+        ? "board"
+        : "hand",
+    );
+  }
+
+  function presentAction(next: GameState, action: GameAction, automatic = false) {
+    if (action.type === "roll" && game) {
+      setResourceReceipt(null);
+      setRollPresentation({
+        outcome: getRollOutcome(game, next),
+        next,
+        automatic,
+        stage: reducedMotion ? "complete" : "rolling",
+      });
+      if (reducedMotion) advanceGame(next, automatic);
+    } else {
+      setRollPresentation(null);
+      advanceGame(next, automatic);
+    }
+  }
+
   function perform(action: GameAction) {
-    if (!game || !viewerId) return;
+    if (!game || rollBusy || !viewerId || !humanPlayers.some((player) => player.id === viewerId)) return;
     try {
       const next = applyAction(game, viewerId, action);
-      setGame(next);
       setError("");
       setSelected(null);
       setBuildMode(null);
@@ -229,20 +411,7 @@ export function App() {
       setDialog(null);
       setChosenResources(emptyResources());
       setDevelopmentCardId(null);
-      if (next.winnerId) {
-        setViewerId(null);
-        setHandoffTarget(null);
-        return;
-      }
-      const nextController = controller(next);
-      if (nextController !== viewerId) passTo(nextController);
-      setMobileView(
-        ["setup-settlement", "setup-road", "road-building", "robber"].includes(
-          next.phase.type,
-        )
-          ? "board"
-          : "hand",
-      );
+      presentAction(next, action);
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -255,12 +424,27 @@ export function App() {
   const activePlayer = game?.players.find(
     (player) => player.id === game.activePlayerId,
   );
-  const viewer = game?.players.find((player) => player.id === viewerId);
+  const viewer = humanPlayers.find((player) => player.id === viewerId);
   const handoffPlayer = game?.players.find(
     (player) => player.id === handoffTarget,
   );
   const isActive = Boolean(viewer && viewer.id === activePlayer?.id);
-  const normalActions = isActive && game?.phase.type === "actions";
+  const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
+  const producingTileIds = rollPresentation && rollPresentation.stage !== "rolling"
+    ? rollPresentation.outcome.producingTileIds : [];
+  const receivedResources = resourceReceipt?.playerId === viewerId ? resourceReceipt?.gains : undefined;
+  const awaitingViewer = viewer && (
+    viewer.id === controllingPlayer?.id ||
+    (game?.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0)
+  );
+  const instructionTitle = rollBusy ? "Let the island provide." : game && awaitingViewer
+    ? phaseTitle(game)
+    : "The island is in motion.";
+  const instructionDescription = rollBusy
+    ? "Follow the dice, the producing hexes, and the resources arriving in your hand."
+    : game && awaitingViewer
+    ? phaseDescription(game)
+    : `${controllingPlayer?.name} is playing. You can inspect your hand and the island while you wait.`;
   const canAfford = (cost: ReturnType<typeof emptyResources>) =>
     Boolean(
       viewer &&
@@ -269,7 +453,7 @@ export function App() {
         ),
     );
   const legalVertices =
-    game && viewer && isActive
+    game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-settlement" || buildMode === "settlement"
         ? legalSettlementVertices(game, viewer.id)
         : buildMode === "city"
@@ -280,13 +464,14 @@ export function App() {
     game &&
     viewer &&
     isActive &&
+    !rollBusy &&
     (game.phase.type === "setup-road" ||
       game.phase.type === "road-building" ||
       buildMode === "road")
       ? legalRoadEdges(game, viewer.id)
       : [];
   const legalTiles =
-    game && viewer && isActive && game.phase.type === "robber"
+    game && viewer && isActive && !rollBusy && game.phase.type === "robber"
       ? game.board.tiles
           .filter((tile) => tile.id !== game.robberTileId)
           .map((tile) => tile.id)
@@ -327,6 +512,7 @@ export function App() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{player.name}</p>
               <p className="mt-0.5 text-[10px] text-muted">
+                {player.control === "computer" && "AI / "}
                 {game.activePlayerId === player.id
                   ? "At the helm"
                   : `Player ${index + 1}`}
@@ -417,7 +603,7 @@ export function App() {
                     <circle cx="8" cy="6" r="3" />
                     <path d="M2 18v-3a6 6 0 0 1 12 0v3m1-14a3 3 0 0 1 0 6m1 2a5 5 0 0 1 3 6" />
                   </svg>
-                  3-4 people
+                  1-4 people / AI opponents
                 </span>
                 <span>60-120 minutes</span>
                 <span>One shared device</span>
@@ -437,7 +623,10 @@ export function App() {
                     {[3, 4].map((count) => (
                       <button
                         key={count}
-                        onClick={() => setPlayerCount(count)}
+                        onClick={() => {
+                          setPlayerCount(count);
+                          setHumanCount((current) => Math.min(current, count));
+                        }}
                         aria-pressed={playerCount === count}
                         className={`min-h-8 rounded-md px-3 text-xs font-semibold ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
                       >
@@ -446,8 +635,25 @@ export function App() {
                     ))}
                   </div>
                 </div>
+                <label className="mb-4 flex items-center justify-between gap-3 text-xs font-semibold">
+                  <span>Human players</span>
+                  <select
+                    className="field !w-auto"
+                    value={humanCount}
+                    onChange={(event) =>
+                      setHumanCount(Number(event.target.value))
+                    }
+                  >
+                    {Array.from({ length: playerCount }, (_, index) => index + 1)
+                      .map((count) => (
+                        <option key={count} value={count}>
+                          {count} {count === 1 ? "human" : "humans"}
+                        </option>
+                      ))}
+                  </select>
+                </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {names.slice(0, playerCount).map((name, index) => (
+                  {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                     <label
                       key={index}
                       className="flex items-center gap-2 rounded-lg border border-line bg-paper/70 px-3"
@@ -473,6 +679,20 @@ export function App() {
                         className="min-h-11 w-full min-w-0 bg-transparent text-sm outline-offset-0"
                       />
                     </label>
+                  ) : (
+                    <div
+                      key={index}
+                      className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-moss/60 px-3 text-sm"
+                    >
+                      <span
+                        className="h-5 w-5 shrink-0 rounded-full"
+                        style={{ background: PLAYER_COLORS[index] }}
+                      />
+                      <span>
+                        Computer {index - humanCount + 1}{" "}
+                        <span className="text-[10px] text-muted">/ AI</span>
+                      </span>
+                    </div>
                   ))}
                 </div>
                 <button
@@ -482,7 +702,9 @@ export function App() {
                   Let&apos;s settle in <Arrow />
                 </button>
                 <p className="mt-3 text-center text-[10px] leading-5 text-muted">
-                  Pass &amp; play. No accounts. Just good company.
+                  {humanCount === 1
+                    ? "Solo play. Your hand stays visible. AI fills the table."
+                    : "Pass & play. Reveal hands only between human players."}
                   <br />
                   Keep this tab open; refreshing ends the game.
                 </p>
@@ -601,6 +823,8 @@ export function App() {
               className="button-secondary"
               onClick={() => {
                 setGame(null);
+                setRollPresentation(null);
+                setResourceReceipt(null);
                 setViewerId(null);
               }}
             >
@@ -673,12 +897,15 @@ export function App() {
               </span>
             </div>
             <div className="flex gap-3">
-              <button
-                className="min-h-10 text-xs font-semibold text-muted"
-                onClick={() => setDialog("players")}
-              >
-                Pass device
-              </button>
+              {needsHandoff && (
+                <button
+                  className="min-h-10 text-xs font-semibold text-muted"
+                  disabled={rollBusy}
+                  onClick={() => setDialog("players")}
+                >
+                  Pass device
+                </button>
+              )}
               <button
                 className="min-h-10 text-xs text-muted"
                 onClick={() => setDialog("restart")}
@@ -687,6 +914,20 @@ export function App() {
               </button>
             </div>
           </div>
+          {computerPlayer && (
+            <p
+              role="status"
+              aria-label="Computer activity"
+              className="mb-5 rounded-xl bg-moss px-4 py-3 text-xs text-forest"
+            >
+              {computerPlayer.name}{" "}
+              {game.trade
+                ? "is considering the trade."
+                : game.phase.type === "discard"
+                  ? "is discarding resources."
+                  : "is playing automatically."}
+            </p>
+          )}
           <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             {playerCards()}
           </div>
@@ -705,15 +946,20 @@ export function App() {
               </button>
             ))}
           </nav>
+          <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+          <ResourceCollection
+            receipt={resourceReceipt?.playerId === viewer.id ? resourceReceipt : null}
+            onDismiss={() => setResourceReceipt(null)}
+          />
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_350px] xl:gap-9">
             <section
               className={`min-w-0 ${mobileView !== "board" ? "hidden lg:block" : ""}`}
               aria-label="Game board"
             >
               <div className="mb-4 lg:hidden">
-                <h1 className="font-serif text-2xl">{phaseTitle(game)}</h1>
+                <h1 className="font-serif text-2xl">{instructionTitle}</h1>
                 <p className="mt-2 text-xs leading-6 text-muted">
-                  {phaseDescription(game)}
+                  {instructionDescription}
                 </p>
               </div>
               <div className="relative rounded-2xl border border-line bg-[#eeeee3]/60 p-2 sm:p-4">
@@ -727,6 +973,7 @@ export function App() {
                   board={game.board}
                   players={game.players}
                   robberTileId={game.robberTileId}
+                  producingTileIds={producingTileIds}
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
@@ -865,16 +1112,10 @@ export function App() {
                   <p className="text-[10px] font-semibold uppercase tracking-[.17em] text-white/60">
                     {isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
                   </p>
-                  {game.dice && (
-                    <div
-                      aria-label={`Dice: ${game.dice[0]} and ${game.dice[1]}`}
-                      className="flex gap-1.5"
-                    >
+                  {game.dice && !rollPresentation && (
+                    <div aria-label={`Dice: ${game.dice[0]} and ${game.dice[1]}`} className="flex gap-1.5">
                       {game.dice.map((value, index) => (
-                        <span
-                          key={index}
-                          className="flex h-7 w-7 items-center justify-center rounded-md bg-paper font-serif text-lg font-bold text-ink"
-                        >
+                        <span key={index} className="flex h-7 w-7 items-center justify-center rounded-md bg-paper font-serif text-lg font-bold text-ink">
                           {value}
                         </span>
                       ))}
@@ -882,15 +1123,16 @@ export function App() {
                   )}
                 </div>
                 <h1 className="mt-3 font-serif text-[28px] leading-tight">
-                  {phaseTitle(game)}
+                  {instructionTitle}
                 </h1>
                 <p className="mt-3 text-xs leading-6 text-white/75">
-                  {phaseDescription(game)}
+                  {instructionDescription}
                 </p>
                 {game.phase.type === "roll" && isActive && (
                   <button
                     className="mt-5 flex min-h-12 w-full items-center justify-between rounded-xl bg-paper px-4 text-sm font-semibold text-forest hover:bg-white"
                     onClick={() => perform({ type: "roll" })}
+                    disabled={rollBusy}
                   >
                     Roll the dice <Arrow />
                   </button>
@@ -899,8 +1141,9 @@ export function App() {
                   <button
                     className="mt-5 w-full rounded-xl border border-white/25 py-3 text-xs font-semibold hover:bg-white/10"
                     onClick={() => perform({ type: "end-turn" })}
+                    disabled={rollBusy}
                   >
-                    End turn &amp; pass device{" "}
+                    {needsHandoff ? "End turn & pass device" : "End turn"}{" "}
                     <span aria-hidden="true">&rarr;</span>
                   </button>
                 )}
@@ -913,21 +1156,36 @@ export function App() {
                     Only for your eyes / {resourceTotal(viewer.resources)} cards
                   </span>
                 </div>
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                   {RESOURCES.map((resource) => (
                     <div
-                      className="flex flex-col items-center rounded-xl border border-line bg-white/60 px-1 py-3"
+                      className={`relative ${viewer.resources[resource] ? "" : "opacity-40"}`}
                       key={resource}
+                      title={`${viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`}
                     >
-                      <span style={{ color: RESOURCE_COLORS[resource] }}>
-                        <ResourceIcon resource={resource} className="h-7 w-7" />
-                      </span>
-                      <span className="mt-2 text-[9px] text-muted">
+                      <div
+                        key={(receivedResources?.[resource] ?? 0) > 0 ? resourceReceipt!.id : "idle"}
+                        className={`relative ${(receivedResources?.[resource] ?? 0) > 0 ? "resource-hand-arrival" : ""}`}
+                      >
+                        <ResourceCard
+                          resource={resource}
+                          count={viewer.resources[resource]}
+                          iconClassName="h-8 w-8"
+                          className="aspect-[3/4] w-full"
+                        />
+                        {(receivedResources?.[resource] ?? 0) > 0 && (
+                          <span
+                            aria-label={`Received ${receivedResources![resource]} ${RESOURCE_NAMES[resource]}`}
+                            className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-paper bg-forest px-2 py-0.5 text-xs font-bold text-white shadow-sm"
+                          >
+                            +{receivedResources![resource]}
+                          </span>
+                        )}
+                      </div>
+                      <span className="sr-only">
+                        {viewer.resources[resource]}{" "}
                         {RESOURCE_NAMES[resource]}
                       </span>
-                      <strong className="mt-0.5 font-serif text-2xl font-normal">
-                        {viewer.resources[resource]}
-                      </strong>
                     </div>
                   ))}
                 </div>
@@ -944,7 +1202,7 @@ export function App() {
               {game.phase.type === "discard" &&
                 (game.phase.required[viewer.id] ?? 0) > 0 && (
                   <section className="panel mt-5 p-4">
-                    <ResourcePicker
+                    <ResourceCardStepper
                       label="Return to the bank"
                       values={chosenResources}
                       maximum={viewer.resources}
@@ -957,6 +1215,7 @@ export function App() {
                     <button
                       className="button-primary mt-3 w-full"
                       disabled={
+                        rollBusy ||
                         resourceTotal(chosenResources) !==
                         game.phase.required[viewer.id]
                       }
@@ -1116,55 +1375,113 @@ export function App() {
               {game.trade && (
                 <section className="panel mt-5 p-4" aria-label="Open trade">
                   <h2 className="font-serif text-xl">A deal on the table.</h2>
-                  <p className="my-3 text-xs leading-6 text-muted">
-                    {activePlayer?.name} offers{" "}
-                    <Cost resources={game.trade.give} /> in exchange for{" "}
-                    <Cost resources={game.trade.receive} />.
+                  <p className="sr-only">
+                    {game.players.find(
+                      (player) => player.id === game.trade!.offeredBy,
+                    )?.name}{" "}
+                    offers{" "}
+                    {RESOURCES.filter(
+                      (resource) => game.trade!.give[resource] > 0,
+                    )
+                      .map(
+                        (resource) =>
+                          `${game.trade!.give[resource]} ${RESOURCE_NAMES[resource]}`,
+                      )
+                      .join(", ")}{" "}
+                    for{" "}
+                    {RESOURCES.filter(
+                      (resource) => game.trade!.receive[resource] > 0,
+                    )
+                      .map(
+                        (resource) =>
+                          `${game.trade!.receive[resource]} ${RESOURCE_NAMES[resource]}`,
+                      )
+                      .join(", ")}
+                    .
                   </p>
+                  <div className="my-4 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3.5">
+                    <span className="flex flex-col items-center gap-1.5">
+                      <CardStack
+                        resources={game.trade.give}
+                        emptyText="Nothing offered"
+                      />
+                      <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
+                        Offered
+                      </span>
+                    </span>
+                    <Arrow className="h-5 w-5 shrink-0 text-forest" />
+                    <span className="flex flex-col items-center gap-1.5">
+                      <CardStack
+                        resources={game.trade.receive}
+                        emptyText="Nothing asked"
+                      />
+                      <span className="text-[9px] font-semibold uppercase tracking-[.15em] text-muted">
+                        Wanted
+                      </span>
+                    </span>
+                  </div>
                   {viewer.id === game.trade.offeredBy ? (
                     <div className="space-y-2">
                       {game.players
                         .filter((player) => player.id !== viewer.id)
-                        .map((player) => (
-                          <div
-                            className="flex items-center justify-between gap-2"
-                            key={player.id}
-                          >
-                            <span className="text-xs">
-                              {player.name}:{" "}
-                              {game.trade!.responses[player.id] === true
-                                ? "accepted"
-                                : game.trade!.responses[player.id] === false
-                                  ? "declined"
-                                  : "not answered"}
-                            </span>
-                            {game.trade!.responses[player.id] ? (
-                              <button
-                                className="button-secondary !min-h-9 !px-2 !py-1 !text-xs"
-                                onClick={() =>
-                                  setConfirmation({
-                                    action: {
-                                      type: "complete-trade",
-                                      playerId: player.id,
-                                    },
-                                    title: `Trade with ${player.name}`,
-                                    description:
-                                      "Complete this exchange once. Both players' resources will be checked again before the transfer.",
-                                  })
-                                }
-                              >
-                                Complete trade
-                              </button>
-                            ) : (
-                              <button
-                                className="min-h-10 text-xs font-semibold underline"
-                                onClick={() => passTo(player.id)}
-                              >
-                                Pass to {player.name}
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                        .map((player) => {
+                          const response =
+                            game.trade!.responses[player.id];
+                          const status =
+                            response === true
+                              ? "accepted"
+                              : response === false
+                                ? "declined"
+                                : "not answered";
+                          return (
+                            <div
+                              key={player.id}
+                              className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white/40 px-3 py-2"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ background: player.color }}
+                                />
+                                <span className="truncate text-xs font-semibold">
+                                  {player.name}
+                                </span>
+                              </span>
+                              <span className="flex shrink-0 items-center gap-2">
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response === true ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                                >
+                                  {status}
+                                </span>
+                                {response ? (
+                                  <button
+                                    className="button-secondary !min-h-8 !px-2.5 !py-1 !text-xs"
+                                    onClick={() =>
+                                      setConfirmation({
+                                        action: {
+                                          type: "complete-trade",
+                                          playerId: player.id,
+                                        },
+                                        title: `Trade with ${player.name}`,
+                                        description:
+                                          "Complete this exchange once. Both players' resources will be checked again before the transfer.",
+                                      })
+                                    }
+                                  >
+                                    Complete trade
+                                  </button>
+                                ) : player.control === "human" ? (
+                                  <button
+                                    className="min-h-8 text-xs font-semibold underline"
+                                    onClick={() => passTo(player.id)}
+                                  >
+                                    Pass to {player.name}
+                                  </button>
+                                ) : null}
+                              </span>
+                            </div>
+                          );
+                        })}
                       <button
                         className="mt-2 text-xs text-clay underline"
                         onClick={() => perform({ type: "cancel-trade" })}
@@ -1201,17 +1518,12 @@ export function App() {
                   )}
                 </section>
               )}
-              {!isActive && (
+              {needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
                 <button
                   className="button-secondary mt-4 w-full"
-                  onClick={() => passTo(controller(game))}
+                  onClick={() => passTo(controllingPlayer.id)}
                 >
-                  Return to{" "}
-                  {
-                    game.players.find(
-                      (player) => player.id === controller(game),
-                    )?.name
-                  }
+                  Return to {controllingPlayer.name}
                 </button>
               )}
               {error && !dialog && !confirmation && (
@@ -1231,11 +1543,25 @@ export function App() {
             </section>
           </div>
         </main>
-      ) : null}
+      ) : (
+        <main className="mx-auto max-w-5xl px-5 py-10">
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="font-serif text-3xl">The island is in motion.</h1>
+            <button className="min-h-10 text-xs text-muted" onClick={() => setDialog("restart")}>End game</button>
+          </div>
+          <p role="status" aria-label="Computer activity" className="my-5 text-sm text-muted">
+            {computerPlayer?.name} is playing automatically. The next human hand will stay hidden until revealed.
+          </p>
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{playerCards()}</div>
+          <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} producingTileIds={producingTileIds} interactive={false} compact />
+          {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
+        </main>
+      )}
 
       <footer className="mx-auto flex max-w-[1440px] flex-wrap justify-between gap-3 px-5 py-6 text-[9px] uppercase tracking-[.14em] text-muted sm:px-9 lg:px-12">
         <span>A tabletop state of mind.</span>
-        <span>Catania / Local pass &amp; play / Wi-Fi play coming later</span>
+        <span>Catania / Solo &amp; pass-and-play / Wi-Fi play coming later</span>
       </footer>
 
       {dialog === "rules" && (
@@ -1288,22 +1614,24 @@ export function App() {
             </p>
             <div className="rounded-xl bg-moss p-4">
               <strong className="text-ink">One device, a whole table.</strong>{" "}
-              Pass the device to the named player before revealing a hand. Use
-              Pass device for trade responses or to inspect your own hand. This
+              Play solo against local AI with your hand always visible, or choose
+              multiple humans and pass the device before revealing each hand.
+              Computer hands cannot be opened. AI handles its own turns and trade
+              responses; it uses bank and port trades but does not propose player trades. This
               is a friendly local game, not a secure multiplayer room. Games
               live only in this tab: refreshing or closing it ends the game.
             </div>
           </div>
         </Dialog>
       )}
-      {dialog === "players" && game && (
+      {dialog === "players" && game && needsHandoff && (
         <Dialog title="Pass the device" onClose={() => setDialog(null)}>
           <p className="mb-5 text-sm leading-6 text-muted">
             Choose whose hand to open. The next screen hides all private cards
             until that player is ready.
           </p>
           <div className="space-y-3">
-            {game.players.map((player) => (
+            {humanPlayers.map((player) => (
               <button
                 className="button-secondary w-full justify-between"
                 key={player.id}
@@ -1340,6 +1668,8 @@ export function App() {
               className="button-primary"
               onClick={() => {
                 setGame(null);
+                setRollPresentation(null);
+                setResourceReceipt(null);
                 setViewerId(null);
                 setHandoffTarget(null);
                 setDialog(null);
@@ -1409,49 +1739,70 @@ export function App() {
           {tradeMode === "bank" ? (
             <>
               <p className="mb-5 text-sm leading-6 text-muted">
-                Your best available port rate is applied automatically. The bank
-                must have the resource you want.
+                Your best port rate is applied automatically. Dimmed cards are
+                beyond your hand; the bank must have what you ask for.
               </p>
-              <div className="grid grid-cols-2 gap-4">
-                <label className="space-y-2 text-xs">
-                  <span>You give / {ratio} cards</span>
-                  <select
-                    className="field"
-                    value={giveResource}
-                    onChange={(event) =>
-                      setGiveResource(event.target.value as Resource)
-                    }
-                  >
-                    {RESOURCES.map((resource) => (
-                      <option key={resource} value={resource}>
-                        {RESOURCE_NAMES[resource]} ({viewer.resources[resource]}
-                        )
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2 text-xs">
-                  <span>You receive / 1 card</span>
-                  <select
-                    className="field"
-                    value={receiveResource}
-                    onChange={(event) =>
-                      setReceiveResource(event.target.value as Resource)
-                    }
-                  >
-                    {RESOURCES.map((resource) => (
-                      <option key={resource} value={resource}>
-                        {RESOURCE_NAMES[resource]} ({game.bank[resource]} in
-                        bank)
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="my-5 rounded-xl bg-moss p-4 text-center text-sm">
-                {ratio} {RESOURCE_NAMES[giveResource]}{" "}
-                <span className="mx-3">&rarr;</span> 1{" "}
-                {RESOURCE_NAMES[receiveResource]}
+              <fieldset className="mb-5">
+                <legend className="mb-3 text-sm font-semibold">
+                  You give
+                </legend>
+                <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                  {RESOURCES.map((resource) => (
+                    <SelectableResourceCard
+                      key={resource}
+                      resource={resource}
+                      action="Give"
+                      count={viewer.resources[resource]}
+                      caption={`${getTradeRatio(game, viewer.id, resource)}:1`}
+                      selected={giveResource === resource}
+                      disabled={
+                        viewer.resources[resource] <
+                        getTradeRatio(game, viewer.id, resource)
+                      }
+                      onClick={() => setGiveResource(resource)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset>
+                <legend className="mb-3 text-sm font-semibold">
+                  You receive
+                </legend>
+                <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                  {RESOURCES.map((resource) => (
+                    <SelectableResourceCard
+                      key={resource}
+                      resource={resource}
+                      action="Receive"
+                      count={game.bank[resource]}
+                      caption="in bank"
+                      selected={receiveResource === resource}
+                      disabled={game.bank[resource] < 1}
+                      onClick={() => setReceiveResource(resource)}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+              <div
+                className="my-5 flex items-center justify-center gap-2 rounded-xl bg-moss p-4"
+                aria-hidden="true"
+              >
+                {Array.from({ length: ratio }, (_, index) => (
+                  <ResourceCard
+                    key={index}
+                    resource={giveResource}
+                    compact
+                    iconClassName="h-5 w-5"
+                    className="h-13 w-9"
+                  />
+                ))}
+                <Arrow className="h-5 w-5 shrink-0 text-forest" />
+                <ResourceCard
+                  resource={receiveResource}
+                  compact
+                  iconClassName="h-5 w-5"
+                  className="h-13 w-9"
+                />
               </div>
               <button
                 className="button-primary w-full"
@@ -1477,22 +1828,37 @@ export function App() {
             </>
           ) : (
             <>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <ResourcePicker
+              <div className="space-y-5">
+                <ResourceCardStepper
                   label="You offer"
                   values={giveResources}
                   maximum={viewer.resources}
                   onChange={setGiveResources}
                 />
-                <ResourcePicker
+                <div
+                  className="flex items-center justify-center gap-4 rounded-xl bg-moss p-4"
+                  aria-hidden="true"
+                >
+                  <CardStack
+                    resources={giveResources}
+                    emptyText="Nothing offered"
+                  />
+                  <Arrow className="h-5 w-5 shrink-0 text-forest" />
+                  <CardStack
+                    resources={receiveResources}
+                    emptyText="Nothing asked"
+                  />
+                </div>
+                <ResourceCardStepper
                   label="You ask for"
                   values={receiveResources}
                   onChange={setReceiveResources}
                 />
               </div>
               <p className="my-4 text-xs leading-6 text-muted">
-                Pass the device to each player for a private response. Choose
-                one accepting player to confirm the exchange.
+                Computers respond automatically. With multiple humans, pass the
+                device for private responses. Choose one accepting player to
+                confirm the exchange.
               </p>
               <button
                 className="button-primary w-full"
@@ -1572,7 +1938,7 @@ export function App() {
             <div className="mt-5 border-t border-line pt-5">
               {developmentCard.kind === "year-of-plenty" && (
                 <>
-                  <ResourcePicker
+                  <ResourceCardStepper
                     label="Take from the bank"
                     values={chosenResources}
                     maximum={game.bank}
@@ -1605,7 +1971,7 @@ export function App() {
               <button
                 className="button-primary mt-4 w-full"
                 disabled={
-                  !isActive ||
+                  !isActive || rollBusy ||
                   !["roll", "actions"].includes(game.phase.type) ||
                   game.developmentPlayed ||
                   developmentCard.purchasedTurn === game.turnNumber ||

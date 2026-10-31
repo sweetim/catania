@@ -166,7 +166,85 @@ export function Dialog({
   );
 }
 
-export function ResourcePicker({
+export function ResourceCard({
+  resource,
+  count,
+  compact = false,
+  selected = false,
+  iconClassName = "h-7 w-7",
+  className = "",
+}: {
+  resource: Resource;
+  count?: number;
+  compact?: boolean;
+  selected?: boolean;
+  iconClassName?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`relative inline-flex flex-col items-center justify-center rounded-xl p-[3px] shadow-sm ${selected ? "ring-2 ring-forest ring-offset-2" : ""} ${className}`}
+      style={{ background: RESOURCE_COLORS[resource] }}
+    >
+      <span className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-lg border border-white/50 px-0.5">
+        <ResourceIcon
+          resource={resource}
+          className={`${iconClassName} text-white`}
+        />
+        {!compact && (
+          <span className="w-full truncate text-center text-[7px] font-bold uppercase tracking-[.12em] text-white">
+            {RESOURCE_NAMES[resource]}
+          </span>
+        )}
+      </span>
+      {count !== undefined ? (
+        <strong className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold leading-none text-white shadow">
+          {count}
+        </strong>
+      ) : null}
+    </span>
+  );
+}
+
+export function SelectableResourceCard({
+  resource,
+  action,
+  count,
+  caption,
+  selected,
+  disabled,
+  onClick,
+}: {
+  resource: Resource;
+  action: string;
+  count?: number;
+  caption: string;
+  selected: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      aria-label={`${action} ${RESOURCE_NAMES[resource]}`}
+      disabled={disabled}
+      onClick={onClick}
+      className="group flex flex-col items-center gap-1.5"
+    >
+      <ResourceCard
+        resource={resource}
+        count={count}
+        selected={selected}
+        className="aspect-[3/4] w-full transition-transform group-enabled:group-hover:-translate-y-1"
+      />
+      <span className="text-[10px] font-semibold text-muted">{caption}</span>
+    </button>
+  );
+}
+
+export function ResourceCardStepper({
   label,
   values,
   maximum,
@@ -180,59 +258,38 @@ export function ResourcePicker({
   return (
     <fieldset>
       <legend className="mb-3 text-sm font-semibold">{label}</legend>
-      <div className="space-y-2">
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map((resource) => (
-          <div
-            className="flex items-center gap-3 rounded-xl border border-line bg-white/50 px-3 py-2"
-            key={resource}
-          >
-            <span style={{ color: RESOURCE_COLORS[resource] }}>
-              <ResourceIcon resource={resource} className="h-5 w-5" />
-            </span>
-            <label htmlFor={`${label}-${resource}`} className="flex-1 text-sm">
-              {RESOURCE_NAMES[resource]}
-            </label>
-            <button
-              className="h-9 w-9 rounded-lg bg-moss text-lg"
-              aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
-              disabled={!values[resource]}
-              onClick={() =>
-                onChange({ ...values, [resource]: values[resource] - 1 })
-              }
-            >
-              -
-            </button>
-            <input
-              id={`${label}-${resource}`}
-              aria-label={`${label} ${RESOURCE_NAMES[resource]}`}
-              type="number"
-              min={0}
-              max={maximum?.[resource] ?? 19}
-              value={values[resource]}
-              onChange={(event) =>
-                onChange({
-                  ...values,
-                  [resource]: Math.max(
-                    0,
-                    Math.min(
-                      maximum?.[resource] ?? 19,
-                      Math.floor(Number(event.target.value) || 0),
-                    ),
-                  ),
-                })
-              }
-              className="w-10 bg-transparent text-center text-sm tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          <div key={resource} className="flex flex-col items-center gap-1.5">
+            <ResourceCard
+              resource={resource}
+              count={values[resource]}
+              className="aspect-[3/4] w-full"
             />
-            <button
-              className="h-9 w-9 rounded-lg bg-moss text-lg"
-              aria-label={`Add ${RESOURCE_NAMES[resource]} to ${label}`}
-              disabled={values[resource] >= (maximum?.[resource] ?? 19)}
-              onClick={() =>
-                onChange({ ...values, [resource]: values[resource] + 1 })
-              }
-            >
-              +
-            </button>
+            <div className="flex w-full gap-1">
+              <button
+                type="button"
+                className="flex h-7 flex-1 items-center justify-center rounded-lg bg-moss pb-0.5 text-base font-bold text-forest"
+                aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
+                disabled={!values[resource]}
+                onClick={() =>
+                  onChange({ ...values, [resource]: values[resource] - 1 })
+                }
+              >
+                &minus;
+              </button>
+              <button
+                type="button"
+                className="flex h-7 flex-1 items-center justify-center rounded-lg bg-moss pb-0.5 text-base font-bold text-forest"
+                aria-label={`Add ${RESOURCE_NAMES[resource]} to ${label}`}
+                disabled={values[resource] >= (maximum?.[resource] ?? 19)}
+                onClick={() =>
+                  onChange({ ...values, [resource]: values[resource] + 1 })
+                }
+              >
+                +
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -240,21 +297,60 @@ export function ResourcePicker({
   );
 }
 
+export function CardStack({
+  resources,
+  emptyText = "No cards",
+}: {
+  resources: Resources;
+  emptyText?: string;
+}) {
+  const entries = (Object.keys(RESOURCE_NAMES) as Resource[]).filter(
+    (resource) => resources[resource] > 0,
+  );
+  if (!entries.length) {
+    return (
+      <span className="text-[10px] font-semibold uppercase tracking-[.15em] text-muted">
+        {emptyText}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+      {entries.map((resource) => (
+        <ResourceCard
+          key={resource}
+          resource={resource}
+          count={resources[resource]}
+          compact
+          iconClassName="h-5 w-5"
+          className="h-13 w-9"
+        />
+      ))}
+    </span>
+  );
+}
+
 export function Cost({ resources }: { resources: Resources }) {
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
+    <span className="inline-flex items-center gap-1">
       {(Object.keys(RESOURCE_NAMES) as Resource[])
         .filter((resource) => resources[resource] > 0)
         .map((resource) => (
           <span
             key={resource}
-            className="inline-flex items-center gap-0.5 text-xs"
-            style={{ color: RESOURCE_COLORS[resource] }}
+            className="relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm"
+            style={{ background: RESOURCE_COLORS[resource] }}
             title={`${resources[resource]} ${RESOURCE_NAMES[resource]}`}
           >
-            <ResourceIcon resource={resource} className="h-3.5 w-3.5" />
-            <span>{resources[resource]}</span>
-            <span className="sr-only">{RESOURCE_NAMES[resource]}</span>
+            <ResourceIcon resource={resource} className="h-4 w-4 text-white" />
+            {resources[resource] > 1 && (
+              <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/40 px-1 text-[9px] font-bold leading-4 text-white">
+                {resources[resource]}
+              </span>
+            )}
+            <span className="sr-only">
+              {resources[resource]} {RESOURCE_NAMES[resource]}
+            </span>
           </span>
         ))}
     </span>

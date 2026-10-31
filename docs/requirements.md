@@ -1,6 +1,6 @@
 # Catania Requirements
 
-Status: The local pass-and-play base-game milestone is approved and implemented. The same-Wi-Fi multiplayer product described below remains a future milestone, not an implemented capability.
+Status: The local base game, including AI opponents and solo hand visibility, is approved and implemented. The same-Wi-Fi multiplayer product described below remains a future milestone, not an implemented capability.
 
 Related document: [Architecture](architecture.md).
 
@@ -12,12 +12,21 @@ setup, finite banks and piece supplies, production, building, domestic and
 maritime trades, robber/discard sequences, development cards, awards, and a
 10-point victory with results and rematch.
 
-Players enter names at the table screen. The device is passed to the named
-player before revealing their hand. A handoff screen removes private hand UI
-from the rendered page. Trade recipients use the same handoff flow to respond;
-the active player selects one acceptance and confirms the exchange. Players
-must respect these handoffs: anyone with the shared device can request another
-player's hand, and the browser necessarily contains the complete local state.
+The table has three or four total seats and a selectable human count from one
+to the seat count, defaulting to one. Local AI fills the remaining seats. Human
+players enter distinct names. With one human, their hand opens automatically and
+remains available during AI turns; no reveal or pass-device step is needed.
+With multiple humans, the device is passed to the named human before revealing
+their hand. Handoff screens remove private hand UI from the rendered page.
+Computer hands cannot be opened through handoff or trade controls.
+
+AI handles initial placement, turns, building, development cards, discards, and
+robber/theft choices using its own hand and public information. Its basic local
+strategy uses bank/port trades and automatically accepts or declines human trade
+offers; it does not propose player trades. Human trade recipients use private
+handoffs to respond. The active player selects one acceptance and confirms the
+exchange. The browser necessarily contains complete local state, so this is a
+friendly display-privacy convention rather than a security boundary.
 
 This milestone replaces neither the network requirements nor their verification
 criteria. Rooms, QR codes, separate phone controllers, board-only host mode,
@@ -230,13 +239,15 @@ The host necessarily holds private game state in memory. Board-only means displa
 - Use large touch targets, readable resource labels, and selected-state indicators. Do not rely on color alone for player identity or valid positions.
 - Explain unavailable actions and required next steps. Require confirmation for board placement and resource transfers.
 - Provide keyboard-operable controls and visible focus. Honor reduced-motion preferences.
+- Show dice settling, actual production highlights, and private resource-gain feedback in sequence. Keep a roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
+- Animate actual resource gains from setup, dice, trades, theft, and development cards in an on-screen collection tray and the revealed hand. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
 - Keep private details off the shared display, including notifications and reconnect overlays.
 - Do not require in-app camera access. The operating system's QR scanner opens the invite.
 
 ## Out Of Scope
 
 - Internet matchmaking, remote play, public signaling, or internet relay infrastructure.
-- Accounts, chat, spectators, additional independent board-display clients, bots, expansions, and custom rules.
+- Accounts, chat, spectators, additional independent board-display clients, network/replacement bots, expansions, and custom rules. Local AI opponents are included in the current milestone above.
 - Automatic Wi-Fi setup, automatic host migration, persistent saved games, and recovery after host refresh or service restart.
 - Protection against a malicious host or other hostile participants on the local network.
 

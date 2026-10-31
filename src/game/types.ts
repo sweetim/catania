@@ -37,6 +37,7 @@ export type Player = {
   id: string;
   name: string;
   color: string;
+  control: "human" | "computer";
   resources: Resources;
   developmentCards: { id: string; kind: DevelopmentKind; purchasedTurn: number }[];
   knightsPlayed: number;

@@ -1,6 +1,6 @@
 # Catania Architecture
 
-Status: The approved local pass-and-play game is implemented. The same-Wi-Fi architecture below remains the intended next milestone, not an existing network implementation.
+Status: The approved local game supports solo AI opponents and human pass-and-play. The same-Wi-Fi architecture below remains the intended next milestone, not an existing network implementation.
 
 Related document: [Requirements and page flows](requirements.md).
 
@@ -14,21 +14,32 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/game/types.ts` | Board, inventory, explicit phase, and action types. |
 | `src/game/board.ts` | Shared hex graph, terrain, nonadjacent red number tokens, nine ports, and injectable randomness. |
 | `src/game/engine.ts` | Pure action validation and atomic transitions, placement previews, trading, awards, and victory. |
+| `src/game/computer.ts` | Pure computer action selection using its own hand and public information, plus required-action controller selection. |
 | `src/components/Board.tsx` | Locally drawn SVG terrain and pieces, keyboard/touch targets, and contained zoom/panning. |
 | `src/components/GameUi.tsx` | Resource controls, icons, and native accessible dialogs. |
-| `src/App.tsx` | Table setup, private handoffs, board/actions, trade responses, results, and rematch. |
-| `tests/game/` | Deterministic rule and graph tests. |
-| `tests/browser/catania.spec.ts` | Real local pass-and-play browser interactions. |
+| `src/App.tsx` | Human/AI table setup, private human handoffs, paced computer turns, board/actions, trade responses, results, and rematch. |
+| `tests/game/` | Deterministic rule, graph, computer-decision, and full-game tests. |
+| `tests/browser/catania.spec.ts` | Real solo, mixed human/AI, and pass-and-play browser interactions. |
 
 `createGame` accepts profiles and an optional random source. `applyAction` takes
 state, a player identity, an action, and an optional random source; it returns a
 new state or throws a validation error without changing the input. Production
 randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.
 All purchases and placements pass through the engine, including local actions.
-Selected board positions are previews until confirmed.
+Human-selected board positions are previews until confirmed; computer actions
+are applied automatically through the same rules.
 
-The React application owns the local in-memory state. Private hands are rendered
-only after a handoff is acknowledged. Public scores exclude hidden victory-point
+Profiles carry a human/computer control type through randomized turn order. A
+pure computer chooser returns one engine action at a time, including off-turn
+discards and responses to human trades. It does not propose domestic trades.
+React schedules computer moves with a cleaned-up timer and a current-state
+check so stale callbacks cannot act after a move, exit, or rematch. Computer
+trade responses do not interrupt an unrelated human input or handoff.
+
+The React application owns the local in-memory state. A single human's hand is
+available immediately and remains available during computer turns. With multiple
+humans, private hands render only after a handoff is acknowledged. Computer
+players never become hand viewers. Public scores exclude hidden victory-point
 cards until results. This is a shared-device privacy convention, not a security
 boundary: a later network implementation must add the authorized projections
 and identity binding described below rather than serializing the local state.
@@ -246,6 +257,22 @@ Use shared board rendering for public display and player interaction, with role-
 The player's default view is Hand, with Board and Players navigation. Build, trade, development-card choices, discard, and robber actions use sheets or overlays that keep the game context visible. The board supports touch-friendly location selection, zoom, and panning on phones.
 
 Keep visual state distinct from rule state: an unconfirmed selected edge, open sheet, or zoom level does not belong in authoritative game state. Accepted placement, resource transfer, and required phase choices do.
+
+The local interface resolves each roll once, then presents dice, production,
+and receipt stages before allowing the next action. Presentation gains come from
+the accepted before/after resource differences, not a second production roll or
+parsed activity text. Timers are cancelled on exit and private handoff; computer
+actions wait for presentation to finish. Reduced motion skips the timed stages
+and keeps static results. Only the revealed human hand receives detailed gain
+badges and a private resource summary.
+
+All accepted actions also compare the revealed player's before/after resources
+per type. Positive differences create a short-lived resource receipt, including
+trades whose total card count decreases. A fixed collection tray animates the
+gained cards even when the phone's Hand view is hidden; matching hand cards pulse.
+Receipts expire or can be dismissed, restart for repeated identical gains, and
+are cleared on handoff, game exit, or victory. They never delay non-roll actions
+or change resource accounting. Reduced motion keeps the receipt static.
 
 ## Verification Strategy
 

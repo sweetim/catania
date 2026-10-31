@@ -48,12 +48,13 @@ function pay(state: GameState, player: Player, cost: Resources): void {
   transfer(player.resources, state.bank, cost);
 }
 
-export function createGame(profiles: { name: string; color: string }[], random: () => number = secureRandom): GameState {
+export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom): GameState {
   requireRule(profiles.length === 3 || profiles.length === 4, "A standard game needs three or four players.");
   requireRule(profiles.every(profile => profile.name.trim() && profile.color.trim()), "Each player needs a name and color.");
+  requireRule(profiles.every(profile => profile.control === "human" || profile.control === "computer"), "Each player needs human or computer control.");
   requireRule(new Set(profiles.map(profile => profile.color)).size === profiles.length, "Choose a different color for each player.");
   const players = shuffle(profiles.map((profile, index): Player => ({
-    id: `player-${index + 1}`, name: profile.name.trim(), color: profile.color,
+    id: `player-${index + 1}`, name: profile.name.trim(), color: profile.color, control: profile.control,
     resources: emptyResources(), developmentCards: [], knightsPlayed: 0,
   })), random);
   const board = createBoard(random);

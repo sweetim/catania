@@ -3,11 +3,11 @@ import {
   applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
   legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
 } from "../../src/game/engine";
-import type { Building, DevelopmentKind, GameAction, GameState, Resources, Vertex } from "../../src/game/types";
+import type { Building, DevelopmentKind, GameAction, GameState, Player, Resources, Vertex } from "../../src/game/types";
 
-const profiles = [
-  { name: "Ada", color: "red" }, { name: "Grace", color: "blue" },
-  { name: "Linus", color: "white" }, { name: "Margaret", color: "orange" },
+const profiles: Pick<Player, "name" | "color" | "control">[] = [
+  { name: "Ada", color: "red", control: "human" }, { name: "Grace", color: "blue", control: "human" },
+  { name: "Linus", color: "white", control: "human" }, { name: "Margaret", color: "orange", control: "human" },
 ];
 const firstPlayer = "player-1";
 const secondPlayer = "player-2";
@@ -101,7 +101,7 @@ describe("initialization and snake setup", () => {
   test("requires three or four named players with distinct colors", () => {
     expect(() => createGame(profiles.slice(0, 2))).toThrow("three or four");
     expect(() => createGame([...profiles, profiles[0]!])).toThrow("three or four");
-    expect(() => createGame([{ name: " ", color: "red" }, ...profiles.slice(1, 3)])).toThrow("name and color");
+    expect(() => createGame([{ name: " ", color: "red", control: "human" }, ...profiles.slice(1, 3)])).toThrow("name and color");
     expect(() => createGame([profiles[0]!, profiles[0]!, profiles[2]!])).toThrow("different color");
   });
 

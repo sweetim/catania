@@ -61,6 +61,66 @@
   }
 }
 
+.dice-rolling .roll-die {
+  animation: dice-tumble 500ms ease-out both;
+  transform-origin: center;
+}
+
+.dice-rolling .roll-die:nth-child(2) {
+  animation-duration: 450ms;
+  animation-delay: 50ms;
+}
+
+.production-highlight {
+  animation: production-glow 650ms ease-out both;
+}
+
+.resource-collection {
+  position: fixed;
+  z-index: 40;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  width: calc(100% - 2rem);
+  max-width: 26rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.resource-collection-card {
+  animation: resource-collect 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.resource-hand-arrival {
+  animation: resource-hand-pulse 850ms 450ms ease-out both;
+  border-radius: 0.75rem;
+}
+
+@keyframes dice-tumble {
+  0% { transform: translateY(-5px) rotate(-24deg) scale(0.9); }
+  25% { transform: translateY(2px) rotate(20deg); }
+  50% { transform: translateY(-7px) rotate(-15deg); }
+  75% { transform: translateY(0) rotate(8deg); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+
+@keyframes production-glow {
+  0% { opacity: 0; stroke-width: 2; }
+  45% { opacity: 1; stroke-width: 7; }
+  100% { opacity: 0.85; stroke-width: 5; }
+}
+
+@keyframes resource-collect {
+  0% { opacity: 0; transform: translate(-35px, 32px) rotate(-18deg) scale(0.65); }
+  55% { opacity: 1; transform: translate(0, -8px) rotate(4deg) scale(1.08); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+}
+
+@keyframes resource-hand-pulse {
+  0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 transparent; }
+  35% { transform: translateY(-8px) scale(1.1); box-shadow: 0 0 0 5px #c6a14b66; }
+  65% { transform: translateY(1px) scale(0.98); box-shadow: 0 0 0 8px #c6a14b00; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

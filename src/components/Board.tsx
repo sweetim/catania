@@ -24,6 +24,7 @@ export function Board({
   legalVertexIds = [],
   legalEdgeIds = [],
   legalTileIds = [],
+  producingTileIds = [],
   selectedId,
   onSelect,
   interactive = true,
@@ -35,6 +36,7 @@ export function Board({
   legalVertexIds?: string[];
   legalEdgeIds?: string[];
   legalTileIds?: string[];
+  producingTileIds?: string[];
   selectedId?: string | null;
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   interactive?: boolean;
@@ -537,7 +539,7 @@ export function Board({
                 <g
                   key={tile.id}
                   role="img"
-                  aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}`}
+                  aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}${producingTileIds.includes(tile.id) ? ", produced resources this roll" : ""}`}
                 >
                   <polygon
                     points={points}
@@ -609,6 +611,18 @@ export function Board({
                       stroke="#815b2b"
                       strokeWidth="4"
                       strokeLinejoin="round"
+                    />
+                  )}
+                  {producingTileIds.includes(tile.id) && (
+                    <polygon
+                      className="production-highlight"
+                      points={points}
+                      fill="#fff1ad"
+                      fillOpacity="0.12"
+                      stroke="#a9792f"
+                      strokeWidth="5"
+                      strokeLinejoin="round"
+                      pointerEvents="none"
                     />
                   )}
                 </g>
