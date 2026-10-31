@@ -80,6 +80,24 @@ work") require constant clarification.
   UI directly. Report test results and any verification that could not be
   completed.
 
+## 6. Learn From User Feedback
+
+**Capture reusable lessons, not conversation history.**
+
+- Treat explicit user corrections and stated long-term preferences as
+  candidates for reusable project rules. Do not turn one-off requests or
+  inferred preferences into permanent instructions.
+- Check existing instructions first. If the lesson is already covered,
+  follow the existing rule instead of adding a duplicate.
+- For a new reusable lesson, propose the exact instruction change and obtain
+  user approval before editing AGENTS.md.
+- Prefer refining the relevant existing rule over adding a new section.
+  Keep each lesson concise, actionable, and scoped to this project.
+- If feedback conflicts with an existing rule, confirm whether it is a
+  one-time exception or a lasting replacement before changing instructions.
+- Never persist secrets, personal information, raw conversation transcripts,
+  or temporary task details.
+
 # Coding Rules
 
 - Use `type` instead of `interface` when defining TypeScript types to ensure
