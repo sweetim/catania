@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { match } from "ts-pattern";
 import { Board } from "../components/Board";
+import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
+import { GameMenu } from "../components/GameMenu";
+import { HelpDialog } from "../components/HelpDialog";
 import { BankSupply, BuildButton, Cost, Dialog, Logo, PieceIcon, RESOURCE_NAMES, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
 import { OpenTrade } from "../components/OpenTrade";
@@ -81,12 +84,13 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
   </>;
 }
 
-function PlayerControls({ snapshot, disabled, error, perform, selectBuild }: {
+function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onTheftNoticeTarget }: {
   snapshot: RoomSnapshot;
   disabled: boolean;
   error: string;
   perform: (action: GameAction, expectedVersion: number) => void;
   selectBuild: (piece: BuildMode) => void;
+  onTheftNoticeTarget: (target: HTMLDivElement | null) => void;
 }) {
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
@@ -205,6 +209,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild }: {
     </section>
 
     <section className="hand-dice private-turn" aria-label="Turn controls">
+      <div ref={onTheftNoticeTarget} className="theft-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? "Game over" : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted"> - {active ? "Your turn" : "Their turn"}</span>}</h2>
         <span className="turn-number">{game.turnNumber === 0 ? "Setup" : `Turn ${game.turnNumber}`}</span>
@@ -277,9 +282,11 @@ export function MultiplayerApp() {
   const [localError, setLocalError] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("illustrated");
-  const [dialog, setDialog] = useState<"theme" | "leave" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | null>(null);
+  const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [theftNoticeTarget, setTheftNoticeTarget] = useState<HTMLDivElement | null>(null);
   const copyFeedbackTimer = useRef<number | undefined>(undefined);
   const snapshot = view?.snapshot;
   const game = snapshot?.game;
@@ -345,13 +352,16 @@ export function MultiplayerApp() {
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-8">
         <Logo />
         {privateGame ? <span className="private-connection" role="status" data-status={view?.status}>{view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline"}</span> : sharedGame ? <span className="ml-auto text-[10px] text-muted sm:mx-auto sm:text-xs" role="status"><span className="hidden sm:inline">Shared board / </span>{view?.status === "connected" ? "Connected" : "Offline"}</span> : <span className="hidden text-xs text-muted sm:block">One island. Your own hand.</span>}
-        {view ? <button className="button-secondary" onClick={() => setDialog("leave")}>Leave room</button> : <a className="text-sm underline underline-offset-4" href="/">Single-device play</a>}
+        {view ? <GameMenu actions={[
+          { label: "Help", onSelect: () => setDialog("help") },
+          ...(host ? [{ label: "Settings", onSelect: () => setDialog("settings") }] : []),
+        ]} exitAction={{ label: "Leave room", onSelect: () => setDialog("leave") }} /> : <a className="text-sm underline underline-offset-4" href="/">Single-device play</a>}
       </header>
       <main className={privateGame ? "private-game-main" : sharedGame ? "shared-game-main" : hostLobby ? "multiplayer-lobby-main" : `mx-auto max-w-[1600px] px-4 pb-10 sm:px-8 ${game ? "pt-4" : "pt-10 sm:pt-16"}`}>
         {!view && <section className="mx-auto max-w-xl">
           <p className="eyebrow">Gather around</p>
           <h1 className="mt-3 font-serif text-5xl tracking-tight">{invitation ? "Your seat awaits." : "An island to share."}</h1>
-          <p className="mb-8 mt-5 text-sm leading-7 text-muted">{invitation ? "Keep your cards close. Connect your phone to the shared board, then wait for the host to admit you." : "One screen for the board, one phone per human player. Fill a three- or four-player table with friends on the same Wi-Fi or computer opponents, without a game server."}</p>
+          <p className="mb-8 mt-5 text-sm leading-7 text-muted">{invitation ? "Keep your cards close. Connect your phone to the shared board, then wait for the host to admit you." : "One screen for the board, one phone per human player. Fill a three- or four-player table with friends on the same local network or computer opponents, without a game server."}</p>
           {invitation ? <form className="panel space-y-4 p-6" onSubmit={event => { event.preventDefault(); connect(); }}>
             <label className="block text-sm font-semibold">Your name<input className="field mt-2" maxLength={20} autoComplete="nickname" value={name} onChange={event => setName(event.target.value)} required /></label>
             <button className="button-primary w-full" disabled={!name.trim()}>Connect to game</button>
@@ -360,11 +370,11 @@ export function MultiplayerApp() {
             <p className="text-sm leading-6 text-muted">Players scan the QR code using their phone cameras. This screen shows only public information and stays open for the whole game.</p>
             <button className="button-primary w-full" onClick={() => { setLocalError(""); session.current = hostSession(setView); }}>Host board</button>
           </div>}
-          <p className="mt-5 text-xs leading-6 text-muted">PeerJS Cloud helps devices find each other. Gameplay runs in the board browser over direct, encrypted connections. Guest Wi-Fi isolation can prevent connections.</p>
+          <p className="mt-5 text-xs leading-6 text-muted">PeerJS Cloud provides signaling, and STUN helps discover reachable addresses. Gameplay runs in the board browser over direct, encrypted connections, without a relay fallback. Ethernet and Wi-Fi can work together; guest Wi-Fi isolation can prevent connections.</p>
         </section>}
 
         {view && (!(privateGame || sharedGame || hostLobby) || view.status !== "connected") && <div className={privateGame ? "private-connection-notice" : "mb-4 flex flex-wrap items-center justify-between gap-2 text-xs"} role="status">
-          <span>{host ? "Shared board" : "Private player screen"} / {view.status === "connected" ? "Connected" : view.status === "connecting" ? "Connecting through PeerJS Cloud..." : view.status === "closed" ? "Room closed" : "Connection lost"}{view.pending && " / Waiting for the host"}</span>
+          <span>{host ? "Shared board" : "Private player screen"} / {view.status === "connected" ? "Connected" : view.status === "connecting" ? host ? "Connecting through PeerJS Cloud..." : "Connecting to the host..." : view.status === "closed" ? "Room closed" : "Connection lost"}{view.pending && " / Waiting for the host"}</span>
           {view.status === "disconnected" && <button className="button-secondary" onClick={() => session.current?.reconnect()}>Reconnect</button>}
           {view.status === "closed" && <a className="underline underline-offset-4" href="/?multiplayer=1">Start another room</a>}
         </div>}
@@ -377,7 +387,7 @@ export function MultiplayerApp() {
                 <button className="button-secondary px-3 text-xs" aria-label="Shuffle island preview" disabled={disabled} onClick={() => session.current?.shuffleBoard()}>Shuffle</button>
               </div>
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
-                <Board board={snapshot.previewBoard} players={[]} robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id} interactive={false} compact fit onChangeTheme={() => setDialog("theme")} />
+                <Board board={snapshot.previewBoard} players={[]} robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id} fillBoardWithWater={boardSettings.fillBoardWithWater} interactive={false} compact fit onChangeTheme={() => setDialog("theme")} />
               </div>
               <p className="mt-4 text-xs leading-5 text-muted">Shuffle until you find your island. Starting the game keeps this exact map.</p>
           </section>}
@@ -462,7 +472,8 @@ export function MultiplayerApp() {
             <div className="board-tablemat">
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} fit
                 legalVertexIds={snapshot.boardTargets.vertices} legalEdgeIds={snapshot.boardTargets.edges} legalTileIds={snapshot.boardTargets.tiles}
-                interactive={!disabled && activePlayer?.control !== "computer" && !game.winnerId} selectedId={currentSelection?.id} showBlockedSettlementLocations
+                interactive={!disabled && activePlayer?.control !== "computer" && !game.winnerId} selectedId={currentSelection?.id}
+                showBlockedSettlementLocations={boardSettings.showBlockedSettlementLocations} fillBoardWithWater={boardSettings.fillBoardWithWater}
                 rolledNumber={game.dice ? game.dice[0] + game.dice[1] : undefined}
                 onChangeTheme={() => setDialog("theme")}
                 onSelect={(kind, id) => setSelected({ kind, id, version: snapshot.version })}
@@ -472,12 +483,14 @@ export function MultiplayerApp() {
           </section>
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={view?.error ?? ""} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} />
+          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={view?.error ?? ""} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onTheftNoticeTarget={setTheftNoticeTarget} />
             : <p className="text-sm text-muted">Waiting for your private player information.</p>}
         </div>}
       </main>
-      {!host && game && !game.winnerId && snapshot?.privatePlayer && <TheftNotice thefts={snapshot.privateThefts} playerId={snapshot.privatePlayer.id} players={game.players} />}
+      {!host && game && !game.winnerId && snapshot?.privatePlayer && <TheftNotice thefts={snapshot.privateThefts} playerId={snapshot.privatePlayer.id} players={game.players} target={theftNoticeTarget} />}
       {dialog === "theme" && <Dialog title="Choose your theme" onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
+      {dialog === "help" && <HelpDialog multiplayer onClose={() => setDialog(null)} />}
+      {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "leave" && <Dialog title={host ? "Close this room?" : "Leave this room?"} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{host ? "The board holds the game in memory. Closing it ends the game for everyone; there is no automatic host transfer or saved game." : "Your seat stays reserved while the host remains open. Open the invitation in this tab to reconnect."}</p>
         <div className="flex gap-3"><button className="button-secondary" onClick={() => setDialog(null)}>Keep playing</button><button className="button-primary" onClick={() => { session.current?.close(); session.current = null; window.location.href = "/"; }}>Leave room</button></div>

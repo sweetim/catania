@@ -1,18 +1,38 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Player, TheftEvent } from "../game/types";
 import { ResourceCard, RESOURCE_NAMES } from "./GameUi";
 
-export function TheftNotice({ thefts, playerId, players }: {
+export function TheftNotice({ thefts, playerId, players, target }: {
   thefts: TheftEvent[];
   playerId: string | null;
   players: Pick<Player, "id" | "name">[];
+  target: HTMLDivElement | null;
 }) {
   // Keep acknowledgements per player even while the pass-and-play hand is hidden.
   const [dismissed, setDismissed] = useState<Record<string, number>>({});
-  if (!playerId) return null;
-  const pending = thefts.filter(theft => theft.id > (dismissed[playerId] ?? 0) &&
-    (theft.thiefId === playerId || theft.victimId === playerId));
+  const notice = useRef<HTMLElement | null>(null);
+  const pending = playerId ? thefts.filter(theft => theft.id > (dismissed[playerId] ?? 0) &&
+    (theft.thiefId === playerId || theft.victimId === playerId)) : [];
   const theft = pending[0];
+  const theftId = theft?.id;
+  useEffect(() => {
+    if (!playerId || theftId === undefined || !target || !notice.current) return;
+    let timeout: number | undefined;
+    // Do not expire a notice while its owner's hand or the notice itself is off-screen.
+    const observer = new IntersectionObserver(([entry]) => {
+      window.clearTimeout(timeout);
+      if (entry && entry.intersectionRatio >= 0.5) {
+        timeout = window.setTimeout(() => setDismissed(previous => ({ ...previous, [playerId]: theftId })), 5000);
+      }
+    }, { threshold: 0.5 });
+    observer.observe(notice.current);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timeout);
+    };
+  }, [playerId, theftId, target]);
+  if (!playerId || !target) return null;
   const lost = theft?.victimId === playerId;
   const otherPlayer = theft && players.find(player => player.id === (lost ? theft.thiefId : theft.victimId))!;
   const title = theft ? lost ? `${otherPlayer!.name} robbed you` : `You stole from ${otherPlayer!.name}` : "";
@@ -20,11 +40,11 @@ export function TheftNotice({ thefts, playerId, players }: {
     ? `${otherPlayer!.name} robbed you of 1 ${RESOURCE_NAMES[theft.resource]}.`
     : `You stole 1 ${RESOURCE_NAMES[theft.resource]} from ${otherPlayer!.name}.` : "";
 
-  return <>
+  return createPortal(<>
     <p role="status" aria-label="Robbery result" aria-atomic="true" className="sr-only">
       <span key={theft ? `${playerId}-${theft.id}` : "empty"}>{description}</span>
     </p>
-    {theft && <section aria-label="Robbery notification"
+    {theft && <section ref={notice} aria-label="Robbery notification"
       className={`theft-notice rounded-2xl border bg-paper p-4 shadow-xl ${lost ? "border-clay" : "border-[#91ad9b]"}`}>
       <div className="flex items-start gap-3">
         <div className="shrink-0 pt-1" aria-hidden="true">
@@ -41,11 +61,11 @@ export function TheftNotice({ thefts, playerId, players }: {
           {pending.length > 1 && <p className="mt-2 text-xs text-muted">{pending.length - 1} more theft notice{pending.length === 2 ? "" : "s"}</p>}
         </div>
         <button type="button" aria-label="Dismiss robbery notification"
-          className="pointer-events-auto -mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
           onClick={() => setDismissed(previous => ({ ...previous, [playerId]: theft.id }))}>
           &times;
         </button>
       </div>
     </section>}
-  </>;
+  </>, target);
 }

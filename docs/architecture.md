@@ -77,10 +77,14 @@ touch behavior, or the ability to join a Wi-Fi room.
 
 Vercel serves the static `dist` build configured by `vercel.json`. No application
 backend, database, Blob storage, or server-side game processing is deployed.
-`src/multiplayer/session.ts` uses PeerJS Cloud to introduce browsers, then sends
-game messages over WebRTC data channels. No STUN/TURN servers are configured;
-devices must support a direct connection, normally on the same Wi-Fi. Signaling
-requires internet connectivity and is an explicit external service dependency.
+`src/multiplayer/session.ts` uses PeerJS Cloud to introduce browsers and Google
+STUN (`stun:stun.l.google.com:19302`) to discover reachable addresses, then sends
+game messages over direct WebRTC data channels. No TURN relay is configured;
+devices must support a direct connection, normally on the same local network
+using Ethernet, Wi-Fi, or both. Signaling and STUN discovery are explicit external
+service dependencies; neither carries game data. Connection diagnostics distinguish
+an unanswered negotiation, direct WebRTC failure, and an open channel without its
+initial snapshot, and report only ICE/gathering states rather than addresses or secrets.
 
 `src/multiplayer/state.ts` owns admission, seat credentials, versions, accepted
 commands, rules execution, and authorized snapshots. The existing `applyAction`
@@ -128,8 +132,10 @@ a name or the shared invitation is not enough to take over a seat.
 There is no host migration, saved-game persistence, organizer-phone
 role, or in-room rematch in this implementation. Keep the host browser open and
 awake. Local-network isolation and browser suspension can break direct connections;
-there is no silent server/relay fallback. Tests use a local test-only PeerServer to
-exercise real WebRTC without relying on the public signaling service. Physical
+there is no silent server/relay fallback. Tests use a local test-only PeerServer and
+override ICE servers to an empty list in the browser harness, exercising native
+WebRTC without public signaling or STUN traffic. Unit tests check the production
+STUN-only configuration. Physical
 phone and deployed public-service behavior require separate manual verification.
 
 ## Historical LAN Proposal
@@ -362,9 +368,12 @@ monotonic identifier, thief, victim, and transferred resource. The engine retain
 the latest 100 events separately from the generic public log. Phone snapshots
 include only events involving their authenticated player in `privateThefts`;
 public projections and shared-board snapshots exclude those details. Both UIs
-use the same dismissible theft notice, with per-player acknowledgement state.
-Local handoffs hide notices without acknowledging them, so victims can see the
-lost card when they next reveal their hand. Empty-hand attempts, spending, and
+use the same theft notice overlay anchored above the turn/dice panel without
+reserving layout space, with per-player acknowledgement
+state retained outside handoff and connection-status remounts. Each notice expires
+after five seconds while on-screen or can be dismissed manually. Local handoffs
+hide notices without acknowledging them, so victims can see the lost card when
+they next reveal their hand. Empty-hand attempts, spending, and
 discards do not create theft events or notices.
 
 ## Verification Strategy

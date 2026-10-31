@@ -41,7 +41,7 @@ function signaling(id: string, callbacks: {
   }
   function create() {
     peer?.removeAllListeners();
-    peer = new Peer(id, { config: { iceServers: [] } });
+    peer = new Peer(id, { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
     peer.on("open", () => {
       clearTimeout(retry); retry = undefined;
       clearTimeout(timeout);
@@ -57,8 +57,8 @@ function signaling(id: string, callbacks: {
     peer.on("error", error => {
       if (closed) return;
       callbacks.failed(error.type === "peer-unavailable"
-        ? "The host is unavailable. Keep the host page open and check that all devices use the same Wi-Fi."
-        : `PeerJS connection failed (${error.type}). Check internet access and the local Wi-Fi connection.`);
+        ? "The target device is unavailable through PeerJS signaling. Keep both pages open and use the host's latest invitation."
+        : `PeerJS connection failed (${error.type}). Check internet access and keep both pages open.`);
       if (!peer.open) schedule();
     });
     peer.on("close", () => {
@@ -270,20 +270,26 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   function connect() {
     if (closed || stopped || connection) return;
     clearTimeout(retry); retry = undefined;
-    view = { ...view, status: "connecting" };
+    view = { ...view, status: "connecting", error: "" };
     publish();
     const current = link.peer.connect(invitation.hostId, { reliable: true, serialization: "binary" });
     connection = current;
-    const failed = () => {
-      if (connection === current) disconnect("Connection to the host was lost. Keep the host page open and use the same Wi-Fi; reconnecting automatically.");
+    const failed = (message = "Connection to the host was lost. Keep both pages open.") => {
+      if (connection !== current) return;
+      const peerConnection = current.peerConnection;
+      const details = peerConnection ? ` Connection details: ICE ${peerConnection.iceConnectionState}; gathering ${peerConnection.iceGatheringState}.` : "";
+      disconnect(`${message}${details} Reconnecting automatically.`);
     };
     timeout = setTimeout(() => {
-      if (connection === current) disconnect("The host connection timed out. Check that all devices share Wi-Fi and the router allows device-to-device traffic.");
+      let message = "Timed out waiting for the host's connection answer. Keep the host page open and use its latest invitation.";
+      if (current.open) message = "Connected to the host, but timed out waiting for the initial game state. Keep the host page active.";
+      else if (current.peerConnection?.remoteDescription) message = "The host answered, but the direct WebRTC connection timed out. Check device firewalls, VPNs, and router device isolation. No relay fallback is configured.";
+      failed(message);
     }, CONNECTION_TIMEOUT);
-    current.on("close", failed);
-    current.on("error", failed);
+    current.on("close", () => failed());
+    current.on("error", () => failed());
     current.on("iceStateChanged", state => {
-      if (state === "failed" || state === "disconnected" || state === "closed") failed();
+      if (state === "failed" || state === "disconnected" || state === "closed") failed("The direct WebRTC connection failed or was interrupted. Check device firewalls, VPNs, and router device isolation. No relay fallback is configured.");
     });
     current.on("open", () => {
       // Secrets and credentials travel only over the encrypted data channel, never signaling metadata.

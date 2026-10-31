@@ -95,6 +95,15 @@ this browser when storage is available, including across new games and reloads.
 Unmarked corners are not necessarily buildable: roads, resources, remaining pieces,
 and turn rules still apply. The setting does not save the game.
 
+In single-device games, **Game > Settings > Fill board with water** extends the
+current theme's water background across the entire map area, including its empty
+margins. It is off by default, keeping the round water shape. Changes apply
+immediately without changing the island, zoom, or pan. The preference also applies
+to the island preview and pass-device board, and is remembered across new games
+and reloads under `catania.fillBoardWithWater` when browser storage is available.
+Unknown values or unavailable storage default to round; storage failures do not
+prevent toggling for the current session. The board controls remain unchanged.
+
 ## Help And Rules
 
 **Help** combines how to play, every build and purchase with costs and piece limits,
@@ -204,10 +213,13 @@ cards. Theft uses a separate private notice instead of the generic gain tray.
 
 After a successful robbery, the victim sees who robbed them and the exact lost
 resource card with **-1**. The thief sees who they stole from and the card with
-**+1**. Notices stay until dismissed, including when the board is open. In
-pass-and-play, each player's unread notices wait until that player reveals their
-hand; neither the handoff screen nor another player's hand shows them. Multiple
-notices appear one at a time. Discarding, spending, and empty-hand theft attempts
+**+1**. Notices float directly above the turn/dice panel, overlaying nearby content
+without shifting the hand or controls, and disappear after five
+seconds on-screen, or sooner with the dismiss button. In pass-and-play, each
+player's unread notices wait until that player reveals their hand; neither the
+handoff screen nor another player's hand shows them. Scrolling a notice out of
+view or hiding the hand stops its timer until it is visible again. Multiple
+notices appear one at a time, each with its own timer. Discarding, spending, and empty-hand theft attempts
 do not produce robbery notices. Multiplayer uses the same private notices, while
 the shared board and public activity never show the stolen resource.
 

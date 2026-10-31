@@ -33,6 +33,12 @@ renaming and left-side player avatars, exact lobby-map preservation after zero o
 multiple shuffles, one phone with two automatic computer opponents, private-hand
 projections, and reconnect readiness. Host-session tests cover computer timer cleanup,
 stale callbacks, off-turn discards/trades, and shared-board authority restrictions.
+Connection tests cover STUN-only configuration for hosts, players, and recreated
+peers; unanswered negotiations, direct ICE failures/timeouts, and missing initial
+snapshots; private-data-free diagnostics; and clearing old errors on retries.
+Browser regressions render all three timeout stages at desktop/mobile sizes,
+using controlled signaling/candidate/message suppression rather than claiming
+to reproduce a physical router failure.
 Dialog regressions cover the shared single-device and cross-device trade editor,
 resource-card selectors, response states, missing-card explanations, development-card
 inspection, discard progress, and purchase/theft/trade confirmations. Phone checks
@@ -41,7 +47,8 @@ Presentation-fixture tests validate rendering and command payloads separately fr
 the real WebRTC game tests that validate authoritative state transitions.
 Robbery coverage checks exact-resource events and private projections, local
 victim/thief notices across handoffs, computer thefts in solo play, and phone
-notice queues, dismissal, resource-loss false positives, and reduced motion.
+notice queues, five-second expiry, anchored overlays without layout shifts, off-screen timer cleanup,
+reconnect acknowledgements, resource-loss false positives, and reduced motion.
 Shared-board layout checks cover the single-device player seats and map, viewport
 containment, horizontally scrolling seats, and confirmed placements at desktop and
 320-pixel widths. They also verify that bank/build/turn panels, tabs, and private
@@ -59,9 +66,12 @@ PLAYWRIGHT_PORT=4191 PLAYWRIGHT_SIGNALING_PORT=4192 bun run test:browser
 ```
 
 Each setting is optional; their defaults remain 4173 and 4176 respectively.
-Multiplayer tests route signaling to that local server and exercise real browser
-WebRTC connections without depending on public PeerJS Cloud. This test server is
-not part of the deployment.
+Multiplayer tests route signaling to that local server and exercise native browser
+WebRTC connections. The harness overrides `RTCPeerConnection` construction to use
+`iceServers: []`, since native STUN traffic bypasses HTTP/WebSocket interception.
+Tests therefore do not depend on public PeerJS Cloud or STUN. Unit tests separately
+assert the production STUN configuration and absence of TURN. This test server
+and discovery override are not part of the deployment.
 
 ## Manual Single-Device Checks
 
@@ -88,8 +98,9 @@ not part of the deployment.
 ## Physical-Device Multiplayer
 
 Viewport automation is not a claim of physical Android/iOS or local-network
-compatibility. Separately check a deployed Vercel host and three physical phones
-on the intended Wi-Fi:
+compatibility or public STUN reachability. Separately check a deployed Vercel host
+and three physical phones on the intended local network, including a desktop on
+Ethernet and Android Chrome on Wi-Fi:
 
 1. Scan the invitation and admit each phone.
 2. Complete setup, roll, trade, and discard.
@@ -101,7 +112,13 @@ on the intended Wi-Fi:
    confirm their phone must request fresh admission. Shuffle the preview, change
    themes, and verify Start keeps the chosen terrain, numbers, ports, and robber.
    Verify automatic
-   computer placements, turns, discards, and trade responses without phone prompts.
+    computer placements, turns, discards, and trade responses without phone prompts.
+6. Keep the host awake and retry joining from Android Chrome with the current
+   invitation. If it fails, record the displayed connection stage and ICE/gathering
+   states, not the invitation or session description. Check both automatic and
+   manual retries clear the previous error. Repeat with phone and desktop roles
+   reversed, and check background/resume behavior. Do not treat STUN as proof that
+   guest isolation or firewall restrictions can be bypassed.
 
 Browser automation does not establish physical Android/iOS compatibility or public
 PeerJS Cloud availability. See the [multiplayer guide](multiplayer.md) for deployment,

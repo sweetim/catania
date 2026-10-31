@@ -1,6 +1,9 @@
-import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useState } from "react";
 import { match } from "ts-pattern";
 import { Board } from "./components/Board";
+import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
+import { GameMenu } from "./components/GameMenu";
+import { HelpDialog } from "./components/HelpDialog";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
 import { TheftNotice } from "./components/TheftNotice";
@@ -16,20 +19,14 @@ import {
   DevelopmentDialog,
   DiscardSelection,
   TheftChoices,
-  DEVELOPMENT_NAMES,
-  DEVELOPMENT_DESCRIPTIONS,
 } from "./components/GameplayDialogs";
 import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "./themes";
 import {
   Arrow,
   BankSupply,
   BuildButton,
-  CardTypeIcon,
-  Cost,
-  DevelopmentCardIcon,
   Dialog,
   Logo,
-  PieceIcon,
   RESOURCE_NAMES,
   ResourceCard,
   ResourceInventory,
@@ -67,7 +64,6 @@ type RollPresentation = {
 };
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
-const BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY = "catania.showBlockedSettlementLocations";
 const BOARD_THEME_STORAGE_KEY = "catania.boardTheme";
 
 function phaseTitle(state: GameState) {
@@ -102,13 +98,9 @@ export function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
-  const [showBlockedSettlementLocations, setShowBlockedSettlementLocations] = useState(() => {
-    try {
-      return window.localStorage.getItem(BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY) !== "false";
-    } catch {
-      return true;
-    }
-  });
+  const [theftNoticeTarget, setTheftNoticeTarget] = useState<HTMLDivElement | null>(null);
+  const boardSettings = useBoardSettings();
+  const { showBlockedSettlementLocations, fillBoardWithWater } = boardSettings;
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
@@ -118,8 +110,6 @@ export function App() {
   const [dialog, setDialog] = useState<
     "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | null
   >(null);
-  const gameMenu = useRef<HTMLDetailsElement>(null);
-  const [gameMenuOpen, setGameMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
     "hand",
   );
@@ -194,14 +184,6 @@ export function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY, String(showBlockedSettlementLocations));
-    } catch {
-      // Keep the toggle usable when browser storage is unavailable.
-    }
-  }, [showBlockedSettlementLocations]);
-
-  useEffect(() => {
-    try {
       window.localStorage.setItem(BOARD_THEME_STORAGE_KEY, boardThemeId);
     } catch {
       // Theme switching still works when browser storage is unavailable.
@@ -248,26 +230,6 @@ export function App() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [Boolean(game), Boolean(game?.winnerId)]);
-
-  useEffect(() => {
-    const dismissMenu = (event: PointerEvent) => {
-      if (gameMenu.current && event.target instanceof Node && !gameMenu.current.contains(event.target)) {
-        gameMenu.current.open = false;
-      }
-    };
-    document.addEventListener("pointerdown", dismissMenu);
-    return () => document.removeEventListener("pointerdown", dismissMenu);
-  }, []);
-
-  function openGameDialog(nextDialog: "help" | "settings" | "players" | "restart") {
-    if (gameMenu.current) {
-      gameMenu.current.open = false;
-      // Dialogs restore focus to the visible opener, not a hidden menu item.
-      gameMenu.current.querySelector("summary")?.focus();
-    }
-    setDialog(nextDialog);
-    if (nextDialog === "help") setError("");
-  }
 
   function startGame(selectedBoard?: GameState["board"]) {
     try {
@@ -530,47 +492,11 @@ export function App() {
           {game ? "A little friendly competition" : "Made for gathering around"}
         </div>
         {game && !game.winnerId ? (
-          <details
-            ref={gameMenu}
-            className="game-menu relative shrink-0"
-            onToggle={(event) => setGameMenuOpen(event.currentTarget.open)}
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && event.currentTarget.open) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.currentTarget.open = false;
-                event.currentTarget.querySelector("summary")?.focus();
-              }
-            }}
-          >
-            <summary role="button" aria-expanded={gameMenuOpen} aria-controls="game-menu" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest">
-              Game
-              <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="m3 4.5 3 3 3-3" />
-              </svg>
-            </summary>
-            <div id="game-menu" role="group" aria-label="Game menu" className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl">
-              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("help")}>
-                Help
-              </button>
-              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("settings")}>
-                Settings
-              </button>
-              {needsHandoff && viewer && (
-                <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={rollBusy} onClick={() => openGameDialog("players")}>
-                  Pass device
-                </button>
-              )}
-              <div className="mt-1 border-t border-line pt-1">
-                <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-clay hover:bg-clay/10" onClick={() => openGameDialog("restart")}>
-                  End game
-                </button>
-              </div>
-            </div>
-          </details>
+          <GameMenu actions={[
+            { label: "Help", onSelect: () => { setDialog("help"); setError(""); } },
+            { label: "Settings", onSelect: () => setDialog("settings") },
+            ...(needsHandoff && viewer ? [{ label: "Pass device", disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
+          ]} exitAction={{ label: "End game", onSelect: () => setDialog("restart") }} />
         ) : (
           <button
             className="text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
@@ -764,6 +690,7 @@ export function App() {
               <Board
                 board={preview}
                 players={[]}
+                fillBoardWithWater={fillBoardWithWater}
                 robberTileId={
                   preview.tiles.find((tile) => tile.terrain === "desert")?.id
                 }
@@ -846,6 +773,7 @@ export function App() {
               players={game.players}
               robberTileId={game.robberTileId}
               showBlockedSettlementLocations={showBlockedSettlementLocations}
+              fillBoardWithWater={fillBoardWithWater}
               interactive={false}
               onChangeTheme={() => setDialog("theme")}
               compact
@@ -945,6 +873,7 @@ export function App() {
                   players={game.players}
                   robberTileId={game.robberTileId}
                   showBlockedSettlementLocations={showBlockedSettlementLocations}
+                  fillBoardWithWater={fillBoardWithWater}
                   producingTileIds={producingTileIds}
                   rolledNumber={rolledNumber}
                   onChangeTheme={() => setDialog("theme")}
@@ -1229,6 +1158,7 @@ export function App() {
               )}
               </div>
               <div className="hand-dice" role="region" aria-label="Turn controls">
+                <div ref={setTheftNoticeTarget} className="theft-notice-anchor" />
                 <div className="turn-header">
                   <h2 className="turn-owner">
                     <span className="truncate" title={activePlayer?.name}>{activePlayer?.name}</span>
@@ -1284,7 +1214,7 @@ export function App() {
             <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
         </main>
       )}
@@ -1304,165 +1234,9 @@ export function App() {
         </Dialog>
       )}
 
-      {dialog === "settings" && (
-        <Dialog title="Settings" onClose={() => setDialog(null)}>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={showBlockedSettlementLocations}
-              onChange={(event) => setShowBlockedSettlementLocations(event.currentTarget.checked)}
-              aria-describedby="blocked-settlement-locations-description"
-              className="size-5 shrink-0 accent-forest"
-            />
-            Show blocked settlement locations
-          </label>
-          <p id="blocked-settlement-locations-description" className="mt-3 text-sm leading-6 text-muted">
-            Crosses mark empty corners next to any settlement or city, where the distance rule prevents building.
-            Unmarked corners still require the usual roads, resources, and available pieces on your turn.
-          </p>
-          <p className="mt-4 text-xs text-muted">Saved in this browser when storage is available. Games are not saved.</p>
-        </Dialog>
-      )}
-
-      {dialog === "help" && (
-        <Dialog title="Help" onClose={() => setDialog(null)} wide>
-          <div className="space-y-8 text-sm leading-7 text-muted">
-            <p className="font-serif text-xl text-ink">
-              Good neighbors. Clever trades. Ten victory points.
-            </p>
-            <section aria-labelledby="help-how-to-play">
-              <h3 id="help-how-to-play" className="mb-4 font-serif text-2xl text-ink">How to play</h3>
-              <ol className="list-decimal space-y-3 pl-5">
-                <li>
-                  <strong className="text-ink">Settle the island.</strong> Choose three or four players,
-                  with computers filling any non-human seats. Turn order is randomized. Each player
-                  places a free settlement and adjoining road in order, then again in reverse.
-                  Your second settlement grants one resource from each neighboring non-desert hex.
-                </li>
-                <li>
-                  <strong className="text-ink">Roll and gather.</strong> Roll two dice once on your turn.
-                  All players collect from matching hexes. Resolve any discards, robber moves, and
-                  theft before continuing. An eligible development card can be played before or after rolling.
-                </li>
-                <li>
-                  <strong className="text-ink">Trade, build, and pass.</strong> After rolling, trade,
-                  build, and buy cards in any order while you have the resources. Select a highlighted
-                  location on the board, then confirm the placement; Cancel or Escape clears the preview.
-                  Finish required choices before ending your turn. Reach 10 points on your own turn to win.
-                </li>
-              </ol>
-            </section>
-
-            <section aria-labelledby="help-builds">
-              <h3 id="help-builds" className="mb-4 font-serif text-2xl text-ink">Builds and costs</h3>
-              <p className="mb-4">Pay these resources to the bank after rolling. You need a legal location and an available piece to build.</p>
-              <ul aria-label="Available builds and purchases" className="grid gap-3 sm:grid-cols-2">
-                {([
-                  { piece: "road", name: "Road", description: "Connect an empty edge to your own road, settlement, or city. You cannot extend through an opponent's building. Roads earn no points by themselves. Limit: 15 roads." },
-                  { piece: "settlement", name: "Settlement", description: "Build on an empty intersection beside your road, at least two edges from every settlement or city. Worth 1 point; produces 1 resource per matching neighboring hex. Limit: 5 settlements." },
-                  { piece: "city", name: "City", description: "Upgrade one of your settlements, returning its piece to your supply. Worth 2 points total; produces 2 resources per matching neighboring hex. Limit: 4 cities." },
-                  { piece: "development", name: "Development card", description: "Draw a hidden card from the shuffled deck. There are 25 cards; purchases stop when the deck is empty. Cards cannot be traded." },
-                ] as const).map(({ piece, name, description }) => (
-                  <li key={piece} className="min-w-0 rounded-xl border border-line bg-white/30 p-4">
-                    <div className="mb-3 flex items-center gap-3 text-forest">
-                      {piece === "development" ? <CardTypeIcon kind="development" /> : <PieceIcon piece={piece} />}
-                      <h4 className="font-semibold text-ink">{name}</h4>
-                    </div>
-                    <Cost resources={COSTS[piece]} />
-                    <p className="mt-3 text-xs leading-6">{description}</p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section aria-labelledby="help-development-cards">
-              <h3 id="help-development-cards" className="mb-4 font-serif text-2xl text-ink">Development cards</h3>
-              <p className="mb-4">
-                All five card types are shown here, whether or not you own them. Counts show the starting
-                deck, not the cards remaining. Play at most one action
-                development card per turn, never on the turn you bought it. Finish mandatory choices
-                before playing a card. Victory-point cards count automatically and do not use this allowance.
-              </p>
-              <ul aria-label="All development cards" className="space-y-3">
-                {([
-                  ["knight", 14], ["victory-point", 5], ["road-building", 2],
-                  ["year-of-plenty", 2], ["monopoly", 2],
-                ] as const).map(([kind, count]) => (
-                  <li key={kind} className="flex gap-3 rounded-xl border border-line bg-white/30 p-4">
-                    <span className="text-forest"><DevelopmentCardIcon kind={kind} /></span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                        <h4 className="font-semibold text-ink">{DEVELOPMENT_NAMES[kind]}</h4>
-                        <span className="rounded-md bg-moss px-2 py-0.5 text-xs font-semibold text-ink">{count} in starting deck</span>
-                      </div>
-                      <p className="mt-1 text-xs leading-6">{DEVELOPMENT_DESCRIPTIONS[kind]}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-xs leading-6">
-                Knight does not trigger discards. You may cancel it before confirming the
-                robber move, unless it has already won the game. Road building needs a remaining road
-                piece and stops early if no legal placements remain. Year of plenty can take two of the
-                same resource, but cannot be played with an empty bank. Played action cards leave your hand.
-              </p>
-            </section>
-
-            <section aria-labelledby="help-rules" className="space-y-4">
-              <h3 id="help-rules" className="font-serif text-2xl text-ink">Game rules</h3>
-              <p>
-                <strong className="text-ink">Resources and production.</strong> Forests produce wood,
-                hills brick, pastures wool, fields grain, and mountains ore. The desert produces nothing.
-                On a matching dice total, each adjacent settlement receives one resource and each city two,
-                unless the robber blocks that hex. The bank starts with 19 of each resource. If it cannot
-                satisfy all claims for a resource and multiple players need it, nobody receives that resource
-                this roll. If only one player needs it, they take what remains. Other resources still produce normally.
-              </p>
-              <p>
-                <strong className="text-ink">Seven and the robber.</strong> A seven produces no resources.
-                Every player with more than seven resource cards chooses half, rounded down, to return
-                to the bank; development cards do not count. After all discards, the active player moves
-                the robber to a different hex, including the desert, and chooses one opponent with an
-                adjacent settlement or city to steal one random resource from. An empty hand gives nothing;
-                if no opponent is adjacent, skip theft. The robber stays and blocks production until moved again.
-              </p>
-              <p>
-                <strong className="text-ink">Trading and ports.</strong> After rolling, the active player
-                can exchange four of one resource for one different resource available in the bank (4:1).
-                Their settlement or city on a generic port improves this to 3:1; a matching resource port
-                allows 2:1 for that resource. Player trades must involve the active player. Request cards
-                and compare prices, or make an exact offer. Both sides must give resources, with no resource
-                appearing on both sides. No gifts or development-card trades. Nothing moves until the active
-                player confirms one exchange and both players still have the cards.
-              </p>
-              <p>
-                <strong className="text-ink">Points and victory.</strong> Each settlement is 1 point,
-                each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are
-                worth 2 points each. Reach at least 10 on your own turn to win, including cards bought
-                that turn. Opponents see only your public score until the game ends.
-              </p>
-              <p>
-                <strong className="text-ink">Longest Road and Largest Army.</strong> Longest Road needs
-                at least five roads in one continuous trail, not your total network. Count each road once;
-                loops can count, branches do not all add together, and an opponent's building interrupts
-                the trail. Largest Army needs at least three played Knights. For either award, the highest
-                qualifying player holds it. A tie stays with the current holder if they are among the leaders;
-                otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.
-              </p>
-              <div className="rounded-xl bg-moss p-4">
-                <strong className="text-ink">One device, a whole table.</strong> Play solo against local
-                AI with your hand always visible, or pass the device before revealing each human's hand.
-                Computer hands cannot be opened. AI handles its own turns and trade responses, including
-                prices for requests; it uses bank and port trades but does not initiate player trades.
-                This is a friendly local game, not a secure multiplayer room. Games live only in this tab:
-                refreshing or closing it ends the game.
-              </div>
-            </section>
-
-          </div>
-        </Dialog>
-      )}
-      {game && !game.winnerId && <TheftNotice thefts={game.thefts} playerId={viewer?.id ?? null} players={game.players} />}
+      {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
+      {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+      {game && !game.winnerId && <TheftNotice thefts={game.thefts} playerId={viewer?.id ?? null} players={game.players} target={theftNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
         <Dialog title="Pass the device" onClose={() => setDialog(null)}>
           <p className="mb-5 text-sm leading-6 text-muted">

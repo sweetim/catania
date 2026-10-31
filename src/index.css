@@ -296,7 +296,7 @@
   scrollbar-width: thin;
 }
 .hand-content > *, .hand-dice { flex-shrink: 0; }
-.hand-dice { display: flex; flex-direction: column; gap: 8px; }
+.hand-dice { position: relative; display: flex; flex-direction: column; gap: 8px; }
 .hand-content:has(.hand-task) { overflow: hidden; }
 .hand-content:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
 .hand-content > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
@@ -349,7 +349,6 @@
 .table-players .player-seat { padding: 10px 14px; }
 .table-players .player-awards { margin-top: 8px; padding-top: 8px; }
 
-.shared-game-shell > header > .button-secondary { flex-shrink: 0; padding: 6px 12px; font-size: 12px; }
 .shared-game-main { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .shared-game-main > [role="status"], .shared-game-main > [role="alert"] { flex: none; width: calc(100% - 32px); max-width: 1560px; margin: 8px auto 0; }
 .shared-game-table { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; width: 100%; max-width: 1600px; margin: 0 auto; padding: 8px 16px max(12px, env(safe-area-inset-bottom)); }
@@ -361,7 +360,6 @@
   .shared-game-shell > header > span:first-child { gap: 6px; }
   .shared-game-shell > header > span:first-child > span { font-size: 28px; }
   .shared-game-shell > header > span:first-child > svg { width: 26px; }
-  .shared-game-shell > header > .button-secondary { padding: 6px 8px; font-size: 11px; }
 }
 
 .handoff-table { flex: 1; min-height: 0; position: relative; display: grid; padding: 12px; }
@@ -395,7 +393,6 @@
 .roll-summary-resource > span > span { letter-spacing: 0; }
 .roll-summary-gain { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 22px; height: 20px; padding: 0 3px; border: 2px solid #f4edda; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .private-game-shell > header { max-width: none; gap: 10px; }
-.private-game-shell > header > .button-secondary { flex-shrink: 0; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
 .private-connection { margin-left: auto; font-size: 10px; color: var(--color-muted); }
 .private-game-main { position: relative; display: grid; flex: 1; min-height: 0; padding: 16px 12px max(12px, env(safe-area-inset-bottom)); }
 .private-game-content { display: grid; min-height: 0; align-items: start; }
@@ -497,14 +494,20 @@
   100% { opacity: 1; }
 }
 
-.theft-notice {
-  position: fixed;
+.theft-notice-anchor {
+  position: absolute;
   z-index: 40;
-  top: max(76px, env(safe-area-inset-top));
-  right: 1rem;
-  width: calc(100% - 2rem);
-  max-width: 24rem;
-  pointer-events: none;
+  top: -1px;
+  right: -1px;
+  left: -1px;
+  height: 0;
+}
+
+.theft-notice {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  width: 100%;
 }
 
 .resource-collection {

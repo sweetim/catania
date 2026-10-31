@@ -1356,6 +1356,122 @@ for (const storageAvailable of [true, false]) {
   });
 }
 
+test("water background defaults to round and fills the map without changing play", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const map = page.locator(".board-viewport");
+  const roundWater = map.locator('path[fill$="-sea)"]');
+  await expect(map).toHaveCSS("background-image", "none");
+  await expect(roundWater).toHaveCount(1);
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  const board = page.getByRole("region", { name: "Game board", exact: true });
+  const frame = await boardFrame(page);
+  const geometry = await themeBoardGeometry(board);
+  const targets = board.getByRole("button", { name: /^Place settlement at / });
+  const legalLabels = await targets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+  await screenshot(page, testInfo, "water-background-round", false);
+
+  await chooseGameOption(page, "Settings");
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  const toggle = settings.getByRole("checkbox", { name: "Fill board with water", exact: true });
+  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toHaveAccessibleDescription(/entire map area.*Off by default/);
+  await toggle.focus();
+  await page.keyboard.press("Space");
+  await expect(toggle).toBeChecked();
+  await screenshot(page, testInfo, "water-background-settings", false);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Game", exact: true })).toBeFocused();
+  await expect(map).toHaveCSS("background-image", /radial-gradient.*rgb\(197, 220, 208\)/);
+  await expect(roundWater).toHaveCount(0);
+  await expect(map.locator('ellipse[stroke-dasharray="2 7"]')).toHaveCount(0);
+  await expectBoardFrame(page, frame);
+  expect(await themeBoardGeometry(board)).toEqual(geometry);
+  expect(await targets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(legalLabels);
+  await screenshot(page, testInfo, "water-background-full", false);
+
+  await page.getByRole("button", { name: "Change theme", exact: true }).click();
+  await page.getByRole("radio", { name: "Mediterranean Ceramic", exact: true }).check();
+  await page.keyboard.press("Escape");
+  await expect(map).toHaveCSS("background-image", /radial-gradient.*rgb\(166, 213, 215\)/);
+  await expectBoardFrame(page, frame);
+  for (let step = 0; step < 4; step++) await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await map.evaluate(element => { element.scrollLeft = 40; element.scrollTop = 60; });
+  const scroll = await map.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }));
+  await chooseGameOption(page, "Settings");
+  await toggle.uncheck();
+  await page.keyboard.press("Escape");
+  await expect(map).toHaveCSS("background-image", "none");
+  await expect(roundWater).toHaveCount(1);
+  await expect(page.getByRole("status", { name: "Zoom level", exact: true })).toHaveText("200%");
+  expect(await map.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual(scroll);
+  expect(await themeBoardGeometry(board)).toEqual(geometry);
+  await chooseGameOption(page, "Settings");
+  await toggle.check();
+  await page.keyboard.press("Escape");
+  await expect(map).toHaveCSS("background-image", /radial-gradient.*rgb\(166, 213, 215\)/);
+  await expect(roundWater).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Zoom level", exact: true })).toHaveText("200%");
+  expect(await map.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual(scroll);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "water-background-full-zoomed", false);
+
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("catania.fillBoardWithWater"))).toBe("true");
+  await page.reload();
+  await showHomeView(page, "Island");
+  await expect(map).toHaveCSS("background-image", /radial-gradient.*rgb\(166, 213, 215\)/);
+  await expect(roundWater).toHaveCount(0);
+  await screenshot(page, testInfo, "water-background-full-preview", false);
+  await showHomeView(page, "Setup");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
+  await expect(map).toHaveCSS("background-image", /radial-gradient/);
+  await expect(roundWater).toHaveCount(0);
+  await screenshot(page, testInfo, "water-background-full-handoff", false);
+  await chooseGameOption(page, "Settings");
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("catania.fillBoardWithWater"))).toBe("false");
+  await page.reload();
+  await expect(map).toHaveCSS("background-image", "none");
+  await expect(roundWater).toHaveCount(1);
+});
+
+for (const storage of ["unknown", "blocked", "write-errors"] as const) {
+  test(`water background stays usable with ${storage} storage`, async ({ page }) => {
+    await page.addInitScript(storage => {
+      if (storage === "unknown") localStorage.setItem("catania.fillBoardWithWater", "not-a-boolean");
+      if (storage === "blocked") Object.defineProperty(window, "localStorage", {
+        get() { throw new DOMException("Storage blocked", "SecurityError"); },
+      });
+      if (storage === "write-errors") Storage.prototype.setItem = () => {
+        throw new DOMException("Storage full", "QuotaExceededError");
+      };
+    }, storage);
+    await page.goto("/");
+    const map = page.locator(".board-viewport");
+    await expect(map).toHaveCSS("background-image", "none");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await chooseGameOption(page, "Settings");
+    const toggle = page.getByRole("checkbox", { name: "Fill board with water", exact: true });
+    await expect(toggle).not.toBeChecked();
+    await toggle.check();
+    await page.keyboard.press("Escape");
+    await expect(map).toHaveCSS("background-image", /radial-gradient/);
+    await expect(map.locator('path[fill$="-sea)"]')).toHaveCount(0);
+    await revealHand(page);
+    await showView(page, "board");
+    await expect(map).toHaveCSS("background-image", /radial-gradient/);
+    await page.reload();
+    await expect(map).toHaveCSS("background-image", "none");
+    await expect(map.locator('path[fill$="-sea)"]')).toHaveCount(1);
+  });
+}
+
 test("short and narrow tabletops contain zoom, controls and placement previews", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -1716,6 +1832,8 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   state = applyAction(state, thief.id, { type: "move-robber", tileId: destination.id });
   const victim = state.players.find(player => state.phase.type === "steal" && state.phase.victimIds.includes(player.id) && resourceTotal(player.resources) > 0)!;
   const bystander = state.players.find(player => player.id !== thief.id && player.id !== victim.id)!;
+  await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   await showView(page, "hand");
   await page.getByRole("button", { name: `${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
   await chooseDice(page, [1, 1]);
@@ -1725,7 +1843,16 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   const notice = page.getByRole("region", { name: "Robbery notification", exact: true });
   const result = page.getByRole("status", { name: "Robbery result", exact: true });
   const dismiss = page.getByRole("button", { name: "Dismiss robbery notification", exact: true });
+  await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
+  expect(await notice.evaluate(element => element.parentElement?.parentElement?.getAttribute("aria-label"))).toBe("Turn controls");
+  await expect(notice).toHaveCSS("position", "absolute");
+  const noticeBounds = (await notice.boundingBox())!;
+  const turnBounds = (await page.getByRole("region", { name: "Turn controls", exact: true }).boundingBox())!;
+  expect(turnBounds.y).toBeGreaterThanOrEqual(noticeBounds.y + noticeBounds.height);
+  expect(turnBounds.y - noticeBounds.y - noticeBounds.height).toBeLessThanOrEqual(12);
+  expect(turnBounds.x).toBeCloseTo(noticeBounds.x, 0);
+  expect(turnBounds.width).toBeCloseTo(noticeBounds.width, 0);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim.name}`, exact: true })).toBeVisible();
   await expect(notice.getByText(`+1 ${resource}`, { exact: true })).toBeVisible();
   await expect(result).toHaveText(`You stole 1 ${resource} from ${victim.name}.`);
@@ -1741,9 +1868,11 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   }
 
   await passTo(bystander.name);
+  await page.clock.runFor(6000);
   await expect(notice).toHaveCount(0);
   await expect(result).toBeEmpty();
   await passTo(victim.name);
+  await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
   await expect(notice.getByRole("heading", { name: `${thief.name} robbed you`, exact: true })).toBeVisible();
   await expect(notice.getByText(`-1 ${resource}`, { exact: true })).toBeVisible();
@@ -1751,15 +1880,26 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   await expect(dismiss).toBeInViewport({ ratio: 1 });
   await noPageOverflow(page);
   await screenshot(page, testInfo, "robbery-victim", false);
+  const turnControls = page.getByRole("region", { name: "Turn controls", exact: true });
+  const hand = page.getByRole("complementary", { name: "Your hand and actions", exact: true }).locator(".hand-content");
+  const turnBeforeDismissal = await turnControls.boundingBox();
+  const handBeforeDismissal = await hand.boundingBox();
   await dismiss.focus();
   await page.keyboard.press("Enter");
   await expect(notice).toHaveCount(0);
   await expect(result).toBeEmpty();
+  expect(await turnControls.boundingBox()).toEqual(turnBeforeDismissal);
+  expect(await hand.boundingBox()).toEqual(handBeforeDismissal);
 
   // Dismissing the victim's notice must not acknowledge the thief's notice.
   await passTo(thief.name);
+  await notice.scrollIntoViewIfNeeded();
   await expect(notice.getByText(`+1 ${resource}`, { exact: true })).toBeVisible();
-  await dismiss.click();
+  await page.clock.runFor(4999);
+  await expect(notice).toHaveCount(1);
+  await page.clock.runFor(1);
+  await expect(notice).toHaveCount(0);
+  await expect(result).toBeEmpty();
   await passTo(victim.name);
   await expect(notice).toHaveCount(0);
   await expect(result).toBeEmpty();
@@ -3504,6 +3644,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   expect(robbery).toBeDefined();
   const robberName = state.players.find(player => player.id === robbery.thiefId)!.name;
   const robberyNotice = page.getByRole("region", { name: "Robbery notification", exact: true });
+  await robberyNotice.scrollIntoViewIfNeeded();
   await expect(robberyNotice.getByRole("heading", { name: `${robberName} robbed you`, exact: true })).toBeVisible();
   await expect(robberyNotice.getByText(`Lost 1 ${RESOURCE_NAMES[robbery.resource]}`, { exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: "Robbery result", exact: true })).toHaveText(`${robberName} robbed you of 1 ${RESOURCE_NAMES[robbery.resource]}.`);

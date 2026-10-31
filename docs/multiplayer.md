@@ -10,7 +10,8 @@ The shared screen hosts the game without occupying a player seat.
 
 1. Open the deployed website on the shared screen and choose **Play across devices**,
    then **Host board**. This browser runs the rules and holds the full game in memory.
-2. Connect all devices to the same normal Wi-Fi. Each human player scans the displayed
+2. Connect all devices to the same local network; a wired Ethernet host and Wi-Fi
+   phones can work together. Each human player scans the displayed
    QR code with their phone's camera, opens the link, and enters a distinct name.
    Scanning the invitation does not connect the phone to Wi-Fi.
    The copy icon immediately after the invitation URL copies the same link and shows
@@ -49,7 +50,15 @@ Active gameplay shows only public player seats above the island, using the same
 player cards and map as single-device play. The map fills the remaining viewport
 without page scrolling. On narrow screens, the player strip scrolls horizontally
 while the map remains visible. Theme, zoom, and placement confirmation stay on the
-map; **Leave room** remains in the header.
+map. The header uses the same **Game** dropdown as single-device play, in both the
+lobby and the game. **Help** includes the rules, build costs, development-card
+reference, and shared-board/private-phone guidance. **Settings** on the shared
+screen controls blocked settlement markers and whether water fills the map;
+these preferences are saved in this browser and shared with single-device play.
+**Leave room** opens the existing confirmation: leaving as host ends the room for
+everyone, while leaving as a player keeps their seat reserved while the host stays
+open. Escape, clicking outside, or tabbing away dismisses the menu; closing its
+dialogs returns focus to **Game**.
 
 Player seats show numbered colors, public points, card counts, played Knights,
 connected roads, and awards, with the same active-turn and public-score-leader
@@ -58,6 +67,9 @@ screen has no bank, build controls, dice/setup panel, activity panel, or view ta
 Build selection, turn guidance, rolls, and private actions remain on players' phones.
 
 ## Private Player Screen
+
+The header's **Game** dropdown contains **Help** and **Leave room**. Board-only
+settings and single-device handoff controls are omitted from private phones.
 
 A separate player-summary card sits above the hand, showing your seat number,
 name, resource and development-card counts, played Knights, connected roads, and
@@ -104,8 +116,11 @@ shows the current result without replaying an old roll.
 
 Successful thefts show a dismissible private notice on both involved phones:
 the victim sees who robbed them and the exact card lost (**-1**), and the thief
-sees who they stole from and the card gained (**+1**). Unread notices appear one
-at a time and stay until dismissed. Activity remains generic and the shared
+sees who they stole from and the card gained (**+1**). Notices overlay immediately
+above the turn/dice panel without shifting the hand or controls, one at a time,
+and disappear after five seconds
+on-screen or manual dismissal. Off-screen notices wait until scrolled into view.
+Activity remains generic and the shared
 board receives no private theft details. Theft events and notice dismissals survive
 reconnecting in the same page; reloading the page resets local notice dismissals.
 
@@ -138,15 +153,41 @@ impersonate another player.
 ## Network Requirements
 
 PeerJS Cloud supplies connection signaling. It does not run game rules or store
-gameplay. Gameplay uses encrypted WebRTC data channels with no configured STUN or
-TURN servers, targeting directly reachable local peers. The website and QR image
+gameplay. Google STUN (`stun:stun.l.google.com:19302`) helps browsers discover
+reachable addresses while retaining local connection candidates. STUN receives
+address-discovery traffic, not game messages, invitation secrets, or seat credentials.
+Gameplay uses direct, encrypted WebRTC data channels; no TURN relay is configured.
+The website and QR image
 are served/rendered by this application; no online QR-generation service is used.
 Internet access is needed to load the deployed site and for signaling when joining
-or reconnecting. This is not an entirely offline or entirely Vercel-only system.
-Public PeerJS service availability is outside this application's control.
+or reconnecting; STUN discovery also uses an external service. This is not an entirely
+offline or entirely Vercel-only system. Public PeerJS and STUN service availability
+is outside this application's control. Local candidates may still connect if STUN
+is unreachable.
 
 Guest Wi-Fi isolation, VPNs, firewalls, browser network restrictions, or suspended
 phone tabs can interrupt or prevent connections. There is no relay fallback.
+STUN does not guarantee connectivity or bypass device isolation.
+
+Connection errors distinguish these stages:
+
+- **PeerJS signaling unavailable or timed out:** check internet access and keep
+  both pages open. For an unavailable target, use the current host invitation.
+- **Waiting for the host's connection answer:** the player registered with
+  signaling, but no host answer was applied before the timeout. Keep the host
+  active and use its latest invitation; this is not proof of a Wi-Fi failure.
+- **Host answered, but direct WebRTC timed out or failed:** check device firewalls,
+  VPNs, guest/client isolation, and browser network restrictions. Ethernet is supported;
+  switching the host to Wi-Fi is not inherently required.
+- **Connected, but waiting for initial game state:** the data channel opened, but
+  no valid initial snapshot arrived. Keep the host browser active. Admission is
+  separate: a waiting-for-admission snapshot already counts as a working connection.
+
+Direct-connection errors include ICE connection and candidate-gathering states when
+available, without addresses, session descriptions, invitation secrets, or credentials.
+Automatic and manual retries clear the previous error when a fresh attempt begins.
+Refreshing the host destroys the room; reload only the player page when retrying
+an invitation in a reused tab.
 
 ## Room Lifetime And Limits
 

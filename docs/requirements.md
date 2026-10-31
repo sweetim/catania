@@ -48,8 +48,9 @@ boundaries. Physical-phone network checks remain separate from browser automatio
 
 - Serve the static application from Vercel. Do not deploy server-side game logic,
   Supabase, Blob storage, or a database.
-- Use PeerJS Cloud for signaling and direct WebRTC connections for gameplay.
-  This external signaling dependency is approved; this is not a fully offline mode.
+- Use PeerJS Cloud for signaling, Google STUN for address discovery, and direct
+  WebRTC connections for gameplay. These external connection services are approved;
+  this is not a fully offline mode. Ethernet and Wi-Fi can share the same local network.
 - The shared board browser owns rules, randomness, admission, and complete game
   state. It does not occupy a seat and must remain open throughout the game.
 - Three or four total players can be human or computer-controlled. Humans scan the
@@ -296,7 +297,7 @@ The host necessarily holds private game state in memory. Board-only means displa
 - Show dice settling, matching number-token highlights rather than hex-border highlights, and private resource-gain feedback in sequence. Distinguish robber-blocked tokens from unblocked matches, and identify actual production separately. Keep a fixed-size roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
 - Show larger dice beside the revealed player's actual roll gains as resource cards under You received, with one card per resource type and a +N quantity. Omit the visible numeric total, roll sentence, and description row while retaining detailed screen-reader announcements. Keep rewards visible on short phone screens, use text when no cards are received, and hide private rewards during handoff.
 - Animate actual resource gains from setup, dice, trades, and development cards in an on-screen collection tray and over stationary revealed hand cards, with gain badges. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
-- Show successful robber thefts as private, dismissible notices naming the other player and exact resource card, with -1 for the victim and +1 for the thief. Keep public activity generic, send details only to involved phones, and defer local notices until their owner reveals their hand. Spending, discards, and empty-hand attempts must not trigger robbery notices.
+- Show successful robber thefts as private overlays anchored directly above the turn/dice panel without shifting the hand or controls, naming the other player and exact resource card, with -1 for the victim and +1 for the thief. Dismiss each after five seconds on-screen or a manual dismissal. Keep public activity generic, send details only to involved phones, and defer local notices until their owner reveals their hand. Spending, discards, and empty-hand attempts must not trigger robbery notices.
 - Keep private details off the shared display, including notifications and reconnect overlays.
 - Do not require in-app camera access. The operating system's QR scanner opens the invite.
 

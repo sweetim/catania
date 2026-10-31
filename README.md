@@ -52,8 +52,9 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
 
 - Games live in memory. Refreshing or closing the single-device game or multiplayer
   host loses the game; there is no saved-game recovery.
-- Multiplayer targets devices on the same Wi-Fi, requires internet access for
-  PeerJS Cloud signaling, and has no relay fallback.
+- Multiplayer targets devices on the same local network, including Ethernet and
+  Wi-Fi together. It uses PeerJS Cloud signaling and Google STUN address discovery,
+  requires internet access, and has no relay fallback.
 - Single-device handoff hides cards on screen, but the shared browser holds all hands.
 
 ## Documentation

@@ -11,7 +11,7 @@ const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 type WireMessage = { direction: "sent" | "received"; message: Record<string, unknown> };
 type WireFrame = { direction: WireMessage["direction"]; channel: number; bytes: number[] };
 type ObservedWindow = Window & {
-  multiplayerProbe: { channels: RTCDataChannel[]; frames: WireFrame[] };
+  multiplayerProbe: { channels: RTCDataChannel[]; frames: WireFrame[]; connections: RTCPeerConnection[]; blockedSends?: number };
 };
 type MultiplayerHarness = {
   newPage: (name: string, phone?: boolean) => Promise<Page>;
@@ -84,8 +84,16 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
         route.onClose(() => { pageClosedSocket = true; socket.close(); });
       });
       await context.addInitScript(() => {
-        const probe: ObservedWindow["multiplayerProbe"] = { channels: [], frames: [] };
+        const probe: ObservedWindow["multiplayerProbe"] = { channels: [], frames: [], connections: [] };
         (window as unknown as ObservedWindow).multiplayerProbe = probe;
+        // Native STUN traffic bypasses HTTP routing; keep discovery local in tests.
+        window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
+          construct(target, argumentsList) {
+            const connection = new target({ ...argumentsList[0], iceServers: [] });
+            probe.connections.push(connection);
+            return connection;
+          },
+        });
         const nativeSend = RTCDataChannel.prototype.send;
         function record(direction: WireMessage["direction"], channel: RTCDataChannel, payload: unknown) {
           const bytes = payload instanceof ArrayBuffer ? new Uint8Array(payload)
@@ -304,6 +312,166 @@ async function expectPhase(pages: Page[], phase: string, activePlayer: string) {
     await expect(page.getByTestId("game-phase")).toHaveAttribute("data-active-player", activePlayer);
   }
 }
+
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Leave room") {
+  await page.getByRole("button", { name: "Game", exact: true }).click();
+  await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
+}
+
+test("room Game menu shares navigation and preserves host and player leave behavior", async ({ multiplayer, isMobile }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  await host.getByRole("button", { name: "Game", exact: true }).click();
+  await expect(host.getByRole("group", { name: "Game menu" }).getByRole("button")).toHaveText(["Help", "Settings", "Leave room"]);
+  await host.keyboard.press("Escape");
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await phone.getByRole("button", { name: "Game", exact: true }).click();
+  await expect(phone.getByRole("group", { name: "Game menu" }).getByRole("button")).toHaveText(["Help", "Leave room"]);
+  await phone.keyboard.press("Escape");
+  for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
+
+  for (const [name, page, options] of [
+    ["host", host, ["Help", "Settings", "Leave room"]],
+    ["phone", phone, ["Help", "Leave room"]],
+  ] as const) {
+    if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+    const gameButton = page.getByRole("button", { name: "Game", exact: true });
+    const menu = page.getByRole("group", { name: "Game menu", exact: true });
+    const content = name === "host" ? page.getByTestId("game-phase") : page.getByLabel("Your hand and actions", { exact: true });
+    const bounds = await content.boundingBox();
+    await expect(gameButton).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: "Leave room", exact: true })).toBeHidden();
+    await gameButton.focus();
+    await page.keyboard.press("Enter");
+    await expect(gameButton).toHaveAttribute("aria-expanded", "true");
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    await expect(menu.getByRole("button")).toHaveText([...options]);
+    for (const option of await menu.getByRole("button").all()) {
+      await expect(option).toBeInViewport({ ratio: 1 });
+      expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await content.boundingBox()).toEqual(bounds);
+    await screenshot(page, testInfo, `${name}-game-menu`);
+    await page.keyboard.press("Tab");
+    await expect(menu.getByRole("button", { name: "Help", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(gameButton).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(menu).toBeVisible();
+    await page.locator("header").click({ position: { x: 8, y: 8 } });
+    await expect(menu).toBeHidden();
+    await gameButton.focus();
+    await page.keyboard.press("Enter");
+    for (let step = 0; step <= options.length; step++) await page.keyboard.press("Tab");
+    await expect(menu).toBeHidden();
+
+    await chooseGameOption(page, "Help");
+    const help = page.getByRole("dialog", { name: "Help", exact: true });
+    await expect(help).toBeInViewport({ ratio: 1 });
+    await expect(help.getByRole("list", { name: "Available builds and purchases" }).getByRole("listitem")).toHaveCount(4);
+    await expect(help.getByRole("list", { name: "All development cards" }).getByRole("listitem")).toHaveCount(5);
+    await expect(help).toContainText("One shared board, private phones.");
+    await expect(help).not.toContainText("not a secure multiplayer room");
+    await screenshot(page, testInfo, `${name}-room-help`);
+    await page.keyboard.press("Escape");
+    await expect(gameButton).toBeFocused();
+    await expect(menu).toBeHidden();
+
+    await chooseGameOption(page, "Leave room");
+    const confirmation = page.getByRole("dialog", { name: name === "host" ? "Close this room?" : "Leave this room?", exact: true });
+    await expect(confirmation).toContainText(name === "host" ? "ends the game for everyone" : "Your seat stays reserved");
+    await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(gameButton).toBeFocused();
+    await chooseGameOption(page, "Leave room");
+    await page.keyboard.press("Escape");
+    await expect(confirmation).toHaveCount(0);
+    await expect(gameButton).toBeFocused();
+    expect(await content.boundingBox()).toEqual(bounds);
+    await noHorizontalOverflow(page);
+  }
+
+  await chooseGameOption(phone, "Leave room");
+  await phone.getByRole("dialog", { name: "Leave this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
+  await expect(phone.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
+  await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toBeVisible();
+  await phone.goto(invitation);
+  await expect(phone.getByLabel("Your hand and actions", { exact: true })).toBeVisible();
+  await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toHaveCount(0);
+  await chooseGameOption(host, "Leave room");
+  await host.getByRole("dialog", { name: "Close this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
+  await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
+  await expect(phone.getByRole("banner").getByRole("status")).toHaveText("Offline");
+  await chooseGameOption(phone, "Help");
+  await expect(phone.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
+});
+
+test("room Game settings update the shared board and persist across play modes", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const map = host.locator(".board-viewport");
+  await chooseGameOption(host, "Settings");
+  const settings = host.getByRole("dialog", { name: "Settings", exact: true });
+  const blockedLocations = settings.getByRole("checkbox", { name: "Show blocked settlement locations", exact: true });
+  const water = settings.getByRole("checkbox", { name: "Fill board with water", exact: true });
+  await expect(blockedLocations).toBeChecked();
+  await expect(water).not.toBeChecked();
+  await expect(blockedLocations).toHaveAccessibleDescription(/distance rule prevents building/);
+  await expect(water).toHaveAccessibleDescription(/entire map area/);
+  await blockedLocations.uncheck();
+  await water.check();
+  await screenshot(host, testInfo, "room-board-settings");
+  await host.keyboard.press("Escape");
+  await expect(host.getByRole("button", { name: "Game", exact: true })).toBeFocused();
+  await expect(map).toHaveCSS("background-image", /radial-gradient/);
+
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
+  await host.getByRole("button", { name: /^Place settlement at / }).first().click();
+  await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expectPhase([host, phone], "setup-road", "Alex");
+  await expect(map).toHaveCSS("background-image", /radial-gradient/);
+  const markers = host.getByRole("img", { name: /^Settlement blocked at / });
+  await expect(markers).toHaveCount(0);
+  const bounds = await map.boundingBox();
+  const targets = host.getByRole("button", { name: /^Build road at / });
+  const labels = await targets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+  const snapshot = await latestSnapshot(phone);
+
+  await chooseGameOption(host, "Settings");
+  await blockedLocations.check();
+  await water.uncheck();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(markers.first()).toBeVisible();
+  await expect(map).toHaveCSS("background-image", "none");
+  expect(await map.boundingBox()).toEqual(bounds);
+  expect(await targets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(labels);
+  expect((await latestSnapshot(phone)).version).toBe(snapshot.version);
+  await screenshot(host, testInfo, "room-board-settings-applied");
+  await chooseGameOption(host, "Settings");
+  await blockedLocations.uncheck();
+  await water.check();
+  await host.keyboard.press("Escape");
+  await expect.poll(() => host.evaluate(() => [localStorage.getItem("catania.showBlockedSettlementLocations"), localStorage.getItem("catania.fillBoardWithWater")])).toEqual(["false", "true"]);
+
+  await chooseGameOption(host, "Leave room");
+  await host.getByRole("dialog", { name: "Close this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
+  await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
+  await expect(map).toHaveCSS("background-image", /radial-gradient/);
+  await hostGame(host);
+  await chooseGameOption(host, "Settings");
+  await expect(blockedLocations).not.toBeChecked();
+  await expect(water).toBeChecked();
+});
 
 test("lobby shows required seats and lets the host add or remove computer players", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
@@ -695,7 +863,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
     await host.setViewportSize(viewport);
     const boardBounds = (await board.boundingBox())!;
     const rosterBounds = (await roster.boundingBox())!;
-    await expect(host.getByRole("button", { name: "Leave room", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(host.getByRole("button", { name: "Game", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(board).toBeInViewport({ ratio: 1 });
     await expect(board.getByRole("group", { name: "Map zoom controls" })).toBeInViewport({ ratio: 1 });
     expect(boardBounds.y).toBeGreaterThanOrEqual(rosterBounds.y + rosterBounds.height);
@@ -816,7 +984,7 @@ test("computer turns run without phones or shared-board input", async ({ multipl
   await host.clock.runFor(450);
   await expect(host.getByTestId("game-phase")).not.toHaveAttribute("data-phase", "roll");
   await screenshot(host, testInfo, "automatic-computer-turn");
-  await host.getByRole("button", { name: "Leave room", exact: true }).click();
+  await chooseGameOption(host, "Leave room");
   await host.getByRole("dialog", { name: "Close this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
   await host.clock.runFor(2_000);
   await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
@@ -1133,7 +1301,7 @@ test("host and three private phones play over real PeerJS channels and recover a
   await privateScreenFits(activePhone);
 });
 
-test("private robbery notices show victim and thief results until dismissed at compact and desktop sizes", async ({ multiplayer }, testInfo) => {
+test("private robbery notices overlay above turn controls without moving the hand for five visible seconds", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -1145,12 +1313,20 @@ test("private robbery notices show victim and thief results until dismissed at c
   const notice = phone.getByRole("region", { name: "Robbery notification", exact: true });
   const announcement = phone.getByRole("status", { name: "Robbery result", exact: true });
   const dismiss = notice.getByRole("button", { name: "Dismiss robbery notification", exact: true });
+  const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
+  const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
+  const hand = phone.getByRole("region", { name: "Your cards", exact: true });
 
   for (const lost of [true, false]) {
     game.activePlayerId = lost ? opponent.id : player.id;
     player.resources.ore = lost ? 4 : 5;
+    await present();
+    const turnBeforeNotice = await turnControls.boundingBox();
+    const handBeforeNotice = await hand.boundingBox();
     snapshot.privateThefts.push({ id: lost ? 1 : 2, thiefId: lost ? opponent.id : player.id, victimId: lost ? player.id : opponent.id, resource: "ore" });
     await present();
+    expect(await turnControls.boundingBox()).toEqual(turnBeforeNotice);
+    expect(await hand.boundingBox()).toEqual(handBeforeNotice);
     const title = lost ? `${opponent.name} robbed you` : `You stole from ${opponent.name}`;
     const description = lost ? `${opponent.name} robbed you of 1 Ore.` : `You stole 1 Ore from ${opponent.name}.`;
     await expect(notice).toHaveCount(1);
@@ -1169,11 +1345,20 @@ test("private robbery notices show victim and thief results until dismissed at c
       await phone.setViewportSize({ width, height });
       await phone.emulateMedia({ reducedMotion });
       await privateScreenFits(phone);
+      await notice.scrollIntoViewIfNeeded();
       await expect(notice).toBeInViewport({ ratio: 1 });
       await expect(notice.getByRole("heading", { name: title, exact: true })).toBeInViewport({ ratio: 1 });
       await expect(notice.locator(".resource-card")).toBeInViewport({ ratio: 1 });
       await expect(dismiss).toBeInViewport({ ratio: 1 });
       expect(await notice.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await notice.evaluate(element => element.parentElement?.parentElement?.getAttribute("aria-label"))).toBe("Turn controls");
+      await expect(notice).toHaveCSS("position", "absolute");
+      const noticeBounds = (await notice.boundingBox())!;
+      const turnBounds = (await turnControls.boundingBox())!;
+      expect(noticeBounds.y + noticeBounds.height).toBeLessThanOrEqual(turnBounds.y);
+      expect(turnBounds.y - noticeBounds.y - noticeBounds.height).toBeCloseTo(8, 0);
+      expect(noticeBounds.x).toBeCloseTo(turnBounds.x, 0);
+      expect(noticeBounds.width).toBeCloseTo(turnBounds.width, 0);
       if (reducedMotion === "reduce") {
         await expect(notice).toHaveCSS("animation-name", "none");
         await expect(notice.locator(".resource-card")).toHaveCSS("animation-name", "none");
@@ -1182,14 +1367,29 @@ test("private robbery notices show victim and thief results until dismissed at c
       await screenshot(phone, testInfo, `private-robbery-${lost ? "victim" : "thief"}-${width}-${height}-${reducedMotion}`);
     }
 
-    await phone.clock.fastForward(60_000);
+    // Both motion preferences use five visible seconds, not time spent below the fold.
+    await phone.emulateMedia({ reducedMotion: lost ? "no-preference" : "reduce" });
+    await phone.setViewportSize({ width: 320, height: 400 });
+    await dashboard.evaluate(element => { element.scrollTop = 0; });
+    await expect(notice).not.toBeInViewport({ ratio: 0.5 });
+    await phone.clock.fastForward(10_000);
     await expect(notice).toBeVisible();
     await expect(announcement).toHaveText(description);
+    await phone.setViewportSize({ width: 320, height: 568 });
+    await notice.scrollIntoViewIfNeeded();
+    await expect(notice).toBeInViewport({ ratio: 1 });
+    const turnBeforeExpiry = await turnControls.boundingBox();
+    const handBeforeExpiry = await hand.boundingBox();
+    await phone.clock.fastForward(2_500);
     await present();
+    await phone.clock.fastForward(2_499);
     await expect(notice).toHaveCount(1);
-    await dismiss.press("Enter");
+    await expect(announcement).toHaveText(description);
+    await phone.clock.fastForward(1);
     await expect(notice).toHaveCount(0);
     await expect(announcement).toHaveText("");
+    expect(await turnControls.boundingBox()).toEqual(turnBeforeExpiry);
+    expect(await hand.boundingBox()).toEqual(handBeforeExpiry);
     await present();
     await expect(notice).toHaveCount(0);
     await expect(announcement).toHaveText("");
@@ -1202,8 +1402,10 @@ test("private robbery notices show victim and thief results until dismissed at c
   expect(await sentActions(phone)).toEqual([]);
 });
 
-test("private robbery notices queue consecutive events and ignore unrelated resource losses", async ({ multiplayer }, testInfo) => {
+test("private robbery notices time each queued event and ignore unrelated resource losses", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
   const [thief, victim] = game.players.filter(other => other.id !== player.id);
@@ -1236,6 +1438,9 @@ test("private robbery notices queue consecutive events and ignore unrelated reso
   await expect(notice.getByText("Lost 1 Ore", { exact: true })).toBeVisible();
   await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim!.name}`, exact: true })).toHaveCount(0);
+  await notice.scrollIntoViewIfNeeded();
+  await expect(notice).toBeInViewport({ ratio: 1 });
+  await phone.clock.fastForward(2_500);
 
   // An identical later theft is still a distinct event, and cannot replace the unread first one.
   snapshot.privateThefts.push({ id: 3, thiefId: thief!.id, victimId: player.id, resource: "ore" });
@@ -1243,19 +1448,27 @@ test("private robbery notices queue consecutive events and ignore unrelated reso
   await expect(notice).toHaveCount(1);
   await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
   await expect(notice.getByText("2 more theft notices", { exact: true })).toBeVisible();
+  await notice.scrollIntoViewIfNeeded();
+  await expect(notice).toBeInViewport({ ratio: 1 });
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "private-robbery-queued");
 
-  await dismiss.focus();
-  await phone.keyboard.press("Enter");
+  await phone.clock.fastForward(2_499);
+  await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
+  await phone.clock.fastForward(1);
   await expect(notice).toHaveCount(1);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim!.name}`, exact: true })).toBeVisible();
-  await expect(dismiss).toBeFocused();
   await expect(notice.getByText("Received 1 Wool", { exact: true })).toBeVisible();
   await expect(notice.getByText("+1 Wool", { exact: true })).toBeVisible();
   await expect(announcement).toHaveText(`You stole 1 Wool from ${victim!.name}.`);
+  await notice.scrollIntoViewIfNeeded();
+  await expect(notice).toBeInViewport({ ratio: 1 });
+  await dismiss.focus();
+  await phone.clock.fastForward(2_500);
   await present();
+  await phone.clock.fastForward(2_499);
   await expect(announcement).toHaveText(`You stole 1 Wool from ${victim!.name}.`);
+  // Manual keyboard dismissal preserves focus for the next distinct, identical theft.
   await phone.keyboard.press("Enter");
   await expect(notice).toHaveCount(1);
   await expect(notice.getByRole("heading", { name: `${thief!.name} robbed you`, exact: true })).toBeVisible();
@@ -1264,7 +1477,12 @@ test("private robbery notices queue consecutive events and ignore unrelated reso
   await expect(notice.getByText("Lost 1 Ore", { exact: true })).toBeVisible();
   await expect(notice.getByText("-1 Ore", { exact: true })).toBeVisible();
   await expect(notice.getByText(/more theft notice/)).toHaveCount(0);
-  await dismiss.click();
+  await notice.scrollIntoViewIfNeeded();
+  await expect(notice).toBeInViewport({ ratio: 1 });
+  await phone.clock.fastForward(4_999);
+  await expect(notice).toHaveCount(1);
+  await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
+  await phone.clock.fastForward(1);
   await expect(notice).toHaveCount(0);
   await expect(announcement).toHaveText("");
   await present();
@@ -1277,7 +1495,7 @@ test("private robbery notices queue consecutive events and ignore unrelated reso
     const channel = (window as unknown as ObservedWindow).multiplayerProbe.channels.find(channel => channel.readyState === "open")!;
     channel.close();
   });
-  await expect(phone.getByRole("alert")).toContainText("Connection to the host was lost");
+  await expect(phone.getByRole("alert")).toContainText(/connection to the host was lost/i);
   await expect(notice).toHaveCount(0);
   await expect(announcement).toHaveText("");
   await phone.getByRole("button", { name: "Reconnect", exact: true }).click();
@@ -1734,6 +1952,57 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
     await privateScreenFits(phone);
   }
 });
+
+for (const [stage, expectedError] of [
+  ["answer", "Timed out waiting for the host's connection answer"],
+  ["direct", "The host answered, but the direct WebRTC connection timed out"],
+  ["state", "Connected to the host, but timed out waiting for the initial game state"],
+] as const) {
+  test(`connection timeout diagnostics distinguish ${stage} and clear on retry`, async ({ multiplayer }, testInfo) => {
+    const host = await multiplayer.newPage("Host");
+    const phone = await multiplayer.newPage("Alex");
+    if (stage === "direct") {
+      for (const page of [host, phone]) await page.addInitScript(() => {
+        const nativeSetRemoteDescription = RTCPeerConnection.prototype.setRemoteDescription;
+        RTCPeerConnection.prototype.setRemoteDescription = function (description) {
+          return Reflect.apply(nativeSetRemoteDescription, this, [{ type: description.type, sdp: description.sdp?.replace(/^a=candidate:.*\r?\n/gm, "") }]);
+        };
+        RTCPeerConnection.prototype.addIceCandidate = async () => {};
+      });
+    }
+    const invitation = await hostGame(host);
+    let offerSent = false;
+    if (stage === "answer") await phone.routeWebSocket(/\/peerjs\?/, route => {
+      route.onMessage(message => { if (JSON.parse(message.toString()).type === "OFFER") offerSent = true; });
+      route.send(JSON.stringify({ type: "OPEN" }));
+    });
+    if (stage === "state") await phone.addInitScript(() => {
+      RTCDataChannel.prototype.send = function () {
+        const probe = (window as unknown as ObservedWindow).multiplayerProbe;
+        probe.blockedSends = (probe.blockedSends ?? 0) + 1;
+      };
+    });
+    await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+    await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+    await requestSeat(phone, invitation, "Alex");
+    if (stage === "answer") await expect.poll(() => offerSent).toBe(true);
+    else if (stage === "direct") await expect.poll(() => phone.evaluate(() =>
+      (window as unknown as ObservedWindow).multiplayerProbe.connections.some(connection => connection.remoteDescription?.type === "answer"))).toBe(true);
+    else await expect.poll(() => phone.evaluate(() => (window as unknown as ObservedWindow).multiplayerProbe.blockedSends ?? 0)).toBeGreaterThan(0);
+    await phone.clock.runFor(15_000);
+    const alert = phone.getByRole("alert");
+    await expect(alert).toContainText(expectedError);
+    await expect(alert).toContainText("Connection details: ICE");
+    const parameters = new URLSearchParams(new URL(invitation).hash.slice(1));
+    await expect(alert).not.toContainText(parameters.get("host")!);
+    await expect(alert).not.toContainText(parameters.get("secret")!);
+    await noHorizontalOverflow(phone);
+    await screenshot(phone, testInfo, `connection-timeout-${stage}`);
+    await phone.clock.runFor(2_000);
+    await expect(alert).toHaveCount(0);
+    await expect(phone.getByRole("status").filter({ hasText: "Private player screen" })).toContainText("Connecting to the host...");
+  });
+}
 
 test("signaling and data-channel loss report failure and recover the reserved seat", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");

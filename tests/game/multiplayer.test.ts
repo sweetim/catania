@@ -997,6 +997,118 @@ test("host session schedules one computer action, discards stale work, cleans ti
   }
 });
 
+test.each([
+  ["answer", "Timed out waiting for the host's connection answer"],
+  ["direct", "The host answered, but the direct WebRTC connection timed out"],
+  ["state", "Connected to the host, but timed out waiting for the initial game state"],
+  ["ice-failure", "The direct WebRTC connection failed or was interrupted"],
+  ["unavailable", "The target device is unavailable through PeerJS signaling"],
+])("connection diagnostics identify %s failures, use STUN without relays, and reset on retry", async (stage, expectedError) => {
+  const OriginalPeer = (await import("peerjs")).default;
+  class TestConnection extends EventEmitter {
+    open = false;
+    peerConnection = {
+      remoteDescription: null as RTCSessionDescriptionInit | null,
+      iceConnectionState: "new" as RTCIceConnectionState,
+      iceGatheringState: "complete" as RTCIceGatheringState,
+    };
+    send = mock(() => {});
+    close() { this.open = false; }
+  }
+  const peers: TestPeer[] = [];
+  class TestPeer extends EventEmitter {
+    open = true;
+    destroyed = false;
+    disconnected = false;
+    connections: TestConnection[] = [];
+    constructor(_identifier: string, readonly options: { config: RTCConfiguration }) { super(); peers.push(this); }
+    connect() { const connection = new TestConnection(); this.connections.push(connection); return connection; }
+    destroy() { this.destroyed = true; }
+  }
+  type Timer = ReturnType<typeof setTimeout>;
+  const timers = new Map<Timer, { callback: () => void; delay: number }>();
+  let timerNumber = 0;
+  const schedule = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, delay: number) => {
+    const timer = ++timerNumber as unknown as Timer;
+    timers.set(timer, { callback, delay });
+    return timer;
+  }) as typeof setTimeout);
+  const cancel = spyOn(globalThis, "clearTimeout").mockImplementation(timer => { timers.delete(timer as Timer); });
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: { getItem: () => null } });
+  const views: SessionView[] = [];
+  let guest: MultiplayerSession | undefined;
+  mock.module("peerjs", () => ({ default: TestPeer }));
+  try {
+    const { hostSession, joinSession } = await import("../../src/multiplayer/session");
+    hostSession(() => {}).close();
+    guest = joinSession({ hostId: "private-host-identifier", secret }, "Ada", view => views.push(view));
+    const peer = peers.at(-1)!;
+    peer.emit("open");
+    const first = peer.connections[0]!;
+    const initialTimeout = [...timers.values()].find(timer => timer.delay === 15000)!;
+    if (stage === "direct" || stage === "state" || stage === "ice-failure") {
+      first.peerConnection.remoteDescription = { type: "answer", sdp: "private-session-description" };
+      first.peerConnection.iceConnectionState = "checking";
+    }
+    if (stage === "state") {
+      first.open = true;
+      first.peerConnection.iceConnectionState = "connected";
+      first.emit("open");
+      expect(first.send).toHaveBeenCalledTimes(1);
+    }
+    if (stage === "ice-failure") {
+      first.peerConnection.iceConnectionState = "failed";
+      first.emit("iceStateChanged", "failed");
+    } else if (stage === "unavailable") peer.emit("error", { type: "peer-unavailable" });
+    else initialTimeout.callback();
+    expect(views.at(-1)!.status).toBe("disconnected");
+    expect(views.at(-1)!.error).toContain(expectedError!);
+    if (stage !== "unavailable") expect(views.at(-1)!.error).toContain(`ICE ${first.peerConnection.iceConnectionState}; gathering complete`);
+    for (const privateValue of [secret, "private-host-identifier", "private-session-description"]) expect(views.at(-1)!.error).not.toContain(privateValue);
+
+    const retry = [...timers].find(([, timer]) => timer.delay === 2000)!;
+    timers.delete(retry[0]);
+    retry[1].callback();
+    expect(peer.connections).toHaveLength(2);
+    expect(views.at(-1)).toMatchObject({ status: "connecting", error: "" });
+    const updates = views.length;
+    initialTimeout.callback();
+    first.emit("close");
+    expect(views).toHaveLength(updates);
+
+    peer.connections.at(-1)!.emit("close");
+    guest.reconnect();
+    expect(peer.connections).toHaveLength(3);
+    expect(views.at(-1)).toMatchObject({ status: "connecting", error: "" });
+    peer.destroyed = true;
+    guest.reconnect();
+    const recreatedPeer = peers.at(-1)!;
+    expect(recreatedPeer).not.toBe(peer);
+    recreatedPeer.emit("open");
+    for (const createdPeer of peers) expect(createdPeer.options.config.iceServers).toEqual([{ urls: "stun:stun.l.google.com:19302" }]);
+
+    const recovered = recreatedPeer.connections[0]!;
+    recovered.open = true;
+    recovered.emit("open");
+    const room = new HostRoom(secret);
+    room.join("connection", { type: "join", name: "Ada", secret });
+    recovered.emit("data", { type: "snapshot", snapshot: room.snapshot("connection") });
+    expect(views.at(-1)).toMatchObject({ status: "connected", error: "" });
+    expect(views.at(-1)!.snapshot!.playerId).toBeNull();
+    expect(timers.size).toBe(0);
+    guest.close();
+    expect(timers.size).toBe(0);
+  } finally {
+    guest?.close();
+    schedule.mockRestore();
+    cancel.mockRestore();
+    if (previousStorage) Object.defineProperty(globalThis, "sessionStorage", previousStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+    mock.module("peerjs", () => ({ default: OriginalPeer }));
+  }
+});
+
 test("host removal and renaming propagate while terminal clients clear revoked identity and require explicit readmission", async () => {
   const OriginalPeer = (await import("peerjs")).default;
   class TestConnection extends EventEmitter {

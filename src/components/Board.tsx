@@ -21,6 +21,7 @@ export function Board({
   legalEdgeIds = [],
   legalTileIds = [],
   showBlockedSettlementLocations = false,
+  fillBoardWithWater = false,
   producingTileIds = [],
   rolledNumber,
   selectedId,
@@ -38,6 +39,7 @@ export function Board({
   legalEdgeIds?: string[];
   legalTileIds?: string[];
   showBlockedSettlementLocations?: boolean;
+  fillBoardWithWater?: boolean;
   producingTileIds?: string[];
   rolledNumber?: number;
   selectedId?: string | null;
@@ -309,6 +311,9 @@ export function Board({
         style={{
           aspectRatio: fit ? undefined : `${viewWidth} / ${viewHeight}`,
           touchAction: "pan-x pan-y",
+          backgroundImage: fillBoardWithWater
+            ? `radial-gradient(ellipse 65% 65% at 48% 43%, ${theme.sea[0]} 0%, ${theme.sea[1]} 78%, ${theme.sea[2]} 100%)`
+            : undefined,
         }}
         onPointerDown={(event) => {
           if (zoom === 1 || event.pointerType !== "mouse" || event.button !== 0)
@@ -599,20 +604,24 @@ export function Board({
             </defs>
 
             <g aria-hidden="true">
-              <path
-                d="M-302-159C-273-260-165-318-40-315C95-340 245-274 296-169C350-67 332 92 267 195C198 291 72 322-42 309C-169 321-286 244-315 129C-345 26-341-54-302-159Z"
-                transform={`scale(${halfWidth / 355} ${halfHeight / 337})`}
-                fill={`url(#${illustrationId}-sea)`}
-              />
-              <ellipse
-                rx={halfWidth - 25}
-                ry={halfHeight - 24}
-                fill="none"
-                stroke="#86aca1"
-                strokeWidth="0.8"
-                strokeDasharray="2 7"
-                opacity="0.55"
-              />
+              {!fillBoardWithWater && (
+                <>
+                  <path
+                    d="M-302-159C-273-260-165-318-40-315C95-340 245-274 296-169C350-67 332 92 267 195C198 291 72 322-42 309C-169 321-286 244-315 129C-345 26-341-54-302-159Z"
+                    transform={`scale(${halfWidth / 355} ${halfHeight / 337})`}
+                    fill={`url(#${illustrationId}-sea)`}
+                  />
+                  <ellipse
+                    rx={halfWidth - 25}
+                    ry={halfHeight - 24}
+                    fill="none"
+                    stroke="#86aca1"
+                    strokeWidth="0.8"
+                    strokeDasharray="2 7"
+                    opacity="0.55"
+                  />
+                </>
+              )}
               <path
                 d="M-287-103q8-5 16 0t16 0M-306-88q8-5 16 0t16 0M240 134q8-5 16 0t16 0M250 148q8-5 16 0t16 0M-189 250q8-5 16 0t16 0M95-279q8-5 16 0t16 0M108-265q8-5 16 0t16 0"
                 fill="none"
