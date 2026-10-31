@@ -37,9 +37,9 @@ When editing existing code:
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
 - If you notice unrelated dead code, mention it - don't delete it.
-- Detected file changes unrelated to your own work may be caused by other
-  agents editing the same files. Ignore them and focus only on the changes
-  you made yourself.
+- Detected file changes unrelated to your own work may be caused by other agents
+  editing the same files. Ignore them and focus only on the changes you made
+  yourself.
 
 When your changes create orphans:
 
@@ -75,8 +75,10 @@ work") require constant clarification.
 
 - After code changes that affect documented behavior, update the relevant docs
   (README, AGENTS.md, inline docs) to match the new behavior.
-- After UI-related changes, provide the user with clear manual testing steps
-  describing what to verify and how to reach the affected UI.
+- After UI-related changes, add or update automated UI tests for the affected
+  behavior and run them. When browser tooling is available, verify the affected
+  UI directly. Report test results and any verification that could not be
+  completed.
 
 # Coding Rules
 
