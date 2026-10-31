@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import { match } from "ts-pattern";
 import type { DevelopmentKind, Resource, Resources } from "../game/types";
+import { resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
 import { useBoardTheme } from "../themes";
 import { ResourceArtwork } from "./ThemeArtwork";
 
@@ -207,12 +210,14 @@ export function DevelopmentCardIcon({ kind }: { kind: DevelopmentKind }) {
 
 export function BankSupply({ resources, developmentCards }: { resources: Resources; developmentCards: number }) {
   const theme = useBoardTheme();
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   return (
-    <section className="bank-tray" aria-label="Resource bank">
-      <h2 className="eyebrow">Bank</h2>
-      <ul className="bank-supply" aria-label="Bank resources">
+    <section className="bank-tray" aria-label={translateText("Resource bank")}>
+      <h2 className="eyebrow">{translateText("Bank")}</h2>
+      <ul className="bank-supply" aria-label={translateText("Bank resources")}>
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
-          <li key={resource} aria-label={`${RESOURCE_NAMES[resource]}: ${resources[resource]} in bank`} title={`${resources[resource]} ${RESOURCE_NAMES[resource]} in bank`}>
+          <li key={resource} aria-label={translateText("{resource}: {count} in bank", { resource: resourceName(language, resource), count: resources[resource] })} title={translateText("{count} {resource} in bank", { count: resources[resource], resource: resourceName(language, resource) })}>
             <span aria-hidden="true" data-theme={theme.id} className="bank-card resource-card inline-flex h-10 w-8 rounded-xl p-[3px] shadow-sm" style={{ backgroundColor: theme.resources[resource] }}>
               <span className="flex h-full w-full flex-col items-center justify-center gap-px rounded-lg border border-white/50 text-white">
                 <ResourceIcon resource={resource} className="h-4 w-4" />
@@ -222,7 +227,7 @@ export function BankSupply({ resources, developmentCards }: { resources: Resourc
           </li>
         ))}
       </ul>
-      <span className="bank-development" role="img" aria-label={`${developmentCards} development cards in bank`} title={`${developmentCards} development cards in bank`}>
+      <span className="bank-development" role="img" aria-label={translateText("{count} development cards in bank", { count: developmentCards })} title={translateText("{count} development cards in bank", { count: developmentCards })}>
         <CardTypeIcon kind="development" />
         <strong>{developmentCards}</strong>
       </span>
@@ -243,6 +248,7 @@ export function Dialog({
   wide?: boolean;
   summary?: ReactNode;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   const reference = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => {
     const dialog = reference.current!;
@@ -269,7 +275,7 @@ export function Dialog({
           <h2 className="font-serif text-2xl">{title}</h2>
           <button
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={translateText("Close dialog")}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line hover:bg-moss"
           >
             <span aria-hidden="true">&times;</span>
@@ -298,6 +304,7 @@ export function ResourceCard({
   className?: string;
 }) {
   const theme = useBoardTheme();
+  const { language } = useLanguage();
   return (
     <span
       aria-hidden="true"
@@ -312,7 +319,7 @@ export function ResourceCard({
         />
         {!compact && (
           <span className="w-full truncate text-center text-[7px] font-bold uppercase tracking-[.12em] text-white">
-            {RESOURCE_NAMES[resource]}
+            {resourceName(language, resource)}
           </span>
         )}
       </span>
@@ -326,19 +333,21 @@ export function ResourceCard({
 }
 
 export function ResourceInventory({ resources }: { resources: Resources }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   return (
-    <section className="resource-inventory" aria-label="Your current resources">
+    <section className="resource-inventory" aria-label={translateText("Your current resources")}>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold">Your hand</h3>
+        <h3 className="text-xs font-semibold">{translateText("Your hand")}</h3>
         <strong className="shrink-0 text-sm text-ink tabular-nums">
-          {Object.values(resources).reduce((total, count) => total + count, 0)} cards
+          {translateText("{count} cards", { count: Object.values(resources).reduce((total, count) => total + count, 0) })}
         </strong>
       </div>
-      <ul aria-label="Cards in hand" className="grid grid-cols-5 gap-2">
+      <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-2">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
-          <li key={resource} aria-label={`${RESOURCE_NAMES[resource]}: ${resources[resource]} in hand`} className="flex min-w-0 flex-col items-center gap-1">
+          <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: resources[resource] })} className="flex min-w-0 flex-col items-center gap-1">
             <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-5 w-5" className="h-11 w-9" />
-            <span className="text-[10px] font-semibold">{RESOURCE_NAMES[resource]}</span>
+            <span className="text-[10px] font-semibold">{resourceName(language, resource)}</span>
           </li>
         ))}
       </ul>
@@ -357,21 +366,24 @@ export function SelectableResourceCard({
   onClick,
 }: {
   resource: Resource;
-  action: string;
+  action: "Give" | "Receive";
   count?: number;
   caption: string;
-  countLabel?: string;
+  countLabel?: "In hand" | "In bank";
   selected: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
+  const name = resourceName(language, resource);
   return (
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={`${action} ${RESOURCE_NAMES[resource]}`}
-      aria-description={countLabel && count !== undefined ? `${countLabel}: ${count}. ${caption}` : caption}
-      title={countLabel && count !== undefined ? `${RESOURCE_NAMES[resource]} / ${countLabel}: ${count}` : RESOURCE_NAMES[resource]}
+      aria-label={translateText(action === "Give" ? "Give {resource}" : "Receive {resource}", { resource: name })}
+      aria-description={countLabel && count !== undefined ? translateText("{countLabel}: {count}. {caption}", { countLabel: translateText(countLabel), count, caption }) : caption}
+      title={countLabel && count !== undefined ? translateText("{resource} / {countLabel}: {count}", { resource: name, countLabel: translateText(countLabel), count }) : name}
       disabled={disabled}
       onClick={onClick}
       className="group flex flex-col items-center gap-1.5"
@@ -400,6 +412,8 @@ export function ResourceCardStepper({
   maximumLabel?: "In hand" | "In bank";
   onChange: (values: Resources) => void;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <fieldset>
       <legend className="mb-3 text-sm font-semibold">{label}</legend>
@@ -408,17 +422,21 @@ export function ResourceCardStepper({
           <div
             key={resource}
             role="group"
-            aria-label={`${RESOURCE_NAMES[resource]} selection`}
+            aria-label={translateText("{resource} selection", { resource: resourceName(language, resource) })}
             aria-description={maximum
-              ? `${maximumLabel} ${maximum[resource]}. Selected ${values[resource]}. Remaining ${maximum[resource] - values[resource]}.`
-              : `Selected ${values[resource]}.`}
+              ? translateText(maximumLabel === "In hand"
+                ? "In hand {maximum}. Selected {selected}. Remaining {remaining}."
+                : "In bank {maximum}. Selected {selected}. Remaining {remaining}.", {
+                maximum: maximum[resource], selected: values[resource], remaining: maximum[resource] - values[resource],
+              })
+              : translateText("Selected {count}.", { count: values[resource] })}
             className="flex min-w-0 flex-col items-center gap-1.5"
           >
             <div className="relative w-full">
               <button
                 type="button"
                 className="resource-select-card relative block min-h-11 w-full rounded-xl"
-                aria-label={`Add ${RESOURCE_NAMES[resource]} to ${label}`}
+                aria-label={translateText("Add {resource} to {label}", { resource: resourceName(language, resource), label })}
                 disabled={values[resource] >= (maximum?.[resource] ?? 19)}
                 onClick={() =>
                   onChange({ ...values, [resource]: values[resource] + 1 })
@@ -427,12 +445,12 @@ export function ResourceCardStepper({
                 <ResourceCard resource={resource} selected={values[resource] > 0} compact className="aspect-[3/4] w-full" />
                 <span aria-hidden="true" className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-base font-bold leading-none text-forest">+</span>
               </button>
-              <output aria-label={`${RESOURCE_NAMES[resource]} selected`} className="selected-resource-count">{values[resource]}</output>
+              <output aria-label={translateText("{resource} selected", { resource: resourceName(language, resource) })} className="selected-resource-count">{values[resource]}</output>
             </div>
             <button
               type="button"
               className="flex h-11 w-full items-center justify-center rounded-lg bg-moss text-lg font-bold text-ink"
-              aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
+              aria-label={translateText("Remove {resource} from {label}", { resource: resourceName(language, resource), label })}
               disabled={!values[resource]}
               onClick={() => onChange({ ...values, [resource]: values[resource] - 1 })}
             >
@@ -447,27 +465,29 @@ export function ResourceCardStepper({
 
 export function CardStack({
   resources,
-  emptyText = "No cards",
+  emptyText,
   label,
 }: {
   resources: Resources;
   emptyText?: string;
   label?: string;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   const entries = (Object.keys(RESOURCE_NAMES) as Resource[]).filter(
     (resource) => resources[resource] > 0,
   );
   if (!entries.length) {
     return (
       <span className="text-[10px] font-semibold uppercase tracking-[.15em] text-muted">
-        {emptyText}
+        {emptyText ?? translateText("No cards")}
       </span>
     );
   }
   return (
     <span
       role={label ? "img" : undefined}
-      aria-label={label ? `${label}: ${entries.map(resource => `${resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}` : undefined}
+      aria-label={label ? translateText("{label}: {resources}", { label, resources: entries.map(resource => translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })).join(language === "ja" ? "、" : ", ") }) : undefined}
       className="inline-flex min-w-0 flex-col items-center gap-2"
     >
       {label && <span className="text-[10px] font-semibold uppercase tracking-[.1em] text-muted">{label}</span>}
@@ -492,6 +512,7 @@ export function BuildButton({ piece, color, resources, ...buttonProperties }: Co
   color: string;
   resources: Resources;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <button
       {...buttonProperties}
@@ -501,9 +522,10 @@ export function BuildButton({ piece, color, resources, ...buttonProperties }: Co
         {piece === "development" ? <span className="flex h-8 w-8 shrink-0 items-center justify-center"><CardTypeIcon kind="development" /></span> : <PieceIcon piece={piece} />}
         <span className="font-semibold text-ink">
           {match(piece)
-            .with("development", () => "Buy a card")
-            .with("city", () => "Upgrade to city")
-            .with("road", "settlement", piece => `Build ${piece}`)
+            .with("development", () => translateText("Buy a card"))
+            .with("city", () => translateText("Upgrade to city"))
+            .with("road", () => translateText("Build road"))
+            .with("settlement", () => translateText("Build settlement"))
             .exhaustive()}
         </span>
       </span>
@@ -514,6 +536,8 @@ export function BuildButton({ piece, color, resources, ...buttonProperties }: Co
 
 export function Cost({ resources }: { resources: Resources }) {
   const theme = useBoardTheme();
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <span className="inline-flex items-center gap-1">
       {(Object.keys(RESOURCE_NAMES) as Resource[])
@@ -524,7 +548,7 @@ export function Cost({ resources }: { resources: Resources }) {
             data-theme={theme.id}
             className="resource-card relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm"
             style={{ backgroundColor: theme.resources[resource] }}
-            title={`${resources[resource]} ${RESOURCE_NAMES[resource]}`}
+            title={translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
           >
             <ResourceIcon resource={resource} className="h-4 w-4 text-white" />
             {resources[resource] > 1 && (
@@ -533,7 +557,7 @@ export function Cost({ resources }: { resources: Resources }) {
               </span>
             )}
             <span className="sr-only">
-              {resources[resource]} {RESOURCE_NAMES[resource]}
+              {translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
             </span>
           </span>
         ))}

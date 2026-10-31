@@ -1,3 +1,5 @@
+import type { GameMessage } from "./messages";
+
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
 export type Resources = Record<Resource, number>;
 export type Terrain = Resource | "desert";
@@ -81,7 +83,7 @@ export type GameState = {
   robberTileId: string;
   awards: { longestRoad: string | null; largestArmy: string | null };
   winnerId: string | null;
-  log: string[];
+  log: GameMessage[];
   thefts: TheftEvent[];
   trade: TradeOffer | null;
   developmentPlayed: boolean;

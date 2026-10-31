@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { emptyResources, RESOURCES, resourceTotal } from "../game/engine";
 import type { DevelopmentKind, GameAction, GamePhase, Player, Resource, Resources } from "../game/types";
-import { Arrow, CardStack, DevelopmentCardIcon, Dialog, RESOURCE_NAMES, ResourceCardStepper, ResourceInventory } from "./GameUi";
+import { resourceName, translate, type Language } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
+import { Arrow, CardStack, DevelopmentCardIcon, Dialog, ResourceCardStepper, ResourceInventory } from "./GameUi";
 
-export const DEVELOPMENT_NAMES: Record<DevelopmentKind, string> = {
+export const DEVELOPMENT_NAMES = {
   knight: "Knight",
   "victory-point": "Victory point",
   "road-building": "Road building",
   "year-of-plenty": "Year of plenty",
   monopoly: "Monopoly",
-};
-export const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
+} as const satisfies Record<DevelopmentKind, string>;
+export const DEVELOPMENT_DESCRIPTIONS = {
   knight:
     "Move the robber and steal one random resource from an adjacent opponent. Only played Knights count toward Largest Army (+2 points): at least three, and more than the current holder.",
   "victory-point":
@@ -21,7 +24,19 @@ export const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
     "Choose two resources from the bank, or all that remain if fewer than two are available.",
   monopoly:
     "Name a resource. Every other player gives you all of that resource from their hand.",
-};
+} as const satisfies Record<DevelopmentKind, string>;
+
+export function getDevelopmentNames(language: Language): Record<DevelopmentKind, string> {
+  return Object.fromEntries(Object.entries(DEVELOPMENT_NAMES).map(([kind, name]) =>
+    [kind, translate(language, gameplayTranslations, name)],
+  )) as Record<DevelopmentKind, string>;
+}
+
+export function getDevelopmentDescriptions(language: Language): Record<DevelopmentKind, string> {
+  return Object.fromEntries(Object.entries(DEVELOPMENT_DESCRIPTIONS).map(([kind, description]) =>
+    [kind, translate(language, gameplayTranslations, description)],
+  )) as Record<DevelopmentKind, string>;
+}
 
 export function DevelopmentDialog({
   player,
@@ -50,6 +65,10 @@ export function DevelopmentDialog({
   onSubmit: (action: GameAction) => void;
   onClearError?: () => void;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
+  const developmentNames = getDevelopmentNames(language);
+  const developmentDescriptions = getDevelopmentDescriptions(language);
   const [developmentCardId, setDevelopmentCardId] = useState(initialCardId);
   const [chosenResources, setChosenResources] = useState(emptyResources);
   const [chosenResource, setChosenResource] = useState<Resource>("wood");
@@ -57,7 +76,7 @@ export function DevelopmentDialog({
 
   return (
     <Dialog
-      title="A card up your sleeve"
+      title={translateText("A card up your sleeve")}
       summary={developmentCard?.kind === "year-of-plenty" || developmentCard?.kind === "monopoly" ? <ResourceInventory resources={player.resources} /> : undefined}
       onClose={onClose}
     >
@@ -76,14 +95,14 @@ export function DevelopmentDialog({
             <span className="flex justify-between gap-3">
               <span className="flex items-center gap-2 font-serif text-xl">
                 <span className="text-forest"><DevelopmentCardIcon kind={card.kind} /></span>
-                {DEVELOPMENT_NAMES[card.kind]}
+                {developmentNames[card.kind]}
               </span>
               {card.kind === "victory-point" && (
-                <span className="text-[10px] text-muted">+1 hidden point</span>
+                <span className="text-[10px] text-muted">{translateText("+1 hidden point")}</span>
               )}
             </span>
             <span className="mt-2 block text-xs leading-6 text-muted">
-              {DEVELOPMENT_DESCRIPTIONS[card.kind]}
+              {developmentDescriptions[card.kind]}
             </span>
           </button>
         ))}
@@ -94,7 +113,7 @@ export function DevelopmentDialog({
             <>
               <fieldset disabled={disabled}>
                 <ResourceCardStepper
-                  label="Take from the bank"
+                  label={translateText("Take from the bank")}
                   values={chosenResources}
                   maximum={bank}
                   maximumLabel="In bank"
@@ -102,13 +121,13 @@ export function DevelopmentDialog({
                 />
               </fieldset>
               <p className="mt-3 text-xs text-muted">
-                Selected {resourceTotal(chosenResources)} of {Math.min(2, resourceTotal(bank))}
+                {translateText("Selected {selected} of {required}", { selected: resourceTotal(chosenResources), required: Math.min(2, resourceTotal(bank)) })}
               </p>
             </>
           )}
           {developmentCard.kind === "monopoly" && (
             <label className="text-sm">
-              Claim every card of this resource
+              {translateText("Claim every card of this resource")}
               <select
                 className="field mt-2"
                 value={chosenResource}
@@ -117,7 +136,7 @@ export function DevelopmentDialog({
               >
                 {RESOURCES.map((resource) => (
                   <option value={resource} key={resource}>
-                    {RESOURCE_NAMES[resource]}
+                    {resourceName(language, resource)}
                   </option>
                 ))}
               </select>
@@ -139,11 +158,10 @@ export function DevelopmentDialog({
               resources: chosenResources,
             })}
           >
-            Confirm {DEVELOPMENT_NAMES[developmentCard.kind]}
+            {translateText("Confirm {development}", { development: developmentNames[developmentCard.kind] })}
           </button>
           <p className="mt-3 text-xs leading-6 text-muted">
-            One action card per turn, before or after rolling. Newly bought
-            action cards must wait until a later turn.
+            {translateText("One action card per turn, before or after rolling. Newly bought action cards must wait until a later turn.")}
           </p>
         </div>
       )}
@@ -175,22 +193,23 @@ export function ActionConfirmation({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <Dialog title={title} summary={resources ? <ResourceInventory resources={resources} /> : undefined} onClose={onClose}>
       {exchange ? <div className="flex items-center justify-center gap-4 rounded-xl bg-moss p-4">
-        <CardStack label="You give" resources={exchange.give} />
+        <CardStack label={translateText("You give")} resources={exchange.give} />
         <Arrow className="h-5 w-5 shrink-0 text-forest" />
-        <CardStack label="You receive" resources={exchange.receive} />
+        <CardStack label={translateText("You receive")} resources={exchange.receive} />
       </div> : <p className="text-sm leading-7 text-muted">
         {description}
       </p>}
       {error && <p role="alert" className="mt-3 text-sm text-clay">{error}</p>}
       <div className="mt-6 flex justify-end gap-3">
         <button className="button-secondary" onClick={onClose}>
-          Cancel
+          {translateText("Cancel")}
         </button>
         <button className="button-primary" disabled={disabled} onClick={onConfirm}>
-          Confirm
+          {translateText("Confirm")}
         </button>
       </div>
     </Dialog>
@@ -212,19 +231,20 @@ export function DiscardSelection({
   disabled?: boolean;
   onConfirm: () => void;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <>
       <fieldset disabled={disabled}>
         <ResourceCardStepper
-          label="Return to the bank"
+          label={translateText("Return to the bank")}
           values={chosenResources}
           maximum={resources}
           onChange={onChangeResources}
         />
       </fieldset>
       <p className="selection-progress mt-3 flex justify-between gap-2 text-xs text-muted" aria-live="polite">
-        <strong className="text-ink">Selected {resourceTotal(chosenResources)} of {required}</strong>
-        <span>{resourceTotal(resources) - resourceTotal(chosenResources)} cards left</span>
+        <strong className="text-ink">{translateText("Selected {selected} of {required}", { selected: resourceTotal(chosenResources), required })}</strong>
+        <span>{translateText("{count} cards left", { count: resourceTotal(resources) - resourceTotal(chosenResources) })}</span>
       </p>
       <button
         className="button-primary mt-3 w-full"
@@ -232,7 +252,7 @@ export function DiscardSelection({
           RESOURCES.some(resource => chosenResources[resource] > resources[resource])}
         onClick={onConfirm}
       >
-        Confirm discard
+        {translateText("Confirm discard")}
       </button>
     </>
   );
@@ -247,6 +267,7 @@ export function TheftChoices({
   disabled?: boolean;
   onSelect: (playerId: string) => void;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return players.map(player => (
     <button
       key={player.id}
@@ -255,7 +276,7 @@ export function TheftChoices({
       onClick={() => onSelect(player.id)}
     >
       <span>{player.name}</span>
-      <span className="text-xs text-muted">{player.resourceCount} resources</span>
+      <span className="text-xs text-muted">{translateText("{count} resources", { count: player.resourceCount })}</span>
     </button>
   ));
 }

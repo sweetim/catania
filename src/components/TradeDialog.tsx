@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { emptyResources, getTradeRatio, RESOURCES, resourceTotal } from "../game/engine";
 import type { Board, GameAction, Player, Resource, Resources, TradeOffer } from "../game/types";
+import { resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
 import {
   Arrow,
   CardStack,
   Dialog,
-  RESOURCE_NAMES,
   ResourceCard,
   ResourceCardStepper,
   ResourceInventory,
@@ -33,6 +35,8 @@ export function TradeDialog({
   onSubmit: (action: GameAction) => void;
   onModeChange?: (mode: "bank" | "players") => void;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   const [tradeMode, setTradeMode] = useState<"bank" | "players">(() => initialOffer ? "players" : initialMode);
   const [playerTradeMode, setPlayerTradeMode] = useState<"request" | "offer">(() => initialOffer ? "offer" : "request");
   const [giveResource, setGiveResource] = useState<Resource>("wood");
@@ -45,7 +49,7 @@ export function TradeDialog({
 
   return (
     <Dialog
-      title="A fair exchange"
+      title={translateText("A fair exchange")}
       summary={tradeMode === "players" ? <ResourceInventory resources={player.resources} /> : undefined}
       onClose={onClose}
     >
@@ -60,18 +64,18 @@ export function TradeDialog({
               onModeChange?.(mode);
             }}
           >
-            {mode === "bank" ? "Bank & ports" : "Player trade"}
+            {translateText(mode === "bank" ? "Bank & ports" : "Player trade")}
           </button>
         ))}
       </div>
       {tradeMode === "bank" ? (
         <>
           <p className="mb-5 text-sm leading-6 text-muted">
-            Your best bank or port rate is shown on each card.
+            {translateText("Your best bank or port rate is shown on each card.")}
           </p>
           <fieldset className="mb-5" disabled={disabled}>
             <legend className="mb-3 text-sm font-semibold">
-              You give
+              {translateText("You give")}
             </legend>
             <div className="grid grid-cols-5 gap-2 sm:gap-3">
               {RESOURCES.map((resource) => (
@@ -91,7 +95,7 @@ export function TradeDialog({
           </fieldset>
           <fieldset disabled={disabled}>
             <legend className="mb-3 text-sm font-semibold">
-              Take 1 from the bank
+              {translateText("Take 1 from the bank")}
             </legend>
             <div className="grid grid-cols-5 gap-2 sm:gap-3">
               {RESOURCES.map((resource) => (
@@ -131,8 +135,13 @@ export function TradeDialog({
             />
           </div>
           {canExchange && (
-            <p role="status" aria-label="Hand after exchange" className="mb-4 text-xs leading-5 text-ink">
-              After exchange: {player.resources[giveResource] - ratio} {RESOURCE_NAMES[giveResource]}, {player.resources[receiveResource] + 1} {RESOURCE_NAMES[receiveResource]} in your hand. Other cards stay the same.
+            <p role="status" aria-label={translateText("Hand after exchange")} className="mb-4 text-xs leading-5 text-ink">
+              {translateText("After exchange: {giveCount} {giveResource}, {receiveCount} {receiveResource} in your hand. Other cards stay the same.", {
+                giveCount: player.resources[giveResource] - ratio,
+                giveResource: resourceName(language, giveResource),
+                receiveCount: player.resources[receiveResource] + 1,
+                receiveResource: resourceName(language, receiveResource),
+              })}
             </p>
           )}
           <button
@@ -140,16 +149,15 @@ export function TradeDialog({
             disabled={disabled || !canExchange}
             onClick={() => onSubmit({ type: "bank-trade", give: giveResource, receive: receiveResource })}
           >
-            Confirm exchange
+            {translateText("Confirm exchange")}
           </button>
           <p className="mt-3 text-xs text-muted">
-            Choose different resources and enough cards to make the
-            exchange.
+            {translateText("Choose different resources and enough cards to make the exchange.")}
           </p>
         </>
       ) : (
         <>
-          <div role="group" aria-label="Player trade type" className="mb-5 flex rounded-xl bg-moss p-1">
+          <div role="group" aria-label={translateText("Player trade type")} className="mb-5 flex rounded-xl bg-moss p-1">
             {(["request", "offer"] as const).map(mode => (
               <button
                 key={mode}
@@ -157,14 +165,14 @@ export function TradeDialog({
                 className={`min-h-10 flex-1 rounded-lg text-sm ${playerTradeMode === mode ? "bg-white shadow-sm" : "text-muted"}`}
                 onClick={() => setPlayerTradeMode(mode)}
               >
-                {mode === "request" ? "Request cards" : "Exact offer"}
+                {translateText(mode === "request" ? "Request cards" : "Exact offer")}
               </button>
             ))}
           </div>
           <fieldset disabled={disabled} className="space-y-5">
             {playerTradeMode === "offer" && <>
             <ResourceCardStepper
-              label="You offer"
+              label={translateText("You offer")}
               values={giveResources}
               maximum={player.resources}
               onChange={setGiveResources}
@@ -173,21 +181,21 @@ export function TradeDialog({
               className="flex items-center justify-center gap-4 rounded-xl bg-moss p-4"
               aria-hidden="true"
             >
-              <CardStack resources={giveResources} emptyText="Nothing offered" />
+              <CardStack resources={giveResources} emptyText={translateText("Nothing offered")} />
               <Arrow className="h-5 w-5 shrink-0 text-forest" />
-              <CardStack resources={receiveResources} emptyText="Nothing asked" />
+              <CardStack resources={receiveResources} emptyText={translateText("Nothing asked")} />
             </div>
             </>}
             <ResourceCardStepper
-              label="You ask for"
+              label={translateText("You ask for")}
               values={receiveResources}
               onChange={setReceiveResources}
             />
           </fieldset>
           <p className="my-4 text-xs leading-6 text-muted">
-            {playerTradeMode === "request"
+            {translateText(playerTradeMode === "request"
               ? "Players name a price. You choose whether to trade."
-              : "No cards move until you confirm a trade."}
+              : "No cards move until you confirm a trade.")}
           </p>
           <button
             className="button-primary w-full"
@@ -205,7 +213,7 @@ export function TradeDialog({
               receive: receiveResources,
             })}
           >
-            {playerTradeMode === "request" ? "Ask for these cards" : "Put the offer on the table"}
+            {translateText(playerTradeMode === "request" ? "Ask for these cards" : "Put the offer on the table")}
           </button>
         </>
       )}

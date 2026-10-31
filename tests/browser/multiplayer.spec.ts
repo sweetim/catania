@@ -5,6 +5,7 @@ import { emptyResources, getTradeRatio, RESOURCES } from "../../src/game/engine"
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import type { Resources } from "../../src/game/types";
 import type { RoomSnapshot } from "../../src/multiplayer/types";
+import { formatGameMessage } from "../../src/game/messages";
 
 const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
@@ -14,7 +15,7 @@ type ObservedWindow = Window & {
   multiplayerProbe: { channels: RTCDataChannel[]; frames: WireFrame[]; connections: RTCPeerConnection[]; blockedSends?: number };
 };
 type MultiplayerHarness = {
-  newPage: (name: string, phone?: boolean) => Promise<Page>;
+  newPage: (name: string, phone?: boolean, locale?: string) => Promise<Page>;
   disconnectSignaling: (page: Page) => void;
 };
 
@@ -29,12 +30,13 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
     const signaling: { direction: string; type: string }[] = [];
     let connectionInterrupted = false;
 
-    async function newPage(name: string, phone = false) {
+    async function newPage(name: string, phone = false, locale = "en-US") {
       const context = await browser.newContext({
         baseURL,
         viewport: phone ? { width: 390, height: 844 } : viewport,
         isMobile: phone || isMobile,
         hasTouch: phone || hasTouch,
+        locale,
       });
       contexts.push(context);
       sockets.set(context, []);
@@ -317,6 +319,67 @@ async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Leave r
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
+
+test("Japanese phones localize a shared English game without changing its state or names", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("English host");
+  const invitation = await hostGame(host);
+  const englishPhone = await multiplayer.newPage("English phone", true);
+  await requestSeat(englishPhone, invitation, "Sam");
+  await host.getByRole("button", { name: "Admit Sam", exact: true }).click();
+  const japanesePhone = await multiplayer.newPage("Japanese phone", true, "ja-JP");
+  await japanesePhone.goto(invitation);
+  await expect(japanesePhone.locator("html")).toHaveAttribute("lang", "ja");
+  await japanesePhone.getByRole("textbox", { name: "あなたの名前", exact: true }).fill("太郎");
+  await japanesePhone.getByRole("button", { name: "ゲームに接続", exact: true }).click();
+  await host.getByRole("button", { name: "Admit 太郎", exact: true }).click();
+  await host.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await host.getByRole("button", { name: "コンピューターを追加", exact: true }).click();
+  await expect(host.getByRole("button", { name: "コンピューター1の名前を変更", exact: true })).toBeVisible();
+  await host.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await expect(host.getByRole("button", { name: "Rename コンピューター1", exact: true })).toBeVisible();
+  await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(japanesePhone.getByTestId("game-phase")).toBeVisible();
+  await expect(englishPhone.getByTestId("game-phase")).toBeVisible();
+  const before = await latestSnapshot(japanesePhone);
+  await expect(japanesePhone.getByRole("heading", { name: "太郎の手札", exact: true })).toBeVisible();
+  await expect(englishPhone.getByRole("heading", { name: "Sam's hand", exact: true })).toBeVisible();
+  await expect(japanesePhone.getByRole("button", { name: "サイコロを振る", exact: true })).toBeVisible();
+  await expect(englishPhone.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible();
+
+  await japanesePhone.getByRole("button", { name: "ゲームの履歴", exact: true }).click();
+  await englishPhone.getByRole("button", { name: "Table activity", exact: true }).click();
+  const entry = before.game!.log.at(-1)!;
+  await expect(japanesePhone.getByRole("dialog")).toContainText(formatGameMessage("ja", entry));
+  await expect(englishPhone.getByRole("dialog")).toContainText(formatGameMessage("en", entry));
+  await screenshot(japanesePhone, testInfo, "japanese-activity");
+  await japanesePhone.keyboard.press("Escape");
+  await englishPhone.keyboard.press("Escape");
+  await japanesePhone.getByRole("button", { name: "ゲーム", exact: true }).click();
+  await japanesePhone.getByRole("button", { name: "ヘルプ", exact: true }).click();
+  await expect(japanesePhone.getByRole("dialog")).toContainText("盤面は共有、手札はそれぞれのスマートフォンで。");
+  await japanesePhone.keyboard.press("Escape");
+
+  const sentBefore = (await messages(japanesePhone)).filter(entry => entry.direction === "sent").length;
+  await japanesePhone.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await expect(japanesePhone.getByRole("heading", { name: "太郎's hand", exact: true })).toBeVisible();
+  await expect(host.locator("html")).toHaveAttribute("lang", "en");
+  await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
+  expect((await latestSnapshot(japanesePhone)).version).toBe(before.version);
+  expect((await latestSnapshot(japanesePhone)).privatePlayer).toEqual(before.privatePlayer);
+  expect((await messages(japanesePhone)).filter(entry => entry.direction === "sent")).toHaveLength(sentBefore);
+  await japanesePhone.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await host.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await expect(host.getByRole("region", { name: "共用のゲームボード", exact: true })).toBeVisible();
+  await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "japanese-shared-board");
+  await japanesePhone.setViewportSize({ width: 320, height: 568 });
+  await noHorizontalOverflow(japanesePhone);
+  await expect(japanesePhone.getByRole("combobox", { name: "言語", exact: true })).toBeInViewport({ ratio: 1 });
+  await screenshot(japanesePhone, testInfo, "japanese-private-phone");
+});
 
 test("room Game menu shares navigation and preserves host and player leave behavior", async ({ multiplayer, isMobile }, testInfo) => {
   const host = await multiplayer.newPage("Host");
@@ -1247,7 +1310,7 @@ test("host and three private phones play over real PeerJS channels and recover a
     channel.send(Uint8Array.from(bytes).buffer);
   }, Array.from(new Uint8Array(command)));
   await expect.poll(async () => (await messages(inactivePhone)).find(entry => entry.direction === "received" && entry.message.type === "result" && entry.message.requestId === requestId)?.message.error)
-    .toBe("Wait for your turn to perform this action.");
+    .toEqual({ key: "Wait for your turn to perform this action." });
   await expectPhase(pages, "roll", activeName);
   expect((await latestSnapshot(activePhone)).game!.dice).toBeNull();
 

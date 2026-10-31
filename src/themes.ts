@@ -1,5 +1,7 @@
 import { createContext, useContext } from "react";
 import type { Resource, Terrain } from "./game/types";
+import { translate, type Language } from "./i18n";
+import { themeTranslations } from "./translations/board";
 
 export type BoardThemeId = "illustrated" | "ceramic" | "wooden" | "pixel" | "space" | "underwater";
 
@@ -127,6 +129,18 @@ export const BOARD_THEMES: Record<BoardThemeId, BoardTheme> = {
 };
 
 export const BoardThemeContext = createContext<BoardTheme>(BOARD_THEMES.illustrated);
+
+export function getThemeName(theme: BoardTheme, language: Language) {
+  return translate(language, themeTranslations, theme.name);
+}
+
+export function getThemeDescription(theme: BoardTheme, language: Language) {
+  return translate(language, themeTranslations, theme.description);
+}
+
+export function getTerrainName(theme: BoardTheme, terrain: Terrain, language: Language) {
+  return translate(language, themeTranslations, theme.terrain[terrain].label);
+}
 
 export function useBoardTheme() {
   return useContext(BoardThemeContext);

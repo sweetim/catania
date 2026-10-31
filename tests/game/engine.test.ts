@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createBoard } from "../../src/game/board";
+import { formatGameMessage } from "../../src/game/messages";
 import {
   applyAction, blockedSettlementVertices, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
   legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
@@ -500,8 +501,8 @@ describe("seven, discards, robber and theft", () => {
     expect(before.thefts).toEqual([]);
     expect(state.thefts).toEqual([{ id: 1, thiefId: firstPlayer, victimId: secondPlayer, resource: "ore" }]);
     expect(state.phase).toEqual({ type: "actions" });
-    expect(state.log.at(-1)).not.toContain("ore");
-    expect(state.log.at(-1)).not.toContain("wood");
+    expect(JSON.stringify(state.log.at(-1))).not.toContain("ore");
+    expect(JSON.stringify(state.log.at(-1))).not.toContain("wood");
     assertConservation(state);
   });
 
@@ -760,7 +761,7 @@ describe("development cards", () => {
     expect(cards[0]!.id).not.toBe(cards[1]!.id);
     expect(state.developmentDeck).toHaveLength(23);
     expect(state.players[0]!.resources).toEqual(emptyResources());
-    expect(state.log.at(-1)).not.toContain(next);
+    expect(JSON.stringify(state.log.at(-1))).not.toContain(next);
     reject(state, { type: "buy-development" }, "resources required");
     state.developmentDeck = [];
     reject(state, { type: "buy-development" }, "deck is empty");
@@ -834,7 +835,7 @@ describe("development cards", () => {
     const restored = applyAction(pending, firstPlayer, { type: "cancel-knight" });
     expect(pending).toEqual(beforeCancel);
     expect({ ...restored, log: original.log }).toEqual(original);
-    expect(restored.log.at(-1)).toBe("Ada cancels Knight.");
+    expect(formatGameMessage("en", restored.log.at(-1)!)).toBe("Ada cancels Knight.");
     reject(restored, { type: "cancel-knight" }, "no Knight");
     const replayed = applyAction(restored, firstPlayer, { type: "play-development", cardId: knight });
     expect(replayed.players[0]!.knightsPlayed).toBe(1);

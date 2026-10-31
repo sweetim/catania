@@ -12,6 +12,7 @@ assets are local.
 - Shared-board multiplayer with QR invitations, private phone hands, and optional computer opponents.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
+- English and Japanese interfaces, including help, accessible controls, activity, and errors.
 
 ## Quick Start
 
@@ -24,6 +25,26 @@ bun run dev
 
 Open the URL printed by Bun (normally `http://localhost:3000`). Use
 `PORT=3001 bun run dev` to choose another port.
+
+## Language
+
+The initial language follows the first supported language in your browser's
+preferences: Japanese (`ja`, including `ja-JP`) or English (`en`, including regional
+variants). If neither is listed, the interface uses English.
+
+Use the header's **English / 日本語** selector to change language. Close any open
+dialog to access the header.
+A manual choice is saved under `catania.language` in `localStorage` and overrides
+browser preferences on later visits. Invalid saved values are ignored. When storage
+is blocked, switching still works for the current visit and the next visit uses the
+browser locale again. Automatic detection does not save an override.
+
+Language is independent of the game: switching preserves the board, current turn,
+private hand, and multiplayer connection. Each multiplayer device chooses its own
+language, including for activity and errors. Player-entered names are not translated.
+New computer names use the language selected when they are added; existing names
+stay unchanged when switching languages.
+Documentation uses the English control names.
 
 ## Build And Deploy
 

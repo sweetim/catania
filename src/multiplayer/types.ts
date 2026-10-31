@@ -1,4 +1,6 @@
 import type { Board, GameAction, GamePhase, GameState, Player, TheftEvent } from "../game/types";
+import type { Language } from "../i18n";
+import type { GameMessage } from "../game/messages";
 
 export type BuildMode = "road" | "settlement" | "city" | null;
 
@@ -48,7 +50,7 @@ export type SessionView = {
   status: "connecting" | "connected" | "disconnected" | "closed";
   invitationUrl: string | null;
   snapshot: RoomSnapshot | null;
-  error: string;
+  error: GameMessage | null;
   pending: boolean;
 };
 
@@ -57,7 +59,7 @@ export type MultiplayerSession = {
   shuffleBoard: () => void;
   admit: (connectionId: string) => void;
   reject: (connectionId: string) => void;
-  addComputer: () => void;
+  addComputer: (language?: Language) => void;
   removePlayer: (playerId: string) => void;
   renameComputer: (playerId: string, name: string) => void;
   perform: (action: GameAction, expectedVersion?: number) => void;

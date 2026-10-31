@@ -1,13 +1,17 @@
 import { useId } from "react";
 import type { Terrain } from "../game/types";
-import { BOARD_THEMES, type BoardThemeId } from "../themes";
+import { useLanguage, useTranslation } from "../localization";
+import { BOARD_THEMES, getThemeName, getThemeDescription, type BoardThemeId } from "../themes";
+import { boardTranslations } from "../translations/board";
 import { TerrainArtwork } from "./ThemeArtwork";
 
 export function ThemeSelector({ value, onChange }: { value: BoardThemeId; onChange: (value: BoardThemeId) => void }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(boardTranslations);
   const selectorId = useId();
   return (
     <fieldset className="@container min-w-0">
-      <legend className="mb-3 text-sm font-semibold">Board theme</legend>
+      <legend className="mb-3 text-sm font-semibold">{translateText("Board theme")}</legend>
       <div className="grid min-w-0 grid-cols-2 gap-2">
         {Object.values(BOARD_THEMES).map((theme) => (
           <label key={theme.id} className="relative flex min-w-0 cursor-pointer">
@@ -23,7 +27,7 @@ export function ThemeSelector({ value, onChange }: { value: BoardThemeId; onChan
             />
             <span className="flex w-full min-w-0 flex-col rounded-xl border border-line bg-white/50 p-2 text-ink transition-colors hover:bg-moss peer-checked:border-ink peer-checked:bg-moss peer-checked:ring-1 peer-checked:ring-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
               <span className="mb-1 flex min-h-4 items-center pr-6" aria-hidden="true">
-                <span className="text-[9px] font-semibold uppercase tracking-[.08em] text-muted">{theme.id === "illustrated" ? "Original" : "Artwork"}</span>
+                <span className="text-[9px] font-semibold uppercase tracking-[.08em] text-muted">{translateText(theme.id === "illustrated" ? "Original" : "Artwork")}</span>
               </span>
               <svg aria-hidden="true" focusable="false" viewBox="0 0 176 92" className="mb-2 block w-full rounded-lg">
                 <rect width="176" height="92" rx="8" fill={theme.sea[1]} />
@@ -35,8 +39,8 @@ export function ThemeSelector({ value, onChange }: { value: BoardThemeId; onChan
                   </g>
                 ))}
               </svg>
-              <span id={`${selectorId}-${theme.id}-name`} className="block text-[11px] font-semibold leading-snug [overflow-wrap:anywhere] @min-[320px]:text-xs">{theme.name}</span>
-              <span id={`${selectorId}-${theme.id}-description`} className="mt-1 block text-[10px] leading-relaxed text-muted [overflow-wrap:anywhere]">{theme.description}</span>
+              <span id={`${selectorId}-${theme.id}-name`} className="block text-[11px] font-semibold leading-snug [overflow-wrap:anywhere] @min-[320px]:text-xs">{getThemeName(theme, language)}</span>
+              <span id={`${selectorId}-${theme.id}-description`} className="mt-1 block text-[10px] leading-relaxed text-muted [overflow-wrap:anywhere]">{getThemeDescription(theme, language)}</span>
             </span>
           </label>
         ))}

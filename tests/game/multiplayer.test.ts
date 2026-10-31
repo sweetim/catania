@@ -2,6 +2,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { chooseComputerAction } from "../../src/game/computer";
 import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
+import { formatGameMessage } from "../../src/game/messages";
 import type { GameAction, GamePhase, GameState, Resources } from "../../src/game/types";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
@@ -233,11 +234,11 @@ describe("multiplayer admission and reconnect identity", () => {
     expect(room.snapshot("replacement").playerId).toBe(actor);
     expect(room.snapshot("replacement").privatePlayer!.name).not.toBe("Changed name");
     expect(room.snapshot(previousConnection).privatePlayer).toBeNull();
-    expect(send(room, previousConnection, { type: "roll" }).error).toContain("not bound");
+    expect(send(room, previousConnection, { type: "roll" }).error?.key).toContain("not bound");
     const version = room.version;
     room.disconnect(previousConnection);
     expect(room.version).toBe(version);
-    expect(send(room, "replacement", { type: "roll" }).error).toBe("");
+    expect(send(room, "replacement", { type: "roll" }).error).toBeNull();
   });
 });
 
@@ -355,7 +356,7 @@ describe("lobby removal and computer names", () => {
     expect(room.version).toBe(version + 1);
     expect(room.snapshot().players).toEqual([original[0]!, original[2]!]);
     expect(room.snapshot("connection-2").playerId).toBeNull();
-    expect(send(room, "connection-2", { type: "roll" }).error).toContain("not bound");
+    expect(send(room, "connection-2", { type: "roll" }).error?.key).toContain("not bound");
     expect(() => room.join("revoked", { type: "join", secret, name: "Grace", credential: credentials[1]! })).toThrow("credential");
     expect(room.snapshot().pendingPlayers).toEqual([]);
 
@@ -491,7 +492,7 @@ describe("host-authoritative computer actions", () => {
     expect(room.game!.phase).toEqual({ type: "discard", required: { "player-1": 4 } });
     expect(resourceTotal(room.game!.players.find(player => player.id === "player-2")!.resources)).toBe(4);
     expect(resourceTotal(room.game!.players.find(player => player.id === "player-3")!.resources)).toBe(5);
-    expect(send(room, "connection-1", { type: "discard", resources: resources({ wood: 4 }) }).error).toBe("");
+    expect(send(room, "connection-1", { type: "discard", resources: resources({ wood: 4 }) }).error).toBeNull();
     expect(room.snapshot().game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
     if (activePlayerId === "player-2") {
       const previousTile = room.game!.robberTileId;
@@ -512,7 +513,7 @@ describe("host-authoritative computer actions", () => {
     const action: GameAction = type === "offer-trade"
       ? { type, give: resources({ wool: 1 }), receive: resources({ wood: 1 }) }
       : { type, receive: resources({ wood: 1 }) };
-    expect(send(room, "connection-1", action).error).toBe("");
+    expect(send(room, "connection-1", action).error).toBeNull();
     const hands = structuredClone(room.game!.players);
     expect(room.performComputer()).toBe(true);
     expect(room.performComputer()).toBe(true);
@@ -521,7 +522,7 @@ describe("host-authoritative computer actions", () => {
     expect(room.game!.trade!.responses["player-3"]).toBe(false);
     expect(room.game!.players).toEqual(hands);
     expect(room.game!.activePlayerId).toBe("player-1");
-    expect(send(room, "connection-1", { type: "complete-trade", playerId: "player-2" }).error).toBe("");
+    expect(send(room, "connection-1", { type: "complete-trade", playerId: "player-2" }).error).toBeNull();
   });
 
   test("computer hands stay private, no reconnect credential binds a computer, and phones cannot take its turn", () => {
@@ -540,9 +541,9 @@ describe("host-authoritative computer actions", () => {
     }
     expect(room.snapshot("connection-1").game!.players.find(player => player.id === computer.id)).toMatchObject({ control: "computer", resourceCount: 3, developmentCount: 1, score: 0 });
     expect(() => room.join("takeover", { type: "join", secret, name: computer.name, credential: computer.id })).toThrow("credential");
-    expect(send(room, computer.id, { type: "roll" }).error).toContain("not bound");
-    expect(send(room, "connection-1", { type: "roll" }).error).toContain("Wait for your turn");
-    expect(send(room, "connection-1", { type: "roll", playerId: computer.id } as GameAction).error).toContain("unexpected fields");
+    expect(send(room, computer.id, { type: "roll" }).error?.key).toContain("not bound");
+    expect(send(room, "connection-1", { type: "roll" }).error?.key).toContain("Wait for your turn");
+    expect(send(room, "connection-1", { type: "roll", playerId: computer.id } as GameAction).error?.key).toContain("unexpected fields");
   });
 });
 
@@ -611,15 +612,15 @@ describe("public and private multiplayer projections", () => {
     game.turnNumber = 2;
     game.developmentDeck = ["victory-point"];
     give(game, game.activePlayerId, { wool: 1, grain: 1, ore: 1 });
-    expect(send(room, activeConnection(room), { type: "buy-development" }).error).toBe("");
-    expect(room.snapshot().game!.log.at(-1)).toContain("buys a development card");
+    expect(send(room, activeConnection(room), { type: "buy-development" }).error).toBeNull();
+    expect(formatGameMessage("en", room.snapshot().game!.log.at(-1)!)).toContain("buys a development card");
     expect(JSON.stringify(room.snapshot().game)).not.toContain("victory-point");
     const victim = room.game!.players.find(player => player.id !== room.game!.activePlayerId)!;
     give(room.game!, victim.id, { brick: 1 });
     room.game!.phase = { type: "steal", victimIds: [victim.id], returnPhase: "actions" };
-    expect(send(room, activeConnection(room), { type: "steal", playerId: victim.id }).error).toBe("");
-    expect(room.snapshot().game!.log.at(-1)).toContain("steals one resource card");
-    expect(room.snapshot().game!.log.at(-1)).not.toContain("brick");
+    expect(send(room, activeConnection(room), { type: "steal", playerId: victim.id }).error).toBeNull();
+    expect(formatGameMessage("en", room.snapshot().game!.log.at(-1)!)).toContain("steals one resource card");
+    expect(JSON.stringify(room.snapshot().game!.log.at(-1))).not.toContain("brick");
   });
 });
 
@@ -639,7 +640,7 @@ describe("private theft feedback", () => {
     for (const [thiefId, victimId] of [["player-1", "player-2"], ["player-3", "player-4"], ["player-2", "player-1"]] as const) {
       room.game!.activePlayerId = thiefId;
       room.game!.phase = { type: "steal", victimIds: [victimId], returnPhase: "actions" };
-      expect(send(room, connectionFor(thiefId), { type: "steal", playerId: victimId }).error).toBe("");
+      expect(send(room, connectionFor(thiefId), { type: "steal", playerId: victimId }).error).toBeNull();
     }
     const thefts: GameState["thefts"] = [
       { id: 1, thiefId: "player-1", victimId: "player-2", resource: "ore" },
@@ -658,9 +659,9 @@ describe("private theft feedback", () => {
       if (connectionId !== undefined) expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
     }
     for (const entry of room.snapshot().game!.log.slice(-3)) {
-      expect(entry).toContain("steals one resource card");
-      expect(entry).not.toContain("ore");
-      expect(entry).not.toContain("wool");
+      expect(formatGameMessage("en", entry)).toContain("steals one resource card");
+      expect(JSON.stringify(entry)).not.toContain("ore");
+      expect(JSON.stringify(entry)).not.toContain("wool");
     }
     room.snapshot("connection-1").privateThefts[0]!.resource = "brick";
     expect(room.game!.thefts).toEqual(thefts);
@@ -671,7 +672,7 @@ describe("private theft feedback", () => {
     room.game!.activePlayerId = "player-1";
     room.game!.phase = { type: "steal", victimIds: ["player-2"], returnPhase: "actions" };
     give(room.game!, "player-2", { brick: 1 });
-    expect(send(room, "connection-1", { type: "steal", playerId: "player-2" }).error).toBe("");
+    expect(send(room, "connection-1", { type: "steal", playerId: "player-2" }).error).toBeNull();
     const original = room.snapshot(connectionFor(playerId)).privateThefts;
     expect(original).toEqual([{ id: 1, thiefId: "player-1", victimId: "player-2", resource: "brick" }]);
     room.disconnect(connectionFor(playerId));
@@ -694,7 +695,7 @@ describe("authoritative action permissions and ordering", () => {
     const result = room.command(activeConnection(room), command);
     const after = structuredClone(room.game);
     const version = room.version;
-    expect(result.error).toBe("");
+    expect(result.error).toBeNull();
     expect(room.command(activeConnection(room), command)).toEqual(result);
     expect(room.version).toBe(version);
     expect(room.game).toEqual(after);
@@ -711,22 +712,22 @@ describe("authoritative action permissions and ordering", () => {
     const opponent = room.game!.players.find(player => player.id !== actor)!.id;
     give(room.game!, actor, { wood: 2 });
     give(room.game!, opponent, { brick: 2 });
-    expect(send(room, connectionFor(actor), { type: "offer-trade", give: resources({ wood: 1 }), receive: resources({ brick: 1 }) }).error).toBe("");
+    expect(send(room, connectionFor(actor), { type: "offer-trade", give: resources({ wood: 1 }), receive: resources({ brick: 1 }) }).error).toBeNull();
     const oldVersion = room.version;
-    expect(send(room, connectionFor(actor), { type: "offer-trade", give: resources({ wood: 2 }), receive: resources({ brick: 2 }) }).error).toBe("");
+    expect(send(room, connectionFor(actor), { type: "offer-trade", give: resources({ wood: 2 }), receive: resources({ brick: 2 }) }).error).toBeNull();
     const before = structuredClone(room.game);
-    expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }, oldVersion).error).toContain("game changed");
+    expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }, oldVersion).error?.key).toContain("game changed");
     expect(room.game).toEqual(before);
-    expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }).error).toBe("");
+    expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }).error).toBeNull();
   });
 
   test("binds actor to the connection, never action payload playerId", () => {
     const { room } = started();
     room.game!.phase = { type: "roll" };
     const other = room.game!.players.find(player => player.id !== room.game!.activePlayerId)!.id;
-    expect(send(room, connectionFor(other), { type: "roll" }).error).toContain("Wait for your turn");
-    expect(send(room, connectionFor(other), { type: "roll", playerId: room.game!.activePlayerId } as GameAction).error).toContain("unexpected fields");
-    expect(send(room, "not-admitted", { type: "roll" }).error).toContain("not bound");
+    expect(send(room, connectionFor(other), { type: "roll" }).error?.key).toContain("Wait for your turn");
+    expect(send(room, connectionFor(other), { type: "roll", playerId: room.game!.activePlayerId } as GameAction).error?.key).toContain("unexpected fields");
+    expect(send(room, "not-admitted", { type: "roll" }).error?.key).toContain("not bound");
     expect(room.game!.phase.type).toBe("roll");
   });
 
@@ -734,7 +735,7 @@ describe("authoritative action permissions and ordering", () => {
     const { room } = started();
     const vertexId = room.snapshot().boardTargets.vertices[0]!;
     const actor = room.game!.activePlayerId;
-    expect(send(room, activeConnection(room), { type: "place-settlement", vertexId }).error).toContain("shared board");
+    expect(send(room, activeConnection(room), { type: "place-settlement", vertexId }).error?.key).toContain("shared board");
     expect(() => room.performBoard({ type: "place-road", edgeId: "edge-0" })).toThrow("highlighted");
     expect(() => room.performBoard({ type: "roll" })).toThrow("phone");
     expect(() => room.performBoard({ type: "end-turn" })).toThrow("phone");
@@ -763,9 +764,9 @@ describe("authoritative action permissions and ordering", () => {
     expect(room.snapshot().boardTargets.edges).toEqual([]);
     const edgeId = legalRoadEdges(room.game!, actor)[0]!;
     expect(() => room.performBoard({ type: "place-road", edgeId })).toThrow("highlighted");
-    expect(room.command(connectionFor(other), { type: "select-build", piece: "road", requestId: "other-build", version: room.version }).error).toContain("active player");
+    expect(room.command(connectionFor(other), { type: "select-build", piece: "road", requestId: "other-build", version: room.version }).error?.key).toContain("active player");
     const version = room.version;
-    expect(room.command(connectionFor(actor), { type: "select-build", piece: "road", requestId: "own-build", version }).error).toBe("");
+    expect(room.command(connectionFor(actor), { type: "select-build", piece: "road", requestId: "own-build", version }).error).toBeNull();
     expect(room.snapshot().boardTargets.edges).toContain(edgeId);
     expect(() => room.selectBuild("road", undefined, version)).toThrow("game changed");
     room.performBoard({ type: "place-road", edgeId });
@@ -782,7 +783,7 @@ describe("authoritative action permissions and ordering", () => {
     const targets = room.snapshot().boardTargets;
     expect(targets.tiles).toHaveLength(18);
     expect(targets.tiles).not.toContain(room.game!.robberTileId);
-    expect(send(room, activeConnection(room), { type: "move-robber", tileId: targets.tiles[0]! }).error).toContain("shared board");
+    expect(send(room, activeConnection(room), { type: "move-robber", tileId: targets.tiles[0]! }).error?.key).toContain("shared board");
     room.performBoard({ type: "move-robber", tileId: targets.tiles[0]! });
     expect(room.game!.robberTileId).toBe(targets.tiles[0]!);
   });
@@ -791,7 +792,7 @@ describe("authoritative action permissions and ordering", () => {
     const { room } = started();
     const before = structuredClone(room.game);
     const version = room.version;
-    expect(send(room, activeConnection(room), { type: "buy-development" }).error).toContain("Roll the dice");
+    expect(send(room, activeConnection(room), { type: "buy-development" }).error?.key).toContain("Roll the dice");
     expect(room.game).toEqual(before);
     expect(room.version).toBe(version);
     expect(getScore(room.game!, room.game!.activePlayerId).total).toBe(0);
@@ -951,7 +952,7 @@ test("host session schedules one computer action, discards stale work, cleans ti
     expect(views.at(-1)!.snapshot).not.toHaveProperty("previewBoard");
     expect(views.at(-1)!.snapshot!.game!.board).toEqual(startingBoard);
     host.shuffleBoard();
-    expect(views.at(-1)!.error).toContain("lobby");
+    expect(views.at(-1)!.error?.key).toContain("lobby");
     expect(views.at(-1)!.snapshot!.game!.board).toEqual(startingBoard);
     const version = views.at(-1)!.snapshot!.version;
     const first = [...timers].find(([, timer]) => timer.delay === 450)!;
@@ -983,7 +984,7 @@ test("host session schedules one computer action, discards stale work, cleans ti
     expect(connection.send).toHaveBeenCalledTimes(1);
     for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard()]) {
       operation();
-      expect(views.at(-1)!.error).toContain("Only the shared host");
+      expect(views.at(-1)!.error?.key).toContain("Only the shared host");
       expect(connection.send).toHaveBeenCalledTimes(1);
     }
     guest.close();
@@ -1063,15 +1064,15 @@ test.each([
     } else if (stage === "unavailable") peer.emit("error", { type: "peer-unavailable" });
     else initialTimeout.callback();
     expect(views.at(-1)!.status).toBe("disconnected");
-    expect(views.at(-1)!.error).toContain(expectedError!);
-    if (stage !== "unavailable") expect(views.at(-1)!.error).toContain(`ICE ${first.peerConnection.iceConnectionState}; gathering complete`);
-    for (const privateValue of [secret, "private-host-identifier", "private-session-description"]) expect(views.at(-1)!.error).not.toContain(privateValue);
+    expect(formatGameMessage("en", views.at(-1)!.error!)).toContain(expectedError!);
+    if (stage !== "unavailable") expect(formatGameMessage("en", views.at(-1)!.error!)).toContain(`ICE ${first.peerConnection.iceConnectionState}; gathering complete`);
+    for (const privateValue of [secret, "private-host-identifier", "private-session-description"]) expect(JSON.stringify(views.at(-1)!.error)).not.toContain(privateValue);
 
     const retry = [...timers].find(([, timer]) => timer.delay === 2000)!;
     timers.delete(retry[0]);
     retry[1].callback();
     expect(peer.connections).toHaveLength(2);
-    expect(views.at(-1)).toMatchObject({ status: "connecting", error: "" });
+    expect(views.at(-1)).toMatchObject({ status: "connecting", error: null });
     const updates = views.length;
     initialTimeout.callback();
     first.emit("close");
@@ -1080,7 +1081,7 @@ test.each([
     peer.connections.at(-1)!.emit("close");
     guest.reconnect();
     expect(peer.connections).toHaveLength(3);
-    expect(views.at(-1)).toMatchObject({ status: "connecting", error: "" });
+    expect(views.at(-1)).toMatchObject({ status: "connecting", error: null });
     peer.destroyed = true;
     guest.reconnect();
     const recreatedPeer = peers.at(-1)!;
@@ -1094,7 +1095,7 @@ test.each([
     const room = new HostRoom(secret);
     room.join("connection", { type: "join", name: "Ada", secret });
     recovered.emit("data", { type: "snapshot", snapshot: room.snapshot("connection") });
-    expect(views.at(-1)).toMatchObject({ status: "connected", error: "" });
+    expect(views.at(-1)).toMatchObject({ status: "connected", error: null });
     expect(views.at(-1)!.snapshot!.playerId).toBeNull();
     expect(timers.size).toBe(0);
     guest.close();
@@ -1201,11 +1202,11 @@ test("host removal and renaming propagate while terminal clients clear revoked i
     guest.perform({ type: "roll" });
     expect(guestViews.at(-1)!.pending).toBe(true);
     host.removePlayer(originalPlayer.id);
-    expect(first.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: "The host removed you from the lobby. Use Reconnect to request a new seat." });
+    expect(first.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: { key: "The host removed you from the lobby. Use Reconnect to request a new seat." } });
     expect(hostViews.at(-1)!.snapshot!.players.map(player => player.id)).toEqual(["player-2", "player-3"]);
     deliver(first.server, first.client);
     expect(guestViews.at(-1)).toMatchObject({ status: "disconnected", snapshot: null, pending: false });
-    expect(guestViews.at(-1)!.error).toContain("host removed you");
+    expect(guestViews.at(-1)!.error?.key).toContain("host removed you");
     expect(storage.has(credentialKey)).toBe(false);
     expect(storage.get(nameKey)).toBe("Ada");
     expect(storage.get("catania:multiplayer:other-room")).toBe("unrelated-credential");
@@ -1235,7 +1236,7 @@ test("host removal and renaming propagate while terminal clients clear revoked i
     retry[1].callback();
     const rejected = attachGuest();
     expect(rejected.client.send.mock.calls[0]![0]).toEqual({ type: "join", secret: invitation.secret, name: "Ada", credential: freshCredential });
-    expect(rejected.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: "This reconnect credential is not valid for this room." });
+    expect(rejected.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: { key: "This reconnect credential is not valid for this room." } });
     expect(hostViews.at(-1)!.snapshot!.pendingPlayers).toEqual([]);
     deliver(rejected.server, rejected.client);
     expect(guestViews.at(-1)).toMatchObject({ status: "disconnected", snapshot: null, pending: false });

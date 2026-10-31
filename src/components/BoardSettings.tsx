@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "../localization";
+import { boardTranslations } from "../translations/board";
 import { Dialog } from "./GameUi";
 
 const BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY = "catania.showBlockedSettlementLocations";
@@ -51,8 +53,9 @@ export function BoardSettingsDialog({
   fillBoardWithWater,
   setFillBoardWithWater,
 }: ReturnType<typeof useBoardSettings> & { onClose: () => void }) {
+  const translateText = useTranslation(boardTranslations);
   return (
-    <Dialog title="Settings" onClose={onClose}>
+    <Dialog title={translateText("Settings")} onClose={onClose}>
       <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold">
         <input
           type="checkbox"
@@ -61,11 +64,10 @@ export function BoardSettingsDialog({
           aria-describedby="blocked-settlement-locations-description"
           className="size-5 shrink-0 accent-forest"
         />
-        Show blocked settlement locations
+        {translateText("Show blocked settlement locations")}
       </label>
       <p id="blocked-settlement-locations-description" className="mt-3 text-sm leading-6 text-muted">
-        Crosses mark empty corners next to any settlement or city, where the distance rule prevents building.
-        Unmarked corners still require the usual roads, resources, and available pieces on your turn.
+        {translateText("Crosses mark empty corners next to any settlement or city, where the distance rule prevents building. Unmarked corners still require the usual roads, resources, and available pieces on your turn.")}
       </p>
       <label className="mt-5 flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold">
         <input
@@ -75,12 +77,12 @@ export function BoardSettingsDialog({
           aria-describedby="fill-board-with-water-description"
           className="size-5 shrink-0 accent-forest"
         />
-        Fill board with water
+        {translateText("Fill board with water")}
       </label>
       <p id="fill-board-with-water-description" className="mt-3 text-sm leading-6 text-muted">
-        Extend the water background to fill the entire map area. Off by default to keep the round water shape.
+        {translateText("Extend the water background to fill the entire map area. Off by default to keep the round water shape.")}
       </p>
-      <p className="mt-4 text-xs text-muted">Saved in this browser when storage is available. Games are not saved.</p>
+      <p className="mt-4 text-xs text-muted">{translateText("Saved in this browser when storage is available. Games are not saved.")}</p>
     </Dialog>
   );
 }

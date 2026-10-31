@@ -1,3 +1,4 @@
+import { GameError } from "./messages";
 import type { Board, Edge, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function secureRandom(): number {
@@ -7,7 +8,7 @@ export function secureRandom(): number {
 export function randomInteger(limit: number, random: () => number): number {
   const value = random();
   if (!Number.isFinite(value) || value < 0 || value >= 1) {
-    throw new Error("Random source must return a number from 0 (inclusive) to 1 (exclusive).");
+    throw new GameError("Random source must return a number from 0 (inclusive) to 1 (exclusive).");
   }
   return Math.floor(value * limit);
 }
@@ -89,7 +90,7 @@ export function createBoard(random: () => number = secureRandom): Board {
     }
     return false;
   }
-  if (!selectRedTiles(0)) throw new Error("Unable to arrange nonadjacent red number tokens.");
+  if (!selectRedTiles(0)) throw new GameError("Unable to arrange nonadjacent red number tokens.");
   const redNumbers = shuffle([6, 6, 8, 8], random);
   const otherNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
   for (const tile of producingTiles) tile.number = redTiles.includes(tile) ? redNumbers.pop()! : otherNumbers.pop()!;

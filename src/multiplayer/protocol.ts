@@ -1,4 +1,6 @@
 import { RESOURCES } from "../game/engine";
+import { GameError, isGameMessage } from "../game/messages";
+import type { GameMessage } from "../game/messages";
 import type { GameAction } from "../game/types";
 import type { BuildMode, RoomSnapshot } from "./types";
 
@@ -7,12 +9,12 @@ export type Command = { requestId: string; version: number } & (
   | { type: "action"; action: GameAction }
   | { type: "select-build"; piece: BuildMode }
 );
-export type CommandResult = { type: "result"; requestId: string; error: string };
+export type CommandResult = { type: "result"; requestId: string; error: GameMessage | null };
 export type ServerMessage =
   | { type: "snapshot"; snapshot: RoomSnapshot }
   | { type: "admitted"; credential: string }
   | CommandResult
-  | { type: "error"; error: string; terminal: boolean };
+  | { type: "error"; error: GameMessage; terminal: boolean };
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): value is RecordValue {
@@ -43,16 +45,16 @@ function buildMode(value: unknown): value is BuildMode {
   return value === null || value === "road" || value === "settlement" || value === "city";
 }
 function messageRecord(value: unknown, maximum: number): RecordValue {
-  if (!record(value)) throw new Error("Invalid network message.");
+  if (!record(value)) throw new GameError("Invalid network message.");
   let size: number;
   try { size = new TextEncoder().encode(JSON.stringify(value)).byteLength; }
-  catch { throw new Error("Invalid network message."); }
-  if (size > maximum) throw new Error("Network message is too large.");
+  catch { throw new GameError("Invalid network message."); }
+  if (size > maximum) throw new GameError("Network message is too large.");
   return value;
 }
 
 export function parseAction(value: unknown): GameAction {
-  if (!record(value)) throw new Error("Invalid game action.");
+  if (!record(value)) throw new GameError("Invalid game action.");
   let valid = false;
   switch (value.type) {
     case "roll": case "end-turn": case "cancel-knight": case "cancel-trade": case "buy-development": case "skip-roads":
@@ -81,7 +83,7 @@ export function parseAction(value: unknown): GameAction {
       valid = fields(value, ["type", "cardId"], ["resource", "resources"]) && identifier(value.cardId, "development") &&
         (!Object.hasOwn(value, "resource") || resource(value.resource)) && (!Object.hasOwn(value, "resources") || resources(value.resources)); break;
   }
-  if (!valid) throw new Error("Invalid game action or unexpected fields.");
+  if (!valid) throw new GameError("Invalid game action or unexpected fields.");
   return value as GameAction;
 }
 
@@ -97,7 +99,7 @@ export function parseClientMessage(value: unknown): JoinMessage | Command {
       return { type: "select-build", requestId: message.requestId, version: message.version, piece: message.piece };
     }
   }
-  throw new Error("Invalid network message or unexpected fields.");
+  throw new GameError("Invalid network message or unexpected fields.");
 }
 
 function array(value: unknown, maximum: number, check: (value: unknown) => boolean): boolean {
@@ -150,7 +152,7 @@ function publicGame(value: unknown): boolean {
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"]) && identifier(trade.offeredBy, "player") &&
       (trade.give === null || resources(trade.give)) && resources(trade.receive) && record(trade.responses) && Object.entries(trade.responses).every(([key, value]) => identifier(key, "player") && (value === false || resources(value))))) &&
-    array(value.log, 100, value => typeof value === "string" && value.length <= 512) && typeof value.developmentPlayed === "boolean" &&
+    array(value.log, 100, isGameMessage) && typeof value.developmentPlayed === "boolean" &&
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
@@ -177,9 +179,8 @@ export function parseServerMessage(value: unknown): ServerMessage {
   const message = messageRecord(value, 131072);
   if (message.type === "snapshot" && fields(message, ["type", "snapshot"]) && snapshot(message.snapshot)) return message as ServerMessage;
   if (message.type === "admitted" && fields(message, ["type", "credential"]) && token(message.credential)) return message as ServerMessage;
-  if (typeof message.error === "string" && message.error.length <= 512) {
-    if (message.type === "result" && fields(message, ["type", "requestId", "error"]) && token(message.requestId)) return message as ServerMessage;
-    if (message.type === "error" && fields(message, ["type", "error", "terminal"]) && typeof message.terminal === "boolean") return message as ServerMessage;
-  }
-  throw new Error("The host sent an invalid network message.");
+  if (message.type === "result" && fields(message, ["type", "requestId", "error"]) && token(message.requestId) &&
+    (message.error === null || isGameMessage(message.error))) return message as ServerMessage;
+  if (message.type === "error" && fields(message, ["type", "error", "terminal"]) && isGameMessage(message.error) && typeof message.terminal === "boolean") return message as ServerMessage;
+  throw new GameError("The host sent an invalid network message.");
 }

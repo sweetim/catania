@@ -9,11 +9,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { MultiplayerApp } from "./multiplayer/MultiplayerApp";
+import { LanguageProvider } from "./localization";
 
 const elem = document.getElementById("root")!;
 const app = (
   <StrictMode>
-    {new URLSearchParams(window.location.search).has("multiplayer") ? <MultiplayerApp /> : <App />}
+    <LanguageProvider>
+      {new URLSearchParams(window.location.search).has("multiplayer") ? <MultiplayerApp /> : <App />}
+    </LanguageProvider>
   </StrictMode>
 );
 

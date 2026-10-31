@@ -20,14 +20,17 @@ import {
   DiscardSelection,
   TheftChoices,
 } from "./components/GameplayDialogs";
-import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "./themes";
+import { BOARD_THEMES, BoardThemeContext, getThemeName, type BoardThemeId } from "./themes";
+import { defaultComputerName, resourceName, type Language, type TranslationParameters } from "./i18n";
+import { LanguageSelector, useLanguage, useTranslation } from "./localization";
+import { appTranslations } from "./translations/app";
+import { formatGameMessage, gameErrorMessage, type GameMessage } from "./game/messages";
 import {
   Arrow,
   BankSupply,
   BuildButton,
   Dialog,
   Logo,
-  RESOURCE_NAMES,
   ResourceCard,
   ResourceInventory,
 } from "./components/GameUi";
@@ -66,21 +69,25 @@ type RollPresentation = {
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
 const BOARD_THEME_STORAGE_KEY = "catania.boardTheme";
 
-function phaseTitle(state: GameState) {
+function phaseTitle(state: GameState, language: Language) {
   return getPhaseInstructions({
+    language,
     phase: state.phase,
     secondSettlement: state.setupIndex >= state.players.length,
   }).title;
 }
 
-function phaseDescription(state: GameState) {
+function phaseDescription(state: GameState, language: Language) {
   return getPhaseInstructions({
+    language,
     phase: state.phase,
     secondSettlement: state.setupIndex >= state.players.length,
   }).description;
 }
 
 export function App() {
+  const { language } = useLanguage();
+  const translateText = useTranslation(appTranslations);
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>(() => {
     try {
       const savedTheme = window.localStorage.getItem(BOARD_THEME_STORAGE_KEY);
@@ -122,11 +129,15 @@ export function App() {
   } | null>(null);
   const [confirmation, setConfirmation] = useState<{
     action: GameAction;
-    title: string;
-    description?: string;
+    title: keyof typeof appTranslations;
+    description?: keyof typeof appTranslations;
+    parameters?: TranslationParameters;
     exchange?: { give: Resources; receive: Resources };
   } | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<GameMessage | keyof typeof appTranslations | "">("");
+  const errorText = typeof error === "string"
+    ? error ? translateText(error) : ""
+    : formatGameMessage(language, error);
   const [tradeMode, setTradeMode] = useState<"bank" | "players">("bank");
   const [chosenResources, setChosenResources] = useState(emptyResources);
   const [developmentCardId, setDevelopmentCardId] = useState<string | null>(
@@ -157,11 +168,7 @@ export function App() {
         const action = chooseComputerAction(game, playerId);
         if (action) presentAction(applyAction(game, playerId, action), action, true);
       } catch (failure) {
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "The computer could not finish its move.",
-        );
+        setError(gameErrorMessage(failure, "The computer could not finish its move."));
       }
     },
   );
@@ -236,8 +243,8 @@ export function App() {
       const profiles = names.slice(0, playerCount).map(
         (name, index): Pick<Player, "name" | "color" | "control"> => ({
           name: index < humanCount
-            ? name.trim() || `Player ${index + 1}`
-            : `Computer ${index - humanCount + 1}`,
+            ? name.trim() || translateText("Player {number}", { number: index + 1 })
+            : defaultComputerName(language, index - humanCount + 1),
           color: PLAYER_COLORS[index]!,
           control: index < humanCount ? "human" : "computer",
         }),
@@ -246,9 +253,9 @@ export function App() {
         new Set(profiles.map((profile) => profile.name.toLowerCase())).size !==
         profiles.length
       ) {
-        throw new Error(
-          "Use a different name for each player so private handoffs are clear.",
-        );
+        setHomeView("setup");
+        setError("Use a different name for each player so private handoffs are clear.");
+        return;
       }
       const next = createGame(profiles, undefined, selectedBoard);
       setRollPresentation(null);
@@ -277,11 +284,7 @@ export function App() {
       setBuildMode(null);
     } catch (failure) {
       setHomeView("setup");
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : "The game could not be started.",
-      );
+      setError(gameErrorMessage(failure, "The game could not be started."));
     }
   }
 
@@ -383,11 +386,7 @@ export function App() {
       setDevelopmentCardId(null);
       presentAction(next, action);
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : "That action is not available.",
-      );
+      setError(gameErrorMessage(failure, "That action is not available."));
     }
   }
 
@@ -413,14 +412,14 @@ export function App() {
   const handTaskOpen = Boolean(viewer && game && (game.trade ||
     (game.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0) ||
     (game.phase.type === "steal" && isActive)));
-  const instructionTitle = rollBusy ? "Let the island provide." : game && awaitingViewer
-    ? phaseTitle(game)
-    : "The island is in motion.";
+  const instructionTitle = rollBusy ? translateText("Let the island provide.") : game && awaitingViewer
+    ? phaseTitle(game, language)
+    : translateText("The island is in motion.");
   const instructionDescription = rollBusy
-    ? "Follow the dice, the matching number tokens, and the cards arriving in your hand."
+    ? translateText("Follow the dice, the matching number tokens, and the cards arriving in your hand.")
     : game && awaitingViewer
-    ? phaseDescription(game)
-    : `${controllingPlayer?.name} is playing. You can inspect your hand and the island while you wait.`;
+    ? phaseDescription(game, language)
+    : translateText("{name} is playing. You can inspect your hand and the island while you wait.", { name: controllingPlayer?.name ?? "" });
   const canAfford = (cost: ReturnType<typeof emptyResources>) =>
     Boolean(
       viewer &&
@@ -430,7 +429,7 @@ export function App() {
     );
   const settlementUnavailable = game && viewer &&
     game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement").length >= 5
-      ? "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece."
+      ? translateText("All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.")
       : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
@@ -485,32 +484,35 @@ export function App() {
   return (
     <BoardThemeContext value={boardTheme}>
     <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId ? "game-shell" : "min-h-dvh"}>
-      <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 border-b border-line px-5 py-5 sm:px-9 lg:px-12">
-        <Logo />
+      <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
+        <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
         <div className="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted sm:flex">
           <span className="h-1.5 w-1.5 rounded-full bg-forest" />
-          {game ? "A little friendly competition" : "Made for gathering around"}
+          {translateText(game ? "A little friendly competition" : "Made for gathering around")}
         </div>
-        {game && !game.winnerId ? (
-          <GameMenu actions={[
-            { label: "Help", onSelect: () => { setDialog("help"); setError(""); } },
-            { label: "Settings", onSelect: () => setDialog("settings") },
-            ...(needsHandoff && viewer ? [{ label: "Pass device", disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
-          ]} exitAction={{ label: "End game", onSelect: () => setDialog("restart") }} />
-        ) : (
-          <button
-            className="text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
-            onClick={() => {
-              setDialog("help");
-              setError("");
-            }}
-          >
-            Help{" "}
-            <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
-              ?
-            </span>
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+          <LanguageSelector />
+          {game && !game.winnerId ? (
+            <GameMenu actions={[
+              { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
+              { label: translateText("Settings"), onSelect: () => setDialog("settings") },
+              ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
+            ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />
+          ) : (
+            <button
+              className="min-h-11 text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
+              onClick={() => {
+                setDialog("help");
+                setError("");
+              }}
+            >
+              {translateText("Help")}{" "}
+              <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
+                ?
+              </span>
+            </button>
+          )}
+        </div>
       </header>
 
       {!game ? (
@@ -518,18 +520,20 @@ export function App() {
           <div className="home-introduction">
             <p className="eyebrow mb-3 flex items-center gap-3">
               <span className="h-px w-8 bg-clay" />
-              Your next gathering starts here
+              {translateText("Your next gathering starts here")}
             </p>
             <h1 className="font-serif leading-[1.05] tracking-[-.045em]">
-              A little island.
+              {translateText("A little island.")}
               <br />
-              Endless <span className="italic text-ink">possibility.</span>
+              {language === "en"
+                ? <>Endless <span className="italic text-ink">possibility.</span></>
+                : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
             </h1>
             <p className="home-description mt-3 max-w-sm text-sm leading-6 text-muted">
-              Settle new shores, strike a good deal, and make room for a little friendly competition.
+              {translateText("Settle new shores, strike a good deal, and make room for a little friendly competition.")}
             </p>
           </div>
-          <nav className="home-navigation" aria-label="Home views">
+          <nav className="home-navigation" aria-label={translateText("Home views")}>
             {(["setup", "island"] as const).map(view => (
               <button
                 key={view}
@@ -537,26 +541,26 @@ export function App() {
                 aria-controls={`home-${view}`}
                 onClick={() => setHomeView(view)}
               >
-                {view === "setup" ? "Setup" : "Island"}
+                {translateText(view === "setup" ? "Setup" : "Island")}
               </button>
             ))}
           </nav>
           <section
             id="home-setup"
             className="home-setup panel"
-            aria-label="Set up your table"
+            aria-label={translateText("Set up your table")}
           >
             <div className="home-setup-content">
               <div>
-                <p className="eyebrow">On this device</p>
+                <p className="eyebrow">{translateText("On this device")}</p>
                 <h2 className="home-setup-heading mt-1 font-serif text-2xl">
-                  Make room at the table.
+                  {translateText("Make room at the table.")}
                 </h2>
               </div>
               <div className="home-table-options">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-muted">Table size</p>
-                  <div className="flex rounded-xl bg-moss p-1" role="group" aria-label="Number of players">
+                  <p className="mb-1.5 text-[11px] font-semibold text-muted">{translateText("Table size")}</p>
+                  <div className="flex rounded-xl bg-moss p-1" role="group" aria-label={translateText("Number of players")}>
                     {[3, 4].map((count) => (
                       <button
                         key={count}
@@ -567,13 +571,13 @@ export function App() {
                         aria-pressed={playerCount === count}
                         className={`min-h-11 flex-1 rounded-lg px-2 text-xs font-semibold ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
                       >
-                        {count} players
+                        {translateText("{count} players", { count })}
                       </button>
                     ))}
                   </div>
                 </div>
                 <label className="min-w-0 text-[11px] font-semibold text-muted">
-                  <span className="mb-1.5 block">Human players</span>
+                  <span className="mb-1.5 block">{translateText("Human players")}</span>
                   <select
                     className="field !min-h-[52px] text-ink"
                     value={humanCount}
@@ -582,7 +586,7 @@ export function App() {
                     {Array.from({ length: playerCount }, (_, index) => index + 1)
                       .map((count) => (
                         <option key={count} value={count}>
-                          {count} {count === 1 ? "human" : "humans"}
+                          {translateText(count === 1 ? "{count} human" : "{count} humans", { count })}
                         </option>
                       ))}
                   </select>
@@ -600,9 +604,9 @@ export function App() {
                     >
                       {index + 1}
                     </span>
-                    <span className="sr-only">Player {index + 1} name</span>
+                    <span className="sr-only">{translateText("Player {number} name", { number: index + 1 })}</span>
                     <input
-                      aria-label={`Player ${index + 1} name`}
+                      aria-label={translateText("Player {number} name", { number: index + 1 })}
                       maxLength={20}
                       value={name}
                       onChange={(event) =>
@@ -625,15 +629,15 @@ export function App() {
                       style={{ background: PLAYER_COLORS[index] }}
                     />
                     <span className="min-w-0">
-                      Computer {index - humanCount + 1}{" "}
-                      <span className="text-[10px] text-muted">/ AI</span>
+                      {defaultComputerName(language, index - humanCount + 1)}{" "}
+                      <span className="text-[10px] text-muted">/ {translateText("AI")}</span>
                     </span>
                   </div>
                 ))}
               </div>
               <button
                 className="home-theme"
-                aria-label="Change theme"
+                aria-label={translateText("Change theme")}
                 aria-haspopup="dialog"
                 onClick={() => setDialog("theme")}
               >
@@ -646,44 +650,44 @@ export function App() {
                   ))}
                 </svg>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-medium text-muted">Board theme</span>
-                  <span className="block text-xs font-semibold">{boardTheme.name}</span>
+                  <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
+                  <span className="block text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
                 </span>
-                <span className="text-xs font-semibold underline underline-offset-4">Change</span>
+                <span className="text-xs font-semibold underline underline-offset-4">{translateText("Change")}</span>
               </button>
             </div>
-            <div className="home-local-start" role="group" aria-label="Start on this device">
-              {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{error}</p>}
+            <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
+              {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{errorText}</p>}
               <button
                 className="button-primary w-full justify-between"
                 onClick={() => startGame(preview)}
               >
-                Let&apos;s settle in <Arrow />
+                {translateText("Let's settle in")} <Arrow />
               </button>
             </div>
           </section>
-          <section className="home-multiplayer" aria-label="Cross-device play">
-            <h2 className="eyebrow mb-2">Separate multiplayer setup</h2>
+          <section className="home-multiplayer" aria-label={translateText("Cross-device play")}>
+            <h2 className="eyebrow mb-2">{translateText("Separate multiplayer setup")}</h2>
             <a className="button-primary w-full justify-between" href="/?multiplayer=1">
-              Play across devices <Arrow />
+              {translateText("Play across devices")} <Arrow />
             </a>
           </section>
           <section
             id="home-island"
             className="home-island"
-            aria-label="Island preview"
+            aria-label={translateText("Island preview")}
           >
             <div className="flex shrink-0 items-center justify-between gap-3">
               <div>
-                <p className="eyebrow">A place to begin</p>
-                <h2 className="mt-1 font-serif text-2xl">Your island awaits.</h2>
+                <p className="eyebrow">{translateText("A place to begin")}</p>
+                <h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2>
               </div>
               <button
                 className="button-secondary !px-3 !text-xs"
                 onClick={() => setPreview(createBoard())}
-                aria-label="Shuffle island preview"
+                aria-label={translateText("Shuffle island preview")}
               >
-                <span aria-hidden="true">&#8635;</span> Shuffle
+                <span aria-hidden="true">&#8635;</span> {translateText("Shuffle")}
               </button>
             </div>
             <div className="min-h-0 flex-1">
@@ -701,20 +705,19 @@ export function App() {
               />
             </div>
             <div className="flex shrink-0 flex-wrap justify-between gap-2 text-[10px] text-muted">
-              <span>19 hexes. A new story every time.</span>
-              <span>3-4 settlers / 60-120 minutes</span>
+              <span>{translateText("19 hexes. A new story every time.")}</span>
+              <span>{translateText("3-4 settlers / 60-120 minutes")}</span>
             </div>
           </section>
         </main>
       ) : game.winnerId ? (
         <main className="mx-auto max-w-5xl px-5 py-12 text-center">
-          <p className="eyebrow">The island has a new legend</p>
+          <p className="eyebrow">{translateText("The island has a new legend")}</p>
           <h1 className="mt-4 font-serif text-5xl">
-            {game.players.find((player) => player.id === game.winnerId)?.name}{" "}
-            takes the island.
+            {translateText("{name} takes the island.", { name: game.players.find((player) => player.id === game.winnerId)?.name ?? "" })}
           </h1>
           <p className="mt-4 text-muted">
-            Ten points. Countless good deals. One more game?
+            {translateText("Ten points. Countless good deals. One more game?")}
           </p>
           <div className="my-10 grid gap-4 text-left sm:grid-cols-2">
             {game.players.map((player) => {
@@ -723,8 +726,7 @@ export function App() {
                 <section className="panel p-6" key={player.id}>
                   <div className="flex justify-between">
                     <h2 className="font-serif text-2xl">
-                      {player.name}
-                      {player.id === game.winnerId ? " / Winner" : ""}
+                      {player.id === game.winnerId ? translateText("{name} / Winner", { name: player.name }) : player.name}
                     </h2>
                     <strong className="font-serif text-3xl">
                       {score.total}
@@ -732,11 +734,11 @@ export function App() {
                   </div>
                   <dl className="mt-5 space-y-2 text-sm text-muted">
                     {[
-                      ["Settlements", score.settlements],
-                      ["Cities", score.cities],
-                      ["Longest Road", score.longestRoad],
-                      ["Largest Army", score.largestArmy],
-                      ["Revealed victory-point cards", score.hidden],
+                      [translateText("Settlements"), score.settlements],
+                      [translateText("Cities"), score.cities],
+                      [translateText("Longest Road"), score.longestRoad],
+                      [translateText("Largest Army"), score.largestArmy],
+                      [translateText("Revealed victory-point cards"), score.hidden],
                     ].map(([label, points]) => (
                       <div className="flex justify-between" key={label}>
                         <dt>{label}</dt>
@@ -758,10 +760,10 @@ export function App() {
                 setViewerId(null);
               }}
             >
-              Back to the table
+              {translateText("Back to the table")}
             </button>
             <button className="button-primary" onClick={() => startGame()}>
-              Play a rematch <Arrow />
+              {translateText("Play a rematch")} <Arrow />
             </button>
           </div>
         </main>
@@ -787,13 +789,12 @@ export function App() {
             >
               {handoffPlayer.name.charAt(0).toUpperCase()}
             </span>
-            <p className="eyebrow mt-7">A moment between friends</p>
+            <p className="eyebrow mt-7">{translateText("A moment between friends")}</p>
             <h1 className="mt-3 font-serif text-4xl">
-              Pass the device to {handoffPlayer.name}.
+              {translateText("Pass the device to {name}.", { name: handoffPlayer.name })}
             </h1>
             <p className="mx-auto mt-4 max-w-xs text-sm leading-7 text-muted">
-              Everyone else, eyes on the island. Your private hand will appear
-              when you&apos;re ready.
+              {translateText("Everyone else, eyes on the island. Your private hand will appear when you're ready.")}
             </p>
             <button
               className="button-primary mt-7"
@@ -812,10 +813,10 @@ export function App() {
                 );
               }}
             >
-              I&apos;m {handoffPlayer.name}. Reveal my hand <Arrow />
+              {translateText("I'm {name}. Reveal my hand", { name: handoffPlayer.name })} <Arrow />
             </button>
             <p className="mt-4 text-[10px] text-muted">
-              Local pass-and-play / private hands rely on taking turns
+              {translateText("Local pass-and-play / private hands rely on taking turns")}
             </p>
           </section>
         </main>
@@ -826,7 +827,7 @@ export function App() {
           </div>
           <nav
             className="table-navigation flex rounded-xl border border-line p-1 lg:hidden"
-            aria-label="Game views"
+            aria-label={translateText("Game views")}
           >
             {(["hand", "board", "players"] as const).map((view) => (
               <button
@@ -835,7 +836,7 @@ export function App() {
                 className={`min-h-11 flex-1 rounded-lg text-sm capitalize ${mobileView === view ? "bg-forest text-ink" : "text-muted"}`}
                 onClick={() => setMobileView(view)}
               >
-                {view}
+                {translateText(view)}
               </button>
             ))}
           </nav>
@@ -852,18 +853,18 @@ export function App() {
           <div className="table-play-area">
             <section
               className={`table-board min-w-0 ${mobileView !== "board" ? "hidden lg:flex" : "flex"}`}
-              aria-label="Game board"
+              aria-label={translateText("Game board")}
             >
               <div className="board-instruction flex items-start gap-2 lg:hidden">
                 <div className="min-w-0 flex-1">
                   <h1 className="font-serif text-lg">{instructionTitle}</h1>
-                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="text-xs leading-4 text-muted">
+                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? translateText("Computer activity") : undefined} className="text-xs leading-4 text-muted">
                     {instructionDescription}
                   </p>
                 </div>
                 {canCancelKnight && (
                   <button className="button-secondary shrink-0 px-3 text-xs" onClick={() => perform({ type: "cancel-knight" })}>
-                    Cancel Knight
+                    {translateText("Cancel Knight")}
                   </button>
                 )}
               </div>
@@ -884,12 +885,12 @@ export function App() {
                   selectedId={selected?.id}
                   confirmation={selectedAction && selected ? {
                     title: selected.kind === "tile"
-                      ? "Move the robber here?"
+                      ? translateText("Move the robber here?")
                       : selected.kind === "edge"
-                        ? "Build a road here?"
+                        ? translateText("Build a road here?")
                         : buildMode === "city"
-                          ? "Upgrade to a city?"
-                          : "Settle here?",
+                          ? translateText("Upgrade to a city?")
+                          : translateText("Settle here?"),
                     onConfirm: () => perform(selectedAction),
                     onCancel: () => setSelected(null),
                   } : undefined}
@@ -903,7 +904,7 @@ export function App() {
                     role="alert"
                     className="board-error text-sm text-clay lg:hidden"
                   >
-                    {error}
+                    {errorText}
                   </p>
                 )}
               </div>
@@ -911,14 +912,14 @@ export function App() {
 
             <aside
               className={`table-hand min-w-0 ${mobileView !== "hand" ? "hidden lg:flex" : "flex"}`}
-              aria-label="Your hand and actions"
+              aria-label={translateText("Your hand and actions")}
             >
-              <div className="hand-content" role="region" aria-label="Your cards">
-              <section inert={handTaskOpen} className="hand-resources" aria-label="Private resources">
+              <div className="hand-content" role="region" aria-label={translateText("Your cards")}>
+              <section inert={handTaskOpen} className="hand-resources" aria-label={translateText("Private resources")}>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <h2 className="eyebrow min-w-0 truncate">{viewer.name}&apos;s hand</h2>
+                  <h2 className="eyebrow min-w-0 truncate">{translateText("{name}'s hand", { name: viewer.name })}</h2>
                   <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums">
-                    {resourceTotal(viewer.resources)} cards
+                    {translateText("{count} cards", { count: resourceTotal(viewer.resources) })}
                   </strong>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
@@ -926,7 +927,7 @@ export function App() {
                     <div
                       className="relative"
                       key={resource}
-                      title={`${viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`}
+                      title={translateText("{count} {resource}", { count: viewer.resources[resource], resource: resourceName(language, resource) })}
                     >
                       <div
                         key={(receivedResources?.[resource] ?? 0) > 0 ? resourceReceipt!.id : "idle"}
@@ -944,7 +945,7 @@ export function App() {
                             <ResourceCard resource={resource} compact className="h-full w-full" />
                           </span>
                           <span
-                            aria-label={`Received ${receivedResources![resource]} ${RESOURCE_NAMES[resource]}`}
+                            aria-label={translateText("Received {count} {resource}", { count: receivedResources![resource], resource: resourceName(language, resource) })}
                             className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-paper bg-forest px-2 py-0.5 text-xs font-bold text-ink shadow-sm"
                           >
                             +{receivedResources![resource]}
@@ -953,18 +954,15 @@ export function App() {
                         )}
                       </div>
                       <span className="sr-only">
-                        {viewer.resources[resource]}{" "}
-                        {RESOURCE_NAMES[resource]}
+                        {translateText("{count} {resource}", { count: viewer.resources[resource], resource: resourceName(language, resource) })}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 flex items-center justify-between rounded-lg bg-moss/80 px-3 py-1.5">
-                  <span className="text-[11px]">Your victory points</span>
+                  <span className="text-[11px]">{translateText("Your victory points")}</span>
                   <span className="text-xs font-semibold">
-                    {getScore(game, viewer.id).public} public +{" "}
-                    {getScore(game, viewer.id).hidden} hidden ={" "}
-                    {getScore(game, viewer.id).total}
+                    {translateText("{public} public + {hidden} hidden = {total}", getScore(game, viewer.id))}
                   </span>
                 </div>
               </section>
@@ -986,7 +984,7 @@ export function App() {
               {game.phase.type === "steal" && isActive && (
                 <section className="hand-task panel space-y-2 p-4">
                   <h2 className="eyebrow mb-3">
-                    Choose a player to steal from
+                    {translateText("Choose a player to steal from")}
                   </h2>
                   <TheftChoices
                     players={game.phase.victimIds.map(playerId => {
@@ -999,8 +997,9 @@ export function App() {
                         action: { type: "steal", playerId },
                         title: "Confirm theft",
                         description: resourceTotal(victim.resources) > 0
-                          ? `Steal one random resource from ${victim.name}.`
-                          : `${victim.name} has no resources. Finish without taking a card.`,
+                          ? "Steal one random resource from {name}."
+                          : "{name} has no resources. Finish without taking a card.",
+                        parameters: { name: victim.name },
                       });
                     }}
                   />
@@ -1013,12 +1012,12 @@ export function App() {
                     className="button-secondary mt-4 w-full"
                     onClick={() => perform({ type: "skip-roads" })}
                   >
-                    Finish road building
+                    {translateText("Finish road building")}
                   </button>
                 )}
 
-              <section inert={handTaskOpen} className="hand-building" aria-label="Build a little bigger">
-                <h2 className="eyebrow mb-2">Build a little bigger</h2>
+              <section inert={handTaskOpen} className="hand-building" aria-label={translateText("Build a little bigger")}>
+                <h2 className="eyebrow mb-2">{translateText("Build a little bigger")}</h2>
                 <div className="build-options flex flex-col gap-2">
                   {(["road", "settlement", "city"] as const).map((piece) => {
                     const locations =
@@ -1029,12 +1028,12 @@ export function App() {
                           : legalSettlementVertices(game, viewer.id);
                     const explanation = piece === "settlement" ? settlementUnavailable : null;
                     const unavailable = explanation ?? (!normalActions
-                      ? "Available after rolling on your turn."
+                      ? translateText("Available after rolling on your turn.")
                       : !canAfford(COSTS[piece])
-                        ? "You need more resources."
+                        ? translateText("You need more resources.")
                         : !locations.length
-                          ? "No legal position or no pieces remaining."
-                          : "Select a location on the board.");
+                          ? translateText("No legal position or no pieces remaining.")
+                          : translateText("Select a location on the board."));
                     return (
                       <Fragment key={piece}>
                         <BuildButton
@@ -1083,8 +1082,7 @@ export function App() {
                   />
                 </div>
                 <p className="sr-only">
-                  Building needs resources, an available piece, and a legal
-                  connection after your roll.
+                  {translateText("Building needs resources, an available piece, and a legal connection after your roll.")}
                 </p>
                 <button
                   className="button-secondary mt-2 w-full px-2"
@@ -1094,7 +1092,7 @@ export function App() {
                     setError("");
                   }}
                 >
-                  Make a trade
+                  {translateText("Make a trade")}
                 </button>
               </section>
               <DevelopmentHand
@@ -1110,9 +1108,9 @@ export function App() {
               />
 
               {game.trade && (
-                <section className="hand-task panel p-4" aria-label="Open trade">
+                <section className="hand-task panel p-4" aria-label={translateText("Open trade")}>
                   <ResourceInventory resources={viewer.resources} />
-                  <h2 className="font-serif text-xl">{game.trade.give ? "Trade offer" : "Trade request"}</h2>
+                  <h2 className="font-serif text-xl">{translateText(game.trade.give ? "Trade offer" : "Trade request")}</h2>
                   <OpenTrade
                     trade={game.trade}
                     viewer={viewer}
@@ -1121,7 +1119,8 @@ export function App() {
                     onChangeResources={setChosenResources}
                     onComplete={(playerId, price) => setConfirmation({
                       action: { type: "complete-trade", playerId },
-                      title: `Trade with ${game.players.find(player => player.id === playerId)!.name}`,
+                      title: "Trade with {name}",
+                      parameters: { name: game.players.find(player => player.id === playerId)!.name },
                       exchange: { give: price, receive: game.trade!.receive },
                     })}
                     onEdit={() => {
@@ -1135,7 +1134,7 @@ export function App() {
                   />
                   {needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
                     <button className="button-secondary mt-4 w-full" onClick={() => passTo(controllingPlayer.id)}>
-                      Return to {controllingPlayer.name}
+                      {translateText("Return to {name}", { name: controllingPlayer.name })}
                     </button>
                   )}
                 </section>
@@ -1145,7 +1144,7 @@ export function App() {
                   className="button-secondary mt-4 w-full"
                   onClick={() => passTo(controllingPlayer.id)}
                 >
-                  Return to {controllingPlayer.name}
+                  {translateText("Return to {name}", { name: controllingPlayer.name })}
                 </button>
               )}
               {error && !dialog && !confirmation && (
@@ -1153,19 +1152,19 @@ export function App() {
                   role="alert"
                   className="mt-4 rounded-xl border border-clay/30 bg-clay/5 p-3 text-sm text-clay"
                 >
-                  {error}
+                  {errorText}
                 </p>
               )}
               </div>
-              <div className="hand-dice" role="region" aria-label="Turn controls">
+              <div className="hand-dice" role="region" aria-label={translateText("Turn controls")}>
                 <div ref={setTheftNoticeTarget} className="theft-notice-anchor" />
                 <div className="turn-header">
                   <h2 className="turn-owner">
                     <span className="truncate" title={activePlayer?.name}>{activePlayer?.name}</span>
-                    <span className="shrink-0 text-xs font-medium text-muted"> - {isActive ? "Your turn" : "Their turn"}</span>
+                    <span className="shrink-0 text-xs font-medium text-muted"> - {translateText(isActive ? "Your turn" : "Their turn")}</span>
                   </h2>
                   <span className="turn-number">
-                    {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
+                    {game.phase.type.startsWith("setup") ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
                   </span>
                 </div>
                 <div className="hidden lg:block">
@@ -1173,7 +1172,11 @@ export function App() {
                 </div>
                 <TurnInstructions
                   title={instructionTitle}
-                  description={computerPlayer && !rollBusy ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : instructionDescription}
+                  description={computerPlayer && !rollBusy ? translateText(game.trade
+                    ? "{name} is considering the trade."
+                    : game.phase.type === "discard"
+                      ? "{name} is discarding resources."
+                      : "{name} is playing automatically.", { name: computerPlayer.name }) : instructionDescription}
                   computerActivity={Boolean(computerPlayer)}
                   onCancelKnight={canCancelKnight ? () => perform({ type: "cancel-knight" }) : undefined}
                 />
@@ -1183,20 +1186,20 @@ export function App() {
                     onClick={() => perform({ type: "roll" })}
                     disabled={game.phase.type !== "roll" || !isActive || rollBusy || handTaskOpen}
                   >
-                    Roll the dice
+                    {translateText("Roll the dice")}
                   </button>
                   <button
                     className="button-secondary h-11 min-w-0 px-2 py-0 text-xs leading-4"
                     onClick={() => perform({ type: "end-turn" })}
                     disabled={!normalActions || handTaskOpen}
                   >
-                    {needsHandoff ? "End turn & pass device" : "End turn"}
+                    {translateText(needsHandoff ? "End turn & pass device" : "End turn")}
                   </button>
                 </div>
               </div>
             </aside>
             <section
-              aria-label="Players and awards"
+              aria-label={translateText("Players and awards")}
               className={`table-players space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
             >
               {playerCards(true)}
@@ -1205,9 +1208,9 @@ export function App() {
         </main>
       ) : (
         <main className="computer-table">
-          <h1 className="font-serif text-3xl">The island is in motion.</h1>
-          <p role="status" aria-label="Computer activity" className="my-5 text-sm text-muted">
-            {computerPlayer?.name} is playing automatically. The next human hand will stay hidden until revealed.
+          <h1 className="font-serif text-3xl">{translateText("The island is in motion.")}</h1>
+          <p role="status" aria-label={translateText("Computer activity")} className="my-5 text-sm text-muted">
+            {translateText("{name} is playing automatically. The next human hand will stay hidden until revealed.", { name: computerPlayer?.name ?? "" })}
           </p>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{playerCards()}</div>
           <div className="table-feedback">
@@ -1215,21 +1218,20 @@ export function App() {
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
           <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
-          {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
+          {error && <p role="alert" className="mt-4 text-sm text-clay">{errorText}</p>}
         </main>
       )}
 
       <footer className={`${game?.winnerId ? "flex" : "hidden"} mx-auto max-w-[1440px] flex-wrap justify-between gap-3 px-5 py-6 text-[9px] uppercase tracking-[.14em] text-muted sm:px-9 lg:px-12`}>
-        <span>A tabletop state of mind.</span>
-        <span>Catania / Solo &amp; pass-and-play / Wi-Fi play coming later</span>
+        <span>{translateText("A tabletop state of mind.")}</span>
+        <span>{translateText("Catania / Solo & pass-and-play / Wi-Fi play coming later")}</span>
       </footer>
 
       {dialog === "theme" && (
-        <Dialog title="Choose your theme" onClose={() => setDialog(null)} wide>
+        <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide>
           <ThemeSelector value={boardThemeId} onChange={setBoardThemeId} />
           <p className="mt-5 text-xs leading-5 text-muted">
-            Changes apply immediately to the board and resource artwork. Resource names and rules stay the same.
-            Your choice is saved in this browser when storage is available; games are not saved.
+            {translateText("Changes apply immediately to the board and resource artwork. Resource names and rules stay the same. Your choice is saved in this browser when storage is available; games are not saved.")}
           </p>
         </Dialog>
       )}
@@ -1238,10 +1240,9 @@ export function App() {
       {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
       {game && !game.winnerId && <TheftNotice thefts={game.thefts} playerId={viewer?.id ?? null} players={game.players} target={theftNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
-        <Dialog title="Pass the device" onClose={() => setDialog(null)}>
+        <Dialog title={translateText("Pass the device")} onClose={() => setDialog(null)}>
           <p className="mb-5 text-sm leading-6 text-muted">
-            Choose whose hand to open. The next screen hides all private cards
-            until that player is ready.
+            {translateText("Choose whose hand to open. The next screen hides all private cards until that player is ready.")}
           </p>
           <div className="space-y-3">
             {humanPlayers.map((player) => (
@@ -1264,17 +1265,16 @@ export function App() {
         </Dialog>
       )}
       {dialog === "restart" && (
-        <Dialog title="Leave this island?" onClose={() => setDialog(null)}>
+        <Dialog title={translateText("Leave this island?")} onClose={() => setDialog(null)}>
           <p className="text-sm leading-7 text-muted">
-            This ends the current game for everyone. Hands, settlements, and
-            progress are not saved.
+            {translateText("This ends the current game for everyone. Hands, settlements, and progress are not saved.")}
           </p>
           <div className="mt-6 flex justify-end gap-3">
             <button
               className="button-secondary"
               onClick={() => setDialog(null)}
             >
-              Keep playing
+              {translateText("Keep playing")}
             </button>
             <button
               className="button-primary"
@@ -1288,18 +1288,18 @@ export function App() {
                 setError("");
               }}
             >
-              End game
+              {translateText("End game")}
             </button>
           </div>
         </Dialog>
       )}
       {confirmation && (
         <ActionConfirmation
-          title={confirmation.title}
-          description={confirmation.description}
+          title={translateText(confirmation.title, confirmation.parameters)}
+          description={confirmation.description && translateText(confirmation.description, confirmation.parameters)}
           exchange={confirmation.exchange}
           resources={viewer && confirmation.action.type !== "steal" ? viewer.resources : undefined}
-          error={error}
+          error={errorText}
           onClose={() => {
             setConfirmation(null);
             setError("");
@@ -1315,7 +1315,7 @@ export function App() {
           initialMode={tradeMode}
           onModeChange={setTradeMode}
           disabled={rollBusy}
-          error={error}
+          error={errorText}
           onClose={() => {
             setDialog(null);
             setError("");
@@ -1333,7 +1333,7 @@ export function App() {
           active={isActive}
           disabled={rollBusy}
           initialCardId={developmentCardId}
-          error={error}
+          error={errorText}
           onClose={() => {
             setDialog(null);
             setError("");

@@ -6,6 +6,9 @@ import {
   legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
 } from "../game/engine";
 import type { GameAction, GameState } from "../game/types";
+import { GameError, gameErrorMessage } from "../game/messages";
+import type { GameMessage } from "../game/messages";
+import { defaultComputerName, type Language } from "../i18n";
 import { parseAction, validName } from "./protocol";
 import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
@@ -13,8 +16,8 @@ import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
 const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-city", "move-robber"]);
 
-function requireRoom(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
+function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
+  if (!condition) throw new GameError(message);
 }
 
 export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
@@ -81,13 +84,13 @@ export class HostRoom {
     return seat;
   }
 
-  addComputer(): void {
+  addComputer(language: Language = "en"): void {
     requireRoom(!this.game, "Computers can only be added in the lobby.");
     requireRoom(this.seats.length < 4, "The room already has four players.");
     const names = [...this.seats.map(seat => seat.player.name), ...this.waiting.values()];
     let number = 1;
-    while (names.some(name => name.toLowerCase() === `computer ${number}`)) number++;
-    this.addSeat(`Computer ${number}`, "computer");
+    while (names.some(name => name.toLowerCase() === defaultComputerName(language, number).toLowerCase())) number++;
+    this.addSeat(defaultComputerName(language, number), "computer");
   }
 
   removePlayer(playerId: string): string | null {
@@ -223,9 +226,9 @@ export class HostRoom {
   }
 
   command(connectionId: string, command: Command): CommandResult {
-    const result: CommandResult = { type: "result", requestId: command.requestId, error: "" };
+    const result: CommandResult = { type: "result", requestId: command.requestId, error: null };
     const seat = this.seats.find(seat => seat.connectionId === connectionId);
-    if (!seat) return { ...result, error: "This connection is not bound to an admitted player." };
+    if (!seat) return { ...result, error: { key: "This connection is not bound to an admitted player." } };
     const previous = seat.requests.get(command.requestId);
     if (previous) return previous;
     try {
@@ -240,7 +243,7 @@ export class HostRoom {
         this.version++;
       }
     } catch (error) {
-      result.error = error instanceof Error ? error.message : "The action could not be applied.";
+      result.error = gameErrorMessage(error, "The action could not be applied.");
     }
     seat.requests.set(command.requestId, result);
     if (seat.requests.size > 128) seat.requests.delete(seat.requests.keys().next().value!);

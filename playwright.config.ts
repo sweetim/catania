@@ -5,7 +5,7 @@ const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: ["catania.spec.ts", "multiplayer.spec.ts"],
+  testMatch: ["catania.spec.ts", "multiplayer.spec.ts", "localization.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -16,6 +16,7 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     browserName: "chromium",
+    locale: "en-US",
     actionTimeout: 10_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

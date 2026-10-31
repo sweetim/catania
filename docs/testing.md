@@ -22,8 +22,9 @@ bunx playwright install chromium
 Rule tests use injected randomness and cover legal and illegal actions, computer
 decisions, and complete AI games. `bun run test` runs the tests in `tests/game/`.
 
-The browser suite selects `tests/browser/catania.spec.ts` and
-`tests/browser/multiplayer.spec.ts` through [`playwright.config.ts`](../playwright.config.ts).
+The browser suite selects `tests/browser/catania.spec.ts`,
+`tests/browser/multiplayer.spec.ts`, and `tests/browser/localization.spec.ts`
+through [`playwright.config.ts`](../playwright.config.ts).
 Tests exercise the interface in desktop and mobile Chromium viewports and write
 diagnostic screenshots to `test-results/`, including each theme's preview, actual
 game board, and resource cards, plus the theme dialog.
@@ -53,6 +54,15 @@ Shared-board layout checks cover the single-device player seats and map, viewpor
 containment, horizontally scrolling seats, and confirmed placements at desktop and
 320-pixel widths. They also verify that bank/build/turn panels, tabs, and private
 hands or actions do not appear on the shared screen.
+
+Language tests cover Japanese browser locales, regional language matching,
+unsupported-locale fallback, saved overrides across both modes, invalid and blocked
+storage, translated document metadata, help/themes/settings, private handoffs,
+keyboard placement, and narrow-screen controls. Mixed-language multiplayer tests
+verify independent host/phone choices, translated activity, preserved names and
+private hands, and switching without network commands or state changes. Unit tests
+check catalog parameter parity and validation/formatting of structured game errors
+and logs. Existing English browser tests explicitly use `en-US`.
 
 ## Browser Test Servers
 
@@ -93,7 +103,12 @@ and discovery override are not part of the deployment.
    closing its dialogs returns focus to **Game**.
 7. Compare all six themes on desktop and phone boards, including a 320-pixel-wide
    viewport. Use arrow keys in the theme radios and check that Close and Escape
-   restore focus to **Theme** without losing a selected location, zoom, or pan.
+    restore focus to **Theme** without losing a selected location, zoom, or pan.
+8. Start with a Japanese browser locale, then switch **English / 日本語** in the
+   header. Check help, resource labels, and placement instructions; confirm a manual
+   choice survives reloads. In multiplayer, use different languages on the host
+   and a phone and compare their activity messages. Visually inspect Japanese text
+   on a system with Japanese fonts; no remote font download is required by the app.
 
 ## Physical-Device Multiplayer
 

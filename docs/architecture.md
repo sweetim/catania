@@ -12,6 +12,9 @@ CSS v4 foundation without a database or runtime external assets.
 | File | Responsibility |
 | --- | --- |
 | `src/game/types.ts` | Board, inventory, explicit phase, and action types. |
+| `src/game/messages.ts` | Structured activity/error templates, per-device formatting, and network message validation. |
+| `src/i18n.ts` / `src/localization.tsx` | Browser-locale detection, saved language override, typed translation lookup, document language, and shared selector. |
+| `src/translations/` | English UI template keys paired with Japanese translations. |
 | `src/game/board.ts` | Shared hex graph, terrain, nonadjacent red number tokens, nine ports, and injectable randomness. |
 | `src/game/engine.ts` | Pure action validation and atomic transitions, placement previews, trading, awards, and victory. |
 | `src/game/computer.ts` | Pure computer action selection using its own hand and public information, plus required-action controller selection. |
@@ -62,6 +65,16 @@ Board themes are an application preference outside `GameState`, persisted under
 back to Illustrated Island. Changing a theme updates the board and shared resource
 artwork without regenerating the island or remounting its zoom/pan controls.
 Resource identifiers, names, player colors, and game rules do not change.
+
+The English/Japanese language preference is also outside `GameState`. On first
+visit, the first supported `navigator.languages` entry selects the language,
+falling back to English. Only manual choices are saved as `catania.language`.
+The shared provider updates both application modes and document metadata without
+remounting gameplay or network sessions. Catalogs translate whole parameterized
+messages; player names remain opaque values. Activity logs and remote errors carry
+known template keys and bounded parameters, not pretranslated text, so each device
+renders the same event in its own language. Protocol validation rejects unknown
+keys, unexpected parameters, and invalid parameter types or bounds.
 
 The Bun development service serves the application and the original template
 API; it does not create rooms or carry gameplay. The browser-only multiplayer

@@ -1,6 +1,9 @@
 import type { RollOutcome } from "../rollPresentation";
 import { RESOURCES } from "../game/engine";
-import { ResourceCard, RESOURCE_NAMES } from "./GameUi";
+import { resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
+import { ResourceCard } from "./GameUi";
 
 export type RollStage = "rolling" | "production" | "received" | "complete";
 
@@ -12,10 +15,11 @@ export function Dice({ dice, rolling = false }: {
   dice?: readonly [number, number] | null;
   rolling?: boolean;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <div
       role="img"
-      aria-label={!dice ? "Dice at rest" : rolling ? "Dice rolling" : `Dice: ${dice[0]} and ${dice[1]}`}
+      aria-label={!dice ? translateText("Dice at rest") : rolling ? translateText("Dice rolling") : translateText("Dice: {first} and {second}", { first: dice[0], second: dice[1] })}
       className={`roll-summary-dice flex shrink-0 gap-1.5 ${rolling ? "dice-rolling" : ""} ${dice ? "" : "opacity-60"}`}
     >
       {(dice ?? [1, 1]).map((value, index) => (
@@ -36,27 +40,29 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
   stage?: RollStage;
   viewerId?: string;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   const rolling = Boolean(outcome) && stage === "rolling";
   const received = Boolean(outcome) && (stage === "received" || stage === "complete");
   const dice = outcome?.dice ?? [1, 1];
   const total = dice[0]! + dice[1]!;
   const title = !outcome
-    ? "Waiting for the next roll."
+    ? translateText("Waiting for the next roll.")
     : rolling
-      ? `${outcome.playerName} is rolling...`
-      : `${outcome.playerName} rolled ${dice[0]} + ${dice[1]} = ${total}.`;
+      ? translateText("{player} is rolling...", { player: outcome.playerName })
+      : translateText("{player} rolled {first} + {second} = {total}.", { player: outcome.playerName, first: dice[0]!, second: dice[1]!, total });
   const result = !outcome
-    ? "The next roll will appear here."
+    ? translateText("The next roll will appear here.")
     : total === 7
-      ? "No resources produced. Resolve any discards, then move the robber."
+      ? translateText("No resources produced. Resolve any discards, then move the robber.")
       : outcome.totalReceived
-        ? `The island supplied ${outcome.totalReceived} resource card${outcome.totalReceived === 1 ? "" : "s"}.`
-        : "No resources produced this roll.";
+        ? translateText(outcome.totalReceived === 1 ? "The island supplied {count} resource card." : "The island supplied {count} resource cards.", { count: outcome.totalReceived })
+        : translateText("No resources produced this roll.");
   const details = [
     result,
-    outcome?.blockedTileIds.length ? "The robber blocked a matching hex." : "",
+    outcome?.blockedTileIds.length ? translateText("The robber blocked a matching hex.") : "",
     outcome?.shortages.length
-      ? `Bank shortage: ${outcome.shortages.map(resource => RESOURCE_NAMES[resource]).join(", ")}. Not all resources could be supplied.`
+      ? translateText("Bank shortage: {resources}. Not all resources could be supplied.", { resources: outcome.shortages.map(resource => resourceName(language, resource)).join(language === "ja" ? "、" : ", ") })
       : "",
   ].filter(Boolean).join(" ");
   const gains = viewerId ? outcome?.gains[viewerId] : undefined;
@@ -65,11 +71,11 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
   return (
     <>
       {/* Keep announcements mounted when reduced motion skips timed stages. */}
-      <p role="status" aria-label="Roll announcement" aria-atomic="true" className="sr-only">
+      <p role="status" aria-label={translateText("Roll announcement")} aria-atomic="true" className="sr-only">
         {received ? `${title} ${details}` : ""}
       </p>
       <section
-        aria-label={outcome ? "Roll result" : "Dice tray"}
+        aria-label={translateText(outcome ? "Roll result" : "Dice tray")}
         data-stage={outcome ? stage : "idle"}
         className="roll-summary"
       >
@@ -77,10 +83,10 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
         <div className="roll-summary-content">
           {received && gains && total !== 7 && gainedResources.length > 0 ? (
             <div className="roll-summary-private">
-              <p className="roll-summary-label">You received</p>
-              <ul className="roll-summary-rewards" aria-label="Your roll rewards">
+              <p className="roll-summary-label">{translateText("You received")}</p>
+              <ul className="roll-summary-rewards" aria-label={translateText("Your roll rewards")}>
                 {gainedResources.map(resource => (
-                  <li key={resource} aria-label={`${RESOURCE_NAMES[resource]} +${gains[resource]}`} title={`You received +${gains[resource]} ${RESOURCE_NAMES[resource]}`}>
+                  <li key={resource} aria-label={translateText("{resource} +{count}", { resource: resourceName(language, resource), count: gains[resource] })} title={translateText("You received +{count} {resource}", { count: gains[resource], resource: resourceName(language, resource) })}>
                     <ResourceCard resource={resource} iconClassName="h-4 w-4" className="roll-summary-resource" />
                     <strong aria-hidden="true" className="roll-summary-gain">+{gains[resource]}</strong>
                   </li>
@@ -88,9 +94,9 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
               </ul>
             </div>
           ) : received && gains && total !== 7 ? (
-            <p className="roll-summary-title">You received no resources this roll.</p>
+            <p className="roll-summary-title">{translateText("You received no resources this roll.")}</p>
           ) : !outcome || rolling ? (
-            <p className="roll-summary-title">{rolling ? "Rolling..." : "Waiting for the next roll."}</p>
+            <p className="roll-summary-title">{translateText(rolling ? "Rolling..." : "Waiting for the next roll.")}</p>
           ) : null}
         </div>
       </section>

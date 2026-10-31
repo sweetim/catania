@@ -1,5 +1,7 @@
 import { match } from "ts-pattern";
 import { createBoard, randomInteger, secureRandom, shuffle } from "./board";
+import { GameError } from "./messages";
+import type { GameMessage } from "./messages";
 import type { Board, DevelopmentKind, GameAction, GameState, Player, Resource, Resources } from "./types";
 
 export const RESOURCES: Resource[] = ["wood", "brick", "wool", "grain", "ore"];
@@ -16,8 +18,8 @@ export function resourceTotal(resources: Resources): number {
   return RESOURCES.reduce((total, resource) => total + resources[resource], 0);
 }
 
-function requireRule(condition: unknown, explanation: string): asserts condition {
-  if (!condition) throw new Error(explanation);
+function requireRule(condition: unknown, key: GameMessage["key"], parameters?: GameMessage["parameters"]): asserts condition {
+  if (!condition) throw new GameError(key, parameters);
 }
 
 function validateResources(resources: Resources): void {
@@ -68,7 +70,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")!.id,
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
-    log: [`${players[0]!.name} begins the first settlement placement.`], thefts: [], trade: null, developmentPlayed: false,
+    log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], trade: null, developmentPlayed: false,
   };
 }
 
@@ -183,7 +185,9 @@ function updateAwards(state: GameState): void {
     state.awards[award] = leaders.some(player => player.id === previous) ? previous : leaders.length === 1 ? leaders[0]!.id : null;
     if (state.awards[award] !== previous) {
       const label = award === "longestRoad" ? "Longest Road" : "Largest Army";
-      state.log.push(state.awards[award] ? `${playerFor(state, state.awards[award]!).name} takes ${label}.` : `${label} is unclaimed.`);
+      state.log.push(state.awards[award]
+        ? { key: "{player} takes {award}.", parameters: { player: playerFor(state, state.awards[award]!).name, award: label } }
+        : { key: "{award} is unclaimed.", parameters: { award: label } });
     }
   }
 }
@@ -194,7 +198,7 @@ function checkVictory(state: GameState): void {
     state.winnerId = state.activePlayerId;
     state.phase = { type: "finished" };
     state.trade = null;
-    state.log.push(`${playerFor(state, state.activePlayerId).name} wins with ${getScore(state, state.activePlayerId).total} points.`);
+    state.log.push({ key: "{player} wins with {points} points.", parameters: { player: playerFor(state, state.activePlayerId).name, points: getScore(state, state.activePlayerId).total } });
   }
 }
 
@@ -211,7 +215,7 @@ function produce(state: GameState, number: number): void {
     const recipients = state.players.filter(player => claims[player.id]![resource] > 0);
     const demand = recipients.reduce((total, player) => total + claims[player.id]![resource], 0);
     if (demand > state.bank[resource] && recipients.length > 1) {
-      state.log.push(`The bank cannot supply ${resource}; nobody receives that resource this roll.`);
+      state.log.push({ key: "The bank cannot supply {resource}; nobody receives that resource this roll.", parameters: { resource } });
       continue;
     }
     for (const player of recipients) {
@@ -255,20 +259,20 @@ export function applyAction(
         }
         state.phase = { type: "setup-road", vertexId: vertex.id };
       }
-      state.log.push(`${player.name} builds a settlement.`);
+      state.log.push({ key: "{player} builds a settlement.", parameters: { player: player.name } });
     })
     .with({ type: "place-city" }, action => {
       requireRule(legalCityVertices(state, playerId).includes(action.vertexId), "Upgrade one of your settlements after rolling; you have at most four cities.");
       pay(state, player, COSTS.city);
       state.board.vertices.find(vertex => vertex.id === action.vertexId)!.building = { playerId, kind: "city" };
-      state.log.push(`${player.name} upgrades a settlement to a city.`);
+      state.log.push({ key: "{player} upgrades a settlement to a city.", parameters: { player: player.name } });
     })
     .with({ type: "place-road" }, action => {
       requireRule(legalRoadEdges(state, playerId).includes(action.edgeId),
         "Choose an empty edge connected to your own network without passing an opponent's building; setup roads must touch the new settlement, and you have at most fifteen roads.");
       if (state.phase.type === "actions") pay(state, player, COSTS.road);
       state.board.edges.find(edge => edge.id === action.edgeId)!.playerId = playerId;
-      state.log.push(`${player.name} builds a road.`);
+      state.log.push({ key: "{player} builds a road.", parameters: { player: player.name } });
       if (state.phase.type === "setup-road") {
         state.setupIndex++;
         if (state.setupIndex === state.setupOrder.length) {
@@ -290,7 +294,7 @@ export function applyAction(
       requireRule(state.phase.type === "roll", "You may roll once per turn, after completing any pre-roll card effect.");
       state.dice = [randomInteger(6, random) + 1, randomInteger(6, random) + 1];
       const total = state.dice[0] + state.dice[1];
-      state.log.push(`${player.name} rolls ${state.dice[0]} + ${state.dice[1]} = ${total}.`);
+      state.log.push({ key: "{player} rolls {first} + {second} = {total}.", parameters: { player: player.name, first: state.dice[0], second: state.dice[1], total } });
       if (total === 7) {
         const required = Object.fromEntries(state.players.filter(player => resourceTotal(player.resources) > 7)
           .map(player => [player.id, Math.floor(resourceTotal(player.resources) / 2)]));
@@ -305,11 +309,11 @@ export function applyAction(
       const required = state.phase.required[playerId];
       requireRule(required !== undefined, "You have no remaining discard obligation.");
       validateResources(action.resources);
-      requireRule(resourceTotal(action.resources) === required, `Select exactly ${required} resource cards to discard.`);
+      requireRule(resourceTotal(action.resources) === required, "Select exactly {count} resource cards to discard.", { count: required });
       requireRule(canPay(player.resources, action.resources), "You cannot discard resources you do not own.");
       transfer(player.resources, state.bank, action.resources);
       delete state.phase.required[playerId];
-      state.log.push(`${player.name} discards ${required} resource cards.`);
+      state.log.push({ key: "{player} discards {count} resource cards.", parameters: { player: player.name, count: required } });
       if (Object.keys(state.phase.required).length === 0) state.phase = { type: "robber", returnPhase: "actions" };
     })
     .with({ type: "cancel-knight" }, () => {
@@ -321,7 +325,7 @@ export function applyAction(
       // Recomputing a tie alone would let the cancelled Knight retain Largest Army.
       state.awards.largestArmy = pendingKnight.previousLargestArmy;
       state.phase = { type: returnPhase };
-      state.log.push(`${player.name} cancels Knight.`);
+      state.log.push({ key: "{player} cancels Knight.", parameters: { player: player.name } });
     })
     .with({ type: "move-robber" }, action => {
       requireRule(state.phase.type === "robber", "Move the robber only after a seven or a Knight card.");
@@ -332,7 +336,7 @@ export function applyAction(
       const victimIds = state.players.filter(other => other.id !== playerId && victims.has(other.id))
         .map(other => other.id);
       state.phase = victimIds.length > 0 ? { type: "steal", victimIds, returnPhase: state.phase.returnPhase } : { type: state.phase.returnPhase };
-      state.log.push(`${player.name} moves the robber.`);
+      state.log.push({ key: "{player} moves the robber.", parameters: { player: player.name } });
     })
     .with({ type: "steal" }, action => {
       requireRule(state.phase.type === "steal", "Move the robber before choosing a victim.");
@@ -353,21 +357,21 @@ export function applyAction(
         }
       }
       state.phase = { type: state.phase.returnPhase };
-      state.log.push(total > 0 ? `${player.name} steals one resource card from ${victim.name}.`
-        : `${player.name} cannot steal a resource from ${victim.name}'s empty hand.`);
+      state.log.push({ key: total > 0 ? "{player} steals one resource card from {victim}."
+        : "{player} cannot steal a resource from {victim}'s empty hand.", parameters: { player: player.name, victim: victim.name } });
     })
     .with({ type: "bank-trade" }, action => {
       requireActions();
       requireRule(RESOURCES.includes(action.give) && RESOURCES.includes(action.receive) && action.give !== action.receive,
         "Choose two different resource types for a maritime trade.");
       const ratio = getTradeRatio(state, playerId, action.give);
-      requireRule(player.resources[action.give] >= ratio, `You need ${ratio} ${action.give} for this trade.`);
-      requireRule(state.bank[action.receive] > 0, `The bank has no ${action.receive} available.`);
+      requireRule(player.resources[action.give] >= ratio, "You need {ratio} {resource} for this trade.", { ratio, resource: action.give });
+      requireRule(state.bank[action.receive] > 0, "The bank has no {resource} available.", { resource: action.receive });
       player.resources[action.give] -= ratio;
       state.bank[action.give] += ratio;
       state.bank[action.receive]--;
       player.resources[action.receive]++;
-      state.log.push(`${player.name} trades ${ratio} ${action.give} for one ${action.receive} with the bank.`);
+      state.log.push({ key: "{player} trades {ratio} {give} for one {receive} with the bank.", parameters: { player: player.name, ratio, give: action.give, receive: action.receive } });
     })
     .with({ type: "offer-trade" }, action => {
       requireActions();
@@ -378,14 +382,14 @@ export function applyAction(
         "Do not offer and request the same resource in a trade.");
       requireRule(canPay(player.resources, action.give), "You cannot offer resources you do not own.");
       state.trade = { offeredBy: playerId, give: { ...action.give }, receive: { ...action.receive }, responses: {} };
-      state.log.push(`${player.name} offers a trade.`);
+      state.log.push({ key: "{player} offers a trade.", parameters: { player: player.name } });
     })
     .with({ type: "request-trade" }, action => {
       requireActions();
       validateResources(action.receive);
       requireRule(resourceTotal(action.receive) > 0, "Request at least one resource.");
       state.trade = { offeredBy: playerId, give: null, receive: { ...action.receive }, responses: {} };
-      state.log.push(`${player.name} requests resources and invites prices.`);
+      state.log.push({ key: "{player} requests resources and invites prices.", parameters: { player: player.name } });
     })
     .with({ type: "propose-trade" }, action => {
       requireActions();
@@ -420,7 +424,7 @@ export function applyAction(
         "Both players must still hold the offered resources. Make a new offer.");
       transfer(player.resources, other.resources, price);
       transfer(other.resources, player.resources, state.trade.receive);
-      state.log.push(`${player.name} trades with ${other.name}.`);
+      state.log.push({ key: "{player} trades with {other}.", parameters: { player: player.name, other: other.name } });
       state.trade = null;
     })
     .with({ type: "cancel-trade" }, () => {
@@ -434,7 +438,7 @@ export function applyAction(
       pay(state, player, COSTS.development);
       const kind = state.developmentDeck.pop()!;
       player.developmentCards.push({ id: `development-${25 - state.developmentDeck.length}`, kind, purchasedTurn: state.turnNumber });
-      state.log.push(`${player.name} buys a development card.`);
+      state.log.push({ key: "{player} buys a development card.", parameters: { player: player.name } });
     })
     .with({ type: "play-development" }, action => {
       requireRule(state.phase.type === "roll" || state.phase.type === "actions", "Finish mandatory choices before playing a development card.");
@@ -463,7 +467,7 @@ export function applyAction(
           validateResources(action.resources!);
           const count = Math.min(2, resourceTotal(state.bank));
           requireRule(count > 0, "The bank has no resources available for Year of Plenty.");
-          requireRule(resourceTotal(action.resources!) === count, `Choose exactly ${count} available resource cards for Year of Plenty.`);
+          requireRule(resourceTotal(action.resources!) === count, "Choose exactly {count} available resource cards for Year of Plenty.", { count });
           requireRule(canPay(state.bank, action.resources!), "Choose resources that are available in the bank.");
           transfer(state.bank, player.resources, action.resources!);
         })
@@ -478,13 +482,13 @@ export function applyAction(
         .exhaustive();
       player.developmentCards = player.developmentCards.filter(other => other.id !== card.id);
       state.developmentPlayed = true;
-      state.log.push(`${player.name} plays ${card.kind}.`);
+      state.log.push({ key: "{player} plays {kind}.", parameters: { player: player.name, kind: card.kind } });
     })
     .with({ type: "skip-roads" }, () => {
       requireRule(state.phase.type === "road-building", "There are no free roads to finish placing.");
       requireRule(legalRoadEdges(state, playerId).length === 0, "Place the remaining free roads while legal locations and road pieces are available.");
       state.phase = { type: state.phase.returnPhase };
-      state.log.push(`${player.name} finishes Road Building.`);
+      state.log.push({ key: "{player} finishes Road Building.", parameters: { player: player.name } });
     })
     .with({ type: "end-turn" }, () => {
       requireActions();
@@ -496,7 +500,7 @@ export function applyAction(
       state.developmentPlayed = false;
       state.dice = null;
       state.phase = { type: "roll" };
-      state.log.push(`${playerFor(state, state.activePlayerId).name} begins a turn.`);
+      state.log.push({ key: "{player} begins a turn.", parameters: { player: playerFor(state, state.activePlayerId).name } });
     })
     .exhaustive();
 

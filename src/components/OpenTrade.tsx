@@ -1,6 +1,9 @@
 import { RESOURCES, resourceTotal } from "../game/engine";
 import type { GameAction, Player, Resources, TradeOffer } from "../game/types";
-import { Arrow, CardStack, RESOURCE_NAMES, ResourceCardStepper } from "./GameUi";
+import { resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
+import { Arrow, CardStack, ResourceCardStepper } from "./GameUi";
 
 export function OpenTrade({
   trade,
@@ -27,19 +30,21 @@ export function OpenTrade({
   onPass?: (playerId: string) => void;
   disabled?: boolean;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
   const canAfford = (resources: Resources) => RESOURCES.every(resource => viewer.resources[resource] >= resources[resource]);
 
   return (
     <>
       {viewer.id !== trade.offeredBy && <p className="mt-1 text-xs text-muted">
-        From {players.find(player => player.id === trade.offeredBy)?.name}
+        {translateText("From {player}", { player: players.find(player => player.id === trade.offeredBy)?.name ?? "" })}
       </p>}
       <div className="my-3 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3">
         {trade.give ? <>
-          <CardStack label="You give" resources={viewer.id === trade.offeredBy ? trade.give : trade.receive} />
+          <CardStack label={translateText("You give")} resources={viewer.id === trade.offeredBy ? trade.give : trade.receive} />
           <Arrow className="h-5 w-5 shrink-0 text-forest" />
-          <CardStack label="You receive" resources={viewer.id === trade.offeredBy ? trade.receive : trade.give} />
-        </> : <CardStack label={viewer.id === trade.offeredBy ? "You receive" : "You give"} resources={trade.receive} />}
+          <CardStack label={translateText("You receive")} resources={viewer.id === trade.offeredBy ? trade.receive : trade.give} />
+        </> : <CardStack label={translateText(viewer.id === trade.offeredBy ? "You receive" : "You give")} resources={trade.receive} />}
       </div>
       {viewer.id === trade.offeredBy ? (
         <div className="space-y-2">
@@ -49,13 +54,13 @@ export function OpenTrade({
               : response === false ? "declined" : "not answered";
             const missingCards = response ? RESOURCES
               .filter(resource => response[resource] > viewer.resources[resource])
-              .map(resource => `${response[resource] - viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`)
-              .join(", ") : "";
+              .map(resource => translateText("{count} {resource}", { count: response[resource] - viewer.resources[resource], resource: resourceName(language, resource) }))
+              .join(language === "ja" ? "、" : ", ") : "";
             return (
               <div
                 key={player.id}
                 role="group"
-                aria-label={`${player.name}'s trade response`}
+                aria-label={translateText("{player}'s trade response", { player: player.name })}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-white/40 px-3 py-2"
               >
                 <span className="flex min-w-0 items-center gap-2">
@@ -65,11 +70,11 @@ export function OpenTrade({
                 {status && <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-ink" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
                 >
-                  {status}
+                  {translateText(status)}
                 </span>}
                 {response ? (
                   <div className="flex w-full flex-wrap items-center justify-between gap-3 pt-1">
-                    {!trade.give && <CardStack label="You give" resources={response} />}
+                    {!trade.give && <CardStack label={translateText("You give")} resources={response} />}
                     <div className="ml-auto flex min-w-0 max-w-full flex-col items-end gap-1.5">
                       <button
                         className="button-primary !min-h-11 !px-3 !text-xs"
@@ -77,10 +82,10 @@ export function OpenTrade({
                         aria-describedby={missingCards ? `trade-missing-${player.id}` : undefined}
                         onClick={() => onComplete(player.id, response)}
                       >
-                        Complete trade
+                        {translateText("Complete trade")}
                       </button>
                       {missingCards && <p id={`trade-missing-${player.id}`} className="text-right text-xs text-clay">
-                        Missing {missingCards}
+                        {translateText("Missing {resources}", { resources: missingCards })}
                       </p>}
                     </div>
                   </div>
@@ -90,7 +95,7 @@ export function OpenTrade({
                     disabled={disabled}
                     onClick={() => onPass(player.id)}
                   >
-                    Pass to {player.name}
+                    {translateText("Pass to {player}", { player: player.name })}
                   </button>
                 ) : null}
               </div>
@@ -103,14 +108,14 @@ export function OpenTrade({
               disabled={disabled}
               onClick={onEdit}
             >
-              Change offer
+              {translateText("Change offer")}
             </button>
             <button
               className="min-h-11 text-xs text-clay underline"
               disabled={disabled}
               onClick={onWithdraw}
             >
-              {trade.give ? "Withdraw offer" : "Withdraw request"}
+              {translateText(trade.give ? "Withdraw offer" : "Withdraw request")}
             </button>
           </div>
         </div>
@@ -118,12 +123,12 @@ export function OpenTrade({
         <>
           {!trade.give && (
             <fieldset disabled={disabled} className="mb-4 space-y-3">
-              <ResourceCardStepper label="You want in return" values={chosenResources} onChange={onChangeResources} />
+              <ResourceCardStepper label={translateText("You want in return")} values={chosenResources} onChange={onChangeResources} />
               <p className="text-xs leading-5 text-muted">
-                Choose different cards in return.
+                {translateText("Choose different cards in return.")}
               </p>
               {!canAfford(trade.receive) && (
-                <p className="text-xs text-clay">You do not have all the requested cards to offer this trade.</p>
+                <p className="text-xs text-clay">{translateText("You do not have all the requested cards to offer this trade.")}</p>
               )}
             </fieldset>
           )}
@@ -133,7 +138,7 @@ export function OpenTrade({
               disabled={disabled}
               onClick={() => onRespond({ type: "respond-trade", accept: false })}
             >
-              Decline
+              {translateText("Decline")}
             </button>
             <button
               className="button-primary"
@@ -145,7 +150,7 @@ export function OpenTrade({
                 ? { type: "respond-trade", accept: true }
                 : { type: "propose-trade", price: chosenResources })}
             >
-              {trade.give ? "Accept offer" : "Propose price"}
+              {translateText(trade.give ? "Accept offer" : "Propose price")}
             </button>
           </div>
         </>

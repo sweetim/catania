@@ -7,8 +7,11 @@ import {
   type KeyboardEvent,
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
-import type { Board as BoardState, Player } from "../game/types";
-import { useBoardTheme } from "../themes";
+import type { Board as BoardState, Player, Terrain } from "../game/types";
+import { pieceName, resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
+import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
+import { boardTranslations } from "../translations/board";
 import { TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
@@ -54,6 +57,8 @@ export function Board({
   compact?: boolean;
   fit?: boolean;
 }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(boardTranslations);
   const theme = useBoardTheme();
   const illustrationId = useId().replace(/:/g, "");
   const surfaceReference = useRef<HTMLDivElement>(null);
@@ -237,6 +242,10 @@ export function Board({
     setZoom(Math.min(2.5, Math.max(1, nextZoom)));
   }
 
+  function terrainResourceName(terrain: Terrain) {
+    return terrain === "desert" ? translateText("Desert").toLowerCase() : resourceName(language, terrain).toLowerCase();
+  }
+
   function targetProperties(
     kind: "vertex" | "edge" | "tile",
     id: string,
@@ -295,17 +304,17 @@ export function Board({
           aria-hidden="true"
         >
           <p className="text-[10px] font-bold tracking-[0.24em] text-[#687b6e]" style={theme.id === "illustrated" ? undefined : { color: theme.terrain.ore.ink }}>
-            THE ISLAND
+            {translateText("THE ISLAND")}
           </p>
           <p className="mt-1 font-serif text-xs italic text-[#7c8879]" style={theme.id === "illustrated" ? undefined : { color: theme.terrain.ore.ink }}>
-            A place to begin.
+            {translateText("A place to begin.")}
           </p>
         </div>
       )}
       <div
         ref={viewportReference}
         role="region"
-        aria-label="Island map. Use the zoom controls to enlarge, then scroll or drag to pan."
+        aria-label={translateText("Island map. Use the zoom controls to enlarge, then scroll or drag to pan.")}
         tabIndex={zoom > 1 ? 0 : -1}
         className={`board-viewport w-full overflow-auto overscroll-contain outline-offset-[-3px] focus-visible:outline-2 focus-visible:outline-[#8b6438] ${fit ? "min-h-0 flex-1" : ""} ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
         style={{
@@ -368,14 +377,12 @@ export function Board({
             aria-labelledby={`${illustrationId}-title ${illustrationId}-description`}
             fontFamily="ui-sans-serif, system-ui, sans-serif"
           >
-            <title id={`${illustrationId}-title`}>Catan island</title>
+            <title id={`${illustrationId}-title`}>{translateText("Catan island")}</title>
             <desc id={`${illustrationId}-description`}>
-              {board.tiles.length} terrain hexes and {board.ports.length}{" "}
-              coastal harbors. Numbers show dice rolls; dots show their
-              probability. Pieces carry their player's number.
-              {canSelect
-                ? " Highlighted locations can be selected with Enter or Space."
-                : " Read-only board."}
+              {translateText(canSelect
+                ? "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Highlighted locations can be selected with Enter or Space."
+                : "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Read-only board.",
+              { tiles: board.tiles.length, ports: board.ports.length })}
             </desc>
             <defs>
               <radialGradient
@@ -651,7 +658,7 @@ export function Board({
                   fontSize="9"
                   letterSpacing="2"
                 >
-                  N
+                  {translateText("N")}
                 </text>
               </g>
               <g
@@ -689,6 +696,16 @@ export function Board({
               const matchesRoll = tile.number !== null && tile.number === rolledNumber;
               const blocked = matchesRoll && robberTileId === tile.id;
               const raised = raisedTileIds.has(tile.id);
+              let description = translateText(tile.number === null
+                ? "{terrain}, {resource}, no production"
+                : "{terrain}, {resource}, roll {number}, {probability} chances out of 36", {
+                terrain: getTerrainName(theme, tile.terrain, language),
+                resource: terrainResourceName(tile.terrain),
+                number: tile.number ?? "",
+                probability,
+              });
+              if (robberTileId === tile.id) description = translateText("{description}, blocked by the robber", { description });
+              if (producingTileIds.includes(tile.id)) description = translateText("{description}, produced resources this roll", { description });
               return (
                 <g
                   key={tile.id}
@@ -696,7 +713,7 @@ export function Board({
                   transform={raised ? `translate(0 ${-tileElevation})` : undefined}
                   pointerEvents="none"
                   role="img"
-                  aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}${producingTileIds.includes(tile.id) ? ", produced resources this roll" : ""}`}
+                  aria-label={description}
                 >
                   <polygon
                     points={points}
@@ -739,7 +756,7 @@ export function Board({
                     fontWeight="700"
                     letterSpacing="1.5"
                   >
-                    {terrain.label.toUpperCase()}
+                    {getTerrainName(theme, tile.terrain, language).toUpperCase()}
                   </text>
                   {tile.number !== null && (
                     <g
@@ -842,7 +859,9 @@ export function Board({
                 <g
                   key={port.edgeId}
                   role="img"
-                  aria-label={`${port.resource === "any" ? "Any resource" : port.resource} harbor, trade ${ratio}`}
+                  aria-label={port.resource === "any"
+                    ? translateText("Any resource harbor, trade {ratio}", { ratio })
+                    : translateText("{resource} harbor, trade {ratio}", { resource: resourceName(language, port.resource).toLowerCase(), ratio })}
                 >
                   <path
                     d={`M${x + directionX * 8} ${y + directionY * 8}L${portX} ${portY}`}
@@ -893,7 +912,7 @@ export function Board({
                       fontWeight="700"
                       letterSpacing="0.8"
                     >
-                      {port.resource.toUpperCase()}
+                      {port.resource === "any" ? translateText("ANY") : resourceName(language, port.resource).toUpperCase()}
                     </text>
                   </g>
                 </g>
@@ -917,7 +936,9 @@ export function Board({
                     {...targetProperties(
                       "tile",
                       tile.id,
-                      `Move robber to ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}`,
+                      translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
+                        resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
+                      }),
                     )}
                   >
                     <polygon points={points} fill="transparent" />
@@ -955,7 +976,7 @@ export function Board({
                   <g
                     key={edge.id}
                     role="img"
-                    aria-label={`${player.name}'s road at ${edge.id}`}
+                    aria-label={translateText("{player}'s road at {location}", { player: player.name, location: edge.id })}
                     pointerEvents="none"
                   >
                     {selectedId === edge.id && (
@@ -1043,7 +1064,7 @@ export function Board({
                     {...targetProperties(
                       "edge",
                       edge.id,
-                      `Build road at ${edge.id}`,
+                      translateText("Build road at {location}", { location: edge.id }),
                     )}
                   >
                     <circle cx={x} cy={y} r={radius} fill="transparent" />
@@ -1094,7 +1115,7 @@ export function Board({
                   key={vertexId}
                   transform={`translate(${vertex.x} ${vertex.y})`}
                   role="img"
-                  aria-label={`Settlement blocked at ${vertexId}: adjacent settlement or city`}
+                  aria-label={translateText("Settlement blocked at {location}: adjacent settlement or city", { location: vertexId })}
                   pointerEvents="none"
                 >
                   <circle r="9" fill="#f4f0e5" fillOpacity="0.9" />
@@ -1114,7 +1135,7 @@ export function Board({
                     key={vertex.id}
                     transform={`translate(${vertex.x} ${vertex.y})`}
                     role="img"
-                    aria-label={`${player.name}'s ${building.kind} at ${vertex.id}`}
+                    aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
                     pointerEvents="none"
                   >
                     <ellipse
@@ -1197,7 +1218,9 @@ export function Board({
                   key={tile.id}
                   transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
                   role="img"
-                  aria-label={`Robber on ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}; production blocked`}
+                  aria-label={translateText(tile.number === null ? "Robber on {resource}; production blocked" : "Robber on {resource} {number}; production blocked", {
+                    resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
+                  })}
                   pointerEvents="none"
                 >
                   <ellipse
@@ -1249,7 +1272,7 @@ export function Board({
                     {...targetProperties(
                       "vertex",
                       vertex.id,
-                      `${occupied ? "Upgrade to city" : "Place settlement"} at ${vertex.id}`,
+                      translateText(occupied ? "Upgrade to city at {location}" : "Place settlement at {location}", { location: vertex.id }),
                     )}
                   >
                     <circle
@@ -1301,7 +1324,7 @@ export function Board({
         <div
           ref={confirmationReference}
           role="group"
-          aria-label="Placement confirmation"
+          aria-label={translateText("Placement confirmation")}
           data-selection-id={selectedId}
           className="placement-confirmation"
           style={{ position: "absolute", left: 0, top: 0, visibility: "hidden" }}
@@ -1309,12 +1332,12 @@ export function Board({
           <p id={`${illustrationId}-confirmation-title`}>{confirmation.title}</p>
           <div>
             <button type="button" className="button-secondary" onClick={cancelConfirmation}>
-              Cancel
+              {translateText("Cancel")}
             </button>
             <button
               ref={confirmButtonReference}
               type="button"
-              aria-label="Confirm placement"
+              aria-label={translateText("Confirm placement")}
               aria-describedby={`${illustrationId}-confirmation-title`}
               className="button-primary"
               onClick={() => {
@@ -1326,7 +1349,7 @@ export function Board({
                 }
               }}
             >
-              Confirm
+              {translateText("Confirm")}
             </button>
           </div>
         </div>
@@ -1339,25 +1362,25 @@ export function Board({
             type="button"
             className="board-theme-button"
             onClick={onChangeTheme}
-            aria-label="Change theme"
+            aria-label={translateText("Change theme")}
             aria-haspopup="dialog"
-            title={`Change theme: ${theme.name}`}
+            title={translateText("Change theme: {theme}", { theme: getThemeName(theme, language) })}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2a4 4 0 0 0 4-4C21 6 17 3 12 3Z" />
               <circle cx="7.5" cy="10" r="1" /><circle cx="11" cy="6.5" r="1" /><circle cx="16" cy="8" r="1" /><circle cx="7.5" cy="15" r="1" />
             </svg>
-            <span className="board-theme-label">Theme</span>
+            <span className="board-theme-label">{translateText("Theme")}</span>
           </button>
         )}
         <div
           className="flex shrink-0 items-center gap-1"
           role="group"
-          aria-label="Map zoom controls"
+          aria-label={translateText("Map zoom controls")}
         >
           <button
             type="button"
-            aria-label="Zoom out"
+            aria-label={translateText("Zoom out")}
             disabled={zoom === 1}
             onClick={() => changeZoom(zoom - 0.25)}
             className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
@@ -1366,14 +1389,14 @@ export function Board({
           </button>
           <output
             aria-live="polite"
-            aria-label="Zoom level"
+            aria-label={translateText("Zoom level")}
             className="min-w-10 text-center text-[10px] font-semibold tabular-nums text-[#6a7862]"
           >
             {Math.round(zoom * 100)}%
           </output>
           <button
             type="button"
-            aria-label="Zoom in"
+            aria-label={translateText("Zoom in")}
             disabled={zoom === 2.5}
             onClick={() => changeZoom(zoom + 0.25)}
             className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
@@ -1382,7 +1405,7 @@ export function Board({
           </button>
           <button
             type="button"
-            aria-label="Reset board view"
+            aria-label={translateText("Reset board view")}
             onClick={() => {
               zoomCenterReference.current = { x: 0.5, y: 0.5 };
               setZoom(1);

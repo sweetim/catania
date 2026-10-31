@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Dice } from "../components/RollSummary";
+import { useTranslation } from "../localization";
+import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import type { PublicGame } from "./types";
 
 export function MultiplayerDice({ game }: { game: PublicGame }) {
+  const translateText = useTranslation(multiplayerUiTranslations);
   const dice = game.dice;
   const rollIdentity = dice ? `${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
   // A first snapshot is already settled, including when reconnecting.
@@ -39,14 +42,14 @@ export function MultiplayerDice({ game }: { game: PublicGame }) {
 
   return (
     <>
-      <p role="status" aria-label="Roll announcement" aria-atomic="true" className="sr-only">
-        {dice && <span key={rollIdentity}>{playerName} rolled {result}.</span>}
+      <p role="status" aria-label={translateText("Roll announcement")} aria-atomic="true" className="sr-only">
+        {dice && <span key={rollIdentity}>{translateText("{name} rolled {result}.", { name: playerName, result })}</span>}
       </p>
-      <section aria-label={dice ? "Roll result" : "Dice tray"} data-stage={dice ? rolling ? "rolling" : "complete" : "idle"} className="roll-summary">
+      <section aria-label={translateText(dice ? "Roll result" : "Dice tray")} data-stage={dice ? rolling ? "rolling" : "complete" : "idle"} className="roll-summary">
         <Dice key={rollIdentity} dice={dice} rolling={rolling} />
         <div className="roll-summary-content">
-          {dice && <p className="roll-summary-label">{playerName} rolled</p>}
-          <p className="roll-summary-title">{dice ? result : "Waiting for the next roll."}</p>
+          {dice && <p className="roll-summary-label">{translateText("{name} rolled", { name: playerName })}</p>}
+          <p className="roll-summary-title">{dice ? result : translateText("Waiting for the next roll.")}</p>
         </div>
       </section>
     </>

@@ -1,55 +1,80 @@
 import { match } from "ts-pattern";
 import type { GamePhase } from "../game/types";
+import { translate, type Language } from "../i18n";
+import { useTranslation } from "../localization";
+import { gameplayTranslations } from "../translations/gameplay";
 
 export function getPhaseInstructions({
   phase,
   secondSettlement,
   pendingKnight = Boolean(phase.type === "robber" && phase.pendingKnight),
   sharedBoard = false,
+  language = "en",
 }: {
   phase: GamePhase;
   secondSettlement: boolean;
   pendingKnight?: boolean;
   sharedBoard?: boolean;
+  language?: Language;
 }) {
+  const translateText = (message: keyof typeof gameplayTranslations, parameters?: Record<string, string | number>) =>
+    translate(language, gameplayTranslations, message, parameters);
   return match(phase)
     .with({ type: "setup-settlement" }, () => ({
-      title: "Find a place to call home.",
-      description: `Place your ${secondSettlement ? "second" : "first"} settlement on a highlighted intersection${sharedBoard ? " on the shared board" : ""}. Leave at least two edges between settlements.`,
+      title: translateText("Find a place to call home."),
+      description: translateText(sharedBoard
+        ? secondSettlement
+          ? "Place your second settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
+          : "Place your first settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
+        : secondSettlement
+          ? "Place your second settlement on a highlighted intersection. Leave at least two edges between settlements."
+          : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),
     }))
     .with({ type: "setup-road" }, () => ({
-      title: "Every journey starts here.",
-      description: `Choose a highlighted edge connected to your new settlement${sharedBoard ? " on the shared board" : ""}, then confirm your road.`,
+      title: translateText("Every journey starts here."),
+      description: translateText(sharedBoard
+        ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
+        : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
     .with({ type: "roll" }, () => ({
-      title: "Let the dice decide.",
-      description: "Roll two dice to gather resources. You may play an eligible development card before rolling.",
+      title: translateText("Let the dice decide."),
+      description: translateText("Roll two dice to gather resources. You may play an eligible development card before rolling."),
     }))
     .with({ type: "actions" }, () => ({
-      title: "Make your next move.",
-      description: "Trade with the bank or another player, build your island, or invest in a development card.",
+      title: translateText("Make your next move."),
+      description: translateText("Trade with the bank or another player, build your island, or invest in a development card."),
     }))
     .with({ type: "discard" }, () => ({
-      title: "Make room in your hand.",
-      description: "A seven was rolled. Players with more than seven resource cards must return half, rounded down, to the bank.",
+      title: translateText("Make room in your hand."),
+      description: translateText("A seven was rolled. Players with more than seven resource cards must return half, rounded down, to the bank."),
     }))
     .with({ type: "robber" }, () => ({
-      title: pendingKnight ? "Move the robber." : "The robber is on the move.",
-      description: pendingKnight
-        ? `Confirm a new hex${sharedBoard ? " on the shared board" : ""} or cancel Knight.`
-        : `Select a different hex${sharedBoard ? " on the shared board" : ""}. The robber stops that hex from producing until it moves again.`,
+      title: translateText(pendingKnight ? "Move the robber." : "The robber is on the move."),
+      description: translateText(pendingKnight
+        ? sharedBoard
+          ? "Confirm a new hex on the shared board or cancel Knight."
+          : "Confirm a new hex or cancel Knight."
+        : sharedBoard
+          ? "Select a different hex on the shared board. The robber stops that hex from producing until it moves again."
+          : "Select a different hex. The robber stops that hex from producing until it moves again."),
     }))
     .with({ type: "steal" }, () => ({
-      title: "Choose a neighboring player.",
-      description: "Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing.",
+      title: translateText("Choose a neighboring player."),
+      description: translateText("Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing."),
     }))
     .with({ type: "road-building" }, phase => ({
-      title: "Take the road less traveled.",
-      description: `Place ${phase.remaining} more road${phase.remaining === 1 ? "" : "s"} for free. Confirm each placement on the ${sharedBoard ? "shared " : ""}board.`,
+      title: translateText("Take the road less traveled."),
+      description: translateText(sharedBoard
+        ? phase.remaining === 1
+          ? "Place {count} more road for free. Confirm each placement on the shared board."
+          : "Place {count} more roads for free. Confirm each placement on the shared board."
+        : phase.remaining === 1
+          ? "Place {count} more road for free. Confirm each placement on the board."
+          : "Place {count} more roads for free. Confirm each placement on the board.", { count: phase.remaining }),
     }))
     .with({ type: "finished" }, () => ({
-      title: "An island. A new legend.",
-      description: "The first player to reach ten victory points on their turn wins.",
+      title: translateText("An island. A new legend."),
+      description: translateText("The first player to reach ten victory points on their turn wins."),
     }))
     .exhaustive();
 }
@@ -67,6 +92,7 @@ export function TurnInstructions({
   onCancelKnight?: () => void;
   disabled?: boolean;
 }) {
+  const translateText = useTranslation(gameplayTranslations);
   return (
     <div className="turn-card rounded-2xl bg-forest text-ink">
       <div className="flex items-center gap-2">
@@ -74,13 +100,13 @@ export function TurnInstructions({
           <h1 className="turn-title font-serif text-xl leading-tight">
             {title}
           </h1>
-          <p role={computerActivity ? "status" : undefined} aria-label={computerActivity ? "Computer activity" : undefined} className="turn-description text-xs leading-4 text-ink/70">
+          <p role={computerActivity ? "status" : undefined} aria-label={computerActivity ? translateText("Computer activity") : undefined} className="turn-description text-xs leading-4 text-ink/70">
             {description}
           </p>
         </div>
         {onCancelKnight && (
           <button className="button-secondary shrink-0 px-3 text-xs" disabled={disabled} onClick={onCancelKnight}>
-            Cancel Knight
+            {translateText("Cancel Knight")}
           </button>
         )}
       </div>
