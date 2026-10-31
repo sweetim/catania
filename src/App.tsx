@@ -1,20 +1,21 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { Board } from "./components/Board";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
 import {
   Arrow,
+  BankSupply,
   CardStack,
+  CardTypeIcon,
   Cost,
+  DevelopmentCardIcon,
   Dialog,
   Logo,
   PieceIcon,
-  RESOURCE_COLORS,
   RESOURCE_NAMES,
   ResourceCard,
   ResourceCardStepper,
-  ResourceIcon,
   ResourceInventory,
   SelectableResourceCard,
 } from "./components/GameUi";
@@ -40,6 +41,7 @@ import type {
   GameState,
   Player,
   Resource,
+  Resources,
 } from "./game/types";
 import "./index.css";
 import { getRollOutcome, type RollOutcome } from "./rollPresentation";
@@ -72,6 +74,11 @@ const DEVELOPMENT_DESCRIPTIONS: Record<DevelopmentKind, string> = {
   monopoly:
     "Name a resource. Every other player gives you all of that resource from their hand.",
 };
+
+function describeResources(resources: Resources) {
+  return RESOURCES.filter(resource => resources[resource] > 0)
+    .map(resource => `${resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ");
+}
 
 function phaseTitle(state: GameState) {
   return match(state.phase)
@@ -153,6 +160,8 @@ export function App() {
   const [dialog, setDialog] = useState<
     "rules" | "reference" | "trade" | "development" | "players" | "restart" | null
   >(null);
+  const gameMenu = useRef<HTMLDetailsElement>(null);
+  const [gameMenuOpen, setGameMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
     "hand",
   );
@@ -170,6 +179,7 @@ export function App() {
   } | null>(null);
   const [error, setError] = useState("");
   const [tradeMode, setTradeMode] = useState<"bank" | "players">("bank");
+  const [playerTradeMode, setPlayerTradeMode] = useState<"request" | "offer">("request");
   const [giveResource, setGiveResource] = useState<Resource>("wood");
   const [receiveResource, setReceiveResource] = useState<Resource>("brick");
   const [giveResources, setGiveResources] = useState(emptyResources);
@@ -269,6 +279,26 @@ export function App() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [Boolean(game), Boolean(game?.winnerId)]);
+
+  useEffect(() => {
+    const dismissMenu = (event: PointerEvent) => {
+      if (gameMenu.current && event.target instanceof Node && !gameMenu.current.contains(event.target)) {
+        gameMenu.current.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", dismissMenu);
+    return () => document.removeEventListener("pointerdown", dismissMenu);
+  }, []);
+
+  function openGameDialog(nextDialog: "rules" | "reference" | "players" | "restart") {
+    if (gameMenu.current) {
+      gameMenu.current.open = false;
+      // Dialogs restore focus to the visible opener, not a hidden menu item.
+      gameMenu.current.querySelector("summary")?.focus();
+    }
+    setDialog(nextDialog);
+    if (nextDialog === "rules") setError("");
+  }
 
   function startGame() {
     try {
@@ -522,16 +552,21 @@ export function App() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{player.name}</p>
-              <p className="mt-0.5 truncate text-[10px] text-muted">
-                {player.control === "computer" && "AI / "}
-                {game.activePlayerId === player.id
-                  ? "At the helm"
-                  : `Player ${index + 1}`}
+              <p className="mt-0.5 h-4 truncate text-[10px] text-muted">
+                {game.activePlayerId === player.id ? player.id === viewerId ? "Your turn" : "Playing" : ""}
               </p>
             </div>
-            <div role="group" aria-label={`${player.name}'s card counts`} className="player-card-counts text-right text-[10px] leading-4 text-muted tabular-nums">
-              <p><strong className="text-sm text-ink">{resourceTotal(player.resources)}</strong> resource cards</p>
-              <p><strong className="text-sm text-ink">{player.developmentCards.length}</strong> development</p>
+            <div role="group" aria-label={`${player.name}'s card counts`} className={`player-card-counts ${detailed ? "player-card-counts-detailed" : ""}`}>
+              <span role="img" aria-label={`${resourceTotal(player.resources)} resource cards`} title={`${resourceTotal(player.resources)} resource cards`} className="player-card-stat text-forest">
+                <CardTypeIcon kind="resource" />
+                <strong>{resourceTotal(player.resources)}</strong>
+                {detailed && <span className="text-[10px] text-muted">resources</span>}
+              </span>
+              <span role="img" aria-label={`${player.developmentCards.length} development cards`} title={`${player.developmentCards.length} development cards`} className="player-card-stat text-[#947231]">
+                <CardTypeIcon kind="development" />
+                <strong>{player.developmentCards.length}</strong>
+                {detailed && <span className="text-[10px] text-muted">development</span>}
+              </span>
             </div>
             <div className="text-right">
               <span className="font-serif text-2xl">
@@ -571,18 +606,62 @@ export function App() {
           <span className="h-1.5 w-1.5 rounded-full bg-forest" />
           {game ? "A little friendly competition" : "Made for gathering around"}
         </div>
-        <button
-          className="text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
-          onClick={() => {
-            setDialog("rules");
-            setError("");
-          }}
-        >
-          How to play{" "}
-          <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
-            ?
-          </span>
-        </button>
+        {game && !game.winnerId ? (
+          <details
+            ref={gameMenu}
+            className="game-menu relative shrink-0"
+            onToggle={(event) => setGameMenuOpen(event.currentTarget.open)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && event.currentTarget.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }
+            }}
+          >
+            <summary role="button" aria-expanded={gameMenuOpen} aria-controls="game-menu" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest">
+              Game
+              <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="m3 4.5 3 3 3-3" />
+              </svg>
+            </summary>
+            <div id="game-menu" role="group" aria-label="Game menu" className="absolute right-0 top-full z-50 mt-1 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl">
+              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("reference")}>
+                Table guide
+              </button>
+              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("rules")}>
+                How to play
+              </button>
+              {needsHandoff && viewer && (
+                <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={rollBusy} onClick={() => openGameDialog("players")}>
+                  Pass device
+                </button>
+              )}
+              <div className="mt-1 border-t border-line pt-1">
+                <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-clay hover:bg-clay/10" onClick={() => openGameDialog("restart")}>
+                  End game
+                </button>
+              </div>
+            </div>
+          </details>
+        ) : (
+          <button
+            className="text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
+            onClick={() => {
+              setDialog("rules");
+              setError("");
+            }}
+          >
+            How to play{" "}
+            <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
+              ?
+            </span>
+          </button>
+        )}
       </header>
 
       {!game ? (
@@ -899,36 +978,6 @@ export function App() {
         </main>
       ) : viewer ? (
         <main className="game-table">
-          <div className="table-toolbar flex items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="eyebrow hidden sm:inline">Your island, taking shape</span>
-              <span className="rounded-full border border-line px-2.5 py-1 text-[10px] text-muted">
-                {game.phase.type.startsWith("setup")
-                  ? "Setup"
-                  : `Turn ${game.turnNumber}`}
-              </span>
-            </div>
-            <div className="flex gap-3">
-              <button className="min-h-10 text-xs font-semibold text-muted" onClick={() => setDialog("reference")}>
-                Table guide
-              </button>
-              {needsHandoff && (
-                <button
-                  className="min-h-10 text-xs font-semibold text-muted"
-                  disabled={rollBusy}
-                  onClick={() => setDialog("players")}
-                >
-                  Pass device
-                </button>
-              )}
-              <button
-                className="min-h-10 text-xs text-muted"
-                onClick={() => setDialog("restart")}
-              >
-                End game
-              </button>
-            </div>
-          </div>
           <div className="table-seats grid gap-2" style={{ gridTemplateColumns: `repeat(${game.players.length}, minmax(0, 1fr))` }}>
             {playerCards()}
           </div>
@@ -947,7 +996,10 @@ export function App() {
               </button>
             ))}
           </nav>
-          <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+          <div className="table-feedback">
+            <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+            <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
+          </div>
           <ResourceCollection
             receipt={resourceReceipt?.playerId === viewer.id ? resourceReceipt : null}
             onDismiss={() => setResourceReceipt(null)}
@@ -975,58 +1027,22 @@ export function App() {
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
                   selectedId={selected?.id}
+                  confirmation={selectedAction && selected ? {
+                    title: selected.kind === "tile"
+                      ? "Move the robber here?"
+                      : selected.kind === "edge"
+                        ? "Build a road here?"
+                        : buildMode === "city"
+                          ? "Upgrade to a city?"
+                          : "Settle here?",
+                    onConfirm: () => perform(selectedAction),
+                    onCancel: () => setSelected(null),
+                  } : undefined}
                   onSelect={(kind, id) => {
                     setSelected({ kind, id });
                     setError("");
                   }}
                 />
-                <div className="board-placement" aria-live="polite">
-                {selectedAction && selected ? (
-                  <div
-                    className="placement-confirmation"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {selected.kind === "tile"
-                          ? "Move the robber here?"
-                          : selected.kind === "edge"
-                            ? "Build a road here?"
-                            : buildMode === "city"
-                              ? "Upgrade to a city?"
-                              : "Settle here?"}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="button-secondary"
-                        onClick={() => setSelected(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="button-primary"
-                        onClick={() => perform(selectedAction)}
-                      >
-                        Confirm placement
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  (legalVertices.length > 0 ||
-                    legalEdges.length > 0 ||
-                    legalTiles.length > 0) && (
-                    <p className="text-center text-xs text-forest">
-                      Select a highlighted{" "}
-                      {legalVertices.length
-                        ? "intersection"
-                        : legalEdges.length
-                          ? "road"
-                          : "hex"}{" "}
-                      to preview your move.
-                    </p>
-                  )
-                )}
-                </div>
                 {error && mobileView === "board" && (
                   <p
                     role="alert"
@@ -1035,32 +1051,6 @@ export function App() {
                     {error}
                   </p>
                 )}
-                <div className="table-bank flex items-center justify-between gap-2 border-t border-line">
-                  <span className="eyebrow">The bank</span>
-                  <div className="flex gap-3 sm:gap-5">
-                    {RESOURCES.map((resource) => (
-                      <span
-                        key={resource}
-                        className="flex items-center gap-1.5 text-xs"
-                        title={`${RESOURCE_NAMES[resource]} in bank`}
-                      >
-                        <span style={{ color: RESOURCE_COLORS[resource] }}>
-                          <ResourceIcon
-                            resource={resource}
-                            className="h-4 w-4"
-                          />
-                        </span>
-                        <span className="sr-only">
-                          {RESOURCE_NAMES[resource]}:
-                        </span>
-                        {game.bank[resource]}
-                      </span>
-                    ))}
-                  </div>
-                  <span className="hidden text-[10px] text-muted xl:inline">
-                    {game.developmentDeck.length} development cards
-                  </span>
-                </div>
               </div>
             </section>
 
@@ -1069,10 +1059,13 @@ export function App() {
               aria-label="Your hand and actions"
             >
               <div inert={handTaskOpen} className="turn-card rounded-2xl bg-forest text-white">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
                     {computerPlayer ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
                   </p>
+                  <span className="shrink-0 rounded-full border border-white/25 px-2 text-[10px] text-white/75">
+                    {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
+                  </span>
                 </div>
                 <h1 className="turn-title font-serif text-xl leading-tight">
                   {instructionTitle}
@@ -1168,9 +1161,9 @@ export function App() {
                       maximum={viewer.resources}
                       onChange={setChosenResources}
                     />
-                    <p className="mt-3 text-xs text-muted">
-                      Choose exactly {game.phase.required[viewer.id]} resources.
-                      Selected {resourceTotal(chosenResources)}.
+                    <p className="selection-progress mt-3 flex justify-between gap-2 text-xs text-muted" aria-live="polite">
+                      <strong className="text-forest">Selected {resourceTotal(chosenResources)} of {game.phase.required[viewer.id]}</strong>
+                      <span>{resourceTotal(viewer.resources) - resourceTotal(chosenResources)} cards left</span>
                     </p>
                     <button
                       className="button-primary mt-3 w-full"
@@ -1278,26 +1271,8 @@ export function App() {
                       </button>
                     );
                   })}
-                </div>
-                <p className="sr-only">
-                  Building needs resources, an available piece, and a legal
-                  connection after your roll.
-                </p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
-                    className="button-secondary px-2"
-                    disabled={!normalActions}
-                    onClick={() => {
-                      setDialog("trade");
-                      setGiveResources(emptyResources());
-                      setReceiveResources(emptyResources());
-                      setError("");
-                    }}
-                  >
-                    Make a trade
-                  </button>
-                  <button
-                    className="button-secondary px-2"
+                    className="flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border border-line bg-white/40 px-2.5 text-left text-xs"
                     disabled={
                       !normalActions ||
                       !canAfford(COSTS.development) ||
@@ -1312,62 +1287,100 @@ export function App() {
                       })
                     }
                   >
-                    Buy a card
+                    <span className="flex min-w-0 items-center gap-2" style={{ color: viewer.color }}>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+                        <CardTypeIcon kind="development" />
+                      </span>
+                      <span className="font-semibold text-ink">Buy a card</span>
+                    </span>
+                    <span className="build-cost shrink-0"><Cost resources={COSTS.development} /></span>
                   </button>
                 </div>
+                <p className="sr-only">
+                  Building needs resources, an available piece, and a legal
+                  connection after your roll.
+                </p>
+                <button
+                  className="button-secondary mt-2 w-full px-2"
+                  disabled={!normalActions}
+                  onClick={() => {
+                    setDialog("trade");
+                    setGiveResources(emptyResources());
+                    setReceiveResources(emptyResources());
+                    setError("");
+                  }}
+                >
+                  Make a trade
+                </button>
               </section>
-              <button
+              <section
                 inert={handTaskOpen}
-                className="development-hand panel flex min-h-11 w-full items-center justify-between px-3 text-left"
-                onClick={() => {
-                  setDevelopmentCardId(null);
-                  setDialog("development");
-                  setError("");
-                }}
+                className="development-hand"
+                aria-label="Your development cards"
               >
-                <span className="text-xs font-medium">
-                  Your development cards
-                </span>
-                <span className="flex items-center gap-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="text-xs font-medium">Your development cards</h2>
                   <span className="rounded-md bg-moss px-2 py-1 text-xs">
                     {viewer.developmentCards.length}
                   </span>
-                  <Arrow />
-                </span>
-              </button>
+                </div>
+                {!viewer.developmentCards.length ? (
+                  <p className="text-xs leading-6 text-muted">
+                    Your next big idea is waiting. Buy a development card for one
+                    wool, one grain, and one ore after rolling on your turn.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {viewer.developmentCards.map((card) => (
+                      <li key={card.id}>
+                        <button
+                          className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-line bg-white/40 px-3 py-2 text-left hover:bg-moss/60"
+                          aria-haspopup="dialog"
+                          onClick={() => {
+                            setDevelopmentCardId(card.id);
+                            setChosenResources(emptyResources());
+                            setChosenResource("wood");
+                            setDialog("development");
+                            setError("");
+                          }}
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss text-forest">
+                            <DevelopmentCardIcon kind={card.kind} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold">{DEVELOPMENT_NAMES[card.kind]}</span>
+                            <span className="block text-[10px] text-muted">
+                              {card.kind === "victory-point"
+                                ? "+1 hidden point"
+                                : card.purchasedTurn === game.turnNumber
+                                  ? "New this turn"
+                                  : "In your hand"}
+                            </span>
+                          </span>
+                          <Arrow className="h-4 w-4 shrink-0 text-muted" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
 
               {game.trade && (
                 <section className="hand-task panel p-4" aria-label="Open trade">
                   <ResourceInventory resources={viewer.resources} />
-                  <h2 className="font-serif text-xl">A deal on the table.</h2>
+                  <h2 className="font-serif text-xl">{game.trade.give ? "A deal on the table." : "A request on the table."}</h2>
                   <p className="mt-1 text-xs text-muted">
-                    {game.players.find(player => player.id === game.trade!.offeredBy)?.name} proposed this exchange.
+                    {game.players.find(player => player.id === game.trade!.offeredBy)?.name}{" "}
+                    {game.trade.give ? "proposed this exchange." : "is asking for cards. Choose a price before any cards move."}
                   </p>
                   <p className="sr-only">
                     {game.players.find(
                       (player) => player.id === game.trade!.offeredBy,
                     )?.name}{" "}
-                    offers{" "}
-                    {RESOURCES.filter(
-                      (resource) => game.trade!.give[resource] > 0,
-                    )
-                      .map(
-                        (resource) =>
-                          `${game.trade!.give[resource]} ${RESOURCE_NAMES[resource]}`,
-                      )
-                      .join(", ")}{" "}
-                    for{" "}
-                    {RESOURCES.filter(
-                      (resource) => game.trade!.receive[resource] > 0,
-                    )
-                      .map(
-                        (resource) =>
-                          `${game.trade!.receive[resource]} ${RESOURCE_NAMES[resource]}`,
-                      )
-                      .join(", ")}
-                    .
+                    {game.trade.give ? `offers ${describeResources(game.trade.give)} for` : "requests"}{" "}
+                    {describeResources(game.trade.receive)}.
                   </p>
-                  <div className="my-4 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3.5">
+                  {game.trade.give ? <div className="my-4 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3.5">
                     <span className="flex flex-col items-center gap-1.5">
                       <CardStack
                         resources={viewer.id === game.trade.offeredBy ? game.trade.give : game.trade.receive}
@@ -1387,7 +1400,12 @@ export function App() {
                         You receive
                       </span>
                     </span>
-                  </div>
+                  </div> : <div className="my-4 flex flex-col items-center gap-2 rounded-xl bg-moss/70 p-3.5">
+                    <CardStack resources={game.trade.receive} />
+                    <span className="text-xs font-semibold">
+                      {viewer.id === game.trade.offeredBy ? "You ask for" : "You give"}: {describeResources(game.trade.receive)}
+                    </span>
+                  </div>}
                   {viewer.id === game.trade.offeredBy ? (
                     <div className="space-y-2">
                       {game.players
@@ -1396,15 +1414,14 @@ export function App() {
                           const response =
                             game.trade!.responses[player.id];
                           const status =
-                            response === true
-                              ? "accepted"
-                              : response === false
-                                ? "declined"
-                                : "not answered";
+                            response ? game.trade!.give ? "accepted" : "price proposed"
+                              : response === false ? "declined" : "not answered";
                           return (
                             <div
                               key={player.id}
-                              className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white/40 px-3 py-2"
+                              role="group"
+                              aria-label={`${player.name}'s trade response`}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-white/40 px-3 py-2"
                             >
                               <span className="flex min-w-0 items-center gap-2">
                                 <span
@@ -1415,15 +1432,16 @@ export function App() {
                                   {player.name}
                                 </span>
                               </span>
-                              <span className="flex shrink-0 items-center gap-2">
+                              <span className="flex flex-wrap items-center gap-2">
                                 <span
-                                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response === true ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
                                 >
                                   {status}
                                 </span>
                                 {response ? (
                                   <button
                                     className="button-secondary !min-h-8 !px-2.5 !py-1 !text-xs"
+                                    disabled={!canAfford(response)}
                                     onClick={() =>
                                       setConfirmation({
                                         action: {
@@ -1431,8 +1449,7 @@ export function App() {
                                           playerId: player.id,
                                         },
                                         title: `Trade with ${player.name}`,
-                                        description:
-                                          "Complete this exchange once. Both players' resources will be checked again before the transfer.",
+                                        description: `You give ${describeResources(response)} and receive ${describeResources(game.trade!.receive)}. Both players' resources will be checked again before the transfer.`,
                                       })
                                     }
                                   >
@@ -1447,6 +1464,12 @@ export function App() {
                                   </button>
                                 ) : null}
                               </span>
+                              {response && !game.trade!.give && (
+                                <p className="w-full text-xs leading-5 text-muted">
+                                  You give: {describeResources(response)}.
+                                  {!canAfford(response) && " You do not have these cards."}
+                                </p>
+                              )}
                             </div>
                           );
                         })}
@@ -1454,10 +1477,22 @@ export function App() {
                         className="mt-2 text-xs text-clay underline"
                         onClick={() => perform({ type: "cancel-trade" })}
                       >
-                        Withdraw offer
+                        {game.trade.give ? "Withdraw offer" : "Withdraw request"}
                       </button>
                     </div>
                   ) : (
+                    <>
+                    {!game.trade.give && (
+                      <div className="mb-4 space-y-3">
+                        <ResourceCardStepper label="You want in return" values={chosenResources} onChange={setChosenResources} />
+                        <p className="text-xs leading-5 text-muted">
+                          Name your price using different resources. The requesting player decides whether to accept.
+                        </p>
+                        {!canAfford(game.trade.receive) && (
+                          <p className="text-xs text-clay">You do not have all the requested cards to offer this trade.</p>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         className="button-secondary"
@@ -1474,15 +1509,21 @@ export function App() {
                             (resource) =>
                               viewer.resources[resource] >=
                               game.trade!.receive[resource],
-                          )
+                          ) || (!game.trade.give && (
+                            !resourceTotal(chosenResources) || RESOURCES.some(resource =>
+                              chosenResources[resource] > 0 && game.trade!.receive[resource] > 0)
+                          ))
                         }
                         onClick={() =>
-                          perform({ type: "respond-trade", accept: true })
+                          perform(game.trade!.give
+                            ? { type: "respond-trade", accept: true }
+                            : { type: "propose-trade", price: chosenResources })
                         }
                       >
-                        Accept offer
+                        {game.trade.give ? "Accept offer" : "Propose price"}
                       </button>
                     </div>
+                    </>
                   )}
                   {needsHandoff && controllingPlayer?.control === "human" && viewer.id !== controllingPlayer.id && (
                     <button className="button-secondary mt-4 w-full" onClick={() => passTo(controllingPlayer.id)}>
@@ -1518,15 +1559,15 @@ export function App() {
         </main>
       ) : (
         <main className="computer-table">
-          <div className="flex items-center justify-between gap-4">
-            <h1 className="font-serif text-3xl">The island is in motion.</h1>
-            <button className="min-h-10 text-xs text-muted" onClick={() => setDialog("restart")}>End game</button>
-          </div>
+          <h1 className="font-serif text-3xl">The island is in motion.</h1>
           <p role="status" aria-label="Computer activity" className="my-5 text-sm text-muted">
             {computerPlayer?.name} is playing automatically. The next human hand will stay hidden until revealed.
           </p>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{playerCards()}</div>
-          <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
+          <div className="table-feedback">
+            <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
+            <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
+          </div>
           <Board board={game.board} players={game.players} robberTileId={game.robberTileId} producingTileIds={producingTileIds} rolledNumber={rolledNumber} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
         </main>
@@ -1592,7 +1633,9 @@ export function App() {
             </p>
             <p>
               <strong className="text-ink">Trade. Build. Repeat.</strong> After
-              rolling, trade with other players or the bank (4:1). A settlement
+              rolling, request cards and let other players name their price, make
+              an exact offer, or trade with the bank (4:1). You confirm one player
+              exchange before any cards move. A settlement
               at a generic port improves the rate to 3:1; a matching resource
               port makes it 2:1. Build roads, new settlements, cities, or buy a
               development card. Each player has 15 roads, 5 settlements, and 4
@@ -1619,7 +1662,8 @@ export function App() {
               Play solo against local AI with your hand always visible, or choose
               multiple humans and pass the device before revealing each hand.
               Computer hands cannot be opened. AI handles its own turns and trade
-              responses; it uses bank and port trades but does not propose player trades. This
+              responses, including prices for your requests; it uses bank and port
+              trades but does not initiate player trades. This
               is a friendly local game, not a secure multiplayer room. Games
               live only in this tab: refreshing or closing it ends the game.
             </div>
@@ -1743,8 +1787,7 @@ export function App() {
           {tradeMode === "bank" ? (
             <>
               <p className="mb-5 text-sm leading-6 text-muted">
-                Your best port rate is applied automatically. Dimmed cards are
-                beyond your hand; the bank must have what you ask for.
+                Your best bank or port rate is shown on each card.
               </p>
               <fieldset className="mb-5">
                 <legend className="mb-3 text-sm font-semibold">
@@ -1771,7 +1814,7 @@ export function App() {
               </fieldset>
               <fieldset>
                 <legend className="mb-3 text-sm font-semibold">
-                  You receive
+                  Take 1 from the bank
                 </legend>
                 <div className="grid grid-cols-5 gap-2 sm:gap-3">
                   {RESOURCES.map((resource) => (
@@ -1781,7 +1824,7 @@ export function App() {
                       action="Receive"
                       count={game.bank[resource]}
                       countLabel="In bank"
-                      caption="Take 1"
+                      caption=""
                       selected={receiveResource === resource}
                       disabled={game.bank[resource] < 1}
                       onClick={() => setReceiveResource(resource)}
@@ -1835,7 +1878,20 @@ export function App() {
             </>
           ) : (
             <>
+              <div role="group" aria-label="Player trade type" className="mb-5 flex rounded-xl bg-moss p-1">
+                {(["request", "offer"] as const).map(mode => (
+                  <button
+                    key={mode}
+                    aria-pressed={playerTradeMode === mode}
+                    className={`min-h-10 flex-1 rounded-lg text-sm ${playerTradeMode === mode ? "bg-white shadow-sm" : "text-muted"}`}
+                    onClick={() => setPlayerTradeMode(mode)}
+                  >
+                    {mode === "request" ? "Request cards" : "Exact offer"}
+                  </button>
+                ))}
+              </div>
               <div className="space-y-5">
+                {playerTradeMode === "offer" && <>
                 <ResourceCardStepper
                   label="You offer"
                   values={giveResources}
@@ -1856,6 +1912,7 @@ export function App() {
                     emptyText="Nothing asked"
                   />
                 </div>
+                </>}
                 <ResourceCardStepper
                   label="You ask for"
                   values={receiveResources}
@@ -1863,30 +1920,32 @@ export function App() {
                 />
               </div>
               <p className="my-4 text-xs leading-6 text-muted">
+                {playerTradeMode === "request" && "Ask for the cards you need. Other players name their price; you choose whether to trade. "}
                 Computers respond automatically. With multiple humans, pass the
-                device for private responses. Choose one accepting player to
-                confirm the exchange.
+                device for private responses. No cards move until you confirm one exchange.
               </p>
               <button
                 className="button-primary w-full"
                 disabled={
-                  !resourceTotal(giveResources) ||
                   !resourceTotal(receiveResources) ||
-                  RESOURCES.some(
+                  (playerTradeMode === "offer" && (!resourceTotal(giveResources) || RESOURCES.some(
                     (resource) =>
                       giveResources[resource] > 0 &&
                       receiveResources[resource] > 0,
-                  )
+                  )))
                 }
                 onClick={() =>
-                  perform({
+                  perform(playerTradeMode === "request" ? {
+                    type: "request-trade",
+                    receive: receiveResources,
+                  } : {
                     type: "offer-trade",
                     give: giveResources,
                     receive: receiveResources,
                   })
                 }
               >
-                Put the offer on the table
+                {playerTradeMode === "request" ? "Ask for these cards" : "Put the offer on the table"}
               </button>
             </>
           )}
@@ -1906,42 +1965,37 @@ export function App() {
             setError("");
           }}
         >
-          {!viewer.developmentCards.length ? (
-            <p className="text-sm leading-7 text-muted">
-              Your next big idea is waiting. Buy a development card for one
-              wool, one grain, and one ore after rolling on your turn.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {viewer.developmentCards.map((card) => (
-                <button
-                  key={card.id}
-                  className={`w-full rounded-xl border p-4 text-left ${developmentCardId === card.id ? "border-forest bg-moss" : "border-line"}`}
-                  onClick={() => {
-                    setDevelopmentCardId(card.id);
-                    setChosenResources(emptyResources());
-                    setError("");
-                  }}
-                >
-                  <span className="flex justify-between gap-3">
-                    <span className="font-serif text-xl">
-                      {DEVELOPMENT_NAMES[card.kind]}
-                    </span>
-                    <span className="text-[10px] text-muted">
-                      {card.kind === "victory-point"
-                        ? "+1 hidden point"
-                        : card.purchasedTurn === game.turnNumber
-                          ? "New this turn"
-                          : "In your hand"}
-                    </span>
+          <div className="space-y-3">
+            {viewer.developmentCards.map((card) => (
+              <button
+                key={card.id}
+                className={`w-full rounded-xl border p-4 text-left ${developmentCardId === card.id ? "border-forest bg-moss" : "border-line"}`}
+                aria-pressed={developmentCardId === card.id}
+                onClick={() => {
+                  setDevelopmentCardId(card.id);
+                  setChosenResources(emptyResources());
+                  setError("");
+                }}
+              >
+                <span className="flex justify-between gap-3">
+                  <span className="flex items-center gap-2 font-serif text-xl">
+                    <span className="text-forest"><DevelopmentCardIcon kind={card.kind} /></span>
+                    {DEVELOPMENT_NAMES[card.kind]}
                   </span>
-                  <span className="mt-2 block text-xs leading-6 text-muted">
-                    {DEVELOPMENT_DESCRIPTIONS[card.kind]}
+                  <span className="text-[10px] text-muted">
+                    {card.kind === "victory-point"
+                      ? "+1 hidden point"
+                      : card.purchasedTurn === game.turnNumber
+                        ? "New this turn"
+                        : "In your hand"}
                   </span>
-                </button>
-              ))}
-            </div>
-          )}
+                </span>
+                <span className="mt-2 block text-xs leading-6 text-muted">
+                  {DEVELOPMENT_DESCRIPTIONS[card.kind]}
+                </span>
+              </button>
+            ))}
+          </div>
           {developmentCard && developmentCard.kind !== "victory-point" && (
             <div className="mt-5 border-t border-line pt-5">
               {developmentCard.kind === "year-of-plenty" && (
@@ -1954,8 +2008,7 @@ export function App() {
                     onChange={setChosenResources}
                   />
                   <p className="mt-3 text-xs text-muted">
-                    Select {Math.min(2, resourceTotal(game.bank))} cards.
-                    Selected {resourceTotal(chosenResources)}.
+                    Selected {resourceTotal(chosenResources)} of {Math.min(2, resourceTotal(game.bank))}
                   </p>
                 </>
               )}

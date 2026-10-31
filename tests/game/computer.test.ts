@@ -329,7 +329,7 @@ describe("computer trades and public information", () => {
     state = applyAction(state, human.id, { type: "offer-trade", give: resources({ ore: 1 }), receive: resources({ wood: 1 }) });
     const result = chooseAndApply(state, computer.id);
     expect(result.action).toEqual({ type: "respond-trade", accept: true });
-    expect(result.state.trade!.responses[computer.id]).toBe(true);
+    expect(result.state.trade!.responses[computer.id]).toEqual(resources({ ore: 1 }));
     expect(chooseComputerAction(result.state, computer.id)).toBeNull();
     expect(chooseComputerAction(state, human.id)).toBeNull();
     const completed = applyAction(result.state, human.id, { type: "complete-trade", playerId: computer.id });
@@ -347,6 +347,64 @@ describe("computer trades and public information", () => {
       receive: resources({ wood: reason === "unfavorable" ? 4 : 1 }),
     });
     expect(chooseAndApply(state, computer.id).action).toEqual({ type: "respond-trade", accept: false });
+  });
+
+  test.each([
+    { name: "single-resource", receive: resources({ wood: 1 }), inventory: resources({ wood: 1, grain: 2, ore: 2 }), price: resources({ ore: 1 }) },
+    { name: "mixed-resource", receive: resources({ wood: 1, brick: 1 }), inventory: resources({ wood: 1, brick: 1, grain: 1, ore: 2 }), price: resources({ grain: 1, ore: 1 }) },
+  ])("quotes a fair useful price for a $name request and waits for confirmation", ({ receive, inventory, price }) => {
+    let state = settledGame();
+    state.phase = { type: "actions" };
+    const human = state.players.find(player => player.id === state.activePlayerId)!;
+    human.control = "human";
+    const computer = state.players.find(player => player.id !== human.id)!;
+    setResources(state, human.id, price);
+    setResources(state, computer.id, inventory);
+    state = applyAction(state, human.id, { type: "request-trade", receive });
+    const result = chooseAndApply(state, computer.id);
+    expect(result.action).toEqual({ type: "propose-trade", price });
+    expect(result.state.trade!.responses[computer.id]).toEqual(price);
+    expect(result.state.players).toEqual(state.players);
+    expect(chooseComputerAction(result.state, computer.id)).toBeNull();
+    const completed = applyAction(result.state, human.id, { type: "complete-trade", playerId: computer.id });
+    expect(completed.trade).toBeNull();
+    expect(completed.players.find(player => player.id === human.id)!.resources).toEqual(receive);
+    expect(completed.players.find(player => player.id === computer.id)!.resources).toEqual(resources({ grain: 2, ore: 3 }));
+    expect(completed.bank).toEqual(state.bank);
+  });
+
+  test.each([
+    { name: "unsuppliable", receive: resources({ wood: 2 }), inventory: resources({ wood: 1, grain: 2, ore: 2 }) },
+    { name: "unhelpful", receive: resources({ wood: 1 }), inventory: resources({ wood: 1, grain: 2, ore: 3 }) },
+    { name: "too large for useful payment", receive: resources({ wood: 2 }), inventory: resources({ wood: 2, grain: 2, ore: 2 }) },
+    { name: "no net build improvement", receive: resources({ grain: 1 }), inventory: resources({ grain: 2, ore: 2 }) },
+    { name: "only overlapping deficits", receive: resources({ ore: 1 }), inventory: resources({ grain: 2, ore: 2 }) },
+  ])("declines a request with $name and does not respond again", ({ receive, inventory }) => {
+    let state = settledGame();
+    state.phase = { type: "actions" };
+    const computer = state.players.find(player => player.id !== state.activePlayerId)!;
+    setResources(state, computer.id, inventory);
+    state = applyAction(state, state.activePlayerId, { type: "request-trade", receive });
+    const result = chooseAndApply(state, computer.id);
+    expect(result.action).toEqual({ type: "respond-trade", accept: false });
+    expect(result.state.trade!.responses[computer.id]).toBe(false);
+    expect(chooseComputerAction(result.state, computer.id)).toBeNull();
+  });
+
+  test("quotes without reading opponents' inventories even when the requester cannot afford the price", () => {
+    let state = settledGame();
+    state.phase = { type: "actions" };
+    const computer = state.players.find(player => player.id !== state.activePlayerId)!;
+    setResources(state, state.activePlayerId, resources({ wool: 1 }));
+    setResources(state, computer.id, resources({ wood: 1, grain: 2, ore: 2 }));
+    state = applyAction(state, state.activePlayerId, { type: "request-trade", receive: resources({ wood: 1 }) });
+    const result = chooseAndApply(state, computer.id);
+    expect(result.action).toEqual({ type: "propose-trade", price: resources({ ore: 1 }) });
+    expect(() => applyAction(result.state, state.activePlayerId, { type: "complete-trade", playerId: computer.id })).toThrow("Both players");
+    for (const opponent of state.players.filter(player => player.id !== computer.id)) {
+      Object.defineProperty(opponent, "resources", { get() { throw new Error("Opponent resources are private"); } });
+    }
+    expect(chooseComputerAction(state, computer.id)).toEqual(result.action);
   });
 
   test.each(["setup-settlement", "actions", "roll", "robber", "steal", "discard"] as const)(

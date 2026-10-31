@@ -503,7 +503,7 @@ describe("domestic and maritime trade", () => {
     const giveOffer = resources({ wood: 2 });
     state = applyAction(state, firstPlayer, { type: "offer-trade", give: giveOffer, receive: resources({ ore: 1 }) });
     giveOffer.wood = 99;
-    expect(state.trade!.give.wood).toBe(2);
+    expect(state.trade!.give!.wood).toBe(2);
     expect(state.players[0]!.resources.wood).toBe(2);
     reject(state, { type: "respond-trade", accept: true }, "Only other players");
     reject(state, { type: "complete-trade", playerId: secondPlayer }, "accepted");
@@ -538,10 +538,84 @@ describe("domestic and maritime trade", () => {
     expect(state.trade!.responses[secondPlayer]).toBe(false);
   });
 
-  test("cancel, turn end, or another substantive action clears stale offers", () => {
+  test("resource requests collect different prices without transferring cards until one is confirmed", () => {
+    let state = actionState();
+    give(state, firstPlayer, { wood: 2, grain: 1 });
+    give(state, secondPlayer, { ore: 1 });
+    give(state, thirdPlayer, { ore: 1 });
+    const inventories = state.players.map(player => ({ ...player.resources }));
+    const requested = resources({ ore: 1 });
+    state = applyAction(state, firstPlayer, { type: "request-trade", receive: requested });
+    requested.ore = 9;
+    expect(state.trade!.give).toBeNull();
+    expect(state.trade!.receive.ore).toBe(1);
+    reject(state, { type: "complete-trade", playerId: secondPlayer }, "proposed a price");
+    const price = resources({ wood: 2 });
+    state = applyAction(state, secondPlayer, { type: "propose-trade", price });
+    price.wood = 99;
+    state = applyAction(state, thirdPlayer, { type: "propose-trade", price: resources({ grain: 1 }) });
+    expect(state.trade!.responses[secondPlayer]).toEqual(resources({ wood: 2 }));
+    expect(state.players.map(player => player.resources)).toEqual(inventories);
+    reject(state, { type: "complete-trade", playerId: firstPlayer }, "Wait for your turn", secondPlayer);
+    const bank = { ...state.bank };
+    state = applyAction(state, firstPlayer, { type: "complete-trade", playerId: thirdPlayer });
+    expect(state.players[0]!.resources).toEqual(resources({ wood: 2, ore: 1 }));
+    expect(state.players[1]!.resources).toEqual(inventories[1]!);
+    expect(state.players[2]!.resources).toEqual(resources({ grain: 1 }));
+    expect(state.bank).toEqual(bank);
+    expect(state.trade).toBeNull();
+    reject(state, { type: "complete-trade", playerId: secondPlayer }, "no open trade");
+    assertConservation(state);
+  });
+
+  test("prices require a valid request, different resources, and a responder who can supply it", () => {
+    let state = actionState();
+    give(state, secondPlayer, { ore: 1 });
+    reject(state, { type: "request-trade", receive: resources() }, "at least one");
+    reject(state, { type: "request-trade", receive: resources({ ore: 1 }) }, "Wait for your turn", secondPlayer);
+    reject(state, { type: "propose-trade", price: resources({ wood: 1 }) }, "open resource request", secondPlayer);
+    state = applyAction(state, firstPlayer, { type: "request-trade", receive: resources({ ore: 1 }) });
+    reject(state, { type: "propose-trade", price: resources({ wood: 1 }) }, "Only other players");
+    reject(state, { type: "respond-trade", accept: true }, "Propose a price", secondPlayer);
+    reject(state, { type: "propose-trade", price: resources() }, "gifts", secondPlayer);
+    reject(state, { type: "propose-trade", price: resources({ ore: 1 }) }, "same resource", secondPlayer);
+    reject(state, { type: "propose-trade", price: resources({ wood: 1 }) }, "resources requested", thirdPlayer);
+    for (const value of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      reject(state, { type: "request-trade", receive: resources({ ore: value }) }, "nonnegative whole number");
+      reject(state, { type: "propose-trade", price: resources({ wood: value }) }, "nonnegative whole number", secondPlayer);
+    }
+    state = applyAction(state, secondPlayer, { type: "propose-trade", price: resources({ wood: 1 }) });
+    state = applyAction(state, secondPlayer, { type: "respond-trade", accept: false });
+    expect(state.trade!.responses[secondPlayer]).toBe(false);
+    reject(state, { type: "complete-trade", playerId: secondPlayer }, "proposed a price");
+    state = applyAction(state, secondPlayer, { type: "propose-trade", price: resources({ brick: 1 }) });
+    expect(state.trade!.responses[secondPlayer]).toEqual(resources({ brick: 1 }));
+    state = applyAction(state, firstPlayer, { type: "request-trade", receive: resources({ wool: 1 }) });
+    expect(state.trade!.responses).toEqual({});
+    state = applyAction(state, firstPlayer, { type: "cancel-trade" });
+    reject(state, { type: "propose-trade", price: resources({ wood: 1 }) }, "open resource request", secondPlayer);
+  });
+
+  test("prices do not expose the requester's hand and both inventories are rechecked at confirmation", () => {
+    let state = actionState();
+    give(state, secondPlayer, { ore: 1 });
+    state = applyAction(state, firstPlayer, { type: "request-trade", receive: resources({ ore: 1 }) });
+    state = applyAction(state, secondPlayer, { type: "propose-trade", price: resources({ wood: 2 }) });
+    reject(state, { type: "complete-trade", playerId: secondPlayer }, "still hold");
+    give(state, firstPlayer, { wood: 2 });
+    const stale = structuredClone(state);
+    stale.players[1]!.resources.ore = 0;
+    reject(stale, { type: "complete-trade", playerId: secondPlayer }, "still hold");
+    state = applyAction(state, firstPlayer, { type: "offer-trade", give: resources({ wood: 2 }), receive: resources({ ore: 1 }) });
+    reject(state, { type: "propose-trade", price: resources({ wood: 1 }) }, "open resource request", secondPlayer);
+  });
+
+  test.each(["offer", "request"])("cancel, turn end, or another substantive action clears stale %s trades", mode => {
     let state = actionState();
     give(state, firstPlayer, { wood: 4 });
-    const offer: GameAction = { type: "offer-trade", give: resources({ wood: 1 }), receive: resources({ ore: 1 }) };
+    const offer: GameAction = mode === "offer"
+      ? { type: "offer-trade", give: resources({ wood: 1 }), receive: resources({ ore: 1 }) }
+      : { type: "request-trade", receive: resources({ ore: 1 }) };
     state = applyAction(state, firstPlayer, offer);
     expect(applyAction(state, firstPlayer, { type: "cancel-trade" }).trade).toBeNull();
     expect(applyAction(state, firstPlayer, { type: "end-turn" }).trade).toBeNull();
@@ -549,6 +623,7 @@ describe("domestic and maritime trade", () => {
     reject(state, { type: "cancel-trade" }, "Wait for your turn", secondPlayer);
     const expired = applyAction(state, firstPlayer, { type: "end-turn" });
     reject(expired, { type: "respond-trade", accept: true }, "Roll the dice", thirdPlayer);
+    reject(expired, { type: "propose-trade", price: resources({ wood: 1 }) }, "Roll the dice", secondPlayer);
   });
 });
 
@@ -975,7 +1050,7 @@ describe("victory, turns and atomic validation", () => {
     const result = applyAction(state, firstPlayer, action);
     result.board.tiles[0]!.terrain = "desert";
     result.players[0]!.resources.wood = 99;
-    result.trade!.give.wood = 99;
+    result.trade!.give!.wood = 99;
     expect(state).toEqual(before);
     expect(action.give.wood).toBe(1);
   });

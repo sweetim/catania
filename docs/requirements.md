@@ -22,10 +22,15 @@ Computer hands cannot be opened through handoff or trade controls.
 
 AI handles initial placement, turns, building, development cards, discards, and
 robber/theft choices using its own hand and public information. Its basic local
-strategy uses bank/port trades and automatically accepts or declines human trade
-offers; it does not propose player trades. Human trade recipients use private
-handoffs to respond. The active player selects one acceptance and confirms the
-exchange. The browser necessarily contains complete local state, so this is a
+strategy uses bank/port trades, accepts or declines exact human trade offers, and
+quotes equal-count prices for resource requests when useful to its build plan;
+it does not initiate player trades or use opponents' private hands to set prices.
+The active player can request cards without specifying payment, or create an exact
+offer. Human recipients use private handoffs to propose a price or accept/decline.
+The active player compares responses and confirms one exchange, or withdraws the
+request/offer. No cards move before confirmation; both inventories are rechecked
+and completed exchanges must give and receive different resources. The browser
+necessarily contains complete local state, so this is a
 friendly display-privacy convention rather than a security boundary.
 
 This milestone replaces neither the network requirements nor their verification
@@ -236,11 +241,12 @@ The host necessarily holds private game state in memory. Board-only means displa
 ## Usability Requirements
 
 - Support portrait player phones and landscape shared displays without clipped controls or page-level horizontal overflow. A zoomable board can pan within its own area.
-- Keep local gameplay within the viewport without page scrolling. Reserve stable board, dice, and placement regions so roll stages, computer notices, and previews do not shift the island. On short screens, hand/player panels and long dialogs may scroll internally; table reference information opens separately.
-- Keep the revealed player's current resource quantities visible in discard, trade, and development-card dialogs, including trade responses and confirmations. Distinguish current holdings or bank supply from selected and remaining amounts; bank exchanges preview the resulting quantities. Remove private summaries during handoff.
-- Show readable per-resource hand quantities and a total, plus each player's public resource-card and development-card totals without revealing opponents' card identities. Stack road, settlement, and city build controls vertically with distinct piece icons, labels, and costs.
+- Keep local gameplay within the viewport without page scrolling. Keep board and dice regions stable so roll stages, computer notices, and previews do not shift the island. On short screens, hand/player panels and long dialogs may scroll internally; table reference information opens separately. Show the shared bank beside the dice on desktop and below them on phones across all game views.
+- Keep the revealed player's current resource quantities visible in discard, trade, and development-card dialogs, including trade responses and confirmations. Use card quantity controls and one discard progress summary rather than repeating owned/selected/remaining captions for every resource; retain per-resource availability and remaining amounts in accessible descriptions. Bank exchanges preview the resulting quantities. Remove private summaries during handoff.
+- Show readable per-resource hand quantities and a total, plus each player's public resource-card and development-card totals as compact icon-and-number badges with full labels in player details and accessible names. Never reveal opponents' card identities. Stack road, settlement, city, and development-card purchase controls vertically with distinct icons, labels, and costs. The development-card row shows one wool, one grain, and one ore; place a full-width trade button below the stack.
 - Use large touch targets, readable resource labels, and selected-state indicators. Do not rely on color alone for player identity or valid positions.
-- Explain unavailable actions and required next steps. Require confirmation for board placement and resource transfers.
+- Show the revealed player's owned development cards as a vertical stack, with a distinct icon, name, and turn status or hidden point for each card. Keep duplicate cards separate; selecting a row opens that card in the development dialog without playing it. Preserve play restrictions and remove the stack during private handoff.
+- Explain unavailable actions and required next steps. Require confirmation for board placement and resource transfers. Place board confirmation beside the selected intersection, road, or hex without resizing the map; keep it inside the visible map during zoom/pan. Support keyboard confirmation and Escape cancellation with focus restored to the selected target.
 - Provide keyboard-operable controls and visible focus. Honor reduced-motion preferences.
 - Show dice settling, matching number-token highlights rather than hex-border highlights, and private resource-gain feedback in sequence. Distinguish robber-blocked tokens from unblocked matches, and identify actual production separately. Keep a fixed-size roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
 - Animate actual resource gains from setup, dice, trades, theft, and development cards in an on-screen collection tray and over stationary revealed hand cards, with gain badges. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.

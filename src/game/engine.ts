@@ -220,7 +220,7 @@ export function applyAction(
   playerFor(original, playerId);
   requireRule(original.phase.type !== "finished", "The game is finished. Start a new game to play again.");
   requireRule(action && typeof action.type === "string", "Choose a valid game action.");
-  if (action.type !== "discard" && action.type !== "respond-trade") {
+  if (action.type !== "discard" && action.type !== "respond-trade" && action.type !== "propose-trade") {
     requireRule(original.activePlayerId === playerId, "Wait for your turn to perform this action.");
   }
   // Every mutation, including multi-step effects and failed random draws, is confined to this copy.
@@ -359,21 +359,45 @@ export function applyAction(
       state.trade = { offeredBy: playerId, give: { ...action.give }, receive: { ...action.receive }, responses: {} };
       state.log.push(`${player.name} offers a trade.`);
     })
+    .with({ type: "request-trade" }, action => {
+      requireActions();
+      validateResources(action.receive);
+      requireRule(resourceTotal(action.receive) > 0, "Request at least one resource.");
+      state.trade = { offeredBy: playerId, give: null, receive: { ...action.receive }, responses: {} };
+      state.log.push(`${player.name} requests resources and invites prices.`);
+    })
+    .with({ type: "propose-trade" }, action => {
+      requireActions();
+      requireRule(state.trade && state.trade.offeredBy !== playerId && state.trade.give === null,
+        "Only other players may propose a price for an open resource request.");
+      validateResources(action.price);
+      requireRule(resourceTotal(action.price) > 0, "A trade must give and receive resources; gifts are not allowed.");
+      requireRule(RESOURCES.every(resource => action.price[resource] === 0 || state.trade!.receive[resource] === 0),
+        "Do not offer and request the same resource in a trade.");
+      requireRule(canPay(player.resources, state.trade.receive), "You do not have the resources requested in this trade.");
+      state.trade.responses[playerId] = { ...action.price };
+    })
     .with({ type: "respond-trade" }, action => {
       requireActions();
       requireRule(state.trade && state.trade.offeredBy !== playerId, "Only other players may respond to the active player's trade offer.");
       requireRule(typeof action.accept === "boolean", "Choose accept or decline for this trade.");
-      if (action.accept) requireRule(canPay(player.resources, state.trade.receive), "You do not have the resources requested in this trade.");
-      state.trade.responses[playerId] = action.accept;
+      if (action.accept) {
+        requireRule(state.trade.give !== null, "Propose a price before confirming this request.");
+        requireRule(canPay(player.resources, state.trade.receive), "You do not have the resources requested in this trade.");
+        state.trade.responses[playerId] = { ...state.trade.give };
+      } else {
+        state.trade.responses[playerId] = false;
+      }
     })
     .with({ type: "complete-trade" }, action => {
       requireActions();
       requireRule(state.trade && state.trade.offeredBy === playerId, "You have no open trade offer to complete.");
-      requireRule(action.playerId !== playerId && state.trade.responses[action.playerId] === true, "Choose an opponent who accepted this offer.");
+      const price = state.trade.responses[action.playerId];
+      requireRule(action.playerId !== playerId && price, "Choose an opponent who accepted this offer or proposed a price.");
       const other = playerFor(state, action.playerId);
-      requireRule(canPay(player.resources, state.trade.give) && canPay(other.resources, state.trade.receive),
+      requireRule(canPay(player.resources, price) && canPay(other.resources, state.trade.receive),
         "Both players must still hold the offered resources. Make a new offer.");
-      transfer(player.resources, other.resources, state.trade.give);
+      transfer(player.resources, other.resources, price);
       transfer(other.resources, player.resources, state.trade.receive);
       state.log.push(`${player.name} trades with ${other.name}.`);
       state.trade = null;
@@ -450,7 +474,7 @@ export function applyAction(
     })
     .exhaustive();
 
-  if (!["offer-trade", "respond-trade", "complete-trade", "cancel-trade"].includes(action.type)) state.trade = null;
+  if (!["offer-trade", "request-trade", "propose-trade", "respond-trade", "complete-trade", "cancel-trade"].includes(action.type)) state.trade = null;
   updateAwards(state);
   checkVictory(state);
   state.log = state.log.slice(-100);

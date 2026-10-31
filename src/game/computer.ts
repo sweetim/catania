@@ -103,6 +103,23 @@ export function chooseComputerAction(state: GameState, playerId: string): GameAc
     const trade = state.trade;
     const cost = buildTargets()[0]?.cost ?? COSTS.city;
     const after = { ...player.resources };
+    if (trade.give === null) {
+      if (RESOURCES.some(resource => player.resources[resource] < trade.receive[resource])) {
+        return { type: "respond-trade", accept: false };
+      }
+      const price = emptyResources();
+      let remaining = resourceTotal(trade.receive);
+      for (const resource of RESOURCES) {
+        after[resource] -= trade.receive[resource];
+        if (trade.receive[resource] > 0) continue;
+        price[resource] = Math.min(remaining, Math.max(0, cost[resource] - after[resource]));
+        after[resource] += price[resource];
+        remaining -= price[resource];
+      }
+      return remaining === 0 && deficit(after, cost) < deficit(player.resources, cost)
+        ? { type: "propose-trade", price }
+        : { type: "respond-trade", accept: false };
+    }
     for (const resource of RESOURCES) after[resource] += trade.give[resource] - trade.receive[resource];
     const improvement = deficit(player.resources, cost) - deficit(after, cost);
     return {

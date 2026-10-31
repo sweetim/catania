@@ -27,6 +27,7 @@ export function Board({
   producingTileIds = [],
   rolledNumber,
   selectedId,
+  confirmation,
   onSelect,
   interactive = true,
   compact = false,
@@ -41,13 +42,23 @@ export function Board({
   producingTileIds?: string[];
   rolledNumber?: number;
   selectedId?: string | null;
+  confirmation?: {
+    title: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+  };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   interactive?: boolean;
   compact?: boolean;
   fit?: boolean;
 }) {
   const illustrationId = useId().replace(/:/g, "");
+  const surfaceReference = useRef<HTMLDivElement>(null);
   const viewportReference = useRef<HTMLDivElement>(null);
+  const mapReference = useRef<SVGSVGElement>(null);
+  const confirmationReference = useRef<HTMLDivElement>(null);
+  const confirmButtonReference = useRef<HTMLButtonElement>(null);
+  const keyboardTargetReference = useRef<{ id: string; key: string } | null>(null);
   const panReference = useRef<{
     x: number;
     y: number;
@@ -94,6 +105,12 @@ export function Board({
           .length === 1,
     };
   });
+  const selectedPoint = selectedId
+    ? verticesById.get(selectedId) ??
+      edgeGeometry.find(({ edge }) => edge.id === selectedId) ??
+      board.tiles.find((tile) => tile.id === selectedId)
+    : undefined;
+  const hasConfirmation = Boolean(confirmation && selectedPoint && canSelect);
 
   useEffect(() => {
     const viewport = viewportReference.current;
@@ -124,6 +141,79 @@ export function Board({
       viewport.clientHeight / 2;
   }, [zoom]);
 
+  useLayoutEffect(() => {
+    const surface = surfaceReference.current;
+    const viewport = viewportReference.current;
+    const map = mapReference.current;
+    const popup = confirmationReference.current;
+    if (!hasConfirmation || !selectedPoint || !surface || !viewport || !map || !popup)
+      return;
+
+    const positionConfirmation = () => {
+      const transformation = map.getScreenCTM();
+      if (!transformation || !viewport.clientWidth || !viewport.clientHeight) {
+        popup.style.visibility = "hidden";
+        return;
+      }
+      const anchor = new DOMPoint(selectedPoint.x, selectedPoint.y).matrixTransform(transformation);
+      const viewportBounds = viewport.getBoundingClientRect();
+      const surfaceBounds = surface.getBoundingClientRect();
+      popup.style.maxHeight = `${Math.max(0, viewport.clientHeight - 16)}px`;
+      const popupBounds = popup.getBoundingClientRect();
+      const targetBounds = map.querySelector<SVGGElement>('[role="button"][aria-pressed="true"]')?.getBoundingClientRect() ?? {
+        left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y,
+      };
+      const minimumLeft = viewportBounds.left + viewport.clientLeft + 8;
+      const minimumTop = viewportBounds.top + viewport.clientTop + 8;
+      const maximumLeft = Math.max(minimumLeft, minimumLeft + viewport.clientWidth - 16 - popupBounds.width);
+      const maximumTop = Math.max(minimumTop, minimumTop + viewport.clientHeight - 16 - popupBounds.height);
+      const below = targetBounds.bottom + 12;
+      const above = targetBounds.top - 12 - popupBounds.height;
+      let left = anchor.x - popupBounds.width / 2;
+      let top = below;
+      if (below > maximumTop) {
+        if (above >= minimumTop) top = above;
+        else if (targetBounds.right + 12 <= maximumLeft) {
+          left = targetBounds.right + 12;
+          top = anchor.y - popupBounds.height / 2;
+        } else if (targetBounds.left - 12 - popupBounds.width >= minimumLeft) {
+          left = targetBounds.left - 12 - popupBounds.width;
+          top = anchor.y - popupBounds.height / 2;
+        } else if (minimumTop - above < below - maximumTop) top = above;
+      }
+      popup.style.left = `${Math.max(minimumLeft, Math.min(maximumLeft, left)) - surfaceBounds.left - surface.clientLeft}px`;
+      popup.style.top = `${Math.max(minimumTop, Math.min(maximumTop, top)) - surfaceBounds.top - surface.clientTop}px`;
+      popup.style.visibility = "visible";
+    };
+
+    const observer = new ResizeObserver(positionConfirmation);
+    observer.observe(viewport);
+    observer.observe(map);
+    observer.observe(popup);
+    viewport.addEventListener("scroll", positionConfirmation, { passive: true });
+    positionConfirmation();
+    return () => {
+      observer.disconnect();
+      viewport.removeEventListener("scroll", positionConfirmation);
+    };
+  }, [hasConfirmation, selectedId, selectedPoint?.x, selectedPoint?.y, zoom, viewportSize.width, viewportSize.height]);
+
+  useLayoutEffect(() => {
+    const button = confirmButtonReference.current;
+    if (hasConfirmation && button?.getClientRects().length) {
+      button.focus({ preventScroll: true });
+    }
+  }, [hasConfirmation, selectedId]);
+
+  function cancelConfirmation() {
+    const target = mapReference.current?.querySelector<SVGGElement>('[role="button"][aria-pressed="true"]');
+    keyboardTargetReference.current = null;
+    confirmation?.onCancel();
+    if (target?.isConnected && target.getClientRects().length && !target.closest("[inert]")) {
+      target.focus({ preventScroll: true });
+    }
+  }
+
   function changeZoom(nextZoom: number) {
     const viewport = viewportReference.current;
     if (viewport) {
@@ -150,15 +240,30 @@ export function Board({
       "aria-label": label,
       "aria-pressed": selectedId === id,
       className: "cursor-pointer outline-none",
-      onClick: () => onSelect?.(kind, id),
+      onClick: () => {
+        keyboardTargetReference.current = null;
+        onSelect?.(kind, id);
+      },
       onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect?.(kind, id);
+          if (!event.repeat) keyboardTargetReference.current = { id, key: event.key };
+        }
+      },
+      onKeyUp: (event: KeyboardEvent<SVGGElement>) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          // Finish the selecting key before moving focus to the native Confirm button.
+          const target = keyboardTargetReference.current;
+          keyboardTargetReference.current = null;
+          if (target?.id === id && target.key === event.key) onSelect?.(kind, id);
         }
       },
       onFocus: () => setFocusedId(id),
-      onBlur: () => setFocusedId(null),
+      onBlur: () => {
+        if (keyboardTargetReference.current?.id === id) keyboardTargetReference.current = null;
+        setFocusedId(null);
+      },
     };
   }
 
@@ -171,7 +276,17 @@ export function Board({
         : "An island of possibilities";
 
   return (
-    <div className={`board-surface relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45] ${fit ? "board-surface-fit flex h-full min-h-0 flex-col" : ""}`}>
+    <div
+      ref={surfaceReference}
+      className={`board-surface relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45] ${fit ? "board-surface-fit flex h-full min-h-0 flex-col" : ""}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && hasConfirmation) {
+          event.preventDefault();
+          event.stopPropagation();
+          cancelConfirmation();
+        }
+      }}
+    >
       {!compact && (
         <div
           className="pointer-events-none absolute left-5 top-4 z-10 hidden sm:block"
@@ -189,7 +304,7 @@ export function Board({
         ref={viewportReference}
         role="region"
         aria-label="Island map. Use the zoom controls to enlarge, then scroll or drag to pan."
-        tabIndex={zoom > 1 ? 0 : undefined}
+        tabIndex={zoom > 1 ? 0 : -1}
         className={`board-viewport w-full overflow-auto overscroll-contain outline-offset-[-3px] focus-visible:outline-2 focus-visible:outline-[#8b6438] ${fit ? "min-h-0 flex-1" : ""} ${zoom > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
         style={{
           aspectRatio: fit ? undefined : `${viewWidth} / ${viewHeight}`,
@@ -241,6 +356,7 @@ export function Board({
           }}
         >
           <svg
+            ref={mapReference}
             viewBox={`${-halfWidth} ${-halfHeight} ${viewWidth} ${viewHeight}`}
             className="block h-full w-full select-none"
             role="group"
@@ -1136,6 +1252,40 @@ export function Board({
           </svg>
         </div>
       </div>
+      {hasConfirmation && confirmation && (
+        <div
+          ref={confirmationReference}
+          role="group"
+          aria-label="Placement confirmation"
+          data-selection-id={selectedId}
+          className="placement-confirmation"
+          style={{ position: "absolute", left: 0, top: 0, visibility: "hidden" }}
+        >
+          <p id={`${illustrationId}-confirmation-title`}>{confirmation.title}</p>
+          <div>
+            <button type="button" className="button-secondary" onClick={cancelConfirmation}>
+              Cancel
+            </button>
+            <button
+              ref={confirmButtonReference}
+              type="button"
+              aria-label="Confirm placement"
+              aria-describedby={`${illustrationId}-confirmation-title`}
+              className="button-primary"
+              onClick={() => {
+                const focusWasInConfirmation = confirmationReference.current?.contains(document.activeElement);
+                confirmation.onConfirm();
+                const viewport = viewportReference.current;
+                if (focusWasInConfirmation && viewport?.getClientRects().length && !viewport.closest("[inert]")) {
+                  viewport.focus({ preventScroll: true });
+                }
+              }}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      )}
       <div
         className={`board-controls flex min-w-0 shrink-0 items-center justify-between gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >

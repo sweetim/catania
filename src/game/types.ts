@@ -54,9 +54,9 @@ export type GamePhase =
   | { type: "finished" };
 export type TradeOffer = {
   offeredBy: string;
-  give: Resources;
+  give: Resources | null;
   receive: Resources;
-  responses: Record<string, boolean>;
+  responses: Record<string, Resources | false>;
 };
 export type GameState = {
   board: Board;
@@ -87,6 +87,8 @@ export type GameAction =
   | { type: "steal"; playerId: string }
   | { type: "bank-trade"; give: Resource; receive: Resource }
   | { type: "offer-trade"; give: Resources; receive: Resources }
+  | { type: "request-trade"; receive: Resources }
+  | { type: "propose-trade"; price: Resources }
   | { type: "respond-trade"; accept: boolean }
   | { type: "complete-trade"; playerId: string }
   | { type: "cancel-trade" }

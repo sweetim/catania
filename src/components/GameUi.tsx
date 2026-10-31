@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { match } from "ts-pattern";
-import type { Resource, Resources } from "../game/types";
+import type { DevelopmentKind, Resource, Resources } from "../game/types";
 
 export const RESOURCE_NAMES: Record<Resource, string> = {
   wood: "Wood",
@@ -152,6 +152,80 @@ export function PieceIcon({ piece }: { piece: "road" | "settlement" | "city" }) 
   );
 }
 
+export function CardTypeIcon({ kind }: { kind: "resource" | "development" }) {
+  return (
+    <svg viewBox="0 0 24 28" className="h-6 w-5 shrink-0" aria-hidden="true" fill="none">
+      <rect x="2" y="2" width="16" height="22" rx="3" fill="currentColor" opacity=".25" />
+      <rect x="6" y="5" width="16" height="22" rx="3" fill="currentColor" />
+      {kind === "resource"
+        ? <path d="M14 9c-7 1-7 9-1 10m1-10c7 4 5 10-1 10m0 0v4m0-6 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+        : <path d="m14 10 1.7 3.5 3.8.5-2.7 2.7.7 3.8-3.5-1.8-3.5 1.8.7-3.8L8.5 14l3.8-.5Z" fill="white" />}
+    </svg>
+  );
+}
+
+export function DevelopmentCardIcon({ kind }: { kind: DevelopmentKind }) {
+  return (
+    <svg className="h-8 w-8 shrink-0" data-development-kind={kind} viewBox="0 0 32 32" aria-hidden="true" fill="none">
+      {match(kind)
+        .with("knight", () => (
+          <>
+            <path d="m16 3 11 4v9c0 6-6 10-11 13C11 26 5 22 5 16V7Z" fill="currentColor" />
+            <path d="M16 8v15m-5-9h10m-8 7h6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          </>
+        ))
+        .with("victory-point", () => (
+          <>
+            <path d="m16 3 4 8 9 1-6.5 6.5L24 28l-8-4.5L8 28l1.5-9.5L3 12l9-1Z" fill="currentColor" />
+            <path d="m13 14 3-2v8m-3 0h6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        ))
+        .with("road-building", () => (
+          <>
+            <path d="M10 3h12l-2 8 10 18H2l10-18Z" fill="currentColor" />
+            <path d="M16 5v5m0 5v4m0 5v4" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          </>
+        ))
+        .with("year-of-plenty", () => (
+          <>
+            <path d="M5 19h22l-3 10H8Z" fill="currentColor" />
+            <path d="M11 19V6m0 7C5 13 4 9 5 6c4 0 6 3 6 7m0-3c0-4 3-6 6-6 1 3-1 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+            <circle cx="22" cy="14" r="4" fill="currentColor" />
+            <path d="M9 23h14" stroke="white" strokeWidth="2" strokeLinecap="round" />
+          </>
+        ))
+        .with("monopoly", () => (
+          <>
+            <path d="M4 16v9c0 5 24 5 24 0v-9" fill="currentColor" opacity=".65" />
+            <ellipse cx="16" cy="16" rx="12" ry="5" fill="currentColor" />
+            <circle cx="16" cy="9" r="7" fill="currentColor" stroke="white" strokeWidth="1.5" />
+            <path d="m16 5 3 4-3 4-3-4Z" fill="white" />
+          </>
+        ))
+        .exhaustive()}
+    </svg>
+  );
+}
+
+export function BankSupply({ resources, developmentCards }: { resources: Resources; developmentCards: number }) {
+  return (
+    <section className="bank-tray" aria-label="Resource bank">
+      <h2 className="eyebrow">Bank</h2>
+      <ul className="bank-supply" aria-label="Bank resources">
+        {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
+          <li key={resource} aria-label={`${RESOURCE_NAMES[resource]}: ${resources[resource]} in bank`} title={`${resources[resource]} ${RESOURCE_NAMES[resource]} in bank`}>
+            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-4 w-4" className="bank-card h-10 w-8" />
+          </li>
+        ))}
+      </ul>
+      <span className="bank-development" role="img" aria-label={`${developmentCards} development cards in bank`} title={`${developmentCards} development cards in bank`}>
+        <CardTypeIcon kind="development" />
+        <strong>{developmentCards}</strong>
+      </span>
+    </section>
+  );
+}
+
 export function Dialog({
   title,
   children,
@@ -249,7 +323,7 @@ export function ResourceInventory({ resources }: { resources: Resources }) {
   return (
     <section className="resource-inventory" aria-label="Your current resources">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold">Currently in your hand</h3>
+        <h3 className="text-xs font-semibold">Your hand</h3>
         <strong className="shrink-0 text-sm text-forest tabular-nums">
           {Object.values(resources).reduce((total, count) => total + count, 0)} cards
         </strong>
@@ -291,6 +365,7 @@ export function SelectableResourceCard({
       aria-pressed={selected}
       aria-label={`${action} ${RESOURCE_NAMES[resource]}`}
       aria-description={countLabel && count !== undefined ? `${countLabel}: ${count}. ${caption}` : caption}
+      title={countLabel && count !== undefined ? `${RESOURCE_NAMES[resource]} / ${countLabel}: ${count}` : RESOURCE_NAMES[resource]}
       disabled={disabled}
       onClick={onClick}
       className="group flex flex-col items-center gap-1.5"
@@ -301,8 +376,7 @@ export function SelectableResourceCard({
         selected={selected}
         className="aspect-[3/4] w-full transition-transform group-enabled:group-hover:-translate-y-1"
       />
-      {countLabel && <span className="text-center text-[10px] leading-3">{countLabel}: <strong>{count}</strong></span>}
-      <span className="text-[10px] font-semibold text-muted">{caption}</span>
+      {caption && <span className="text-[10px] font-semibold text-muted">{caption}</span>}
     </button>
   );
 }
@@ -323,43 +397,41 @@ export function ResourceCardStepper({
   return (
     <fieldset>
       <legend className="mb-3 text-sm font-semibold">{label}</legend>
-      <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+      <div className="grid grid-cols-5 gap-1 sm:gap-2">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map((resource) => (
-          <div key={resource} role="group" aria-label={`${RESOURCE_NAMES[resource]} selection`} className="flex min-w-0 flex-col items-center gap-1.5">
-            <ResourceCard
-              resource={resource}
-              selected={values[resource] > 0}
-              className="aspect-[3/4] w-full"
-            />
-            <div className="resource-selection-counts text-center text-[10px] leading-4 tabular-nums">
-              {maximum && <p>{maximumLabel} <strong>{maximum[resource]}</strong></p>}
-              <p className="font-semibold text-forest">Selected <strong>{values[resource]}</strong></p>
-              {maximum && <p>Remaining <strong>{maximum[resource] - values[resource]}</strong></p>}
-            </div>
-            <div className="flex w-full gap-1">
+          <div
+            key={resource}
+            role="group"
+            aria-label={`${RESOURCE_NAMES[resource]} selection`}
+            aria-description={maximum
+              ? `${maximumLabel} ${maximum[resource]}. Selected ${values[resource]}. Remaining ${maximum[resource] - values[resource]}.`
+              : `Selected ${values[resource]}.`}
+            className="flex min-w-0 flex-col items-center gap-1.5"
+          >
+            <div className="relative w-full">
               <button
                 type="button"
-                className="flex h-11 min-w-0 flex-1 items-center justify-center rounded-lg bg-moss pb-0.5 text-base font-bold text-forest"
-                aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
-                disabled={!values[resource]}
-                onClick={() =>
-                  onChange({ ...values, [resource]: values[resource] - 1 })
-                }
-              >
-                &minus;
-              </button>
-              <button
-                type="button"
-                className="flex h-11 min-w-0 flex-1 items-center justify-center rounded-lg bg-moss pb-0.5 text-base font-bold text-forest"
+                className="resource-select-card relative block min-h-11 w-full rounded-xl"
                 aria-label={`Add ${RESOURCE_NAMES[resource]} to ${label}`}
                 disabled={values[resource] >= (maximum?.[resource] ?? 19)}
                 onClick={() =>
                   onChange({ ...values, [resource]: values[resource] + 1 })
                 }
               >
-                +
+                <ResourceCard resource={resource} selected={values[resource] > 0} compact className="aspect-[3/4] w-full" />
+                <span aria-hidden="true" className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-base font-bold leading-none text-forest">+</span>
               </button>
+              <output aria-label={`${RESOURCE_NAMES[resource]} selected`} className="selected-resource-count">{values[resource]}</output>
             </div>
+            <button
+              type="button"
+              className="flex h-11 w-full items-center justify-center rounded-lg bg-moss text-lg font-bold text-forest"
+              aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
+              disabled={!values[resource]}
+              onClick={() => onChange({ ...values, [resource]: values[resource] - 1 })}
+            >
+              &minus;
+            </button>
           </div>
         ))}
       </div>
