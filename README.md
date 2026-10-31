@@ -116,9 +116,11 @@ previous turn phase. The map's **Cancel** or Escape only clears the selected hex
 Cancellation is unavailable after confirming the move, for a robber triggered
 by seven, or when the Knight has already won the game.
 
-Dice rolls settle before matching number tokens light up and resource totals
-update. Robber-blocked matches have a muted, dashed token ring rather than a
-production glow; hex borders do not flash. Gained resource cards deal into an
+Dice rolls settle before matching number tokens light up, their hexes lift with
+a deeper shadow, and resource totals update. Selected or keyboard-focused robber
+destinations also lift, while click targets stay in their original positions.
+Robber-blocked matches still lift but keep a muted, dashed token ring rather than
+a production glow; hex borders do not flash. Gained resource cards deal into an
 on-screen collection tray and animate over stationary hand cards, followed by
 gain badges and a glow. The tray remains visible while viewing the board and can
 be dismissed; it clears after a few seconds or immediately on private handoff.

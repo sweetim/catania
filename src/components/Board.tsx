@@ -17,6 +17,7 @@ const terrainStyles = {
   ore: { fill: "#a7b6b4", ink: "#536a6e", label: "Mountains" },
   desert: { fill: "#dec49b", ink: "#ab8556", label: "Desert" },
 };
+const tileElevation = 8;
 
 export function Board({
   board,
@@ -90,6 +91,10 @@ export function Board({
   const legalVertices = new Set(canSelect ? legalVertexIds : []);
   const legalEdges = new Set(canSelect ? legalEdgeIds : []);
   const legalTiles = new Set(canSelect ? legalTileIds : []);
+  const raisedTileIds = new Set(board.tiles.filter((tile) =>
+    (tile.number !== null && tile.number === rolledNumber) ||
+    (legalTiles.has(tile.id) && (selectedId === tile.id || focusedId === tile.id)),
+  ).map((tile) => tile.id));
   const blockedVertices = showBlockedSettlementLocations ? blockedSettlementVertices(board) : [];
   const mapWidth = fit
     ? Math.min(viewportSize.width, (viewportSize.height * viewWidth) / viewHeight)
@@ -664,7 +669,8 @@ export function Board({
               </g>
             </g>
 
-            {board.tiles.map((tile) => {
+            {/* Paint raised terrain last, beneath pieces and fixed interaction targets. */}
+            {board.tiles.toSorted((left, right) => Number(raisedTileIds.has(left.id)) - Number(raisedTileIds.has(right.id))).map((tile) => {
               const terrain = terrainStyles[tile.terrain];
               const points = tile.vertexIds
                 .map((id) => {
@@ -677,20 +683,24 @@ export function Board({
               const frequent = tile.number === 6 || tile.number === 8;
               const matchesRoll = tile.number !== null && tile.number === rolledNumber;
               const blocked = matchesRoll && robberTileId === tile.id;
+              const raised = raisedTileIds.has(tile.id);
               return (
                 <g
                   key={tile.id}
+                  className={`terrain-hex${raised ? " terrain-hex-raised" : ""}`}
+                  transform={raised ? `translate(0 ${-tileElevation})` : undefined}
+                  pointerEvents="none"
                   role="img"
                   aria-label={`${terrain.label}, ${tile.terrain}${tile.number === null ? ", no production" : `, roll ${tile.number}, ${probability} chances out of 36`}${robberTileId === tile.id ? ", blocked by the robber" : ""}${producingTileIds.includes(tile.id) ? ", produced resources this roll" : ""}`}
                 >
                   <polygon
                     points={points}
-                    transform="translate(0 2.5)"
+                    transform={`translate(0 ${2.5 + (raised ? tileElevation : 0)})`}
                     fill="#887753"
                     stroke="#887753"
                     strokeWidth="3"
                     strokeLinejoin="round"
-                    opacity="0.45"
+                    opacity={raised ? "0.85" : "0.45"}
                     pointerEvents="none"
                   />
                   <polygon
@@ -899,18 +909,22 @@ export function Board({
                       `Move robber to ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}`,
                     )}
                   >
+                    <polygon points={points} fill="transparent" />
                     <polygon
                       points={points}
+                      transform={raisedTileIds.has(tile.id) ? `translate(0 ${-tileElevation})` : undefined}
                       fill={highlighted ? "#fff5cb" : "transparent"}
                       fillOpacity={highlighted ? "0.2" : "1"}
                       stroke={highlighted ? "#553e20" : "#fff4d4"}
                       strokeWidth={highlighted ? "5" : "2.5"}
                       strokeDasharray={highlighted ? undefined : "5 5"}
                       strokeLinejoin="round"
+                      pointerEvents="none"
                     />
                     {highlighted && (
                       <polygon
                         points={points}
+                        transform={`translate(0 ${-tileElevation})`}
                         fill="none"
                         stroke="#fff5d8"
                         strokeWidth="1"
@@ -1170,7 +1184,7 @@ export function Board({
               .map((tile) => (
                 <g
                   key={tile.id}
-                  transform={`translate(${tile.x + 24} ${tile.y + 18})`}
+                  transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
                   role="img"
                   aria-label={`Robber on ${tile.terrain}${tile.number === null ? "" : ` ${tile.number}`}; production blocked`}
                   pointerEvents="none"

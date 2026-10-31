@@ -236,6 +236,7 @@
 .roll-summary-resource { width: 38px; height: 46px; }
 .roll-summary-resource > span > span { letter-spacing: 0; }
 .roll-summary-gain { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 22px; height: 20px; padding: 0 3px; border: 2px solid #f4edda; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.terrain-hex-raised { filter: drop-shadow(0 6px 4px #253b3659); }
 .number-token-highlight:not(.number-token-blocked) { animation: token-glow 650ms ease-out both; }
 .number-token-blocked { stroke-dasharray: 3 3; }
 

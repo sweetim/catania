@@ -1447,8 +1447,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     const summary = page.getByRole("region", { name: "Roll result" });
     const highlights = page.getByRole("img", { name: /produced resources this roll/, includeHidden: true });
     const numberHighlights = page.locator("g.number-token-highlight");
+    const raisedTiles = page.locator("g.terrain-hex-raised");
     const matchingTiles = state.board.tiles.filter(candidate => candidate.number === tile.number);
     await showView(page, "board");
+    await expect(raisedTiles).toHaveCount(0);
     await expectResourceBank(page, state.bank);
     await expect(page.getByRole("region", { name: "Dice tray", exact: true })).toHaveAttribute("data-stage", "idle");
     const idleFrame = await boardFrame(page);
@@ -1525,6 +1527,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       await page.keyboard.press("Escape");
       await expect(highlights).toHaveCount(0);
       await expect(numberHighlights).toHaveCount(0);
+      await expect(raisedTiles).toHaveCount(0);
       await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePlayer.resources[resource]} ${RESOURCE_NAMES[resource]}`));
       await expect(collection).toHaveCount(0);
       await showView(page, "board");
@@ -1536,6 +1539,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       await expect(summary).toBeVisible();
       await expect(highlights.first()).toBeVisible();
       await expect(numberHighlights).toHaveText(matchingTiles.map(candidate => String(candidate.number)));
+      await expect(raisedTiles).toHaveCount(matchingTiles.length);
       await expect(page.locator("polygon.production-highlight, polygon.number-token-highlight")).toHaveCount(0);
       await expectResourceBank(page, state.bank);
       await expectBoardFrame(page, idleFrame);
@@ -1564,6 +1568,17 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await showView(page, "board");
     await expectBoardFrame(page, idleFrame);
     await expectResourceBank(page, next.bank);
+    await expect(raisedTiles).toHaveCount(matchingTiles.length);
+    for (const raisedTile of await raisedTiles.all()) {
+      await expect(raisedTile).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -8)");
+      await expect(raisedTile).toHaveCSS("filter", /drop-shadow/);
+      await expect(raisedTile).toHaveCSS("pointer-events", "none");
+      await expect(raisedTile.locator("polygon").first()).toHaveAttribute("transform", "translate(0 10.5)");
+      await expect(raisedTile.locator(".number-token-highlight")).toHaveText(String(tile.number));
+    }
+    expect(await page.locator("g.terrain-hex").evaluateAll((elements, raisedCount) => elements.every((element, index) =>
+      element.classList.contains("terrain-hex-raised") === (index >= elements.length - raisedCount),
+    ), matchingTiles.length), "Raised hexes paint above ordinary terrain").toBe(true);
     await expect(collection).toBeInViewport({ ratio: 1 });
     if (!isMobile) {
       const collectionFrame = (await collection.boundingBox())!;
@@ -1574,6 +1589,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     } else {
       expect(await collection.getByRole("listitem").first().evaluate(element => element.getAnimations().length)).toBe(0);
       expect(await numberHighlights.evaluateAll(elements => elements.every(element => element.getAnimations().length === 0))).toBe(true);
+      expect(await raisedTiles.evaluateAll(elements => elements.every(element => element.getAnimations().length === 0))).toBe(true);
     }
     await screenshot(page, testInfo, "resource-collection-board", false);
     await screenshot(page, testInfo, "roll-highlighted-board");
@@ -1627,6 +1643,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
     await privateHandIsAbsent(page);
     await expect(summary).toHaveCount(0);
+    await expect(raisedTiles).toHaveCount(0);
     await expect(collection).toHaveCount(0);
     await expect(page.getByLabel(/^Received /)).toHaveCount(0);
     await revealHand(page);
@@ -1653,6 +1670,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(endTurnButton).toBeDisabled();
     await expect(highlights).toHaveCount(0);
     await expect(numberHighlights).toHaveCount(0);
+    await expect(raisedTiles).toHaveCount(0);
     await expect(collection).toHaveCount(0);
     await expect(page.getByLabel(/^Received /)).toHaveCount(0);
     await showView(page, "board");
@@ -1662,9 +1680,17 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(page.getByRole("button", { name: "Cancel Knight", exact: true, includeHidden: true })).toHaveCount(0);
     const robberTarget = page.getByRole("button", { name: /^Move robber to / }).first();
     const robberDestination = state.board.tiles.find(candidate => candidate.id !== state.robberTileId)!;
+    const hitTarget = robberTarget.locator("polygon").first();
+    const hitTargetBounds = await hitTarget.boundingBox();
     await robberTarget.focus();
+    await expect(raisedTiles).toHaveCount(1);
+    await expect(raisedTiles).toHaveAccessibleName(new RegExp(`, ${robberDestination.terrain},`));
+    await expect(raisedTiles).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -8)");
+    expect(await hitTarget.boundingBox()).toEqual(hitTargetBounds);
     await page.keyboard.press("Space");
     const confirmation = await expectPlacementConfirmation(page, robberTarget, robberDestination.id);
+    await expect(raisedTiles).toHaveCount(1);
+    expect(await hitTarget.boundingBox()).toEqual(hitTargetBounds);
     await expect(confirmation.getByRole("button", { name: "Confirm placement", exact: true })).toBeFocused();
     await expect(page.getByRole("button", { name: /^Move robber to / })).toHaveCount(18);
     await expectBoardFrame(page, idleFrame);
@@ -1673,9 +1699,47 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expect(confirmation).toHaveCount(0);
     await expect(robberTarget).toBeFocused();
     await expect(robberTarget).toHaveAttribute("aria-pressed", "false");
+    await expect(raisedTiles).toHaveCount(1);
+    await page.getByRole("button", { name: "Zoom in", exact: true }).focus();
+    await expect(raisedTiles).toHaveCount(0);
+    await robberTarget.click();
+    await expectPlacementConfirmation(page, robberTarget, robberDestination.id);
+    await expect(raisedTiles).toHaveCount(1);
+    expect(await hitTarget.boundingBox()).toEqual(hitTargetBounds);
     await expectBoardFrame(page, idleFrame);
   });
 }
+
+test("robber-blocked dice matches stay raised with muted tokens", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const state = await prepareRollGame(page);
+  const destination = state.board.tiles.find(tile => tile.number !== null && tile.vertexIds.every(vertexId =>
+    !state.board.vertices.find(vertex => vertex.id === vertexId)!.building,
+  ))!;
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  const targetIndex = state.board.tiles.filter(tile => tile.id !== state.robberTileId).indexOf(destination);
+  await page.getByRole("button", { name: /^Move robber to / }).nth(targetIndex).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(page.locator("g.terrain-hex-raised")).toHaveCount(0);
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  await revealHand(page);
+  const firstDie = Math.max(1, destination.number! - 6);
+  await chooseDice(page, [firstDie, destination.number! - firstDie]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  const blockedTile = page.locator("g.terrain-hex-raised").filter({ has: page.locator(".number-token-blocked") });
+  await expect(blockedTile).toHaveCount(1);
+  await expect(blockedTile).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -8)");
+  await expect(blockedTile).toHaveAccessibleName(/blocked by the robber/);
+  await expect(blockedTile).not.toHaveAccessibleName(/produced resources this roll/);
+  await expect(blockedTile.locator(".number-token-halo")).toHaveAttribute("stroke-dasharray", "3 4");
+  await expect(blockedTile.locator(".number-token-face")).toHaveAttribute("fill", "#e6e1d4");
+  await expect(page.getByRole("img", { name: /^Robber on / })).toHaveAttribute("transform", `translate(${destination.x + 24} ${destination.y + 10})`);
+  await screenshot(page, testInfo, "raised-robber-blocked-hex", false);
+});
 
 test("roll rewards show resource cards, quantities and empty results across screen sizes", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
