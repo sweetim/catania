@@ -120,6 +120,7 @@ async function privateHandIsAbsent(page: Page) {
   await expect(page.getByText("Your victory points", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Resource collection", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("status", { name: "Resource receipt", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Your roll rewards", includeHidden: true })).toHaveCount(0);
 }
 
 async function revealHand(page: Page) {
@@ -140,7 +141,7 @@ async function showView(page: Page, view: "board" | "hand" | "players") {
   }
 }
 
-async function chooseGameOption(page: Page, name: "Table guide" | "How to play" | "Pass device" | "End game") {
+async function chooseGameOption(page: Page, name: "Table guide" | "How to play" | "Settings" | "Pass device" | "End game") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -485,8 +486,8 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await page.keyboard.press("Enter");
     await expect(menu).toBeInViewport({ ratio: 1 });
     await expect(gameButton).toHaveAttribute("aria-expanded", "true");
-    await expect(menu.getByRole("button")).toHaveText(["Table guide", "How to play", "Pass device", "End game"]);
-    for (const name of ["Table guide", "How to play", "Pass device", "End game"]) {
+    await expect(menu.getByRole("button")).toHaveText(["Table guide", "How to play", "Settings", "Pass device", "End game"]);
+    for (const name of ["Table guide", "How to play", "Settings", "Pass device", "End game"]) {
       const option = menu.getByRole("button", { name, exact: true });
       await expect(option).toBeInViewport({ ratio: 1 });
       expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -506,7 +507,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await expect(menu).toBeHidden();
     await gameButton.focus();
     await page.keyboard.press("Enter");
-    for (let step = 0; step < 5; step++) await page.keyboard.press("Tab");
+    for (let step = 0; step < 6; step++) await page.keyboard.press("Tab");
     await expect(menu).toBeHidden();
     await chooseGameOption(page, "How to play");
     await expect(page.getByRole("dialog", { name: "A little guide to the island", exact: true })).toBeVisible();
@@ -533,6 +534,118 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await screenshot(page, testInfo, `header-and-turn-card-${artifact}`, false);
   }
 });
+
+test("blocked settlement markers follow the distance rule and toggle without changing placement", async ({ page, isMobile }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  const board = createBoard(() => 0);
+  const occupiedVertices = new Set<string>();
+  const markers = page.getByRole("img", { name: /^Settlement blocked at / });
+  const settlementTargets = page.getByRole("button", { name: /^Place settlement at / });
+  await expect(markers).toHaveCount(0);
+  let expectedLabels: string[] = [];
+  for (let placement = 0; placement < 2; placement++) {
+    const target = settlementTargets.first();
+    const vertexId = (await target.getAttribute("aria-label"))!.replace("Place settlement at ", "");
+    await target.click();
+    await expect(markers).toHaveCount(expectedLabels.length);
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    occupiedVertices.add(vertexId);
+    const blockedVertices = board.vertices.filter(vertex => !occupiedVertices.has(vertex.id) && board.edges.some(edge =>
+      edge.vertexIds.includes(vertex.id) && edge.vertexIds.some(neighborId => occupiedVertices.has(neighborId)),
+    ));
+    expectedLabels = blockedVertices.map(vertex => `Settlement blocked at ${vertex.id}: adjacent settlement or city`);
+    await expect.poll(() => markers.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(expectedLabels);
+    expect(await markers.evaluateAll(elements => elements.every(element =>
+      !element.hasAttribute("tabindex") && getComputedStyle(element).pointerEvents === "none",
+    ))).toBe(true);
+    await page.getByRole("button", { name: /^Build road at / }).first().click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
+    await expect(markers).toHaveCount(expectedLabels.length);
+    await revealHand(page);
+    await expect(settlementTargets).toHaveCount(board.vertices.length - occupiedVertices.size - expectedLabels.length);
+  }
+
+  await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1280, height: 720 });
+  const initialFrame = await boardFrame(page);
+  const legalLabels = await settlementTargets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+  await screenshot(page, testInfo, "blocked-settlement-markers", false);
+  const gameButton = page.getByRole("button", { name: "Game", exact: true });
+  await gameButton.focus();
+  await page.keyboard.press("Enter");
+  for (let step = 0; step < 3; step++) await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  const toggle = settings.getByRole("checkbox", { name: "Show blocked settlement locations", exact: true });
+  await expect(toggle).toBeChecked();
+  await expect(toggle).toHaveAccessibleDescription(/distance rule prevents building/);
+  await expect(settings).toBeInViewport({ ratio: 1 });
+  await screenshot(page, testInfo, "settlement-marker-settings", false);
+  await page.keyboard.press("Tab");
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(toggle).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(gameButton).toBeFocused();
+  await expect(markers).toHaveCount(0);
+  await expectBoardFrame(page, initialFrame);
+  expect(await settlementTargets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(legalLabels);
+  await screenshot(page, testInfo, "settlement-markers-off", false);
+
+  await chooseGameOption(page, "Settings");
+  await toggle.check();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(markers).toHaveCount(expectedLabels.length);
+  await expectBoardFrame(page, initialFrame);
+  expect(await settlementTargets.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(legalLabels);
+  await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
+  await screenshot(page, testInfo, "blocked-settlement-markers-restored", false);
+  for (let step = 0; step < 4; step++) await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect(page.getByRole("status", { name: "Zoom level", exact: true })).toHaveText("200%");
+  await expect(markers).toHaveCount(expectedLabels.length);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "blocked-settlement-markers-zoomed", false);
+});
+
+for (const storageAvailable of [true, false]) {
+  test(`settlement marker settings work with browser storage ${storageAvailable ? "available" : "blocked"}`, async ({ page }) => {
+    if (!storageAvailable) {
+      await page.addInitScript(() => {
+        Object.defineProperty(window, "localStorage", {
+          get() { throw new DOMException("Storage blocked", "SecurityError"); },
+        });
+      });
+    }
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await revealHand(page);
+    await placeStartingPieces(page);
+    await chooseGameOption(page, "Settings");
+    const toggle = page.getByRole("checkbox", { name: "Show blocked settlement locations", exact: true });
+    await expect(toggle).toBeChecked();
+    await toggle.uncheck();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("img", { name: /^Settlement blocked at / })).toHaveCount(0);
+    await chooseGameOption(page, "End game");
+    await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+    await page.reload();
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await chooseGameOption(page, "Settings");
+    await expect(toggle).toBeChecked({ checked: !storageAvailable });
+    await page.keyboard.press("Escape");
+    await revealHand(page);
+    await placeStartingPieces(page);
+    const markers = page.getByRole("img", { name: /^Settlement blocked at / });
+    if (storageAvailable) await expect(markers).toHaveCount(0);
+    else await expect(markers.first()).toBeVisible();
+  });
+}
 
 test("short and narrow tabletops contain zoom, controls and placement previews", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
@@ -1404,6 +1517,8 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
 
     if (reducedMotion === "no-preference") {
       await expect(summary).toHaveAttribute("data-stage", "rolling");
+      await expect(summary.getByRole("list", { name: "Your roll rewards" })).toHaveCount(0);
+      await expect(summary.getByRole("img", { name: "Dice rolling", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeDisabled();
       await page.getByRole("button", { name: "Game", exact: true }).click();
       await expect(page.getByRole("button", { name: "Pass device", exact: true })).toBeDisabled();
@@ -1416,6 +1531,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       await expectBoardFrame(page, idleFrame);
       await page.clock.runFor(500);
       await expect(summary).toHaveAttribute("data-stage", "production");
+      await expect(summary.getByRole("list", { name: "Your roll rewards" })).toHaveCount(0);
       await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePlayer.resources[resource]} ${RESOURCE_NAMES[resource]}`));
       await expect(summary).toBeVisible();
       await expect(highlights.first()).toBeVisible();
@@ -1431,6 +1547,11 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     }
 
     await expect(summary.getByRole("img", { name: `Dice: ${dice[0]} and ${dice[1]}` })).toBeVisible();
+    await expect(summary.locator(".roll-summary-total, .roll-summary-details")).toHaveCount(0);
+    await expect(summary).not.toContainText(/rolled|The island supplied|The robber blocked/);
+    const rollRewards = summary.getByRole("list", { name: "Your roll rewards" });
+    await expect(rollRewards).toBeInViewport({ ratio: 1 });
+    await expect(rollRewards.getByRole("listitem")).toHaveCount(RESOURCES.filter(resource => afterPlayer.resources[resource] > beforePlayer.resources[resource]).length);
     await expect(page.getByRole("status", { name: "Resource receipt" })).toContainText("You received +");
     const producingTiles = state.board.tiles.filter(candidate => candidate.number === tile.number && candidate.id !== state.robberTileId && candidate.vertexIds.some(
       vertexId => state.board.vertices.find(vertex => vertex.id === vertexId)?.building,
@@ -1467,6 +1588,9 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
         const dealtCard = handCard.locator(".resource-dealt-card");
         await expect(badge).toHaveText(`+${gain}`);
         await expect(collection.getByRole("listitem", { name: `${RESOURCE_NAMES[resource]} +${gain}`, exact: true })).toBeVisible();
+        const reward = rollRewards.getByRole("listitem", { name: `${RESOURCE_NAMES[resource]} +${gain}`, exact: true });
+        await expect(reward.locator("svg")).toBeVisible();
+        await expect(reward.locator("strong")).toHaveText(`+${gain}`);
         await expect(dealtCard).toHaveAttribute("aria-hidden", "true");
         if (reducedMotion === "reduce") {
           expect(await handCard.evaluate(element => element.getAnimations().length)).toBe(0);
@@ -1520,6 +1644,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     }
     await expect(summary).toHaveAttribute("data-stage", "complete");
     await expect(page.getByRole("status", { name: "Roll announcement" })).toContainText("No resources produced. Resolve any discards, then move the robber.");
+    await expect(summary.getByRole("img", { name: "Dice: 3 and 4", exact: true })).toBeVisible();
+    await expect(summary).toHaveText("");
+    await screenshot(page, testInfo, "roll-seven-simplified", false);
+    await expect(summary.getByRole("list", { name: "Your roll rewards" })).toHaveCount(0);
     await showView(page, "hand");
     await expect(rollButton).toBeDisabled();
     await expect(endTurnButton).toBeDisabled();
@@ -1548,6 +1676,71 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expectBoardFrame(page, idleFrame);
   });
 }
+
+test("roll rewards show resource cards, quantities and empty results across screen sizes", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await prepareRollGame(page);
+  const summary = page.getByRole("region", { name: "Roll result", exact: true });
+  const rewards = summary.getByRole("list", { name: "Your roll rewards", exact: true });
+  const scenarios: { dice: [number, number]; rewards: [Resource, number][] }[] = [
+    { dice: [2, 6], rewards: [["wood", 1], ["ore", 1]] },
+    { dice: [2, 3], rewards: [["wood", 2]] },
+    { dice: [1, 1], rewards: [] },
+  ];
+  for (const [index, scenario] of scenarios.entries()) {
+    await chooseDice(page, scenario.dice);
+    await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+    await expect(summary).toHaveAttribute("data-stage", "complete");
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    await expect(summary.getByRole("img", { name: `Dice: ${scenario.dice[0]} and ${scenario.dice[1]}`, exact: true })).toBeVisible();
+    await expect(summary.locator(".roll-summary-total, .roll-summary-details")).toHaveCount(0);
+    await expect(summary).not.toContainText(/rolled|The island supplied|The robber blocked/);
+    await expect(page.getByRole("status", { name: "Roll announcement", exact: true })).toContainText(`rolled ${scenario.dice[0]} + ${scenario.dice[1]} = ${scenario.dice[0] + scenario.dice[1]}.`);
+    await expect(rewards.getByRole("listitem")).toHaveCount(scenario.rewards.length);
+    if (!scenario.rewards.length) {
+      await expect(summary.getByText("You received no resources this roll.", { exact: true })).toBeVisible();
+    }
+    for (const viewport of isMobile
+      ? [{ width: 320, height: 844 }, { width: 390, height: 667 }, { width: 320, height: 568 }]
+      : [{ width: 1280, height: 720 }, { width: 1440, height: 1000 }]) {
+      await page.setViewportSize(viewport);
+      await expect(summary).toBeInViewport({ ratio: 1 });
+      const summaryBounds = (await summary.boundingBox())!;
+      const dice = summary.locator(".roll-die");
+      await expect(dice).toHaveCount(2);
+      for (const die of await dice.all()) {
+        const size = isMobile && viewport.height <= 740 ? "48px" : "56px";
+        await expect(die).toHaveCSS("width", size);
+        await expect(die).toHaveCSS("height", size);
+        await expect(die).toBeInViewport({ ratio: 1 });
+      }
+      const diceBounds = (await summary.getByRole("img").boundingBox())!;
+      for (const [resource, quantity] of scenario.rewards) {
+        const reward = rewards.getByRole("listitem", { name: `${RESOURCE_NAMES[resource]} +${quantity}`, exact: true });
+        await expect(reward.locator("svg")).toBeVisible();
+        await expect(reward.locator("strong")).toHaveText(`+${quantity}`);
+        expect(await reward.locator(".roll-summary-resource > span > span").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+        for (const element of [reward, reward.locator("strong")]) {
+          await expect(element).toBeInViewport({ ratio: 1 });
+          const bounds = (await element.boundingBox())!;
+          expect(bounds.x).toBeGreaterThanOrEqual(diceBounds.x + diceBounds.width);
+          expect(bounds.x + bounds.width).toBeLessThanOrEqual(summaryBounds.x + summaryBounds.width);
+          expect(bounds.y).toBeGreaterThanOrEqual(summaryBounds.y);
+          expect(bounds.y + bounds.height).toBeLessThanOrEqual(summaryBounds.y + summaryBounds.height);
+        }
+      }
+      expect(await summary.locator(".roll-summary-content").evaluate(element => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
+      await noPageOverflow(page);
+      await screenshot(page, testInfo, `roll-rewards-${index}-${viewport.width}-${viewport.height}`, false);
+    }
+    if (index < scenarios.length - 1) {
+      await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+      await privateHandIsAbsent(page);
+      await revealHand(page);
+    }
+  }
+});
 
 test("very short windows keep hand tasks and turn controls reachable", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -2279,7 +2472,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await page.clock.runFor(450);
   const computerRoll = page.getByRole("region", { name: "Roll result" });
   await expect(computerRoll).toHaveAttribute("data-stage", "rolling");
-  await expect(computerRoll).toContainText(/Computer \d+ is rolling/);
+  await expect(computerRoll).toHaveText("Rolling...");
+  await expect(computerRoll.getByRole("img", { name: "Dice rolling", exact: true })).toBeVisible();
   await expectBoardFrame(page, humanTurnFrame);
   await page.clock.runFor(500);
   await expect(computerRoll).toHaveAttribute("data-stage", "production");

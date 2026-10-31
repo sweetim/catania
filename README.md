@@ -71,12 +71,19 @@ within the hand or player panel without moving the board. On very short windows,
 the entire sidebar scrolls internally so the status card, turn controls, and hand
 tasks remain reachable. The header's **Game** menu contains **Table guide**
 (costs, public activity, and player details),
-**How to play**, and **Pass device** when multiple humans have a hand revealed.
+**How to play**, **Settings**, and **Pass device** when multiple humans have a hand revealed.
 **End game** sits below a divider and still requires confirmation. The turn header
 shows **Setup** or the current turn number. Keyboard users can select highlighted
 positions with Enter or Space. Confirm/Cancel appears beside the selected piece
 or hex, stays inside the map, and follows zoom and pan. Confirm is focused for
 keyboard use; Escape cancels and returns focus to the selected location.
+
+Small crosses mark empty corners next to any settlement or city where the distance
+rule prevents a new settlement. **Game > Settings > Show blocked settlement locations**
+toggles these markers. They are on by default, and the preference is remembered in
+this browser when storage is available, including across new games and reloads.
+Unmarked corners are not necessarily buildable: roads, resources, remaining pieces,
+and turn rules still apply. The setting does not save the game.
 
 The hand shows large per-resource quantities and a total card count. Discard and
 trade panels keep your current cards visible. Tap a resource card to add it to a
@@ -118,9 +125,13 @@ be dismissed; it clears after a few seconds or immediately on private handoff.
 It shows actual gains for the revealed hand
 from starting settlements, dice, bank/player trades, theft, and development cards.
 A fixed-size roll summary stays visible in every phone view until the next action.
-Computer turns wait for the roll sequence to finish. Sevens, robber blocking,
-and bank shortages are explained without revealing another player's resource
-breakdown. Reduced-motion settings
+It shows larger dice beside **You received** resource cards
+with **+N** quantities for the revealed player, including on short phone screens.
+Rolls without a personal gain show a short message instead of cards.
+The tray omits the numeric total, roll sentence, and description row.
+Computer turns wait for the roll sequence to finish. Screen-reader announcements
+explain sevens, robber blocking, and bank shortages without revealing another
+player's resource breakdown. Reduced-motion settings
 show the result, collection cards, and static highlights immediately, without
 animation delays.
 

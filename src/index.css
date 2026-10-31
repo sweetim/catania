@@ -217,19 +217,25 @@
 .roll-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   flex: none;
-  height: 112px;
+  height: 88px;
   padding: 8px 12px;
   border: 1px solid #cfc09a;
   border-radius: 14px;
   background: linear-gradient(110deg, #ece0c5, #f8f1e2);
   box-shadow: inset 0 2px 5px #846b3414, 0 1px #fffdf6;
 }
-.roll-summary-content { display: grid; grid-template-rows: 20px minmax(0, 1fr) 32px; height: 100%; }
-.roll-summary-title, .roll-summary-details, .roll-summary-private { margin: 0; overflow: auto; scrollbar-width: thin; }
-.roll-summary-title { font-size: 12px; }
-.roll-summary-private { line-height: 16px; }
+.roll-summary-dice .roll-die { width: 56px; height: 56px; }
+.roll-summary-label { font-size: 10px; font-weight: 600; line-height: 12px; color: var(--color-muted); }
+.roll-summary-content { flex: 1; min-width: 0; max-height: 100%; overflow: auto; scrollbar-width: thin; }
+.roll-summary-title { margin: 0; font-size: 12px; font-weight: 600; line-height: 16px; overflow-wrap: anywhere; }
+.roll-summary-label { margin: 0 0 2px; }
+.roll-summary-rewards { display: flex; gap: 10px; margin: 0; padding: 6px 5px 2px 0; list-style: none; }
+.roll-summary-rewards li { position: relative; display: flex; flex: none; }
+.roll-summary-resource { width: 38px; height: 46px; }
+.roll-summary-resource > span > span { letter-spacing: 0; }
+.roll-summary-gain { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 22px; height: 20px; padding: 0 3px; border: 2px solid #f4edda; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .number-token-highlight:not(.number-token-blocked) { animation: token-glow 650ms ease-out both; }
 .number-token-blocked { stroke-dasharray: 3 3; }
 
@@ -243,15 +249,9 @@
   .table-feedback { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
   .game-table > .table-feedback { grid-column: 2; grid-row: 2; grid-template-columns: minmax(0, 1fr); }
   .bank-tray { height: 64px; padding-inline: 12px; }
-  .roll-summary { height: 64px; }
-  .roll-summary-content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr); }
-  .roll-summary-title { grid-area: 1 / 1; }
-  .roll-summary-private { grid-area: 1 / 2; text-align: right; }
-  .roll-summary-details { grid-area: 2 / 1 / 3 / 3; }
-  .hand-dice .roll-summary { height: 112px; gap: 8px; padding: 8px; }
-  .hand-dice .roll-summary-content { grid-template-columns: minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr) 32px; }
-  .hand-dice .roll-summary-private { grid-area: 3 / 1; text-align: left; }
-  .hand-dice .roll-summary-details { grid-area: 2 / 1; }
+  .hand-dice .roll-summary { padding-inline: 8px; }
+  .computer-table .roll-summary { height: 64px; }
+  .computer-table .roll-summary-dice .roll-die { width: 44px; height: 44px; }
   .board-tablemat { padding: 12px; }
 }
 
@@ -270,10 +270,11 @@
   .table-navigation { padding: 0; }
   .table-feedback { gap: 4px; }
   .bank-tray { height: 50px; padding-block: 4px; }
-  .roll-summary { height: 64px; }
-  .roll-summary-content { grid-template-rows: 20px minmax(0, 1fr); }
-  .roll-summary-private { display: none; }
-  .roll-summary-details { font-size: 10px; line-height: 12px; }
+  .roll-summary { gap: 12px; padding-block: 6px; }
+  .roll-summary-dice .roll-die { width: 48px; height: 48px; }
+  .roll-summary-label { margin-bottom: 0; }
+  .roll-summary-resource { height: 34px; }
+  .roll-summary-resource > span { gap: 0; }
   .board-instruction { height: 48px; }
   .board-instruction h1 { font-size: 16px; line-height: 20px; }
   .board-instruction p { font-size: 10px; line-height: 12px; }

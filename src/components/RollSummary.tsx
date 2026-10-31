@@ -1,6 +1,6 @@
 import type { RollOutcome } from "../rollPresentation";
 import { RESOURCES } from "../game/engine";
-import { RESOURCE_NAMES } from "./GameUi";
+import { ResourceCard, RESOURCE_NAMES } from "./GameUi";
 
 export type RollStage = "rolling" | "production" | "received" | "complete";
 
@@ -37,13 +37,7 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
       : "",
   ].filter(Boolean).join(" ");
   const gains = viewerId ? outcome?.gains[viewerId] : undefined;
-  const gainDescription = gains && RESOURCES
-    .filter(resource => gains[resource] > 0)
-    .map(resource => `+${gains[resource]} ${RESOURCE_NAMES[resource]}`)
-    .join(", ");
-  const privateSummary = gains && total !== 7
-    ? gainDescription ? `You received ${gainDescription}.` : "You received no resources this roll."
-    : "";
+  const gainedResources = gains ? RESOURCES.filter(resource => gains[resource] > 0) : [];
 
   return (
     <>
@@ -54,15 +48,15 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
       <section
         aria-label={outcome ? "Roll result" : "Dice tray"}
         data-stage={outcome ? stage : "idle"}
-        className="roll-summary flex min-h-0 items-start gap-3 rounded-2xl border border-[#c9b983] bg-[#f4edda] px-3 py-3 sm:items-center sm:px-4"
+        className="roll-summary"
       >
         <div
           role="img"
           aria-label={!outcome ? "Dice at rest" : rolling ? "Dice rolling" : `Dice: ${dice[0]} and ${dice[1]}`}
-          className={`roll-summary-dice flex shrink-0 gap-1.5 pt-0.5 ${rolling ? "dice-rolling" : ""} ${outcome ? "" : "opacity-60"}`}
+          className={`roll-summary-dice flex shrink-0 gap-1.5 ${rolling ? "dice-rolling" : ""} ${outcome ? "" : "opacity-60"}`}
         >
           {dice.map((value, index) => (
-            <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die h-9 w-9 sm:h-11 sm:w-11">
+            <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die">
               <rect x="2" y="4" width="44" height="42" rx="10" fill="#c9b983" />
               <rect x="2" y="2" width="44" height="42" rx="10" fill="#fffaf0" stroke="#b8a777" />
               {DIE_PIPS[rolling ? 5 : value]!.map(position => (
@@ -71,14 +65,24 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
             </svg>
           ))}
         </div>
-        <div className="roll-summary-content min-h-0 min-w-0 flex-1">
-          <p className="roll-summary-title min-h-5 text-sm font-semibold text-ink">{title}</p>
-          <p className="roll-summary-details mt-1 min-h-0 overflow-y-auto overscroll-contain text-xs leading-5 text-muted">
-            {!outcome ? result : rolling ? "A little chance. A little possibility." : received ? details : "Following the roll across the island..."}
-          </p>
-          <p className="roll-summary-private mt-1 min-h-5 text-xs font-semibold leading-5 text-ink">
-            {received ? privateSummary : ""}
-          </p>
+        <div className="roll-summary-content">
+          {received && gains && total !== 7 && gainedResources.length > 0 ? (
+            <div className="roll-summary-private">
+              <p className="roll-summary-label">You received</p>
+              <ul className="roll-summary-rewards" aria-label="Your roll rewards">
+                {gainedResources.map(resource => (
+                  <li key={resource} aria-label={`${RESOURCE_NAMES[resource]} +${gains[resource]}`} title={`You received +${gains[resource]} ${RESOURCE_NAMES[resource]}`}>
+                    <ResourceCard resource={resource} iconClassName="h-4 w-4" className="roll-summary-resource" />
+                    <strong aria-hidden="true" className="roll-summary-gain">+{gains[resource]}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : received && gains && total !== 7 ? (
+            <p className="roll-summary-title">You received no resources this roll.</p>
+          ) : !outcome || rolling ? (
+            <p className="roll-summary-title">{rolling ? "Rolling..." : "Waiting for the next roll."}</p>
+          ) : null}
         </div>
       </section>
     </>

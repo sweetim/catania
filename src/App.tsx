@@ -55,6 +55,7 @@ type RollPresentation = {
 };
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
+const BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY = "catania.showBlockedSettlementLocations";
 const DEVELOPMENT_NAMES: Record<DevelopmentKind, string> = {
   knight: "Knight",
   "victory-point": "Victory point",
@@ -147,6 +148,13 @@ export function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
+  const [showBlockedSettlementLocations, setShowBlockedSettlementLocations] = useState(() => {
+    try {
+      return window.localStorage.getItem(BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
@@ -154,7 +162,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "rules" | "reference" | "trade" | "development" | "players" | "restart" | null
+    "rules" | "reference" | "settings" | "trade" | "development" | "players" | "restart" | null
   >(null);
   const gameMenu = useRef<HTMLDetailsElement>(null);
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
@@ -236,6 +244,14 @@ export function App() {
     return () => preference.removeEventListener("change", update);
   }, []);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY, String(showBlockedSettlementLocations));
+    } catch {
+      // Keep the toggle usable when browser storage is unavailable.
+    }
+  }, [showBlockedSettlementLocations]);
+
   const advanceRollPresentation = useEffectEvent((expected: RollPresentation) => {
     if (rollPresentation !== expected) return;
     const stage = reducedMotion ? "complete" : match(expected.stage)
@@ -287,7 +303,7 @@ export function App() {
     return () => document.removeEventListener("pointerdown", dismissMenu);
   }, []);
 
-  function openGameDialog(nextDialog: "rules" | "reference" | "players" | "restart") {
+  function openGameDialog(nextDialog: "rules" | "reference" | "settings" | "players" | "restart") {
     if (gameMenu.current) {
       gameMenu.current.open = false;
       // Dialogs restore focus to the visible opener, not a hidden menu item.
@@ -634,6 +650,9 @@ export function App() {
               <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("rules")}>
                 How to play
               </button>
+              <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" onClick={() => openGameDialog("settings")}>
+                Settings
+              </button>
               {needsHandoff && viewer && (
                 <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={rollBusy} onClick={() => openGameDialog("players")}>
                   Pass device
@@ -930,6 +949,7 @@ export function App() {
               board={game.board}
               players={game.players}
               robberTileId={game.robberTileId}
+              showBlockedSettlementLocations={showBlockedSettlementLocations}
               interactive={false}
               compact
               fit
@@ -1027,6 +1047,7 @@ export function App() {
                   board={game.board}
                   players={game.players}
                   robberTileId={game.robberTileId}
+                  showBlockedSettlementLocations={showBlockedSettlementLocations}
                   producingTileIds={producingTileIds}
                   rolledNumber={rolledNumber}
                   fit
@@ -1578,7 +1599,7 @@ export function App() {
             <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} producingTileIds={producingTileIds} rolledNumber={rolledNumber} interactive={false} compact fit />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} producingTileIds={producingTileIds} rolledNumber={rolledNumber} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
         </main>
       )}
@@ -1587,6 +1608,26 @@ export function App() {
         <span>A tabletop state of mind.</span>
         <span>Catania / Solo &amp; pass-and-play / Wi-Fi play coming later</span>
       </footer>
+
+      {dialog === "settings" && (
+        <Dialog title="Settings" onClose={() => setDialog(null)}>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={showBlockedSettlementLocations}
+              onChange={(event) => setShowBlockedSettlementLocations(event.currentTarget.checked)}
+              aria-describedby="blocked-settlement-locations-description"
+              className="size-5 shrink-0 accent-forest"
+            />
+            Show blocked settlement locations
+          </label>
+          <p id="blocked-settlement-locations-description" className="mt-3 text-sm leading-6 text-muted">
+            Crosses mark empty corners next to any settlement or city, where the distance rule prevents building.
+            Unmarked corners still require the usual roads, resources, and available pieces on your turn.
+          </p>
+          <p className="mt-4 text-xs text-muted">Saved in this browser when storage is available. Games are not saved.</p>
+        </Dialog>
+      )}
 
       {dialog === "reference" && game && (
         <Dialog title="Around the table" onClose={() => setDialog(null)} wide>

@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { blockedSettlementVertices } from "../game/engine";
 import type { Board as BoardState, Player } from "../game/types";
 
 const terrainStyles = {
@@ -24,6 +25,7 @@ export function Board({
   legalVertexIds = [],
   legalEdgeIds = [],
   legalTileIds = [],
+  showBlockedSettlementLocations = false,
   producingTileIds = [],
   rolledNumber,
   selectedId,
@@ -39,6 +41,7 @@ export function Board({
   legalVertexIds?: string[];
   legalEdgeIds?: string[];
   legalTileIds?: string[];
+  showBlockedSettlementLocations?: boolean;
   producingTileIds?: string[];
   rolledNumber?: number;
   selectedId?: string | null;
@@ -87,6 +90,7 @@ export function Board({
   const legalVertices = new Set(canSelect ? legalVertexIds : []);
   const legalEdges = new Set(canSelect ? legalEdgeIds : []);
   const legalTiles = new Set(canSelect ? legalTileIds : []);
+  const blockedVertices = showBlockedSettlementLocations ? blockedSettlementVertices(board) : [];
   const mapWidth = fit
     ? Math.min(viewportSize.width, (viewportSize.height * viewWidth) / viewHeight)
     : viewportSize.width;
@@ -1058,6 +1062,22 @@ export function Board({
                 );
               })}
 
+            {blockedVertices.map((vertexId) => {
+              const vertex = verticesById.get(vertexId)!;
+              return (
+                <g
+                  key={vertexId}
+                  transform={`translate(${vertex.x} ${vertex.y})`}
+                  role="img"
+                  aria-label={`Settlement blocked at ${vertexId}: adjacent settlement or city`}
+                  pointerEvents="none"
+                >
+                  <circle r="9" fill="#f4f0e5" fillOpacity="0.9" />
+                  <path d="M-4-4 4 4M-4 4 4-4" fill="none" stroke="#775f55" strokeWidth="1.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                </g>
+              );
+            })}
+
             {board.vertices
               .filter((vertex) => vertex.building)
               .map((vertex) => {
@@ -1293,7 +1313,14 @@ export function Board({
           <p className="text-[10px] font-medium leading-4 text-[#5c6b59] sm:text-xs">
             {instruction}
           </p>
-          {!compact && (
+          {blockedVertices.length > 0 ? (
+            <p className="hidden items-center gap-1 text-[10px] leading-3 text-[#775f55] sm:flex">
+              <svg aria-hidden="true" className="size-3 shrink-0" viewBox="-6 -6 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M-3.5-3.5 3.5 3.5M-3.5 3.5 3.5-3.5" />
+              </svg>
+              <span>Too close<span className="sr-only"> to another settlement or city to build</span></span>
+            </p>
+          ) : !compact && (
             <p className="hidden text-[10px] leading-4 text-[#8a927f] sm:block">
               {zoom > 1
                 ? "Drag or scroll to explore"

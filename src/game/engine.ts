@@ -78,14 +78,22 @@ function pieceCount(state: GameState, playerId: string, kind: "road" | "settleme
     : state.board.vertices.filter(vertex => vertex.building?.playerId === playerId && vertex.building.kind === kind).length;
 }
 
+export function blockedSettlementVertices(board: Board): string[] {
+  return board.vertices.filter(vertex => {
+    if (vertex.building) return false;
+    const adjacentEdges = board.edges.filter(edge => vertex.edgeIds.includes(edge.id));
+    return adjacentEdges.some(edge => edge.vertexIds.some(id => id !== vertex.id &&
+      board.vertices.find(neighbor => neighbor.id === id)!.building));
+  }).map(vertex => vertex.id);
+}
+
 export function legalSettlementVertices(state: GameState, playerId: string): string[] {
   if (state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
     !["setup-settlement", "actions"].includes(state.phase.type) || pieceCount(state, playerId, "settlement") >= 5) return [];
+  const blockedVertices = new Set(blockedSettlementVertices(state.board));
   return state.board.vertices.filter(vertex => {
-    if (vertex.building) return false;
+    if (vertex.building || blockedVertices.has(vertex.id)) return false;
     const adjacentEdges = state.board.edges.filter(edge => vertex.edgeIds.includes(edge.id));
-    if (adjacentEdges.some(edge => edge.vertexIds.some(id => id !== vertex.id &&
-      state.board.vertices.find(neighbor => neighbor.id === id)!.building))) return false;
     return state.phase.type === "setup-settlement" || adjacentEdges.some(edge => edge.playerId === playerId);
   }).map(vertex => vertex.id);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createBoard } from "../../src/game/board";
 import {
-  applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
+  applyAction, blockedSettlementVertices, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
   legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
 } from "../../src/game/engine";
 import type { Building, DevelopmentKind, GameAction, GameState, Player, Resources, Vertex } from "../../src/game/types";
@@ -202,6 +202,53 @@ describe("initialization and snake setup", () => {
     state = applyAction(state, firstPlayer, { type: "place-settlement", vertexId });
     const remote = state.board.edges.find(edge => !edge.vertexIds.includes(vertexId))!;
     reject(state, { type: "place-road", edgeId: remote.id }, "empty edge");
+  });
+});
+
+describe("settlement distance markers", () => {
+  test("an island without buildings has no blocked vertices", () => {
+    expect(blockedSettlementVertices(newGame().board)).toEqual([]);
+  });
+
+  test("marks empty one-edge neighbors once for every player's settlements and cities, not occupied or two-edge vertices", () => {
+    const state = graphState([
+      { playerId: null, vertices: ["own", "shared", "opponent", "near", "far"] },
+      { playerId: null, vertices: ["own", "third", "other-near", "other-far"] },
+    ], {
+      own: { playerId: firstPlayer, kind: "settlement" },
+      opponent: { playerId: secondPlayer, kind: "city" },
+      third: { playerId: thirdPlayer, kind: "settlement" },
+    });
+    expect(blockedSettlementVertices(state.board)).toEqual(["shared", "near", "other-near"]);
+    state.phase = { type: "setup-settlement" };
+    expect(legalSettlementVertices(state, firstPlayer)).toEqual(["far", "other-far"]);
+  });
+
+  test("recomputes after buildings are placed or upgraded", () => {
+    const state = graphState([{ playerId: null, vertices: ["first", "neighbor", "second", "beyond"] }]);
+    const first = state.board.vertices.find(vertex => vertex.id === "first")!;
+    first.building = { playerId: firstPlayer, kind: "settlement" };
+    expect(blockedSettlementVertices(state.board)).toEqual(["neighbor"]);
+    first.building.kind = "city";
+    expect(blockedSettlementVertices(state.board)).toEqual(["neighbor"]);
+    state.board.vertices.find(vertex => vertex.id === "second")!.building = { playerId: secondPlayer, kind: "settlement" };
+    expect(blockedSettlementVertices(state.board)).toEqual(["neighbor", "beyond"]);
+  });
+
+  test("depends only on distance, not roads, phase, turn, resources or settlement supply", () => {
+    const state = graphState([{ playerId: null, vertices: ["own", "near", "remote"] }], {
+      own: { playerId: firstPlayer, kind: "settlement" },
+      extra1: { playerId: firstPlayer, kind: "settlement" }, extra2: { playerId: firstPlayer, kind: "settlement" },
+      extra3: { playerId: firstPlayer, kind: "settlement" }, extra4: { playerId: firstPlayer, kind: "settlement" },
+    });
+    expect(blockedSettlementVertices(state.board)).toEqual(["near"]);
+    state.phase = { type: "roll" };
+    state.activePlayerId = secondPlayer;
+    give(state, firstPlayer, COSTS.settlement);
+    for (const edge of state.board.edges) edge.playerId = firstPlayer;
+    expect(blockedSettlementVertices(state.board)).toEqual(["near"]);
+    state.board.vertices.find(vertex => vertex.id === "extra4")!.building!.kind = "city";
+    expect(blockedSettlementVertices(state.board)).toEqual(["near"]);
   });
 });
 
