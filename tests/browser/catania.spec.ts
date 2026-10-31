@@ -324,7 +324,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await expect(development.getByRole("button")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
-  const diceLabel = await page.getByLabel(/^Dice: /).getAttribute("aria-label");
+  const diceLabel = await page.getByRole("img", { name: /^Dice: / }).getAttribute("aria-label");
   const dice = diceLabel!.match(/\d/g)!.map(Number);
   expect(dice).toHaveLength(2);
   for (const die of dice) expect(die).toBeGreaterThanOrEqual(1);
@@ -508,8 +508,13 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
     if (isMobile) {
       expect(bankFrame!.y).toBeGreaterThanOrEqual(diceBounds!.y + diceBounds!.height);
     } else {
-      expect(bankFrame!.y).toBeLessThan(diceBounds!.y + diceBounds!.height);
-      expect(bankFrame!.y + bankFrame!.height).toBeGreaterThan(diceBounds!.y);
+      const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
+      await expect(sidebar.getByRole("region", { name: "Dice tray", exact: true })).toBeInViewport({ ratio: 1 });
+      const sidebarBounds = (await sidebar.boundingBox())!;
+      expect(sidebarBounds.x).toBeGreaterThanOrEqual(boardBounds!.x + boardBounds!.width);
+      expect(diceBounds!.y).toBeGreaterThan(sidebarBounds.y + sidebarBounds.height / 2);
+      expect(diceBounds!.x).toBeGreaterThanOrEqual(sidebarBounds.x);
+      expect(diceBounds!.x + diceBounds!.width).toBeLessThanOrEqual(sidebarBounds.x + sidebarBounds.width);
     }
     await screenshot(page, testInfo, `shared-bank-above-play-area-${artifact}`, false);
     await expect(page.getByRole("region", { name: "Dice tray", exact: true })).toHaveAttribute("data-stage", "idle");
@@ -664,7 +669,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
       await expect(control).toBeInViewport({ ratio: 1 });
       await noPageOverflow(page);
     }
-    expect(await page.getByRole("complementary", { name: "Your hand and actions", exact: true }).evaluate(element =>
+    expect(await page.getByRole("complementary", { name: "Your hand and actions", exact: true }).locator(".hand-content").evaluate(element =>
       element.scrollHeight > element.clientHeight && element.scrollTop > 0,
     )).toBe(true);
     await screenshot(page, testInfo, `accessible-hand-${artifact}`, false);
@@ -1008,8 +1013,24 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await screenshot(page, testInfo, "roll-idle", false);
     await showView(page, "hand");
     const handFrame = await privateResources.boundingBox();
-    await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeInViewport({ ratio: 1 });
-    await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+    const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
+    const rollButton = sidebar.getByRole("button", { name: "Roll the dice", exact: true });
+    await expect(rollButton).toBeInViewport({ ratio: 1 });
+    const rollButtonFrame = (await rollButton.boundingBox())!;
+    const sidebarFrame = (await sidebar.boundingBox())!;
+    expect(sidebarFrame.y + sidebarFrame.height - rollButtonFrame.y - rollButtonFrame.height).toBeLessThanOrEqual(12);
+    await sidebar.getByRole("region", { name: "Your development cards", exact: true }).scrollIntoViewIfNeeded();
+    expect(await rollButton.boundingBox()).toEqual(rollButtonFrame);
+    if (!isMobile) {
+      const sidebarDice = sidebar.getByRole("region", { name: "Dice tray", exact: true });
+      await expect(sidebarDice).toBeInViewport({ ratio: 1 });
+      const diceFrame = (await sidebarDice.boundingBox())!;
+      expect(diceFrame.y + diceFrame.height).toBeLessThanOrEqual(rollButtonFrame.y);
+    }
+    await sidebar.locator(".hand-content").evaluate(element => element.scrollTo({ top: 0 }));
+    expect(await privateResources.boundingBox()).toEqual(handFrame);
+    await screenshot(page, testInfo, "sidebar-dice-and-roll", false);
+    await rollButton.click();
 
     if (reducedMotion === "no-preference") {
       await expect(summary).toHaveAttribute("data-stage", "rolling");
@@ -1053,6 +1074,11 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await expectBoardFrame(page, idleFrame);
     await expectResourceBank(page, next.bank);
     await expect(collection).toBeInViewport({ ratio: 1 });
+    if (!isMobile) {
+      const collectionFrame = (await collection.boundingBox())!;
+      const summaryFrame = (await summary.boundingBox())!;
+      expect(collectionFrame.y + collectionFrame.height).toBeLessThanOrEqual(summaryFrame.y);
+    }
     if (reducedMotion === "no-preference") {
       await verifyResourceAnimation(collection.getByRole("listitem").first(), "resource-collect");
     } else {
@@ -1089,6 +1115,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await screenshot(page, testInfo, "roll-receipt");
     if (reducedMotion === "no-preference") await page.clock.runFor(700);
     await expect(summary).toHaveAttribute("data-stage", "complete");
+    expect(await sidebar.getByRole("button", { name: "End turn & pass device", exact: true }).boundingBox()).toEqual(rollButtonFrame);
     await showView(page, "board");
     await expectBoardFrame(page, idleFrame);
     await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();

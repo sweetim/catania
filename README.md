@@ -47,8 +47,11 @@ serves the source through Bun rather than reading `dist/`.
    and start a fresh rematch or return to the table.
 
 Gameplay fits the viewport without page scrolling. The board and dice tray stay
-in place as rolls and turn notices update. The shared bank sits beside the dice
-on desktop and below them on phones, visible across all three game views.
+in place as rolls and turn notices update. On desktop, the dice tray and turn
+controls sit at the bottom of the right-hand action sidebar; its other content
+scrolls above them. The shared bank stays above the sidebar. On phones, turn
+controls stay at the bottom of **Hand**, while the dice summary and bank remain
+above the selected view, visible across all three game views.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. Short screens can scroll
 within the hand or player panel without moving the board. The header's **Game**

@@ -997,7 +997,9 @@ export function App() {
             ))}
           </nav>
           <div className="table-feedback">
-            <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+            <div className="lg:hidden">
+              <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+            </div>
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
           <ResourceCollection
@@ -1058,6 +1060,7 @@ export function App() {
               className={`table-hand min-w-0 ${mobileView !== "hand" ? "hidden lg:flex" : "flex"}`}
               aria-label="Your hand and actions"
             >
+              <div className="hand-content">
               <div inert={handTaskOpen} className="turn-card rounded-2xl bg-forest text-white">
                 <div className="flex items-center justify-between gap-2">
                   <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
@@ -1073,27 +1076,6 @@ export function App() {
                 <p className="turn-description text-xs leading-4 text-white/75">
                   {instructionDescription}
                 </p>
-                <div className="turn-action">
-                {game.phase.type === "roll" && isActive && (
-                  <button
-                    className="flex min-h-11 w-full items-center justify-between rounded-xl bg-paper px-4 text-sm font-semibold text-forest hover:bg-white"
-                    onClick={() => perform({ type: "roll" })}
-                    disabled={rollBusy}
-                  >
-                    Roll the dice <Arrow />
-                  </button>
-                )}
-                {game.phase.type === "actions" && isActive && (
-                  <button
-                    className="min-h-11 w-full rounded-xl border border-white/25 text-xs font-semibold hover:bg-white/10"
-                    onClick={() => perform({ type: "end-turn" })}
-                    disabled={rollBusy}
-                  >
-                    {needsHandoff ? "End turn & pass device" : "End turn"}{" "}
-                    <span aria-hidden="true">&rarr;</span>
-                  </button>
-                )}
-                </div>
               </div>
 
               <section inert={handTaskOpen} className="hand-resources" aria-label="Private resources">
@@ -1548,6 +1530,33 @@ export function App() {
                   {error}
                 </p>
               )}
+              </div>
+              <div className="hand-dice">
+                <div className="hidden lg:block">
+                  <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+                </div>
+                <div inert={handTaskOpen} className="turn-action">
+                  {game.phase.type === "roll" && isActive && (
+                    <button
+                      className="button-primary h-11 w-full justify-between px-4 py-0"
+                      onClick={() => perform({ type: "roll" })}
+                      disabled={rollBusy}
+                    >
+                      Roll the dice <Arrow />
+                    </button>
+                  )}
+                  {game.phase.type === "actions" && isActive && (
+                    <button
+                      className="button-secondary h-11 w-full py-0 text-xs"
+                      onClick={() => perform({ type: "end-turn" })}
+                      disabled={rollBusy}
+                    >
+                      {needsHandoff ? "End turn & pass device" : "End turn"}{" "}
+                      <span aria-hidden="true">&rarr;</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </aside>
             <section
               aria-label="Players and awards"

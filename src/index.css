@@ -144,20 +144,29 @@
   border: 1px solid #d9d2bf;
   border-radius: 18px;
   background: #faf7ee;
+  overflow: hidden;
+}
+.hand-content {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-.table-hand > * { flex-shrink: 0; }
-.table-hand:has(.hand-task) { overflow: hidden; }
-.table-hand:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
-.table-hand > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
+.hand-content > *, .hand-dice { flex-shrink: 0; }
+.hand-content:has(.hand-task) { overflow: hidden; }
+.hand-content:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
+.hand-content > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
 .turn-card { padding: 12px; }
 .turn-card > div:first-child { height: 16px; }
 .turn-owner { height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-title { height: 26px; margin-top: 4px; overflow: auto; }
 .turn-description { height: 32px; overflow: auto; margin-top: 4px; }
-.turn-action { height: 44px; margin-top: 8px; }
+.turn-action { height: 44px; }
 .hand-resource-card {
   height: 76px;
   box-shadow: 0 2px 0 #e9e0c9, 0 3px 0 #b7aa8e, 0 5px 7px #283d3326;
@@ -224,17 +233,24 @@
   .table-seats .player-seat { padding: 7px 12px; }
   .table-play-area { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
   .table-feedback { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
+  .game-table > .table-feedback > .bank-tray { grid-column: 2; }
   .bank-tray { height: 64px; padding-inline: 12px; }
   .roll-summary { height: 64px; }
   .roll-summary-content { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr); }
   .roll-summary-title { grid-area: 1 / 1; }
   .roll-summary-private { grid-area: 1 / 2; text-align: right; }
   .roll-summary-details { grid-area: 2 / 1 / 3 / 3; }
+  .hand-dice .roll-summary { height: 112px; gap: 8px; padding: 8px; }
+  .hand-dice .roll-summary-content { grid-template-columns: minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr) 32px; }
+  .hand-dice .roll-summary-private { grid-area: 3 / 1; text-align: left; }
+  .hand-dice .roll-summary-details { grid-area: 2 / 1; }
+  .hand-dice .turn-action { margin-top: 8px; }
   .board-tablemat { padding: 12px; }
 }
 
 @media (max-height: 850px) {
   .table-hand { gap: 8px; padding: 8px; }
+  .hand-content { gap: 8px; }
   .turn-card { padding: 8px 10px; }
   .hand-resource-card { height: 60px; }
   .hand-building .button-secondary { padding-top: 6px; padding-bottom: 6px; }
@@ -277,7 +293,7 @@
   .resource-collection {
     left: auto;
     right: max(30px, calc((100vw - 1560px) / 2 + 10px));
-    bottom: 24px;
+    bottom: 196px;
     width: 330px;
     transform: none;
   }
