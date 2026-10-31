@@ -94,9 +94,9 @@ export function Logo() {
   return (
     <span className="flex items-center gap-2.5">
       <svg aria-hidden="true" viewBox="0 0 40 44" className="h-9 w-9">
-        <path d="m20 1 18 10v22L20 43 2 33V11Z" fill="#315e49" />
-        <path d="m9 28 8-15 5 9 4-6 6 12H9Z" fill="#f1e4bc" />
-        <path d="m13 28 4-8 5 8" fill="#a4b788" />
+        <path d="m20 1 18 10v22L20 43 2 33V11Z" fill="var(--color-forest)" />
+        <path d="m9 28 8-15 5 9 4-6 6 12H9Z" fill="var(--color-ink)" />
+        <path d="m13 28 4-8 5 8" fill="var(--color-forest)" />
       </svg>
       <span className="font-serif text-3xl tracking-[-.06em]">
         catania<span className="text-clay">.</span>
@@ -324,7 +324,7 @@ export function ResourceInventory({ resources }: { resources: Resources }) {
     <section className="resource-inventory" aria-label="Your current resources">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold">Your hand</h3>
-        <strong className="shrink-0 text-sm text-forest tabular-nums">
+        <strong className="shrink-0 text-sm text-ink tabular-nums">
           {Object.values(resources).reduce((total, count) => total + count, 0)} cards
         </strong>
       </div>
@@ -425,7 +425,7 @@ export function ResourceCardStepper({
             </div>
             <button
               type="button"
-              className="flex h-11 w-full items-center justify-center rounded-lg bg-moss text-lg font-bold text-forest"
+              className="flex h-11 w-full items-center justify-center rounded-lg bg-moss text-lg font-bold text-ink"
               aria-label={`Remove ${RESOURCE_NAMES[resource]} from ${label}`}
               disabled={!values[resource]}
               onClick={() => onChange({ ...values, [resource]: values[resource] - 1 })}

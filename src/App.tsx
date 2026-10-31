@@ -82,7 +82,7 @@ function phaseTitle(state: GameState) {
     .with({ type: "roll" }, () => "Let the dice decide.")
     .with({ type: "actions" }, () => "Make your next move.")
     .with({ type: "discard" }, () => "Make room in your hand.")
-    .with({ type: "robber" }, () => "The robber is on the move.")
+    .with({ type: "robber" }, phase => phase.pendingKnight ? "Move the robber." : "The robber is on the move.")
     .with({ type: "steal" }, () => "Choose a neighboring player.")
     .with({ type: "road-building" }, () => "Take the road less traveled.")
     .with({ type: "finished" }, () => "An island. A new legend.")
@@ -118,8 +118,9 @@ function phaseDescription(state: GameState) {
     )
     .with(
       { type: "robber" },
-      () =>
-        "Select a different hex. The robber stops that hex from producing until it moves again.",
+      phase => phase.pendingKnight
+        ? "Confirm a new hex or cancel Knight."
+        : "Select a different hex. The robber stops that hex from producing until it moves again.",
     )
     .with(
       { type: "steal" },
@@ -296,7 +297,7 @@ export function App() {
     if (nextDialog === "rules") setError("");
   }
 
-  function startGame() {
+  function startGame(selectedBoard?: GameState["board"]) {
     try {
       const profiles = names.slice(0, playerCount).map(
         (name, index): Pick<Player, "name" | "color" | "control"> => ({
@@ -315,7 +316,7 @@ export function App() {
           "Use a different name for each player so private handoffs are clear.",
         );
       }
-      const next = createGame(profiles);
+      const next = createGame(profiles, undefined, selectedBoard);
       setRollPresentation(null);
       setResourceReceipt(null);
       setGame(next);
@@ -578,13 +579,13 @@ export function App() {
                 <p>
                   {getLongestRoadLength(game, player.id)} connected roads{" "}
                   {game.awards.longestRoad === player.id && (
-                    <strong className="text-forest"> / Longest Road +2</strong>
+                    <strong className="text-ink"> / Longest Road +2</strong>
                   )}
                 </p>
                 <p>
                   {player.knightsPlayed} knights played{" "}
                   {game.awards.largestArmy === player.id && (
-                    <strong className="text-forest"> / Largest Army +2</strong>
+                    <strong className="text-ink"> / Largest Army +2</strong>
                   )}
                 </p>
               </div>
@@ -672,7 +673,7 @@ export function App() {
               <h1 className="max-w-lg font-serif text-5xl leading-[1.05] tracking-[-.045em] sm:text-6xl lg:text-[72px]">
                 A little island.
                 <br />
-                Endless <span className="italic text-forest">possibility.</span>
+                Endless <span className="italic text-ink">possibility.</span>
               </h1>
               <p className="mt-6 max-w-sm text-sm leading-7 text-muted">
                 Gather your favorite people. Settle new shores, strike a good
@@ -784,7 +785,7 @@ export function App() {
                 </div>
                 <button
                   className="button-primary mt-5 w-full justify-between"
-                  onClick={startGame}
+                  onClick={() => startGame(preview)}
                 >
                   Let&apos;s settle in <Arrow />
                 </button>
@@ -917,7 +918,7 @@ export function App() {
             >
               Back to the table
             </button>
-            <button className="button-primary" onClick={startGame}>
+            <button className="button-primary" onClick={() => startGame()}>
               Play a rematch <Arrow />
             </button>
           </div>
@@ -986,7 +987,7 @@ export function App() {
               <button
                 key={view}
                 aria-pressed={mobileView === view}
-                className={`min-h-11 flex-1 rounded-lg text-sm capitalize ${mobileView === view ? "bg-forest text-white" : "text-muted"}`}
+                className={`min-h-11 flex-1 rounded-lg text-sm capitalize ${mobileView === view ? "bg-forest text-ink" : "text-muted"}`}
                 onClick={() => setMobileView(view)}
               >
                 {view}
@@ -1064,11 +1065,11 @@ export function App() {
               className={`table-hand min-w-0 ${mobileView !== "hand" ? "hidden lg:flex" : "flex"}`}
               aria-label="Your hand and actions"
             >
-              <div className="hand-content">
+              <div className="hand-content" role="region" aria-label="Your cards">
               <section inert={handTaskOpen} className="hand-resources" aria-label="Private resources">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="eyebrow min-w-0 truncate">{viewer.name}&apos;s hand</h2>
-                  <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-forest tabular-nums">
+                  <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums">
                     {resourceTotal(viewer.resources)} cards
                   </strong>
                 </div>
@@ -1096,7 +1097,7 @@ export function App() {
                           </span>
                           <span
                             aria-label={`Received ${receivedResources![resource]} ${RESOURCE_NAMES[resource]}`}
-                            className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-paper bg-forest px-2 py-0.5 text-xs font-bold text-white shadow-sm"
+                            className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-paper bg-forest px-2 py-0.5 text-xs font-bold text-ink shadow-sm"
                           >
                             +{receivedResources![resource]}
                           </span>
@@ -1131,7 +1132,7 @@ export function App() {
                       onChange={setChosenResources}
                     />
                     <p className="selection-progress mt-3 flex justify-between gap-2 text-xs text-muted" aria-live="polite">
-                      <strong className="text-forest">Selected {resourceTotal(chosenResources)} of {game.phase.required[viewer.id]}</strong>
+                      <strong className="text-ink">Selected {resourceTotal(chosenResources)} of {game.phase.required[viewer.id]}</strong>
                       <span>{resourceTotal(viewer.resources) - resourceTotal(chosenResources)} cards left</span>
                     </p>
                     <button
@@ -1377,7 +1378,7 @@ export function App() {
                                 </span>
                               </span>
                               {status && <span
-                                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-white" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-ink" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
                               >
                                 {status}
                               </span>}
@@ -1510,26 +1511,27 @@ export function App() {
                 </p>
               )}
               </div>
-              <div className="hand-dice">
+              <div className="hand-dice" role="region" aria-label="Turn controls">
+                <div className="turn-header">
+                  <h2 className="turn-owner">
+                    <span className="truncate" title={activePlayer?.name}>{activePlayer?.name}</span>
+                    <span className="shrink-0 text-xs font-medium text-muted"> - {isActive ? "Your turn" : "Their turn"}</span>
+                  </h2>
+                  <span className="turn-number">
+                    {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
+                  </span>
+                </div>
                 <div className="hidden lg:block">
                   <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
                 </div>
-                <div className="turn-card rounded-2xl bg-forest text-white">
-                  <div className="flex items-center justify-between gap-2">
-                    <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-owner text-[10px] font-semibold text-white/75">
-                      {computerPlayer ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : isActive ? "Your turn" : `${activePlayer?.name}'s turn`}
-                    </p>
-                    <span className="shrink-0 rounded-full border border-white/25 px-2 text-[10px] text-white/75">
-                      {game.phase.type.startsWith("setup") ? "Setup" : `Turn ${game.turnNumber}`}
-                    </span>
-                  </div>
+                <div className="turn-card rounded-2xl bg-forest text-ink">
                   <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <h1 className="turn-title font-serif text-xl leading-tight">
                         {instructionTitle}
                       </h1>
-                      <p className="turn-description text-xs leading-4 text-white/75">
-                        {instructionDescription}
+                      <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? "Computer activity" : undefined} className="turn-description text-xs leading-4 text-ink/70">
+                        {computerPlayer && !rollBusy ? `${computerPlayer.name} ${game.trade ? "is considering the trade." : game.phase.type === "discard" ? "is discarding resources." : "is playing automatically."}` : instructionDescription}
                       </p>
                     </div>
                     {canCancelKnight && (
@@ -1702,7 +1704,6 @@ export function App() {
               </button>
             ))}
           </div>
-          <div className="mt-6 space-y-3">{playerCards(true)}</div>
         </Dialog>
       )}
       {dialog === "restart" && (
@@ -1738,7 +1739,7 @@ export function App() {
       {confirmation && (
         <Dialog
           title={confirmation.title}
-          summary={viewer ? <ResourceInventory resources={viewer.resources} /> : undefined}
+          summary={viewer && confirmation.action.type !== "steal" ? <ResourceInventory resources={viewer.resources} /> : undefined}
           onClose={() => {
             setConfirmation(null);
             setError("");
@@ -1778,7 +1779,7 @@ export function App() {
       {dialog === "trade" && game && viewer && (
         <Dialog
           title="A fair exchange"
-          summary={<ResourceInventory resources={viewer.resources} />}
+          summary={tradeMode === "players" ? <ResourceInventory resources={viewer.resources} /> : undefined}
           onClose={() => {
             setDialog(null);
             setError("");
@@ -1866,7 +1867,7 @@ export function App() {
                 />
               </div>
               {canExchange && (
-                <p role="status" aria-label="Hand after exchange" className="mb-4 text-xs leading-5 text-forest">
+                <p role="status" aria-label="Hand after exchange" className="mb-4 text-xs leading-5 text-ink">
                   After exchange: {viewer.resources[giveResource] - ratio} {RESOURCE_NAMES[giveResource]}, {viewer.resources[receiveResource] + 1} {RESOURCE_NAMES[receiveResource]} in your hand. Other cards stay the same.
                 </p>
               )}
@@ -1971,7 +1972,7 @@ export function App() {
       {dialog === "development" && game && viewer && (
         <Dialog
           title="A card up your sleeve"
-          summary={<ResourceInventory resources={viewer.resources} />}
+          summary={developmentCard?.kind === "year-of-plenty" || developmentCard?.kind === "monopoly" ? <ResourceInventory resources={viewer.resources} /> : undefined}
           onClose={() => {
             setDialog(null);
             setError("");

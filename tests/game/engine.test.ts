@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createBoard } from "../../src/game/board";
 import {
   applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
   legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
@@ -98,6 +99,22 @@ function productionState(): GameState {
 }
 
 describe("initialization and snake setup", () => {
+  test("uses an independent copy of the selected island and starts its robber on the desert", () => {
+    const preview = createBoard(() => 0);
+    const original = structuredClone(preview);
+    const state = createGame(profiles, () => 0.999999, preview);
+    expect(state.board).toEqual(preview);
+    expect(state.board).not.toBe(preview);
+    expect(state.robberTileId).toBe(preview.tiles.find(tile => tile.terrain === "desert")!.id);
+    expect(createGame(profiles, () => 0.999999).board).not.toEqual(preview);
+
+    state.board.vertices[0]!.building = { playerId: state.activePlayerId, kind: "settlement" };
+    state.board.edges[0]!.playerId = state.activePlayerId;
+    state.board.tiles[0]!.number = 12;
+    state.board.ports[0]!.resource = "ore";
+    expect(preview).toEqual(original);
+  });
+
   test("requires three or four named players with distinct colors", () => {
     expect(() => createGame(profiles.slice(0, 2))).toThrow("three or four");
     expect(() => createGame([...profiles, profiles[0]!])).toThrow("three or four");

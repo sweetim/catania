@@ -31,7 +31,7 @@ export function ResourceCollection({ receipt, onDismiss }: {
         >
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-serif text-xl text-forest">Added to your hand</h2>
+              <h2 className="font-serif text-xl text-ink">Added to your hand</h2>
               <p className="mt-0.5 text-xs text-muted">+{total} resource card{total === 1 ? "" : "s"}</p>
             </div>
             <button
@@ -52,8 +52,8 @@ export function ResourceCollection({ receipt, onDismiss }: {
                 style={{ animationDelay: `${index * 90}ms` }}
               >
                 <ResourceCard resource={resource} compact className="h-18 w-10 sm:h-20 sm:w-12" />
-                <span aria-hidden="true" className="mt-1 block text-center text-[10px] font-semibold text-forest">{RESOURCE_NAMES[resource]}</span>
-                <span aria-hidden="true" className="absolute -right-1.5 -top-2 rounded-full border-2 border-paper bg-forest px-1.5 py-0.5 text-xs font-bold text-white">
+                <span aria-hidden="true" className="mt-1 block text-center text-[10px] font-semibold text-ink">{RESOURCE_NAMES[resource]}</span>
+                <span aria-hidden="true" className="absolute -right-1.5 -top-2 rounded-full border-2 border-paper bg-forest px-1.5 py-0.5 text-xs font-bold text-ink">
                   +{receipt.gains[resource]}
                 </span>
               </li>

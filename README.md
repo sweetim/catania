@@ -31,7 +31,9 @@ serves the source through Bun rather than reading `dist/`.
 ## Play
 
 1. Choose three or four total players and how many are human (one by default).
-   AI fills the remaining seats. Enter distinct names and select **Let's settle in**.
+   AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
+   the island preview. **Let's settle in** starts on the island currently shown,
+   including its terrain, number tokens, and harbors.
 2. With one human, your hand opens automatically and stays available during AI turns.
    With multiple humans, pass the device to the named player before revealing their hand.
 3. Place a settlement and road in forward order, then in reverse order. Your
@@ -50,12 +52,17 @@ serves the source through Bun rather than reading `dist/`.
    and start a fresh rematch or return to the table.
 
 Gameplay fits the viewport without page scrolling. The board and dice tray stay
-in place as rolls and turn notices update. On desktop, the dice tray and turn
-controls sit at the bottom of the right-hand action sidebar; its other content
-scrolls vertically above them without horizontal scrolling. The turn-status card
-sits directly above the persistent **Roll the dice** and **End turn** buttons,
-which stay in place and become disabled when unavailable. The shared bank stays
-above the sidebar, with the board filling the full height beside both. On phones,
+in place as rolls and turn notices update. On desktop, the right sidebar has
+three separately bordered panels: **Bank**, **Your cards**, and **Turn controls**.
+Rounded edges, subtle shadows, and clear background gaps make them read as three
+detached islands, with compact 12-pixel gaps on desktop and 8-pixel gaps on phones.
+The cards panel holds resources, development cards, and build/trade controls,
+scrolling vertically without horizontal scrolling. The bottom panel starts with
+the active player's name and **Your turn** or **Their turn**, alongside a
+high-contrast turn-number badge. Below it are the dice result, the current-action
+card without a repeated turn-owner label, and the persistent **Roll the dice** and
+**End turn** buttons, which stay in place and become disabled when unavailable.
+The board fills the full height beside all three panels. On phones,
 the turn-status card and controls stay at the bottom of **Hand**, while the dice
 summary and bank remain above the selected view, visible across all three game views.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
@@ -65,7 +72,7 @@ the entire sidebar scrolls internally so the status card, turn controls, and han
 tasks remain reachable. The header's **Game** menu contains **Table guide**
 (costs, public activity, and player details),
 **How to play**, and **Pass device** when multiple humans have a hand revealed.
-**End game** sits below a divider and still requires confirmation. The turn card
+**End game** sits below a divider and still requires confirmation. The turn header
 shows **Setup** or the current turn number. Keyboard users can select highlighted
 positions with Enter or Space. Confirm/Cancel appears beside the selected piece
 or hex, stays inside the map, and follows zoom and pan. Confirm is focused for
@@ -77,9 +84,13 @@ selection, use its minus button to remove it, and read the selected quantity on
 the card. Discards show one selected/required progress line and the total left in
 hand instead of repeating labels under every resource. Per-resource availability
 and remaining quantities remain available to assistive technology. Bank
-trades preview the resulting quantities, and player trades show what **you give**
-and **you receive**. Development-card dialogs and confirmations also show your
-current resources. These private summaries disappear during device handoffs.
+trades show available quantities on the selection cards and preview the resulting
+quantities without a duplicate hand summary. Player trades show what **you give**
+and **you receive**, with current resources available through confirmation.
+Development-card purchases and resource choices for Year of Plenty or Monopoly
+also show your current resources; Knight, Road Building, Victory Point, and theft
+confirmation omit that summary. The device-handoff picker shows human names and
+colors without detailed player cards; all private summaries disappear during handoff.
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
 breakdown. Build controls are vertical rows with road, settlement, city, and

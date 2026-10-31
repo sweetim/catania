@@ -72,11 +72,11 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
           ))}
         </div>
         <div className="roll-summary-content min-h-0 min-w-0 flex-1">
-          <p className="roll-summary-title min-h-5 text-sm font-semibold text-forest">{title}</p>
+          <p className="roll-summary-title min-h-5 text-sm font-semibold text-ink">{title}</p>
           <p className="roll-summary-details mt-1 min-h-0 overflow-y-auto overscroll-contain text-xs leading-5 text-muted">
             {!outcome ? result : rolling ? "A little chance. A little possibility." : received ? details : "Following the roll across the island..."}
           </p>
-          <p className="roll-summary-private mt-1 min-h-5 text-xs font-semibold leading-5 text-forest">
+          <p className="roll-summary-private mt-1 min-h-5 text-xs font-semibold leading-5 text-ink">
             {received ? privateSummary : ""}
           </p>
         </div>

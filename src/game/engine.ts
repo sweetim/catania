@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
 import { createBoard, randomInteger, secureRandom, shuffle } from "./board";
-import type { DevelopmentKind, GameAction, GameState, Player, Resource, Resources } from "./types";
+import type { Board, DevelopmentKind, GameAction, GameState, Player, Resource, Resources } from "./types";
 
 export const RESOURCES: Resource[] = ["wood", "brick", "wool", "grain", "ore"];
 export function emptyResources(): Resources {
@@ -48,7 +48,7 @@ function pay(state: GameState, player: Player, cost: Resources): void {
   transfer(player.resources, state.bank, cost);
 }
 
-export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom): GameState {
+export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom, selectedBoard?: Board): GameState {
   requireRule(profiles.length === 3 || profiles.length === 4, "A standard game needs three or four players.");
   requireRule(profiles.every(profile => profile.name.trim() && profile.color.trim()), "Each player needs a name and color.");
   requireRule(profiles.every(profile => profile.control === "human" || profile.control === "computer"), "Each player needs human or computer control.");
@@ -57,7 +57,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     id: `player-${index + 1}`, name: profile.name.trim(), color: profile.color, control: profile.control,
     resources: emptyResources(), developmentCards: [], knightsPlayed: 0,
   })), random);
-  const board = createBoard(random);
+  const board = selectedBoard ? structuredClone(selectedBoard) : createBoard(random);
   const developmentDeck = shuffle<DevelopmentKind>([
     ...Array<DevelopmentKind>(14).fill("knight"), ...Array<DevelopmentKind>(5).fill("victory-point"),
     "road-building", "road-building", "year-of-plenty", "year-of-plenty", "monopoly", "monopoly",

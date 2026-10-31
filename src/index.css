@@ -39,13 +39,13 @@
     @apply cursor-not-allowed opacity-40;
   }
   ::selection {
-    @apply bg-forest text-white;
+    @apply bg-forest text-ink;
   }
 }
 
 @layer components {
   .button-primary {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-ink disabled:hover:bg-forest;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-ink transition-colors hover:bg-ink hover:text-white disabled:hover:bg-forest disabled:hover:text-ink;
   }
   .button-secondary {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-white/50 px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-moss;
@@ -139,13 +139,14 @@
   position: relative;
   min-height: 0;
   flex-direction: column;
-  gap: 12px;
-  padding: 10px;
-  border: 1px solid #d9d2bf;
-  border-radius: 18px;
-  background: #faf7ee;
-  overflow: hidden;
+  gap: 8px;
 }
+.game-table > .table-feedback > .bank-tray, .hand-content, .hand-dice {
+  border: 1px solid #b9ab8e;
+  border-radius: 20px;
+  box-shadow: inset 0 1px #fffdf6, 0 3px 0 #d0c5ae, 0 8px 18px #423d2814;
+}
+.hand-content, .hand-dice { padding: 10px; background: #faf7ee; }
 .hand-content {
   position: relative;
   display: flex;
@@ -154,7 +155,7 @@
   min-width: 0;
   flex-direction: column;
   gap: 12px;
-  padding: 0 4px 4px;
+  padding: 10px 14px 14px;
   overflow: auto;
   scroll-padding-block: 4px;
   overscroll-behavior: contain;
@@ -165,10 +166,11 @@
 .hand-content:has(.hand-task) { overflow: hidden; }
 .hand-content:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
 .hand-content > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
+.turn-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 24px; }
+.turn-owner { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; }
+.turn-number { display: inline-flex; justify-self: end; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .turn-card { padding: 12px; }
-.turn-card > div:first-child { height: 16px; }
-.turn-owner { height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.turn-title { height: 26px; margin-top: 4px; overflow: auto; }
+.turn-title { height: 26px; overflow: auto; }
 .turn-description { height: 32px; overflow: auto; margin-top: 4px; }
 .turn-action { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; height: 44px; }
 .hand-resource-card {
@@ -191,7 +193,7 @@
   padding: 10px;
 }
 .hand-task > .resource-inventory { position: sticky; top: 0; z-index: 1; margin-bottom: 16px; }
-.selected-resource-count { position: absolute; top: -5px; right: -2px; display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px; border: 2px solid var(--color-paper); border-radius: 8px; background: var(--color-forest); color: white; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none; }
+.selected-resource-count { position: absolute; top: -5px; right: -2px; display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px; border: 2px solid var(--color-paper); border-radius: 8px; background: var(--color-forest); color: var(--color-ink); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; pointer-events: none; }
 .resource-select-card:disabled { opacity: 0.55; }
 .build-cost > span { gap: 3px; }
 .build-cost > span > span { width: 24px; height: 32px; }
@@ -237,7 +239,7 @@
   .table-seats .player-seat { padding: 7px 12px; }
   .table-play-area { display: contents; }
   .table-board { grid-column: 1; grid-row: 2 / 4; }
-  .table-hand { grid-column: 2; grid-row: 3; }
+  .table-hand { grid-column: 2; grid-row: 3; gap: 12px; margin-top: 4px; }
   .table-feedback { grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; }
   .game-table > .table-feedback { grid-column: 2; grid-row: 2; grid-template-columns: minmax(0, 1fr); }
   .bank-tray { height: 64px; padding-inline: 12px; }
@@ -254,8 +256,8 @@
 }
 
 @media (max-height: 850px) {
-  .table-hand { gap: 8px; padding: 8px; }
-  .hand-content { gap: 8px; }
+  .hand-content { gap: 8px; padding: 8px 12px 12px; }
+  .hand-dice { padding: 8px; }
   .turn-card { padding: 8px 10px; }
   .hand-resource-card { height: 60px; }
   .hand-building .button-secondary { padding-top: 6px; padding-bottom: 6px; }
@@ -264,6 +266,7 @@
 @media (max-width: 1023px) and (max-height: 740px) {
   .game-shell > header { padding: 4px 16px; }
   .game-table { gap: 4px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .table-hand { margin-top: 4px; }
   .table-navigation { padding: 0; }
   .table-feedback { gap: 4px; }
   .bank-tray { height: 50px; padding-block: 4px; }
@@ -305,7 +308,7 @@
   .resource-collection {
     left: auto;
     right: max(30px, calc((100vw - 1560px) / 2 + 10px));
-    bottom: 312px;
+    bottom: 328px;
     width: 330px;
     transform: none;
   }
