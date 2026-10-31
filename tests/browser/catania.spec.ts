@@ -945,7 +945,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
   }
 });
 
-test("player score crowns, cell highlights and active-turn borders follow public VP leaders and turn changes", async ({ page, isMobile }, testInfo) => {
+test("player score highlights and active-turn borders follow public VP leaders without crowns", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1024, height: 768 });
   await page.goto("/");
@@ -998,8 +998,8 @@ test("player score crowns, cell highlights and active-turn borders follow public
     await showView(page, "players");
     for (const [name, score] of points) {
       const seat = seats.locator(".player-seat").filter({ has: page.getByText(name, { exact: true }) });
-      const leader = seat.getByRole("img", { name: "Public VP leader", exact: true });
-      await expect(leader).toHaveCount(!allTied && score === highest ? 1 : 0);
+      await expect(seat.getByRole("img", { name: "Public VP leader", exact: true })).toHaveCount(0);
+      await expect(seat.locator(".player-score > svg")).toHaveCount(0);
       if (!allTied && score === highest) {
         await expect(seat).toHaveClass(/player-seat-leading/);
         await expect(seat).toHaveCSS("border-top-color", "rgb(181, 138, 45)");
@@ -1024,8 +1024,8 @@ test("player score crowns, cell highlights and active-turn borders follow public
         return Math.abs(name.top + name.height / 2 - avatar.top - avatar.height / 2);
       }), "Player names are vertically centered beside their avatars").toBeLessThanOrEqual(1);
       await expect(seat.locator(".player-score > span")).toHaveText([String(score), "VP"]);
-      expect(await seat.evaluate(element => element.scrollWidth <= element.clientWidth), "Player details fit beside the score and crown").toBe(true);
-      expect(await seat.getByText(name, { exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth), "Player names remain readable beside leader crowns").toBe(true);
+      expect(await seat.evaluate(element => element.scrollWidth <= element.clientWidth), "Player details fit beside the score").toBe(true);
+      expect(await seat.getByText(name, { exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth), "Player names remain readable beside the score").toBe(true);
     }
     if (placement === 0) {
       const activeSeat = seats.locator(".player-seat-active");
@@ -1063,7 +1063,7 @@ test("player score crowns, cell highlights and active-turn borders follow public
       expect(await activeSeat.evaluate(element => element.getAnimations().length)).toBe(0);
     }
     if (placement === 0 || placement === 1) {
-      await seats.getByRole("img", { name: "Public VP leader", exact: true }).first().scrollIntoViewIfNeeded();
+      await seats.locator(".player-seat-leading").first().scrollIntoViewIfNeeded();
       await screenshot(page, testInfo, placement === 0 ? "public-vp-leader" : "tied-public-vp-leaders", false);
     }
     await noPageOverflow(page);
@@ -1955,6 +1955,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   const roads = buyerSeat.getByRole("img", { name: /^\d+ connected roads?$/ });
   const largestArmy = buyerSeat.getByRole("img", { name: "Largest Army (+2 victory points)", exact: true });
   const longestRoad = buyerSeat.getByRole("img", { name: "Longest Road (+2 victory points)", exact: true });
+  const awards = buyerSeat.getByRole("group", { name: "Victory point awards", exact: true });
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
   await showView(page, "players");
@@ -2003,6 +2004,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
       await expect(army.locator('svg[data-development-kind="knight"]')).toBeVisible();
       await expect(army.locator("strong")).toHaveText(String(buyer.knightsPlayed));
       await expect(largestArmy).toHaveCount(holdsAward ? 1 : 0);
+      await expect(awards).toHaveCount(holdsAward ? 1 : 0);
       await expect(army).toBeInViewport({ ratio: 1 });
       await expect(seats.getByRole("img", { name: /Largest Army/ })).toHaveCount(holdsAward ? 1 : 0);
       expect(await buyerSeat.innerText()).not.toMatch(/knights? played|Largest Army|\+2/);
@@ -2063,6 +2065,9 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   await expect(longestRoad.locator('svg[data-piece="road"]')).toBeVisible();
   await expect(roads.locator('svg[data-piece="road"]')).toBeVisible();
   await expect(roads).toHaveCSS("color", await army.evaluate(element => getComputedStyle(element).color));
+  await expect(awards.getByRole("img")).toHaveCount(2);
+  await expect(buyerSeat.locator(".player-card-counts").getByRole("img", { name: /Largest Army|Longest Road/ })).toHaveCount(0);
+  await expect(buyerSeat.locator(".player-score").getByRole("group", { name: "Victory point awards", exact: true })).toBeVisible();
   expect(await buyerSeat.innerText()).not.toMatch(/Longest Road|Largest Army|\+2/);
   if (isMobile) await expect(buyerSeat.locator(".player-awards")).toHaveText("5 connected roads");
   if (await dismissCollection.isVisible()) await dismissCollection.click();
@@ -2080,7 +2085,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
       const { width, height } = element.getBoundingClientRect();
       return { width, height };
     }));
-    expect(iconSizes).toHaveLength(7);
+    expect(iconSizes).toHaveLength(6);
     for (const size of iconSizes) expect(size).toEqual(iconSizes[0]);
     const countGaps = await buyerSeat.locator(".player-card-stat").evaluateAll(elements => elements.map(element => {
       const icon = element.querySelector("svg")!.getBoundingClientRect();
@@ -2088,11 +2093,13 @@ test("played Knight and connected road counts show Largest Army and Longest Road
       return count.x - icon.right;
     }));
     expect(countGaps).toEqual([4, 4, 4, 4]);
-    const countBounds = (await roads.boundingBox())!;
+    const victoryPointBounds = (await buyerSeat.getByText("VP", { exact: true }).boundingBox())!;
     const awardBounds = (await largestArmy.boundingBox())!;
-    expect(awardBounds.x - countBounds.x - countBounds.width).toBeCloseTo(10);
+    expect(awardBounds.x - victoryPointBounds.x - victoryPointBounds.width).toBeCloseTo(10);
+    expect(awardBounds.y + awardBounds.height / 2).toBeCloseTo(victoryPointBounds.y + victoryPointBounds.height / 2);
     const roadBounds = (await longestRoad.boundingBox())!;
     expect(roadBounds.x - awardBounds.x - awardBounds.width).toBeCloseTo(10);
+    expect(roadBounds.y + roadBounds.height / 2).toBeCloseTo(awardBounds.y + awardBounds.height / 2);
     expect(await buyerSeat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await noPageOverflow(page);
     await screenshot(page, testInfo, `player-awards-${viewport.width}`, false);
@@ -2156,7 +2163,7 @@ test("owned development cards group by type with counts, descriptions and older-
   const kinds = [...new Set(buyer.developmentCards.map(card => card.kind))];
   expect(kinds).toHaveLength(5);
   await showView(page, "players");
-  await expect(page.getByRole("img", { name: "Public VP leader", exact: true })).toHaveCount(0);
+  await expect(page.locator(".player-seat-leading")).toHaveCount(0);
   await showView(page, "hand");
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   if (await dismissCollection.isVisible()) await dismissCollection.click();

@@ -128,17 +128,19 @@ breakdown. Player seats also show each player's played-Knight count as a shield
 icon and number, followed by a road icon and their longest connected-road count,
 including zero, on desktop and phones. These use matching icon sizes and gaps.
 A gold crossed-swords icon marks Largest Army, and a matching gold road icon marks
-Longest Road. Each tooltip and accessible label includes the award's two victory
-points without adding a text badge. Player details retain the connected-road count.
+Longest Road. These reward icons sit together immediately to the right of VP,
+separate from the Knight and road counts. Each tooltip and accessible label includes
+the award's two victory points without adding a text badge. Player details retain
+the connected-road count.
 Knights still in hand do not count: play at least three to qualify, and surpass
-the current holder to take the award. A gold crown and warm gold cell highlight
-mark the highest public VP
-score, shared by tied leaders unless everyone is tied. Names are vertically centered
+the current holder to take the award. A warm gold cell highlight marks the highest
+public VP score without a crown icon, shared by tied leaders unless everyone is tied.
+Names are vertically centered
 beside their avatars, without a repeated turn-status line or dot. The active cell
 has a gentle border pulse that becomes a static outline with reduced motion enabled;
 it moves to the next player's cell when the turn changes without moving the layout.
 The separate turn controls also identify the active player. Hidden victory-point
-cards do not affect the crowns or cell highlights.
+cards do not affect the cell highlights.
 Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.

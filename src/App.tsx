@@ -613,37 +613,32 @@ export function App() {
                 <DevelopmentCardIcon kind="knight" />
                 <strong>{player.knightsPlayed}</strong>
               </span>
-              <span className="flex items-center gap-2.5">
-                <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-forest">
-                  <PieceIcon piece="road" />
-                  <strong>{roadLength}</strong>
-                </span>
-                {hasLargestArmy && (
-                  <svg role="img" aria-label="Largest Army (+2 victory points)" viewBox="0 0 24 28" className="shrink-0 text-[#b58a2d]" fill="none">
-                    <title>Largest Army (+2 victory points)</title>
-                    <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
-                    <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                )}
-                {hasLongestRoad && (
-                  <span role="img" aria-label="Longest Road (+2 victory points)" title="Longest Road (+2 victory points)" className="shrink-0 text-[#b58a2d]">
-                    <PieceIcon piece="road" />
-                  </span>
-                )}
+              <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-forest">
+                <PieceIcon piece="road" />
+                <strong>{roadLength}</strong>
               </span>
             </div>
             <div className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${isPublicScoreLeader ? "text-[#8b6425]" : ""}`}>
-              {isPublicScoreLeader && (
-                <svg role="img" aria-label="Public VP leader" viewBox="0 0 24 24" className="size-4 shrink-0 text-[#b58a2d]" fill="currentColor">
-                  <title>Highest public victory points</title>
-                  <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
-                  <path d="M5 21h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              )}
               <span className="font-serif text-2xl">
                 {game.winnerId ? score.total : score.public}
               </span>
               <span className="text-[9px] text-muted">VP</span>
+              {(hasLargestArmy || hasLongestRoad) && (
+                <div role="group" aria-label="Victory point awards" className="ml-1.5 flex shrink-0 items-center gap-2.5">
+                  {hasLargestArmy && (
+                    <svg role="img" aria-label="Largest Army (+2 victory points)" viewBox="0 0 24 28" className="shrink-0 text-[#b58a2d]" fill="none">
+                      <title>Largest Army (+2 victory points)</title>
+                      <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
+                      <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  )}
+                  {hasLongestRoad && (
+                    <span role="img" aria-label="Longest Road (+2 victory points)" title="Longest Road (+2 victory points)" className="shrink-0 text-[#b58a2d]">
+                      <PieceIcon piece="road" />
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           {detailed && (
