@@ -66,6 +66,7 @@ export type TradeOffer = {
   receive: Resources;
   responses: Record<string, Resources | false>;
 };
+export type TheftEvent = { id: number; thiefId: string; victimId: string; resource: Resource };
 export type GameState = {
   board: Board;
   players: Player[];
@@ -81,6 +82,7 @@ export type GameState = {
   awards: { longestRoad: string | null; largestArmy: string | null };
   winnerId: string | null;
   log: string[];
+  thefts: TheftEvent[];
   trade: TradeOffer | null;
   developmentPlayed: boolean;
 };

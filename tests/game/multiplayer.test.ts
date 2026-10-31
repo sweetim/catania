@@ -1,8 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { emptyResources, getScore, legalRoadEdges } from "../../src/game/engine";
+import { describe, expect, mock, spyOn, test } from "bun:test";
+import { EventEmitter } from "node:events";
+import { chooseComputerAction } from "../../src/game/computer";
+import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
 import type { GameAction, GamePhase, GameState, Resources } from "../../src/game/types";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
+import type { MultiplayerSession, SessionView } from "../../src/multiplayer/types";
 
 const secret = "invitation-secret";
 const names = ["Ada", "Grace", "Linus", "Margaret"];
@@ -32,6 +35,94 @@ function give(game: GameState, playerId: string, amounts: Partial<Resources>) {
     game.bank[resource] -= amount;
   }
 }
+function mixedRoom() {
+  const { room, credentials } = lobby(1);
+  room.addComputer();
+  room.addComputer();
+  room.start();
+  return { room, credentials };
+}
+
+describe("host lobby board preview", () => {
+  test.each([0, 1, 2])("starts on the exact preview after %s shuffles, preserving ports, robber and seat identities", shuffles => {
+    const { room } = lobby();
+    room.addComputer();
+    room.removePlayer("player-2");
+    for (let index = 0; index < shuffles; index++) {
+      const before = room.snapshot();
+      room.shuffleBoard();
+      expect(room.version).toBe(before.version + 1);
+      expect(room.snapshot().players).toEqual(before.players);
+      expect(room.snapshot().previewBoard).not.toEqual(before.previewBoard);
+    }
+    const preview = room.snapshot().previewBoard!;
+    expect(preview.tiles).toHaveLength(19);
+    expect(preview.ports).toHaveLength(9);
+    room.start();
+    expect(room.game!.board).toEqual(preview);
+    expect(room.game!.board.ports).toEqual(preview.ports);
+    expect(room.game!.robberTileId).toBe(preview.tiles.find(tile => tile.terrain === "desert")!.id);
+    expect(room.game!.players.map(player => player.id).toSorted()).toEqual(["player-1", "player-3", "player-4"]);
+    expect(room.snapshot()).not.toHaveProperty("previewBoard");
+    expect(room.snapshot("connection-1")).not.toHaveProperty("previewBoard");
+    expect(room.snapshot("connection-1").game!.board).toEqual(preview);
+    const started = room.snapshot();
+    expect(() => room.shuffleBoard()).toThrow("lobby");
+    expect(room.snapshot()).toEqual(started);
+  });
+
+  test("roster changes, renames, disconnects and reconnects do not regenerate the preview", () => {
+    const { room, credentials } = lobby(1);
+    const preview = room.snapshot().previewBoard;
+    for (const operation of [
+      () => room.join("connection-2", { type: "join", secret, name: "Grace" }),
+      () => room.admit("connection-2"),
+      () => room.addComputer(),
+      () => room.renameComputer("player-3", "Rover"),
+      () => room.disconnect("connection-1"),
+      () => room.join("replacement", { type: "join", secret, name: "Ada", credential: credentials[0]! }),
+      () => room.join("pending", { type: "join", secret, name: "Linus" }),
+      () => room.reject("pending"),
+      () => room.removePlayer("player-2"),
+    ]) {
+      operation();
+      expect(room.snapshot().previewBoard).toEqual(preview);
+    }
+    expect(() => room.start()).toThrow("three or four");
+    expect(room.snapshot().previewBoard).toEqual(preview);
+  });
+
+  test("snapshot edits cannot alter the authoritative preview or starting board", () => {
+    const { room } = lobby();
+    const original = room.snapshot().previewBoard!;
+    const exposed = room.snapshot().previewBoard!;
+    exposed.tiles[0]!.terrain = "desert";
+    exposed.tiles[0]!.number = 12;
+    exposed.vertices[0]!.building = { playerId: "player-1", kind: "city" };
+    exposed.edges[0]!.playerId = "player-1";
+    exposed.ports[0]!.edgeId = "edge-99";
+    expect(room.snapshot().previewBoard).toEqual(original);
+    room.start();
+    expect(room.game!.board).toEqual(original);
+    original.tiles[0]!.x += 100;
+    expect(room.game!.board).not.toEqual(original);
+  });
+
+  test("preview stays local to the host and the guest protocol rejects preview fields and shuffle commands", () => {
+    const { room } = lobby(1);
+    room.join("pending", { type: "join", secret, name: "Grace" });
+    const previewBoard = room.snapshot().previewBoard;
+    expect(previewBoard).toBeDefined();
+    for (const connectionId of ["connection-1", "pending", "outsider"]) {
+      const snapshot = room.snapshot(connectionId);
+      expect(snapshot).not.toHaveProperty("previewBoard");
+      expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, previewBoard } })).toThrow();
+    }
+    expect(() => parseClientMessage({ type: "shuffle-board", requestId: "request", version: room.version })).toThrow();
+    expect(() => parseClientMessage({ type: "join", secret, name: "Linus", previewBoard })).toThrow();
+  });
+});
 
 describe("multiplayer admission and reconnect identity", () => {
   test("requires the invitation secret before exposing roster or storing a pending request", () => {
@@ -84,7 +175,7 @@ describe("multiplayer admission and reconnect identity", () => {
     expect(room.snapshot().players[0]!.name).toBe("Ada");
   });
 
-  test("host has no seat; requires three or four connected human players and preserves player IDs after shuffle", () => {
+  test("host has no seat; requires three or four seats with connected humans and preserves player IDs after shuffle", () => {
     const { room } = lobby(2);
     expect(() => room.start()).toThrow("three or four");
     room.join("connection-3", { type: "join", name: "Linus", secret });
@@ -147,6 +238,311 @@ describe("multiplayer admission and reconnect identity", () => {
     room.disconnect(previousConnection);
     expect(room.version).toBe(version);
     expect(send(room, "replacement", { type: "roll" }).error).toBe("");
+  });
+});
+
+describe("multiplayer computer seats", () => {
+  for (const count of [3, 4]) {
+    test.each(Array.from({ length: count + 1 }, (_, index) => index))(`${count} seats start with %s humans and preserve mixed control after shuffle`, humans => {
+      const { room } = lobby(humans);
+      for (let index = humans; index < count; index++) room.addComputer();
+      const players = room.snapshot().players;
+      expect(players.every(player => player.connected)).toBe(true);
+      room.start();
+      for (const player of room.game!.players) {
+        const { connected, ...profile } = players.find(seat => seat.id === player.id)!;
+        expect(player).toMatchObject(profile);
+      }
+      expect(room.game!.players.filter(player => player.control === "human")).toHaveLength(humans);
+      expect(room.snapshot().privatePlayer).toBeNull();
+    });
+  }
+
+  test("computer names avoid seated and pending humans, case-insensitively", () => {
+    const room = new HostRoom(secret);
+    room.join("first", { type: "join", secret, name: " COMPUTER 1 " });
+    room.admit("first");
+    room.join("pending", { type: "join", secret, name: "computer 2" });
+    room.addComputer();
+    room.addComputer();
+    expect(room.snapshot().players.map(player => player.name)).toEqual(["COMPUTER 1", "Computer 3", "Computer 4"]);
+    expect(() => room.join("duplicate", { type: "join", secret, name: "computer 3" })).toThrow("different name");
+    room.admit("pending");
+    expect(room.snapshot("pending").players).toHaveLength(4);
+  });
+
+  test("capacity includes computers, pending admission rechecks it, and players can only be removed in the lobby", () => {
+    const { room } = lobby(1);
+    room.join("pending", { type: "join", secret, name: "Grace" });
+    for (let index = 0; index < 3; index++) room.addComputer();
+    const before = room.snapshot();
+    expect(() => room.addComputer()).toThrow("four players");
+    expect(() => room.admit("pending")).toThrow("four players");
+    expect(() => room.join("late", { type: "join", secret, name: "Linus" })).toThrow("four players");
+    expect(() => room.removePlayer("unknown")).toThrow("player");
+    expect(room.snapshot()).toEqual(before);
+    expect(room.removePlayer("player-2")).toBeNull();
+    room.removePlayer("player-3");
+    expect(() => room.start()).toThrow("three or four");
+    room.addComputer();
+    room.start();
+    expect(() => room.addComputer()).toThrow("lobby");
+    expect(() => room.removePlayer("player-4")).toThrow("lobby");
+    expect(() => room.removePlayer("player-1")).toThrow("lobby");
+    expect(() => room.renameComputer("player-4", "New name")).toThrow("lobby");
+  });
+
+  test("removed slots can be reused by humans and computers without changing remaining identities or colors", () => {
+    const { room } = lobby(1);
+    for (let index = 0; index < 3; index++) room.addComputer();
+    const original = room.snapshot().players;
+    room.removePlayer("player-2");
+    room.join("replacement", { type: "join", secret, name: "Grace" });
+    room.admit("replacement");
+    room.removePlayer("player-3");
+    room.addComputer();
+    const players = room.snapshot().players;
+    expect(new Set(players.map(player => player.id)).size).toBe(4);
+    expect(new Set(players.map(player => player.color)).size).toBe(4);
+    expect(players.find(player => player.id === "player-1")).toEqual(original[0]!);
+    expect(players.find(player => player.id === "player-4")).toEqual(original[3]!);
+    expect(players.find(player => player.id === "player-2")).toMatchObject({ name: "Grace", control: "human", color: original[1]!.color });
+    room.start();
+    expect(room.snapshot("replacement").privatePlayer).toMatchObject({ id: "player-2", name: "Grace", color: original[1]!.color, control: "human" });
+  });
+
+  test("starting with an unfilled ID gap preserves roster, active player and snake setup identities", () => {
+    const { room } = lobby(1);
+    for (let index = 0; index < 3; index++) room.addComputer();
+    room.removePlayer("player-2");
+    const players = room.snapshot().players;
+    room.start();
+    for (const player of room.game!.players) {
+      const { connected, ...profile } = players.find(seat => seat.id === player.id)!;
+      expect(player).toMatchObject(profile);
+    }
+    const order = room.game!.players.map(player => player.id);
+    expect(room.game!.activePlayerId).toBe(order[0]!);
+    expect(room.game!.setupOrder).toEqual([...order, ...order.toReversed()]);
+    expect(order.toSorted()).toEqual(["player-1", "player-3", "player-4"]);
+  });
+
+  test("human disconnects still block start, never convert to computers, and leave computer availability unchanged", () => {
+    const { room, credentials } = lobby(1);
+    room.addComputer();
+    room.addComputer();
+    room.disconnect("connection-1");
+    expect(() => room.start()).toThrow("connected");
+    expect(room.snapshot().players.map(player => player.connected)).toEqual([false, true, true]);
+    room.join("replacement", { type: "join", secret, name: "Ada", credential: credentials[0]! });
+    room.start();
+    room.disconnect("replacement");
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "roll" };
+    expect(room.performComputer()).toBe(false);
+    expect(room.snapshot().game!.players.find(player => player.id === "player-1")).toMatchObject({ control: "human", connected: false });
+    expect(room.snapshot().players.filter(player => player.control === "computer").every(player => player.connected)).toBe(true);
+  });
+});
+
+describe("lobby removal and computer names", () => {
+  test.each([true, false])("removing a human with connected=%s revokes credentials and permits safe seat reuse", connected => {
+    const { room, credentials } = lobby();
+    const original = room.snapshot().players;
+    if (!connected) room.disconnect("connection-2");
+    const version = room.version;
+    expect(room.removePlayer("player-2")).toBe(connected ? "connection-2" : null);
+    expect(room.version).toBe(version + 1);
+    expect(room.snapshot().players).toEqual([original[0]!, original[2]!]);
+    expect(room.snapshot("connection-2").playerId).toBeNull();
+    expect(send(room, "connection-2", { type: "roll" }).error).toContain("not bound");
+    expect(() => room.join("revoked", { type: "join", secret, name: "Grace", credential: credentials[1]! })).toThrow("credential");
+    expect(room.snapshot().pendingPlayers).toEqual([]);
+
+    room.addComputer();
+    expect(room.snapshot().players.find(player => player.id === "player-2")).toMatchObject({ color: original[1]!.color, control: "computer" });
+    expect(() => room.join("revoked", { type: "join", secret, name: "Grace", credential: credentials[1]! })).toThrow("credential");
+    room.removePlayer("player-2");
+    room.join("fresh", { type: "join", secret, name: "Grace" });
+    expect(room.snapshot("fresh").playerId).toBeNull();
+    const credential = room.admit("fresh");
+    expect(credential).not.toBe(credentials[1]!);
+    room.disconnect("connection-2");
+    expect(room.snapshot("fresh").players.toSorted((first, second) => first.id.localeCompare(second.id))).toEqual(original);
+    expect(room.join("other-phone", { type: "join", secret, name: "Linus", credential: credentials[2]! }).credential).toBe(credentials[2]!);
+    room.start();
+    expect(room.snapshot("fresh").privatePlayer).toMatchObject({ id: "player-2", name: "Grace", color: original[1]!.color });
+    expect(room.snapshot("connection-2").privatePlayer).toBeNull();
+    expect(() => room.join("revoked", { type: "join", secret, name: "Grace", credential: credentials[1]! })).toThrow("credential");
+  });
+
+  test("removing a human leaves existing identities unchanged through game start", () => {
+    const { room } = lobby(4);
+    room.removePlayer("player-2");
+    room.start();
+    expect(room.game!.players.map(player => player.id).toSorted()).toEqual(["player-1", "player-3", "player-4"]);
+    for (const player of room.game!.players) {
+      expect(player.name).toBe(names[Number(player.id.split("-")[1]) - 1]!);
+      expect(room.snapshot(connectionFor(player.id)).privatePlayer!.id).toBe(player.id);
+    }
+  });
+
+  test.each(["", " ", "a".repeat(21), "a".repeat(81), "Name\n", "Name\u0000", "Name\u200b"])("invalid computer name %j cannot mutate the lobby", name => {
+    const { room } = lobby(1);
+    room.addComputer();
+    const before = room.snapshot();
+    expect(() => room.renameComputer("player-2", name)).toThrow("name");
+    expect(room.snapshot()).toEqual(before);
+  });
+
+  test("computer renaming normalizes NFC, preserves identity, and avoids all seated and pending names", () => {
+    const { room } = lobby(1);
+    room.addComputer();
+    room.addComputer();
+    room.join("pending", { type: "join", secret, name: "Zo\u00eb" });
+    const original = room.snapshot().players[1]!;
+    const version = room.version;
+    room.renameComputer(original.id, " e\u0301mile ");
+    expect(room.version).toBe(version + 1);
+    const renamed = { ...original, name: "\u00e9mile" };
+    for (const connectionId of [undefined, "connection-1", "pending"]) {
+      expect(room.snapshot(connectionId).players[1]).toEqual(renamed);
+    }
+    room.renameComputer(original.id, " \u00e9mile ");
+    expect(room.version).toBe(version + 1);
+    for (const name of [" ADA ", "computer 2", " ZOE\u0308 "]) {
+      expect(() => room.renameComputer(original.id, name)).toThrow("different name");
+    }
+    expect(() => room.renameComputer("player-1", "Human renamed")).toThrow("computer");
+    expect(() => room.renameComputer("missing", "Missing renamed")).toThrow("computer");
+    expect(room.version).toBe(version + 1);
+    expect(() => room.join("duplicate", { type: "join", secret, name: "E\u0301MILE" })).toThrow("different name");
+    room.addComputer();
+    expect(room.snapshot().players[3]!.name).toBe("Computer 1");
+    room.start();
+    expect(room.game!.players.find(player => player.id === original.id)).toMatchObject({ id: original.id, color: original.color, control: "computer", name: "\u00e9mile" });
+    expect(room.snapshot("connection-1").game!.players.find(player => player.id === original.id)!.name).toBe("\u00e9mile");
+    expect(() => room.renameComputer(original.id, "Too late")).toThrow("lobby");
+  });
+});
+
+describe("host-authoritative computer actions", () => {
+  test("mixed setup uses legal computer choices and rejects manual computer placements and build choices", () => {
+    const { room } = mixedRoom();
+    let steps = 0;
+    while (room.game!.phase.type.startsWith("setup")) {
+      const game = room.game!;
+      if (game.players.find(player => player.id === game.activePlayerId)!.control === "computer") {
+        const action = chooseComputerAction(game, game.activePlayerId)!;
+        const before = room.snapshot();
+        expect(before.boardTargets).toEqual({ vertices: [], edges: [], tiles: [] });
+        expect(() => room.performBoard(action)).toThrow("computer");
+        expect(() => room.selectBuild(null)).toThrow("computer");
+        expect(room.snapshot()).toEqual(before);
+        expect(room.performComputer()).toBe(true);
+      } else {
+        expect(room.performComputer()).toBe(false);
+        const targets = room.snapshot().boardTargets;
+        room.performBoard(game.phase.type === "setup-settlement"
+          ? { type: "place-settlement", vertexId: targets.vertices[0]! }
+          : { type: "place-road", edgeId: targets.edges[0]! });
+      }
+      steps++;
+    }
+    expect(steps).toBe(12);
+    expect(room.game!.phase.type).toBe("roll");
+    for (const player of room.game!.players) {
+      expect(room.game!.board.vertices.filter(vertex => vertex.building?.playerId === player.id)).toHaveLength(2);
+      expect(room.game!.board.edges.filter(edge => edge.playerId === player.id)).toHaveLength(2);
+    }
+  });
+
+  test("computer turns advance once per current version and stop for humans or a finished game", () => {
+    const { room } = mixedRoom();
+    room.game!.activePlayerId = "player-2";
+    room.game!.phase = { type: "roll" };
+    const version = room.version;
+    expect(room.performComputer(version)).toBe(true);
+    expect(room.version).toBe(version + 1);
+    expect(room.game!.dice).not.toBeNull();
+    expect(() => room.performComputer(version)).toThrow("game changed");
+    room.game!.phase = { type: "actions" };
+    expect(() => room.selectBuild("road")).toThrow("computer");
+    expect(room.performComputer()).toBe(true);
+    expect(room.game!.activePlayerId).not.toBe("player-2");
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "roll" };
+    expect(room.performComputer()).toBe(false);
+    room.game!.activePlayerId = "player-2";
+    room.game!.phase = { type: "finished" };
+    expect(room.performComputer()).toBe(false);
+  });
+
+  test.each(["player-1", "player-2"])("computers discard with %s active even while a human obligation remains first", activePlayerId => {
+    const { room } = mixedRoom();
+    room.game!.activePlayerId = activePlayerId;
+    give(room.game!, "player-1", { wood: 8 });
+    give(room.game!, "player-2", { brick: 8 });
+    give(room.game!, "player-3", { ore: 10 });
+    room.game!.phase = { type: "discard", required: { "player-1": 4, "player-2": 4, "player-3": 5 } };
+    expect(room.performComputer()).toBe(true);
+    expect(room.performComputer()).toBe(true);
+    expect(room.performComputer()).toBe(false);
+    expect(room.game!.phase).toEqual({ type: "discard", required: { "player-1": 4 } });
+    expect(resourceTotal(room.game!.players.find(player => player.id === "player-2")!.resources)).toBe(4);
+    expect(resourceTotal(room.game!.players.find(player => player.id === "player-3")!.resources)).toBe(5);
+    expect(send(room, "connection-1", { type: "discard", resources: resources({ wood: 4 }) }).error).toBe("");
+    expect(room.snapshot().game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
+    if (activePlayerId === "player-2") {
+      const previousTile = room.game!.robberTileId;
+      const action = chooseComputerAction(room.game!, activePlayerId)!;
+      expect(room.snapshot().boardTargets).toEqual({ vertices: [], edges: [], tiles: [] });
+      expect(() => room.performBoard(action)).toThrow("computer");
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.robberTileId).not.toBe(previousTile);
+    }
+  });
+
+  test.each(["offer-trade", "request-trade"] as const)("off-turn computers answer %s once without advancing or taking over the human turn", type => {
+    const { room } = mixedRoom();
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "actions" };
+    give(room.game!, "player-1", { wool: 1 });
+    give(room.game!, "player-2", { wood: 1, grain: 1, ore: 1 });
+    const action: GameAction = type === "offer-trade"
+      ? { type, give: resources({ wool: 1 }), receive: resources({ wood: 1 }) }
+      : { type, receive: resources({ wood: 1 }) };
+    expect(send(room, "connection-1", action).error).toBe("");
+    const hands = structuredClone(room.game!.players);
+    expect(room.performComputer()).toBe(true);
+    expect(room.performComputer()).toBe(true);
+    expect(room.performComputer()).toBe(false);
+    expect(room.game!.trade!.responses["player-2"]).toEqual(resources({ wool: 1 }));
+    expect(room.game!.trade!.responses["player-3"]).toBe(false);
+    expect(room.game!.players).toEqual(hands);
+    expect(room.game!.activePlayerId).toBe("player-1");
+    expect(send(room, "connection-1", { type: "complete-trade", playerId: "player-2" }).error).toBe("");
+  });
+
+  test("computer hands stay private, no reconnect credential binds a computer, and phones cannot take its turn", () => {
+    const { room } = mixedRoom();
+    const computer = room.game!.players.find(player => player.id === "player-2")!;
+    give(room.game!, computer.id, { ore: 3 });
+    computer.developmentCards.push({ id: "development-9", kind: "victory-point", purchasedTurn: 0 });
+    room.game!.activePlayerId = computer.id;
+    room.game!.phase = { type: "roll" };
+    for (const connectionId of [undefined, "connection-1", computer.id, "outsider"]) {
+      const snapshot = room.snapshot(connectionId);
+      expect(snapshot.privatePlayer?.control).not.toBe("computer");
+      expect(snapshot.game?.players.find(player => player.id === computer.id)).not.toHaveProperty("resources");
+      expect(JSON.stringify(snapshot)).not.toContain("development-9");
+      expect(JSON.stringify(snapshot)).not.toContain("victory-point");
+    }
+    expect(room.snapshot("connection-1").game!.players.find(player => player.id === computer.id)).toMatchObject({ control: "computer", resourceCount: 3, developmentCount: 1, score: 0 });
+    expect(() => room.join("takeover", { type: "join", secret, name: computer.name, credential: computer.id })).toThrow("credential");
+    expect(send(room, computer.id, { type: "roll" }).error).toContain("not bound");
+    expect(send(room, "connection-1", { type: "roll" }).error).toContain("Wait for your turn");
+    expect(send(room, "connection-1", { type: "roll", playerId: computer.id } as GameAction).error).toContain("unexpected fields");
   });
 });
 
@@ -224,6 +620,68 @@ describe("public and private multiplayer projections", () => {
     expect(send(room, activeConnection(room), { type: "steal", playerId: victim.id }).error).toBe("");
     expect(room.snapshot().game!.log.at(-1)).toContain("steals one resource card");
     expect(room.snapshot().game!.log.at(-1)).not.toContain("brick");
+  });
+});
+
+describe("private theft feedback", () => {
+  test("host, admitted players, pending guests and outsiders have no theft events in the lobby", () => {
+    const { room } = lobby();
+    room.join("pending", { type: "join", secret, name: "Margaret" });
+    for (const connectionId of [undefined, "connection-1", "pending", "outsider"]) {
+      expect(room.snapshot(connectionId).privateThefts).toEqual([]);
+    }
+  });
+
+  test("only each thief and victim receive the actual resources, without public or unrelated-player leaks", () => {
+    const { room } = started(4);
+    give(room.game!, "player-2", { ore: 1 });
+    give(room.game!, "player-4", { wool: 1 });
+    for (const [thiefId, victimId] of [["player-1", "player-2"], ["player-3", "player-4"], ["player-2", "player-1"]] as const) {
+      room.game!.activePlayerId = thiefId;
+      room.game!.phase = { type: "steal", victimIds: [victimId], returnPhase: "actions" };
+      expect(send(room, connectionFor(thiefId), { type: "steal", playerId: victimId }).error).toBe("");
+    }
+    const thefts: GameState["thefts"] = [
+      { id: 1, thiefId: "player-1", victimId: "player-2", resource: "ore" },
+      { id: 2, thiefId: "player-3", victimId: "player-4", resource: "wool" },
+      { id: 3, thiefId: "player-2", victimId: "player-1", resource: "ore" },
+    ];
+    expect(room.game!.thefts).toEqual(thefts);
+    for (const connectionId of [undefined, "outsider", "connection-1", "connection-2", "connection-3", "connection-4"]) {
+      const snapshot = room.snapshot(connectionId);
+      const expected = connectionId === "connection-1" || connectionId === "connection-2" ? [thefts[0]!, thefts[2]!]
+        : connectionId === "connection-3" || connectionId === "connection-4" ? [thefts[1]!] : [];
+      expect(snapshot.privateThefts).toEqual(expected);
+      expect(snapshot.game).not.toHaveProperty("thefts");
+      expect(snapshot.game).not.toHaveProperty("privateThefts");
+      expect(JSON.stringify(snapshot.game)).not.toContain("thiefId");
+      if (connectionId !== undefined) expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+    }
+    for (const entry of room.snapshot().game!.log.slice(-3)) {
+      expect(entry).toContain("steals one resource card");
+      expect(entry).not.toContain("ore");
+      expect(entry).not.toContain("wool");
+    }
+    room.snapshot("connection-1").privateThefts[0]!.resource = "brick";
+    expect(room.game!.thefts).toEqual(thefts);
+  });
+
+  test.each(["player-1", "player-2"])("reconnect retains theft history for %s and revokes the old connection", playerId => {
+    const { room, credentials } = started();
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "steal", victimIds: ["player-2"], returnPhase: "actions" };
+    give(room.game!, "player-2", { brick: 1 });
+    expect(send(room, "connection-1", { type: "steal", playerId: "player-2" }).error).toBe("");
+    const original = room.snapshot(connectionFor(playerId)).privateThefts;
+    expect(original).toEqual([{ id: 1, thiefId: "player-1", victimId: "player-2", resource: "brick" }]);
+    room.disconnect(connectionFor(playerId));
+    expect(room.snapshot(connectionFor(playerId)).privateThefts).toEqual([]);
+    const credential = credentials[Number(playerId.split("-")[1]) - 1]!;
+    room.join("replacement", { type: "join", secret, name: "Reconnected", credential });
+    const snapshot = room.snapshot("replacement");
+    expect(snapshot.privateThefts).toEqual(original);
+    expect(room.snapshot(connectionFor(playerId)).privateThefts).toEqual([]);
+    expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
   });
 });
 
@@ -341,6 +799,75 @@ describe("authoritative action permissions and ordering", () => {
 });
 
 describe("untrusted multiplayer protocol", () => {
+  test("requires bounded, strictly ordered theft events with exact fields and valid resources and identities", () => {
+    const { room } = started();
+    const snapshot = room.snapshot("connection-1");
+    const theft = { id: 1, thiefId: "player-1", victimId: "player-2", resource: "ore" };
+    for (const privateThefts of [[], [theft], [theft, { ...theft, id: 3 }], Array.from({ length: 100 }, (_, index) => ({ ...theft, id: index + 1 }))]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privateThefts } })).not.toThrow();
+    }
+    const missing = { ...snapshot };
+    Reflect.deleteProperty(missing, "privateThefts");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: missing })).toThrow();
+    for (const privateThefts of [
+      undefined, null, {}, "theft", [null], [{}],
+      ...[0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1"].map(id => [{ ...theft, id }]),
+      ...[undefined, null, "gold", "desert"].map(resource => [{ ...theft, resource }]),
+      [{ ...theft, thiefId: "player-9" }], [{ ...theft, victimId: "player-9" }],
+      [{ ...theft, victimId: "player-1" }], [{ ...theft, thiefId: "player-2", victimId: "player-3" }],
+      [{ ...theft, thiefId: "player-4" }], [{ ...theft, victimId: "player-4" }],
+      [{ ...theft, extra: true }], [{ id: 1, thiefId: "player-1", victimId: "player-2" }],
+      [theft, theft], [{ ...theft, id: 2 }, theft],
+      Array.from({ length: 101 }, (_, index) => ({ ...theft, id: index + 1 })),
+    ]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privateThefts } })).toThrow();
+    }
+  });
+
+  test("rejects thefts without a private owner or game, foreign participants, and public theft fields", () => {
+    const { room } = started();
+    const snapshot = room.snapshot("connection-1");
+    const privateThefts = [{ id: 1, thiefId: "player-1", victimId: "player-2", resource: "wood" }];
+    for (const invalid of [
+      { ...snapshot, privateThefts, privatePlayer: null },
+      { ...snapshot, privateThefts, playerId: null, privatePlayer: null },
+      { ...snapshot, privateThefts, game: null },
+      { ...snapshot, privateThefts, game: { ...snapshot.game, players: snapshot.game!.players.filter(player => player.id !== "player-2") } },
+      { ...snapshot, privateThefts, game: { ...snapshot.game, players: snapshot.game!.players.filter(player => player.id !== "player-1") } },
+      { ...snapshot, game: { ...snapshot.game, thefts: privateThefts } },
+      { ...snapshot, game: { ...snapshot.game, privateThefts } },
+      { ...lobby().room.snapshot("connection-1"), privateThefts },
+      { ...room.snapshot("outsider"), privateThefts },
+    ]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: invalid })).toThrow();
+    }
+  });
+
+  test("requires public human/computer control and rejects computer private hands or ownership", () => {
+    const { room } = mixedRoom();
+    const snapshot = room.snapshot("connection-1");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+    for (const control of [undefined, null, "remote", false]) {
+      const invalid = structuredClone(snapshot);
+      Object.assign(invalid.players[0]!, { control });
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: invalid })).toThrow();
+      const invalidGame = structuredClone(snapshot);
+      Object.assign(invalidGame.game!.players[0]!, { control });
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: invalidGame })).toThrow();
+    }
+    const computer = room.game!.players.find(player => player.control === "computer")!;
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, playerId: computer.id, privatePlayer: computer } })).toThrow();
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, playerId: computer.id, privatePlayer: null } })).toThrow();
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privatePlayer: { ...snapshot.privatePlayer, control: "computer" } } })).toThrow();
+  });
+
+  test("computer lobby operations and computer actions are not client protocol commands", () => {
+    for (const type of ["add-computer", "remove-player", "rename-computer", "computer-action"]) {
+      expect(() => parseClientMessage({ type, requestId: "request", version: 0 })).toThrow();
+    }
+    expect(() => parseClientMessage({ type: "join", secret, name: "Computer 1", control: "computer" })).toThrow();
+  });
+
   test.each([
     null, [], "roll", { type: "unknown" }, { type: "roll", playerId: "player-1" },
     { type: "roll", secret: "secret" }, { type: "steal", playerId: "player-9" },
@@ -374,4 +901,256 @@ describe("untrusted multiplayer protocol", () => {
     const projection = publicGame(room.game!, snapshot.players);
     expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, game: projection } })).not.toThrow();
   });
+});
+
+test("host session schedules one computer action, discards stale work, cleans timers on close, and guest lobby methods send nothing", async () => {
+  const OriginalPeer = (await import("peerjs")).default;
+  const connection = Object.assign(new EventEmitter(), { open: true, send: mock(() => {}), close: mock(() => {}) });
+  const peers: EventEmitter[] = [];
+  class TestPeer extends EventEmitter {
+    open = true;
+    destroyed = false;
+    disconnected = false;
+    constructor() { super(); peers.push(this); }
+    connect() { return connection; }
+    destroy() { this.destroyed = true; }
+  }
+  type Timer = ReturnType<typeof setTimeout>;
+  const timers = new Map<Timer, { callback: () => void; delay: number }>();
+  let timerNumber = 0;
+  const schedule = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, delay: number) => {
+    const timer = ++timerNumber as unknown as Timer;
+    timers.set(timer, { callback, delay });
+    return timer;
+  }) as typeof setTimeout);
+  const cancel = spyOn(globalThis, "clearTimeout").mockImplementation(timer => { timers.delete(timer as Timer); });
+  const views: SessionView[] = [];
+  let host: MultiplayerSession | undefined;
+  let guest: MultiplayerSession | undefined;
+  mock.module("peerjs", () => ({ default: TestPeer }));
+  try {
+    const { hostSession, joinSession } = await import("../../src/multiplayer/session");
+    host = hostSession(view => views.push(view));
+    const initialPreview = views.at(-1)!.snapshot!.previewBoard;
+    expect(initialPreview).toBeDefined();
+    const initialVersion = views.at(-1)!.snapshot!.version;
+    const initialUpdates = views.length;
+    host.shuffleBoard();
+    expect(views).toHaveLength(initialUpdates + 1);
+    expect(views.at(-1)!.snapshot!.version).toBe(initialVersion + 1);
+    expect(views.at(-1)!.snapshot!.previewBoard).not.toEqual(initialPreview);
+    host.addComputer();
+    expect(views.at(-1)!.snapshot!.players).toHaveLength(1);
+    host.renameComputer("player-1", "New name");
+    expect(views.at(-1)!.snapshot!.players[0]!.name).toBe("New name");
+    host.removePlayer("player-1");
+    expect(views.at(-1)!.snapshot!.players).toHaveLength(0);
+    for (let index = 0; index < 3; index++) host.addComputer();
+    const startingBoard = views.at(-1)!.snapshot!.previewBoard!;
+    host.startGame();
+    expect(views.at(-1)!.snapshot).not.toHaveProperty("previewBoard");
+    expect(views.at(-1)!.snapshot!.game!.board).toEqual(startingBoard);
+    host.shuffleBoard();
+    expect(views.at(-1)!.error).toContain("lobby");
+    expect(views.at(-1)!.snapshot!.game!.board).toEqual(startingBoard);
+    const version = views.at(-1)!.snapshot!.version;
+    const first = [...timers].find(([, timer]) => timer.delay === 450)!;
+    expect(first).toBeDefined();
+    expect([...timers.values()].filter(timer => timer.delay === 450)).toHaveLength(1);
+    expect(views.at(-1)!.snapshot!.game!.phase.type).toBe("setup-settlement");
+    timers.delete(first[0]);
+    first[1].callback();
+    expect(views.at(-1)!.snapshot!.version).toBe(version + 1);
+    expect(views.at(-1)!.snapshot!.game!.phase.type).toBe("setup-road");
+    const published = views.length;
+    first[1].callback();
+    expect(views).toHaveLength(published);
+    const next = [...timers.values()].find(timer => timer.delay === 450)!;
+    host.close();
+    const closed = views.length;
+    expect(timers.size).toBe(0);
+    next.callback();
+    host.addComputer();
+    host.removePlayer("player-1");
+    host.renameComputer("player-1", "New name");
+    host.shuffleBoard();
+    expect(views).toHaveLength(closed);
+    expect(views.at(-1)!.status).toBe("closed");
+
+    guest = joinSession({ hostId: "host-id", secret }, "Ada", view => views.push(view));
+    peers.at(-1)!.emit("open");
+    connection.emit("open");
+    expect(connection.send).toHaveBeenCalledTimes(1);
+    for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard()]) {
+      operation();
+      expect(views.at(-1)!.error).toContain("Only the shared host");
+      expect(connection.send).toHaveBeenCalledTimes(1);
+    }
+    guest.close();
+    expect(timers.size).toBe(0);
+  } finally {
+    host?.close();
+    guest?.close();
+    schedule.mockRestore();
+    cancel.mockRestore();
+    mock.module("peerjs", () => ({ default: OriginalPeer }));
+  }
+});
+
+test("host removal and renaming propagate while terminal clients clear revoked identity and require explicit readmission", async () => {
+  const OriginalPeer = (await import("peerjs")).default;
+  class TestConnection extends EventEmitter {
+    open = true;
+    serialization = "binary";
+    messages: unknown[] = [];
+    send = mock((message: unknown) => { this.messages.push(message); });
+    close() { this.open = false; }
+  }
+  const peers: TestPeer[] = [];
+  class TestPeer extends EventEmitter {
+    open = true;
+    destroyed = false;
+    disconnected = false;
+    connections: TestConnection[] = [];
+    constructor() { super(); peers.push(this); }
+    connect() { const connection = new TestConnection(); this.connections.push(connection); return connection; }
+    destroy() { this.destroyed = true; }
+  }
+  type Timer = ReturnType<typeof setTimeout>;
+  const timers = new Map<Timer, { callback: () => void; delay: number }>();
+  let timerNumber = 0;
+  const schedule = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, delay: number) => {
+    const timer = ++timerNumber as unknown as Timer;
+    timers.set(timer, { callback, delay });
+    return timer;
+  }) as typeof setTimeout);
+  const cancel = spyOn(globalThis, "clearTimeout").mockImplementation(timer => { timers.delete(timer as Timer); });
+  const previousLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, "location", { configurable: true, value: { origin: "https://catania.test", pathname: "/" } });
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+    removeItem: (key: string) => { storage.delete(key); },
+  } });
+  const hostViews: SessionView[] = [];
+  const guestViews: SessionView[] = [];
+  let host: MultiplayerSession | undefined;
+  let guest: MultiplayerSession | undefined;
+  const deliver = (from: TestConnection, to: TestConnection) => {
+    while (from.messages.length) to.emit("data", from.messages.shift());
+  };
+  const attachGuest = () => {
+    const client = peers[1]!.connections.at(-1)!;
+    const server = new TestConnection();
+    peers[0]!.emit("connection", server);
+    client.emit("open");
+    deliver(client, server);
+    return { client, server };
+  };
+  mock.module("peerjs", () => ({ default: TestPeer }));
+  try {
+    const { hostSession, joinSession } = await import("../../src/multiplayer/session");
+    host = hostSession(view => hostViews.push(view));
+    peers[0]!.emit("open");
+    const invitationParameters = new URLSearchParams(new URL(hostViews.at(-1)!.invitationUrl!).hash.slice(1));
+    const invitation = { hostId: invitationParameters.get("host")!, secret: invitationParameters.get("secret")! };
+    const credentialKey = `catania:multiplayer:${invitation.hostId}`;
+    const nameKey = `catania.multiplayer.name.${invitation.hostId}`;
+    storage.set(nameKey, "Ada");
+    storage.set("catania:multiplayer:other-room", "unrelated-credential");
+    guest = joinSession(invitation, "Ada", view => guestViews.push(view));
+    peers[1]!.emit("open");
+    const first = attachGuest();
+    host.admit(hostViews.at(-1)!.snapshot!.pendingPlayers![0]!.connectionId);
+    deliver(first.server, first.client);
+    const credential = storage.get(credentialKey)!;
+    const originalPlayer = guestViews.at(-1)!.snapshot!.players[0]!;
+    expect(guestViews.at(-1)!.snapshot!.playerId).toBe(originalPlayer.id);
+    host.shuffleBoard();
+    deliver(first.server, first.client);
+    expect(hostViews.at(-1)!.snapshot!.previewBoard).toBeDefined();
+    expect(guestViews.at(-1)!.snapshot).not.toHaveProperty("previewBoard");
+    expect(guestViews.at(-1)!.status).toBe("connected");
+
+    const otherPhone = new TestConnection();
+    peers[0]!.emit("connection", otherPhone);
+    otherPhone.emit("data", { type: "join", secret: invitation.secret, name: "Grace" });
+    host.admit(hostViews.at(-1)!.snapshot!.pendingPlayers![0]!.connectionId);
+    host.addComputer();
+    host.renameComputer("player-3", " Rover ");
+    deliver(first.server, first.client);
+    expect(guestViews.at(-1)!.snapshot!.players.find(player => player.id === "player-3")!.name).toBe("Rover");
+    const renamed = parseServerMessage(otherPhone.messages.at(-1));
+    expect(renamed.type).toBe("snapshot");
+    if (renamed.type === "snapshot") expect(renamed.snapshot.players.find(player => player.id === "player-3")!.name).toBe("Rover");
+
+    guest.perform({ type: "roll" });
+    expect(guestViews.at(-1)!.pending).toBe(true);
+    host.removePlayer(originalPlayer.id);
+    expect(first.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: "The host removed you from the lobby. Use Reconnect to request a new seat." });
+    expect(hostViews.at(-1)!.snapshot!.players.map(player => player.id)).toEqual(["player-2", "player-3"]);
+    deliver(first.server, first.client);
+    expect(guestViews.at(-1)).toMatchObject({ status: "disconnected", snapshot: null, pending: false });
+    expect(guestViews.at(-1)!.error).toContain("host removed you");
+    expect(storage.has(credentialKey)).toBe(false);
+    expect(storage.get(nameKey)).toBe("Ada");
+    expect(storage.get("catania:multiplayer:other-room")).toBe("unrelated-credential");
+    expect([...timers.values()].some(timer => timer.delay === 2000)).toBe(false);
+    peers[1]!.emit("open");
+    expect(peers[1]!.connections).toHaveLength(1);
+
+    guest.reconnect();
+    const fresh = attachGuest();
+    expect(fresh.client.send.mock.calls[0]![0]).toEqual({ type: "join", secret: invitation.secret, name: "Ada" });
+    deliver(fresh.server, fresh.client);
+    expect(guestViews.at(-1)!.snapshot!.playerId).toBeNull();
+    host.admit(hostViews.at(-1)!.snapshot!.pendingPlayers![0]!.connectionId);
+    deliver(fresh.server, fresh.client);
+    const freshCredential = storage.get(credentialKey)!;
+    expect(freshCredential).not.toBe(credential);
+    expect(guestViews.at(-1)!.snapshot!.players.find(player => player.id === originalPlayer.id)).toEqual(originalPlayer);
+    first.server.emit("close");
+    expect(hostViews.at(-1)!.snapshot!.players.find(player => player.id === originalPlayer.id)!.connected).toBe(true);
+
+    fresh.client.emit("close");
+    fresh.server.emit("close");
+    host.removePlayer(originalPlayer.id);
+    expect(storage.get(credentialKey)).toBe(freshCredential);
+    const retry = [...timers].find(([, timer]) => timer.delay === 2000)!;
+    timers.delete(retry[0]);
+    retry[1].callback();
+    const rejected = attachGuest();
+    expect(rejected.client.send.mock.calls[0]![0]).toEqual({ type: "join", secret: invitation.secret, name: "Ada", credential: freshCredential });
+    expect(rejected.server.messages.at(-1)).toEqual({ type: "error", terminal: true, error: "This reconnect credential is not valid for this room." });
+    expect(hostViews.at(-1)!.snapshot!.pendingPlayers).toEqual([]);
+    deliver(rejected.server, rejected.client);
+    expect(guestViews.at(-1)).toMatchObject({ status: "disconnected", snapshot: null, pending: false });
+    expect(storage.has(credentialKey)).toBe(false);
+    expect([...timers.values()].some(timer => timer.delay === 2000)).toBe(false);
+    peers[1]!.emit("open");
+    expect(peers[1]!.connections).toHaveLength(3);
+    guest.reconnect();
+    const readmission = attachGuest();
+    expect(readmission.client.send.mock.calls[0]![0]).toEqual({ type: "join", secret: invitation.secret, name: "Ada" });
+    deliver(readmission.server, readmission.client);
+    expect(guestViews.at(-1)!.snapshot!.playerId).toBeNull();
+    expect(hostViews.at(-1)!.snapshot!.pendingPlayers!.map(player => player.name)).toEqual(["Ada"]);
+    expect(hostViews.at(-1)!.snapshot!.players.find(player => player.id === "player-2")).toMatchObject({ name: "Grace", connected: true });
+    expect(otherPhone.messages.some(message => parseServerMessage(message).type === "error")).toBe(false);
+    guest.close();
+    host.close();
+    expect(timers.size).toBe(0);
+  } finally {
+    guest?.close();
+    host?.close();
+    schedule.mockRestore();
+    cancel.mockRestore();
+    if (previousLocation) Object.defineProperty(globalThis, "location", previousLocation);
+    else Reflect.deleteProperty(globalThis, "location");
+    if (previousStorage) Object.defineProperty(globalThis, "sessionStorage", previousStorage);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+    mock.module("peerjs", () => ({ default: OriginalPeer }));
+  }
 });

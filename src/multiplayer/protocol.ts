@@ -105,14 +105,15 @@ function array(value: unknown, maximum: number, check: (value: unknown) => boole
 }
 function roomPlayer(value: unknown, publicPlayer = false): boolean {
   if (!record(value) || !fields(value, publicPlayer
-    ? ["id", "name", "color", "connected", "resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"]
-    : ["id", "name", "color", "connected"])) return false;
+    ? ["id", "name", "color", "control", "connected", "resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"]
+    : ["id", "name", "color", "control", "connected"])) return false;
   return identifier(value.id, "player") && validName(value.name) && typeof value.color === "string" && /^#[a-f0-9]{6}$/i.test(value.color) &&
+    (value.control === "human" || value.control === "computer") &&
     typeof value.connected === "boolean" && (!publicPlayer || ["resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"].every(key => integer(value[key], 95)));
 }
 function privatePlayer(value: unknown): boolean {
   return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed"]) &&
-    roomPlayer({ id: value.id, name: value.name, color: value.color, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) &&
+    roomPlayer({ id: value.id, name: value.name, color: value.color, control: value.control, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) &&
     array(value.developmentCards, 25, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
       ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"].includes(card.kind as string));
 }
@@ -153,9 +154,21 @@ function publicGame(value: unknown): boolean {
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
-  if (!record(value) || !fields(value, ["version", "players", "game", "playerId", "privatePlayer", "privateScore", "buildMode", "boardTargets"])) return false;
+  if (!record(value) || !fields(value, ["version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateScore", "buildMode", "boardTargets"])) return false;
+  let previousTheftId = 0;
   return integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&
-    (value.playerId === null || identifier(value.playerId, "player")) && (value.privatePlayer === null || (privatePlayer(value.privatePlayer) && (value.privatePlayer as RecordValue).id === value.playerId)) &&
+    (value.playerId === null || (identifier(value.playerId, "player") && (value.players as RecordValue[]).some(player => player.id === value.playerId && player.control === "human"))) &&
+    (value.privatePlayer === null || (privatePlayer(value.privatePlayer) && (value.privatePlayer as RecordValue).id === value.playerId)) &&
+    array(value.privateThefts, 100, theft => {
+      if (!record(theft) || !fields(theft, ["id", "thiefId", "victimId", "resource"]) || !integer(theft.id) || theft.id <= previousTheftId ||
+        !identifier(theft.thiefId, "player") || !identifier(theft.victimId, "player") || theft.thiefId === theft.victimId || !resource(theft.resource) ||
+        !record(value.privatePlayer) || !record(value.game)) return false;
+      if ((theft.thiefId !== value.privatePlayer.id && theft.victimId !== value.privatePlayer.id) ||
+        !(value.game.players as RecordValue[]).some(player => player.id === theft.thiefId) ||
+        !(value.game.players as RecordValue[]).some(player => player.id === theft.victimId)) return false;
+      previousTheftId = theft.id;
+      return true;
+    }) &&
     (value.privateScore === null || integer(value.privateScore, 30)) && buildMode(value.buildMode) && record(value.boardTargets) && fields(value.boardTargets, ["vertices", "edges", "tiles"]) &&
     array(value.boardTargets.vertices, 54, value => identifier(value, "vertex")) && array(value.boardTargets.edges, 72, value => identifier(value, "edge")) && array(value.boardTargets.tiles, 19, value => identifier(value, "tile"));
 }

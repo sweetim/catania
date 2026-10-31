@@ -141,6 +141,7 @@ describe("initialization and snake setup", () => {
     expect(state.board.tiles.find(tile => tile.id === state.robberTileId)!.terrain).toBe("desert");
     expect(state.dice).toBeNull();
     expect(state.turnNumber).toBe(0);
+    expect(state.thefts).toEqual([]);
   });
 
   test.each([3, 4])("completes the exact free %s-player forward/reverse setup with second-settlement resources", count => {
@@ -489,12 +490,15 @@ describe("seven, discards, robber and theft", () => {
     const emptyVictim = applyAction(state, firstPlayer, { type: "steal", playerId: thirdPlayer }, () => { throw new Error("No draw for an empty hand"); });
     expect(emptyVictim.phase.type).toBe("actions");
     expect(emptyVictim.players[0]!.resources).toEqual(emptyResources());
+    expect(emptyVictim.thefts).toEqual([]);
     reject(state, { type: "end-turn" }, "mandatory choices");
     const before = structuredClone(state);
     state = applyAction(state, firstPlayer, { type: "steal", playerId: secondPlayer }, () => 0.3);
     expect(state.players[0]!.resources.ore).toBe(1);
     expect(state.players[1]!.resources).toEqual(resources({ wood: 1, ore: 2 }));
     expect(before.players[1]!.resources.ore).toBe(3);
+    expect(before.thefts).toEqual([]);
+    expect(state.thefts).toEqual([{ id: 1, thiefId: firstPlayer, victimId: secondPlayer, resource: "ore" }]);
     expect(state.phase).toEqual({ type: "actions" });
     expect(state.log.at(-1)).not.toContain("ore");
     expect(state.log.at(-1)).not.toContain("wood");
@@ -509,6 +513,8 @@ describe("seven, discards, robber and theft", () => {
     const high = applyAction(state, firstPlayer, { type: "steal", playerId: secondPlayer }, () => 0.999999);
     expect(low.players[0]!.resources.wood).toBe(1);
     expect(high.players[0]!.resources.ore).toBe(1);
+    expect(low.thefts).toEqual([{ id: 1, thiefId: firstPlayer, victimId: secondPlayer, resource: "wood" }]);
+    expect(high.thefts).toEqual([{ id: 1, thiefId: firstPlayer, victimId: secondPlayer, resource: "ore" }]);
     expect(high.phase).toEqual({ type: "roll" });
   });
 
@@ -518,7 +524,57 @@ describe("seven, discards, robber and theft", () => {
     const tile = state.board.tiles.find(tile => tile.id !== state.robberTileId)!;
     const result = applyAction(state, firstPlayer, { type: "move-robber", tileId: tile.id });
     expect(result.phase).toEqual({ type: "roll" });
+    expect(result.thefts).toEqual([]);
     reject(result, { type: "steal", playerId: secondPlayer }, "before choosing");
+  });
+
+  test("theft events have consecutive IDs across thieves and retain only the latest 100", () => {
+    let state = actionState();
+    give(state, secondPlayer, { wood: 1 });
+    for (let id = 1; id <= 102; id++) {
+      const thiefId = id % 2 === 1 ? firstPlayer : secondPlayer;
+      const victimId = id % 2 === 1 ? secondPlayer : firstPlayer;
+      state.activePlayerId = thiefId;
+      state.phase = { type: "steal", victimIds: [victimId], returnPhase: "actions" };
+      state = applyAction(state, thiefId, { type: "steal", playerId: victimId }, () => 0);
+      expect(state.thefts.at(-1)).toEqual({ id, thiefId, victimId, resource: "wood" });
+      expect(state.thefts).toHaveLength(Math.min(id, 100));
+    }
+    expect(state.thefts.map(theft => theft.id)).toEqual(Array.from({ length: 100 }, (_, index) => index + 3));
+    expect(state.log).toHaveLength(100);
+    assertConservation(state);
+  });
+
+  test("empty hands, spending, trades, discards and ordinary actions retain theft history", () => {
+    let state = actionState();
+    give(state, secondPlayer, { brick: 1 });
+    state.phase = { type: "steal", victimIds: [secondPlayer], returnPhase: "actions" };
+    state = applyAction(state, firstPlayer, { type: "steal", playerId: secondPlayer }, () => 0);
+    const thefts = structuredClone(state.thefts);
+    state.phase = { type: "steal", victimIds: [secondPlayer], returnPhase: "actions" };
+    state = applyAction(state, firstPlayer, { type: "steal", playerId: secondPlayer });
+    expect(state.thefts).toEqual(thefts);
+
+    give(state, firstPlayer, { wood: 5, wool: 1, grain: 1, ore: 1 });
+    state.board.vertices[0]!.building = { playerId: firstPlayer, kind: "settlement" };
+    for (const action of [
+      { type: "place-road", edgeId: legalRoadEdges(state, firstPlayer)[0]! },
+      { type: "buy-development" },
+      { type: "bank-trade", give: "wood", receive: "ore" },
+    ] satisfies GameAction[]) {
+      state = applyAction(state, firstPlayer, action);
+      expect(state.thefts).toEqual(thefts);
+    }
+    state.phase = { type: "discard", required: { [firstPlayer]: 1 } };
+    state = applyAction(state, firstPlayer, { type: "discard", resources: resources({ ore: 1 }) });
+    expect(state.thefts).toEqual(thefts);
+    state = applyAction(state, firstPlayer, { type: "move-robber", tileId: state.board.tiles.find(tile => tile.id !== state.robberTileId)!.id });
+    expect(state.thefts).toEqual(thefts);
+    state = applyAction(state, firstPlayer, { type: "end-turn" });
+    expect(state.thefts).toEqual(thefts);
+    state = applyAction(state, state.activePlayerId, { type: "roll" }, () => 0);
+    expect(state.thefts).toEqual(thefts);
+    assertConservation(state);
   });
 });
 

@@ -1,14 +1,15 @@
 # Catania
 
 A Catan-style base game with single-device play for 1-4 humans (AI fills a 3-4
-player table), or a shared board and private phones for 3-4 human players.
+player table), or a shared board with private human phones and computer opponents
+at a 3-4 player table.
 Built with Bun, React 19, TypeScript, and Tailwind CSS v4. All illustrations and
 assets are local.
 
 ## Features
 
 - Solo AI opponents or human pass-and-play on one device.
-- Shared-board multiplayer with QR invitations and private phone hands.
+- Shared-board multiplayer with QR invitations, private phone hands, and optional computer opponents.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 
@@ -52,7 +53,7 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
 - Games live in memory. Refreshing or closing the single-device game or multiplayer
   host loses the game; there is no saved-game recovery.
 - Multiplayer targets devices on the same Wi-Fi, requires internet access for
-  PeerJS Cloud signaling, and has no relay fallback or multiplayer AI.
+  PeerJS Cloud signaling, and has no relay fallback.
 - Single-device handoff hides cards on screen, but the shared browser holds all hands.
 
 ## Documentation

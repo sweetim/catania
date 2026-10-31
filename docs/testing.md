@@ -27,19 +27,38 @@ The browser suite selects `tests/browser/catania.spec.ts` and
 Tests exercise the interface in desktop and mobile Chromium viewports and write
 diagnostic screenshots to `test-results/`, including each theme's preview, actual
 game board, and resource cards, plus the theme dialog.
+Multiplayer coverage includes required/optional lobby seats, computer add/remove
+controls and capacity, human removal and fresh readmission, validated computer
+renaming and left-side player avatars, exact lobby-map preservation after zero or
+multiple shuffles, one phone with two automatic computer opponents, private-hand
+projections, and reconnect readiness. Host-session tests cover computer timer cleanup,
+stale callbacks, off-turn discards/trades, and shared-board authority restrictions.
+Dialog regressions cover the shared single-device and cross-device trade editor,
+resource-card selectors, response states, missing-card explanations, development-card
+inspection, discard progress, and purchase/theft/trade confirmations. Phone checks
+include 320-pixel layouts and version changes while a choice or confirmation is open.
+Presentation-fixture tests validate rendering and command payloads separately from
+the real WebRTC game tests that validate authoritative state transitions.
+Robbery coverage checks exact-resource events and private projections, local
+victim/thief notices across handoffs, computer thefts in solo play, and phone
+notice queues, dismissal, resource-loss false positives, and reduced motion.
+Shared-board layout checks cover the single-device player seats and map, viewport
+containment, horizontally scrolling seats, and confirmed placements at desktop and
+320-pixel widths. They also verify that bank/build/turn panels, tabs, and private
+hands or actions do not appear on the shared screen.
 
 ## Browser Test Servers
 
 Browser tests use the declared Playwright dependency, a dedicated application
 server on port 4173, and a test-only PeerServer on port 4176. Existing servers are
-not reused. Set `PLAYWRIGHT_PORT` to use another application port when 4173 is
-already occupied:
+not reused. Set `PLAYWRIGHT_PORT` and `PLAYWRIGHT_SIGNALING_PORT` to use different
+application and signaling ports when another test run occupies the defaults:
 
 ```bash
-PLAYWRIGHT_PORT=4174 bun run test:browser
+PLAYWRIGHT_PORT=4191 PLAYWRIGHT_SIGNALING_PORT=4192 bun run test:browser
 ```
 
-This changes only the application port; the test PeerServer still needs port 4176.
+Each setting is optional; their defaults remain 4173 and 4176 respectively.
 Multiplayer tests route signaling to that local server and exercise real browser
 WebRTC connections without depending on public PeerJS Cloud. This test server is
 not part of the deployment.
@@ -76,6 +95,13 @@ on the intended Wi-Fi:
 2. Complete setup, roll, trade, and discard.
 3. Reconnect a phone after backgrounding it.
 4. Verify that the shared screen never shows a private hand.
+5. In a new room, admit one phone and add two computers. Check the missing-player
+   message, optional fourth seat, and add/remove controls. Rename a computer, check
+   its left-side robot avatar, and verify duplicate names are rejected. Remove the human and
+   confirm their phone must request fresh admission. Shuffle the preview, change
+   themes, and verify Start keeps the chosen terrain, numbers, ports, and robber.
+   Verify automatic
+   computer placements, turns, discards, and trade responses without phone prompts.
 
 Browser automation does not establish physical Android/iOS compatibility or public
 PeerJS Cloud availability. See the [multiplayer guide](multiplayer.md) for deployment,

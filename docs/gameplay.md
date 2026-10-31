@@ -7,6 +7,18 @@ For a shared board and private phones, see the [multiplayer guide](multiplayer.m
 
 ## Start A Game
 
+The home screen fits one viewport, with setup and the island preview side by
+side on desktop and wide landscape phones. On narrower screens, switch between
+**Setup** and **Island**; return to **Setup** to start the game. **Play across
+devices** remains available in either view. Very short windows scroll the settings
+inside the setup card while its start button stays visible in the card footer.
+
+The **On this device** card contains the local player settings and **Let's settle
+in**, beneath the theme selector.
+Under **Separate multiplayer setup**, **Play across devices** opens setup for a shared
+board and phones. It does not carry over these names, player counts, or the island
+preview; multiplayer players and a new island are set up independently.
+
 1. Choose three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
@@ -61,12 +73,15 @@ and returns focus to the selected location.
 
 ## Themes And Settings
 
-Choose a **Board theme** before starting to update the island preview immediately:
+The selected **Board theme** shows three miniature hex tiles with the theme's
+actual terrain artwork. Use **Change** before starting to open
+**Choose your theme** and update the island preview immediately:
 **Illustrated Island** (the default), **Mediterranean Ceramic**, **Carved Wooden Tabletop**,
 **Pixel-Art Kingdom**, **Space Frontier**, or **Underwater Colonies**. During play,
 the board footer's **Theme** button opens **Choose your theme**. Radio selections
 apply immediately without closing the dialog; Close or Escape returns focus to
-**Theme**. Themes change only board and resource artwork and palettes, not names,
+the opening control. The home island preview also has a **Theme** button.
+Themes change only board and resource artwork and palettes, not names,
 rules, pieces, turns, or resources. Switching preserves the current selection,
 zoom, and pan. This browser remembers the choice across games and reloads in
 `localStorage` under `catania.boardTheme`; unknown values or unavailable storage
@@ -184,8 +199,17 @@ Gained resource cards deal into an on-screen collection tray and animate over
 stationary hand cards, followed by gain badges and a glow. The tray remains
 visible while viewing the board and can be dismissed; it clears after a few
 seconds or immediately on private handoff. It shows actual gains for the
-revealed hand from starting settlements, dice, bank/player trades, theft,
-and development cards.
+revealed hand from starting settlements, dice, bank/player trades, and development
+cards. Theft uses a separate private notice instead of the generic gain tray.
+
+After a successful robbery, the victim sees who robbed them and the exact lost
+resource card with **-1**. The thief sees who they stole from and the card with
+**+1**. Notices stay until dismissed, including when the board is open. In
+pass-and-play, each player's unread notices wait until that player reveals their
+hand; neither the handoff screen nor another player's hand shows them. Multiple
+notices appear one at a time. Discarding, spending, and empty-hand theft attempts
+do not produce robbery notices. Multiplayer uses the same private notices, while
+the shared board and public activity never show the stolen resource.
 
 A fixed-size roll summary stays visible in every phone view until the next action.
 It shows larger dice beside **You received** resource cards with **+N** quantities

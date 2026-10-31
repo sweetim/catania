@@ -1,6 +1,6 @@
 # Catania Architecture
 
-Status: The local game supports solo AI opponents and human pass-and-play. The current multiplayer implementation uses a browser-authoritative shared board, PeerJS Cloud signaling, and private phone views. The older local-service proposal is retained separately below, not as a description of the deployed transport.
+Status: The local game supports solo AI opponents and human pass-and-play. The current multiplayer implementation uses a browser-authoritative shared board, PeerJS Cloud signaling, private phone views, and optional computer opponents. The older local-service proposal is retained separately below, not as a description of the deployed transport.
 
 Related document: [Requirements and page flows](requirements.md).
 
@@ -17,6 +17,12 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/game/computer.ts` | Pure computer action selection using its own hand and public information, plus required-action controller selection. |
 | `src/components/Board.tsx` | Locally drawn SVG terrain and pieces, keyboard/touch targets, and contained zoom/panning. |
 | `src/components/GameUi.tsx` | Resource controls, icons, and native accessible dialogs. |
+| `src/components/TradeDialog.tsx` | Shared bank/port and player-trade editor for both gameplay modes. |
+| `src/components/OpenTrade.tsx` | Shared offers, requests, response states, and price selection using only the viewer's private hand. |
+| `src/components/GameplayDialogs.tsx` | Shared development cards, discard selection, public theft choices, and action confirmations. |
+| `src/components/PlayerSeat.tsx` | Shared player identity, card counts, public score, turn/leader styling, and award indicators. |
+| `src/components/TurnInstructions.tsx` | Shared phase headings, guidance, and instruction-panel presentation. |
+| `src/components/DevelopmentHand.tsx` | Shared grouped development-card list and eligible-copy selection. |
 | `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |
 | `src/components/ThemeArtwork.tsx` | Local SVG terrain and resource artwork for theme variants. |
 | `src/components/ThemeSelector.tsx` | Shared native-radio theme picker for setup and the board toolbar dialog. |
@@ -90,19 +96,36 @@ and reconnect credentials. The host UI consumes a public snapshot even though
 the trusted host process necessarily holds the full state. Only the active
 player's phone may send normal turn actions; off-turn trade responses and required
 discards remain permitted by the engine. Only the shared board accepts placement
-and robber movement, with confirmation and current-state validation.
+and robber movement for human turns, with confirmation and current-state validation.
+Computer seats have no connection or reconnect credential. The host session reuses
+the local computer chooser with a paced, version-checked timer, including off-turn
+discards and trade responses. Closing the room cancels automation. Computer hands
+remain private, and shared-board input is disabled during computer turns.
 
 `src/multiplayer/MultiplayerApp.tsx` provides the board lobby, locally rendered QR,
 exact-connection admission, public clickable board, and private phone controls.
-The host starts with three or four connected, admitted human players and occupies
-no seat. The room invitation uses a URL fragment, which is not sent to Vercel in
+Local and cross-device play render the same gameplay dialog components; their
+controllers retain separate action dispatch, handoff, and network authority.
+Phone editors and confirmations capture the snapshot version and disable submission
+if it changes, requiring the player to review the latest state before sending an
+action. Shared components receive public board/bank data plus only the current
+player's hand, never fabricated or exposed opponent inventories.
+The host starts with three or four human or computer players and occupies no seat.
+Human players must be admitted and connected. Before starting, the host can add
+computers, remove any seat, and rename computers with the same unique-name rules as
+human admission. Human removal revokes the seat credential; terminal rejections clear
+the phone's cached credential and snapshot and stop automatic rejoining. The lobby
+uses color-tinted person/robot avatars before player names and displays required empty seats and an optional fourth
+seat. The host owns a lobby island preview, exposes it only in its local snapshot,
+and can shuffle it before play. Starting passes that exact board into the engine;
+roster changes and theme changes do not regenerate it. The room invitation uses a URL fragment, which is not sent to Vercel in
 the page request. The invitation secret is checked over the game data channel,
 not included in PeerJS signaling metadata. Individual reconnect credentials are
 host-issued and kept only in each phone's room-scoped `sessionStorage`. A reconnect
 replaces the old seat connection and receives a fresh authorized snapshot; knowing
 a name or the shared invitation is not enough to take over a seat.
 
-There is no host migration, saved-game persistence, multiplayer AI, organizer-phone
+There is no host migration, saved-game persistence, organizer-phone
 role, or in-room rematch in this implementation. Keep the host browser open and
 awake. Local-network isolation and browser suspension can break direct connections;
 there is no silent server/relay fallback. Tests use a local test-only PeerServer to
@@ -333,6 +356,16 @@ gained cards even when the phone's Hand view is hidden; matching hand cards puls
 Receipts expire or can be dismissed, restart for repeated identical gains, and
 are cleared on handoff, game exit, or victory. They never delay non-roll actions
 or change resource accounting. Reduced motion keeps the receipt static.
+
+Successful robber thefts instead record a private `TheftEvent` containing a
+monotonic identifier, thief, victim, and transferred resource. The engine retains
+the latest 100 events separately from the generic public log. Phone snapshots
+include only events involving their authenticated player in `privateThefts`;
+public projections and shared-board snapshots exclude those details. Both UIs
+use the same dismissible theft notice, with per-player acknowledgement state.
+Local handoffs hide notices without acknowledging them, so victims can see the
+lost card when they next reveal their hand. Empty-hand attempts, spending, and
+discards do not create theft events or notices.
 
 ## Verification Strategy
 

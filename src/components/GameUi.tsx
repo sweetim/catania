@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import { match } from "ts-pattern";
 import type { DevelopmentKind, Resource, Resources } from "../game/types";
 import { useBoardTheme } from "../themes";
@@ -484,6 +484,31 @@ export function CardStack({
         ))}
       </span>
     </span>
+  );
+}
+
+export function BuildButton({ piece, color, resources, ...buttonProperties }: ComponentProps<"button"> & {
+  piece: "road" | "settlement" | "city" | "development";
+  color: string;
+  resources: Resources;
+}) {
+  return (
+    <button
+      {...buttonProperties}
+      className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${buttonProperties["aria-pressed"] === true || buttonProperties["aria-pressed"] === "true" ? "border-forest bg-moss" : "border-line bg-white/40"}`}
+    >
+      <span className="flex min-w-0 items-center gap-2" style={{ color }}>
+        {piece === "development" ? <span className="flex h-8 w-8 shrink-0 items-center justify-center"><CardTypeIcon kind="development" /></span> : <PieceIcon piece={piece} />}
+        <span className="font-semibold text-ink">
+          {match(piece)
+            .with("development", () => "Buy a card")
+            .with("city", () => "Upgrade to city")
+            .with("road", "settlement", piece => `Build ${piece}`)
+            .exhaustive()}
+        </span>
+      </span>
+      <span className="build-cost shrink-0"><Cost resources={resources} /></span>
+    </button>
   );
 }
 

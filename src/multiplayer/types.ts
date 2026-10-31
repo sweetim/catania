@@ -1,8 +1,8 @@
-import type { GameAction, GamePhase, GameState, Player } from "../game/types";
+import type { Board, GameAction, GamePhase, GameState, Player, TheftEvent } from "../game/types";
 
 export type BuildMode = "road" | "settlement" | "city" | null;
 
-export type RoomPlayer = Pick<Player, "id" | "name" | "color"> & {
+export type RoomPlayer = Pick<Player, "id" | "name" | "color" | "control"> & {
   connected: boolean;
 };
 
@@ -31,9 +31,11 @@ export type RoomSnapshot = {
   version: number;
   players: RoomPlayer[];
   pendingPlayers?: { connectionId: string; name: string }[];
+  previewBoard?: Board;
   game: PublicGame | null;
   playerId: string | null;
   privatePlayer: Player | null;
+  privateThefts: TheftEvent[];
   privateScore: number | null;
   buildMode: BuildMode;
   boardTargets: { vertices: string[]; edges: string[]; tiles: string[] };
@@ -52,8 +54,12 @@ export type SessionView = {
 
 export type MultiplayerSession = {
   startGame: () => void;
+  shuffleBoard: () => void;
   admit: (connectionId: string) => void;
   reject: (connectionId: string) => void;
+  addComputer: () => void;
+  removePlayer: (playerId: string) => void;
+  renameComputer: (playerId: string, name: string) => void;
   perform: (action: GameAction, expectedVersion?: number) => void;
   selectBuild: (piece: BuildMode, expectedVersion?: number) => void;
   reconnect: () => void;

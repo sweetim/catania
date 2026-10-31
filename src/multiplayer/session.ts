@@ -98,10 +98,29 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   const room = new HostRoom(secret);
   let closed = false;
   let signalingError = "";
+  let computerTimer: Timer | undefined;
   let view: SessionView = { role: "host", status: "connecting", invitationUrl: null, snapshot: room.snapshot(), error: "", pending: false };
   const connections = new Map<string, { connection: DataConnection; joined: boolean; timeout: Timer }>();
   const publish = () => {
     if (closed) return;
+    clearTimeout(computerTimer);
+    computerTimer = undefined;
+    const expectedVersion = room.version;
+    if (room.game?.players.some(player => player.control === "computer") && room.game.phase.type !== "finished") {
+      const timer = setTimeout(() => {
+        if (closed || computerTimer !== timer || room.version !== expectedVersion) return;
+        computerTimer = undefined;
+        try {
+          if (!room.performComputer(expectedVersion)) return;
+          view = { ...view, error: "" };
+          publish();
+        } catch (error) {
+          view = { ...view, error: error instanceof Error ? error.message : "The computer could not finish its move." };
+          onChange({ ...view, error: view.error || signalingError });
+        }
+      }, 450);
+      computerTimer = timer;
+    }
     view = { ...view, snapshot: room.snapshot() };
     onChange({ ...view, error: view.error || signalingError });
     for (const [connectionId, entry] of connections) {
@@ -183,6 +202,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   }
   onChange(view);
   return {
+    shuffleBoard: () => perform(() => room.shuffleBoard()),
     startGame: () => perform(() => {
       const waiting = room.snapshot().pendingPlayers ?? [];
       room.start();
@@ -195,12 +215,19 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
       send(entry.connection, { type: "admitted", credential }, () => remove(connectionId));
     }),
     reject: connectionId => perform(() => { room.reject(connectionId); deny(connectionId, "The host declined your join request."); }),
+    addComputer: () => perform(() => room.addComputer()),
+    removePlayer: playerId => perform(() => {
+      const connectionId = room.removePlayer(playerId);
+      if (connectionId) deny(connectionId, "The host removed you from the lobby. Use Reconnect to request a new seat.");
+    }),
+    renameComputer: (playerId, name) => perform(() => room.renameComputer(playerId, name)),
     perform: (action, expectedVersion) => perform(() => room.performBoard(action, expectedVersion)),
     selectBuild: (piece, expectedVersion) => perform(() => room.selectBuild(piece, undefined, expectedVersion)),
     reconnect: () => { if (!closed) link.reconnect(); },
     close: () => {
       if (closed) return;
       closed = true;
+      clearTimeout(computerTimer);
       for (const connectionId of [...connections.keys()]) remove(connectionId);
       link.close();
       view = { ...view, status: "closed", pending: false, snapshot: null, invitationUrl: null };
@@ -289,7 +316,15 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
         case "error":
           clearPending();
           view = { ...view, error: message.error };
-          if (message.terminal) { stopped = true; disconnect(message.error, false); }
+          if (message.terminal) {
+            credential = null;
+            try { sessionStorage.removeItem(storageKey); }
+            catch { storageError = "Session storage is blocked. The old seat credential could not be cleared."; }
+            view = { ...view, snapshot: null };
+            stopped = true;
+            clearTimeout(retry); retry = undefined;
+            disconnect(message.error, false);
+          }
           else publish();
           break;
       }
@@ -319,10 +354,10 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
     timeout = setTimeout(() => disconnect("The host did not confirm the command. Reconnecting to obtain the authoritative state; the command will not be replayed."), CONNECTION_TIMEOUT);
     send(connection, message, () => disconnect("The command could not reach the host. Reconnecting automatically."));
   }
-  const hostOnly = () => { if (!closed) { view = { ...view, error: "Only the shared host can manage admission or start the game." }; publish(); } };
+  const hostOnly = () => { if (!closed) { view = { ...view, error: "Only the shared host can manage the lobby or start the game." }; publish(); } };
   publish();
   return {
-    startGame: hostOnly, admit: hostOnly, reject: hostOnly,
+    startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly,
     perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

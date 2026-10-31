@@ -8,6 +8,29 @@ const DIE_PIPS = [
   [], [4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8],
 ];
 
+export function Dice({ dice, rolling = false }: {
+  dice?: readonly [number, number] | null;
+  rolling?: boolean;
+}) {
+  return (
+    <div
+      role="img"
+      aria-label={!dice ? "Dice at rest" : rolling ? "Dice rolling" : `Dice: ${dice[0]} and ${dice[1]}`}
+      className={`roll-summary-dice flex shrink-0 gap-1.5 ${rolling ? "dice-rolling" : ""} ${dice ? "" : "opacity-60"}`}
+    >
+      {(dice ?? [1, 1]).map((value, index) => (
+        <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die">
+          <rect x="2" y="4" width="44" height="42" rx="10" fill="#c9b983" />
+          <rect x="2" y="2" width="44" height="42" rx="10" fill="#fffaf0" stroke="#b8a777" />
+          {DIE_PIPS[value]!.map(position => (
+            <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
+          ))}
+        </svg>
+      ))}
+    </div>
+  );
+}
+
 export function RollSummary({ outcome, stage = "complete", viewerId }: {
   outcome?: RollOutcome;
   stage?: RollStage;
@@ -50,21 +73,7 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
         data-stage={outcome ? stage : "idle"}
         className="roll-summary"
       >
-        <div
-          role="img"
-          aria-label={!outcome ? "Dice at rest" : rolling ? "Dice rolling" : `Dice: ${dice[0]} and ${dice[1]}`}
-          className={`roll-summary-dice flex shrink-0 gap-1.5 ${rolling ? "dice-rolling" : ""} ${outcome ? "" : "opacity-60"}`}
-        >
-          {dice.map((value, index) => (
-            <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die">
-              <rect x="2" y="4" width="44" height="42" rx="10" fill="#c9b983" />
-              <rect x="2" y="2" width="44" height="42" rx="10" fill="#fffaf0" stroke="#b8a777" />
-              {DIE_PIPS[value]!.map(position => (
-                <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
-              ))}
-            </svg>
-          ))}
-        </div>
+        <Dice dice={outcome?.dice} rolling={rolling} />
         <div className="roll-summary-content">
           {received && gains && total !== 7 && gainedResources.length > 0 ? (
             <div className="roll-summary-private">

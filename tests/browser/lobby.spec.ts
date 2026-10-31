@@ -82,12 +82,14 @@ const test = base.extend<{ lobby: LobbyHarness }>({
           page.on("websocket", socket => {
             inspectAddress(socket.url());
             socket.on("socketerror", error => errors.push(`websocket: ${error}`));
-            for (const [event, direction] of [["framesent", "sent"], ["framereceived", "received"]] as const) {
-              socket.on(event, frame => {
-                const message = JSON.parse(frame.payload.toString()) as { type: string };
-                signaling.push({ direction, type: message.type });
-              });
-            }
+            socket.on("framesent", frame => {
+              const message = JSON.parse(frame.payload.toString()) as { type: string };
+              signaling.push({ direction: "sent", type: message.type });
+            });
+            socket.on("framereceived", frame => {
+              const message = JSON.parse(frame.payload.toString()) as { type: string };
+              signaling.push({ direction: "received", type: message.type });
+            });
           });
         });
       }

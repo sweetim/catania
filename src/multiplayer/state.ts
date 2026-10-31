@@ -1,4 +1,6 @@
 import { match } from "ts-pattern";
+import { createBoard } from "../game/board";
+import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
   legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
@@ -34,7 +36,7 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
     // Engine logs describe public events, never drawn cards, discarded kinds, or stolen resources.
     log: game.log, developmentPlayed: game.developmentPlayed,
     players: game.players.map(player => ({
-      id: player.id, name: player.name, color: player.color,
+      id: player.id, name: player.name, color: player.color, control: player.control,
       connected: players.some(seat => seat.id === player.id && seat.connected),
       resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
       knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
@@ -47,7 +49,7 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
 
 type Seat = {
   player: Omit<RoomPlayer, "connected">;
-  credential: string;
+  credential: string | null;
   connectionId: string | null;
   requests: Map<string, CommandResult>;
 };
@@ -58,8 +60,57 @@ export class HostRoom {
   buildMode: BuildMode = null;
   private readonly seats: Seat[] = [];
   private readonly waiting = new Map<string, string>();
+  private previewBoard = createBoard();
 
   constructor(private readonly secret: string) {}
+
+  shuffleBoard(): void {
+    requireRoom(!this.game, "The board can only be shuffled in the lobby.");
+    this.previewBoard = createBoard();
+    this.version++;
+  }
+
+  private addSeat(name: string, control: RoomPlayer["control"], connectionId: string | null = null): Seat {
+    const index = PLAYER_COLORS.findIndex(color => !this.seats.some(seat => seat.player.color === color));
+    const seat: Seat = {
+      player: { id: `player-${index + 1}`, name, color: PLAYER_COLORS[index]!, control },
+      credential: control === "human" ? crypto.randomUUID() : null, connectionId, requests: new Map(),
+    };
+    this.seats.push(seat);
+    this.version++;
+    return seat;
+  }
+
+  addComputer(): void {
+    requireRoom(!this.game, "Computers can only be added in the lobby.");
+    requireRoom(this.seats.length < 4, "The room already has four players.");
+    const names = [...this.seats.map(seat => seat.player.name), ...this.waiting.values()];
+    let number = 1;
+    while (names.some(name => name.toLowerCase() === `computer ${number}`)) number++;
+    this.addSeat(`Computer ${number}`, "computer");
+  }
+
+  removePlayer(playerId: string): string | null {
+    requireRoom(!this.game, "Players can only be removed in the lobby.");
+    const index = this.seats.findIndex(seat => seat.player.id === playerId);
+    requireRoom(index !== -1, "Choose a player in this lobby to remove.");
+    const [seat] = this.seats.splice(index, 1);
+    this.version++;
+    return seat!.connectionId;
+  }
+
+  renameComputer(playerId: string, value: string): void {
+    requireRoom(!this.game, "Computers can only be renamed in the lobby.");
+    const seat = this.seats.find(seat => seat.player.id === playerId && seat.player.control === "computer");
+    requireRoom(seat, "Choose a computer in this lobby to rename.");
+    requireRoom(validName(value), "Choose a name with 1 to 20 characters and no control characters.");
+    const name = value.trim().normalize("NFC");
+    const names = [...this.seats.filter(other => other !== seat).map(other => other.player.name), ...this.waiting.values()];
+    requireRoom(!names.some(other => other.toLowerCase() === name.toLowerCase()), "Choose a different name; that name is already in the room.");
+    if (name === seat.player.name) return;
+    seat.player.name = name;
+    this.version++;
+  }
 
   join(connectionId: string, message: JoinMessage): { credential: string | null; revokedConnectionId: string | null } {
     requireRoom(message.secret === this.secret, "This invitation is not valid for this host.");
@@ -90,14 +141,9 @@ export class HostRoom {
     requireRoom(this.seats.length < 4, "The room already has four players.");
     const name = this.waiting.get(connectionId);
     requireRoom(name, "That exact join request is no longer connected.");
-    const credential = crypto.randomUUID();
-    this.seats.push({
-      player: { id: `player-${this.seats.length + 1}`, name, color: PLAYER_COLORS[this.seats.length]! },
-      credential, connectionId, requests: new Map(),
-    });
+    const seat = this.addSeat(name, "human", connectionId);
     this.waiting.delete(connectionId);
-    this.version++;
-    return credential;
+    return seat.credential!;
   }
 
   reject(connectionId: string): void {
@@ -114,9 +160,14 @@ export class HostRoom {
 
   start(): void {
     requireRoom(!this.game, "The game has already started.");
-    requireRoom(this.seats.length >= 3 && this.seats.length <= 4, "Admit three or four human players before starting.");
-    requireRoom(this.seats.every(seat => seat.connectionId), "All admitted players must be connected before starting.");
-    this.game = createGame(this.seats.map(seat => ({ ...seat.player, control: "human" })));
+    requireRoom(this.seats.length >= 3 && this.seats.length <= 4, "Add three or four players before starting.");
+    requireRoom(this.seats.every(seat => seat.player.control === "computer" || seat.connectionId), "All admitted human players must be connected before starting.");
+    this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard);
+    // The engine numbers input profiles; preserve lobby identity when removed players leave gaps.
+    const playerIds = new Map(this.seats.map((seat, index) => [`player-${index + 1}`, seat.player.id]));
+    for (const player of this.game.players) player.id = playerIds.get(player.id)!;
+    this.game.activePlayerId = playerIds.get(this.game.activePlayerId)!;
+    this.game.setupOrder = this.game.setupOrder.map(playerId => playerIds.get(playerId)!);
     this.waiting.clear();
     this.version++;
   }
@@ -125,6 +176,7 @@ export class HostRoom {
     requireRoom(expectedVersion === this.version, "The game changed. Review the latest state and try again.");
     const game = this.game;
     requireRoom(game, "The game has not started.");
+    requireRoom(game.players.find(player => player.id === game.activePlayerId)?.control === "human", "The computer controls its own turn.");
     requireRoom(connectionId === undefined || this.seats.some(seat => seat.connectionId === connectionId && seat.player.id === game.activePlayerId), "Only the active player may choose a build.");
     requireRoom(game.phase.type === "actions", "Finish the current phase before choosing a build.");
     requireRoom(piece === null || piece === "road" || piece === "settlement" || piece === "city", "Choose a valid build.");
@@ -141,6 +193,7 @@ export class HostRoom {
     const action = parseAction(value);
     const game = this.game;
     requireRoom(game, "The game has not started.");
+    requireRoom(game.players.find(player => player.id === game.activePlayerId)?.control === "human", "The computer controls its own turn.");
     requireRoom(BOARD_ACTIONS.has(action.type), "The shared board can only place pieces or move the robber. Use the active player's phone for other actions.");
     const targets = this.targets();
     const authorized = match(action)
@@ -153,6 +206,20 @@ export class HostRoom {
     this.game = applyAction(game, game.activePlayerId, action);
     this.buildMode = null;
     this.version++;
+  }
+
+  performComputer(expectedVersion = this.version): boolean {
+    requireRoom(expectedVersion === this.version, "The game changed. Review the latest state and try again.");
+    if (!this.game) return false;
+    for (const player of this.game.players) {
+      const action = chooseComputerAction(this.game, player.id);
+      if (!action) continue;
+      this.game = applyAction(this.game, player.id, action);
+      this.buildMode = null;
+      this.version++;
+      return true;
+    }
+    return false;
   }
 
   command(connectionId: string, command: Command): CommandResult {
@@ -183,7 +250,7 @@ export class HostRoom {
   private targets(): RoomSnapshot["boardTargets"] {
     const targets: RoomSnapshot["boardTargets"] = { vertices: [], edges: [], tiles: [] };
     const game = this.game;
-    if (!game) return targets;
+    if (!game || game.players.find(player => player.id === game.activePlayerId)?.control === "computer") return targets;
     if (game.phase.type === "setup-settlement" || (game.phase.type === "actions" && this.buildMode === "settlement")) {
       targets.vertices = legalSettlementVertices(game, game.activePlayerId);
     } else if (game.phase.type === "actions" && this.buildMode === "city") {
@@ -199,14 +266,16 @@ export class HostRoom {
   snapshot(connectionId?: string): RoomSnapshot {
     const seat = this.seats.find(seat => seat.connectionId === connectionId);
     const host = connectionId === undefined;
-    const players = this.seats.map(seat => ({ ...seat.player, connected: seat.connectionId !== null }));
+    const players = this.seats.map(seat => ({ ...seat.player, connected: seat.player.control === "computer" || seat.connectionId !== null }));
     const game = host || seat ? this.game : null;
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
       version: this.version, players,
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
+      ...(host && !this.game ? { previewBoard: this.previewBoard } : {}),
       game: game ? publicGame(game, players) : null,
       playerId: seat?.player.id ?? null, privatePlayer,
+      privateThefts: game && privatePlayer ? game.thefts.filter(theft => theft.thiefId === privatePlayer.id || theft.victimId === privatePlayer.id) : [],
       privateScore: game && privatePlayer ? getScore(game, privatePlayer.id).total : null,
       buildMode: game ? this.buildMode : null,
       boardTargets: game ? this.targets() : { vertices: [], edges: [], tiles: [] },

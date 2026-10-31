@@ -68,7 +68,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")!.id,
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
-    log: [`${players[0]!.name} begins the first settlement placement.`], trade: null, developmentPlayed: false,
+    log: [`${players[0]!.name} begins the first settlement placement.`], thefts: [], trade: null, developmentPlayed: false,
   };
 }
 
@@ -118,8 +118,8 @@ export function legalRoadEdges(state: GameState, playerId: string): string[] {
   }).map(edge => edge.id);
 }
 
-export function getTradeRatio(state: GameState, playerId: string, resource: Resource): number {
-  playerFor(state, playerId);
+export function getTradeRatio(state: { board: Board; players: Pick<Player, "id">[] }, playerId: string, resource: Resource): number {
+  requireRule(state.players.some(player => player.id === playerId), "This player is not seated in the game.");
   requireRule(RESOURCES.includes(resource), "Choose a valid resource to trade.");
   let ratio = 4;
   for (const port of state.board.ports) {
@@ -345,6 +345,8 @@ export function applyAction(
           if (selected < victim.resources[resource]) {
             victim.resources[resource]--;
             player.resources[resource]++;
+            state.thefts.push({ id: (state.thefts.at(-1)?.id ?? 0) + 1, thiefId: playerId, victimId: victim.id, resource });
+            state.thefts = state.thefts.slice(-100);
             break;
           }
           selected -= victim.resources[resource];

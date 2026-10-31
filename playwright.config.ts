@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -32,7 +33,7 @@ export default defineConfig({
     },
     {
       command: "bun run tests/helpers/peer-server.ts",
-      wait: { stdout: /Test PeerServer listening on http:\/\/127\.0\.0\.1:4176/ },
+      wait: { stdout: new RegExp(`Test PeerServer listening on http://127.0.0.1:${signalingPort}`) },
       reuseExistingServer: false,
       timeout: 30_000,
     },

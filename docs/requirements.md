@@ -52,11 +52,22 @@ boundaries. Physical-phone network checks remain separate from browser automatio
   This external signaling dependency is approved; this is not a fully offline mode.
 - The shared board browser owns rules, randomness, admission, and complete game
   state. It does not occupy a seat and must remain open throughout the game.
-- Three or four players scan the QR link, enter distinct names, and are individually
-  admitted by the host. No accounts or app installation are required.
+- Three or four total players can be human or computer-controlled. Humans scan the
+  QR link, enter distinct names, and are individually admitted by the host. The host
+  can add or rename computer opponents and remove any player before starting.
+  Color-tinted person/robot avatars replace color dots before player names. Removing a human
+  revokes their seat credential; rejoining requires fresh host admission.
+  No accounts or app installation
+  are required. The lobby shows the missing player count, required empty seats, an
+  optional fourth seat, and disconnected humans who must reconnect before starting.
+- The host lobby shows an island preview with a host-only **Shuffle** control.
+  Starting uses the exact displayed map; player and theme changes preserve it.
 - The shared board is clickable for confirmed placements and robber movement.
   Phones display their own cards and score, public player information, and controls
   for rolls, development cards, trades, discards, theft, and ending a turn.
+- Computer players use the existing local AI for automatic setup, turns, discards,
+  and trade responses. They need no phone; their hands remain private, and shared
+  board input is disabled during their turns.
 - Only recipient-specific snapshots cross the connection. Other players' private
   cards, future deck order, and credentials are not distributed or merely hidden.
 - A returning phone can reclaim its seat with a room-scoped browser credential.
@@ -64,7 +75,7 @@ boundaries. Physical-phone network checks remain separate from browser automatio
 - No internet relay fallback is configured. Wi-Fi isolation, network restrictions,
   and suspended browsers can prevent or interrupt connections.
 - Existing single-device play and AI remain available separately. Host & Play,
-  organizer/readiness roles, multiplayer AI, and in-room rematches are not included.
+  organizer/readiness roles and in-room rematches are not included.
 
 The following sections preserve the original broader product proposal. Where they
 describe local signaling, offline operation, noninteractive shared displays, or
@@ -268,6 +279,7 @@ The host necessarily holds private game state in memory. Board-only means displa
 
 ## Usability Requirements
 
+- Keep the single-device home screen within the viewport, with setup and island preview side by side on desktop and wide landscape phones, and Setup/Island views on narrower screens. Put the local start button inside the On this device card, beneath the theme selector, in a footer that stays visible while settings scroll. On narrow screens, return to Setup to start; cross-device play remains available in either view. Use matching full-width button styles, with cross-device play outside the local card under a divider and Separate multiplayer setup heading, without helper text beneath either action; local settings do not transfer to multiplayer. Show the selected theme with illustrated sample hex tiles in a compact control that opens the existing theme dialog instead of an inline gallery. Fit the preview to available height; very short windows may scroll within setup without moving the page.
 - Support portrait player phones and landscape shared displays without clipped controls or page-level horizontal overflow. A zoomable board can pan within its own area.
 - Start the Turn controls panel with the active player's name and Your turn/Their turn, plus a high-contrast Setup/turn-number badge. Follow with the dice result, current-action card without a repeated turn-owner label, and persistent roll/end-turn buttons. Keep computer-activity announcements in the action description.
 - Visually separate the desktop right sidebar into three detached panels: Bank; Your cards, including resources, development cards, and build/trade controls; and Turn controls, containing the dice result, current-action card, and roll/end-turn buttons. Use rounded borders, subtle shadows, and compact page-background gaps between the panels: 12 pixels on desktop and 8 pixels on phones. Scroll the cards panel independently while keeping the full-height board and turn controls stable.
@@ -283,7 +295,8 @@ The host necessarily holds private game state in memory. Board-only means displa
 - Combine How to play and the table guide into one Help dialog, accessible before and during play and on the results screen. Include setup and turn instructions, all builds and purchases with costs and piece limits, all five development-card types regardless of ownership, and the implemented game rules. Label each development-card type with its standard starting deck count: 14 Knights, 5 Victory points, and 2 each of Road building, Year of plenty, and Monopoly, never live remaining quantities. Omit the Current table section, public activity, and player details from Help. Long Help content scrolls internally, with keyboard dismissal and focus restoration.
 - Show dice settling, matching number-token highlights rather than hex-border highlights, and private resource-gain feedback in sequence. Distinguish robber-blocked tokens from unblocked matches, and identify actual production separately. Keep a fixed-size roll summary available across phone views, explain sevens and blocked or unavailable production, and show immediate static results with reduced motion.
 - Show larger dice beside the revealed player's actual roll gains as resource cards under You received, with one card per resource type and a +N quantity. Omit the visible numeric total, roll sentence, and description row while retaining detailed screen-reader announcements. Keep rewards visible on short phone screens, use text when no cards are received, and hide private rewards during handoff.
-- Animate actual resource gains from setup, dice, trades, theft, and development cards in an on-screen collection tray and over stationary revealed hand cards, with gain badges. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
+- Animate actual resource gains from setup, dice, trades, and development cards in an on-screen collection tray and over stationary revealed hand cards, with gain badges. Keep collection feedback visible while the hand is off-screen, clear it on private handoff, and suppress motion without hiding receipt information when reduced motion is enabled.
+- Show successful robber thefts as private, dismissible notices naming the other player and exact resource card, with -1 for the victim and +1 for the thief. Keep public activity generic, send details only to involved phones, and defer local notices until their owner reveals their hand. Spending, discards, and empty-hand attempts must not trigger robbery notices.
 - Keep private details off the shared display, including notifications and reconnect overlays.
 - Do not require in-app camera access. The operating system's QR scanner opens the invite.
 
