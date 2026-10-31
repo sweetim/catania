@@ -56,8 +56,12 @@ async function boardFrame(page: Page) {
   const board = page.getByRole("region", { name: "Game board", exact: true });
   await expect(board).toBeInViewport({ ratio: 1 });
   await expect(board.locator(".board-map")).toBeInViewport({ ratio: 1 });
-  await expect(board.locator(".board-controls")).toHaveText(/^\s*-\s*\d+%\s*\+\s*$/);
-  await expect(board.getByRole("group", { name: "Map zoom controls", exact: true })).toBeInViewport({ ratio: 1 });
+  const zoom = board.getByRole("group", { name: "Map zoom controls", exact: true });
+  await expect(zoom).toHaveText(/^\s*-\s*\d+%\s*\+\s*$/);
+  await expect(zoom).toBeInViewport({ ratio: 1 });
+  const theme = board.locator(".board-controls").getByRole("button", { name: "Change theme", exact: true });
+  await expect(theme).toHaveText("Theme");
+  await expect(theme).toBeInViewport({ ratio: 1 });
   await noPageOverflow(page);
   const frame = await board.locator(".board-surface, .board-viewport, .board-map").evaluateAll(elements => elements.map(element => {
     const { x, y, width, height } = element.getBoundingClientRect();
@@ -225,6 +229,318 @@ async function expectPublicCardCounts(page: Page, state: GameState) {
   }
   await noPageOverflow(page);
 }
+
+const BOARD_THEMES = [
+  { id: "illustrated", name: "Illustrated Island" },
+  { id: "ceramic", name: "Mediterranean Ceramic" },
+  { id: "wooden", name: "Carved Wooden Tabletop" },
+  { id: "pixel", name: "Pixel-Art Kingdom" },
+  { id: "space", name: "Space Frontier" },
+  { id: "underwater", name: "Underwater Colonies" },
+] as const;
+
+async function expectBoardTheme(page: Page, theme: typeof BOARD_THEMES[number]["id"]) {
+  await expect(page.locator("#root > [data-theme]")).toHaveAttribute("data-theme", theme);
+  const surfaces = page.locator(".board-surface");
+  expect(await surfaces.count()).toBeGreaterThan(0);
+  for (const surface of await surfaces.all()) await expect(surface).toHaveAttribute("data-theme", theme);
+}
+
+async function themeBoardGeometry(context: Locator) {
+  return context.locator('svg g[role="img"]').evaluateAll(elements => elements.map(element => ({
+    label: element.getAttribute("aria-label"),
+    transform: element.getAttribute("transform"),
+    points: element.querySelector("polygon")?.getAttribute("points") ?? null,
+    token: element.querySelector(".number-token")?.textContent ?? null,
+    path: element.classList.contains("terrain-hex") ? null : element.querySelector(":scope > path")?.getAttribute("d") ?? null,
+    line: element.querySelector(":scope > line")?.getAttributeNames().filter(name => ["x1", "x2", "y1", "y2"].includes(name))
+      .map(name => [name, element.querySelector(":scope > line")!.getAttribute(name)]) ?? null,
+  })));
+}
+
+async function themeTerrainArtwork(context: Locator) {
+  return context.locator(".terrain-hex").evaluateAll(elements => elements.map(element =>
+    Array.from(element.querySelectorAll("path, use, rect, ellipse, line"), graphic => graphic.outerHTML).join(""),
+  ).join(""));
+}
+
+for (const theme of BOARD_THEMES) {
+  test(`board theme ${theme.name} previews immediately, starts the selected island and persists`, async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await seedGameRandomness(page);
+    const choices = page.getByRole("group", { name: "Board theme", exact: true });
+    await expect(choices.locator("legend")).toHaveText("Board theme");
+    expect(await choices.evaluate(element => element.tagName)).toBe("FIELDSET");
+    await expect(choices.locator('input[type="radio"]')).toHaveCount(6);
+    for (const choice of BOARD_THEMES) await expect(choices.getByRole("radio", { name: choice.name, exact: true })).toBeEnabled();
+    await expect(choices.getByRole("radio", { name: "Illustrated Island", exact: true })).toBeChecked();
+    await expectBoardTheme(page, "illustrated");
+    const preview = page.getByRole("region", { name: "Island preview", exact: true });
+    const geometry = await themeBoardGeometry(preview);
+    const originalArtwork = await themeTerrainArtwork(preview);
+    await choices.getByRole("radio", { name: theme.name, exact: true }).check();
+    await expectBoardTheme(page, theme.id);
+    await expect(choices.getByRole("radio", { name: theme.name, exact: true })).toBeChecked();
+    expect(await themeBoardGeometry(preview)).toEqual(geometry);
+    if (theme.id !== "illustrated") expect(await themeTerrainArtwork(preview)).not.toBe(originalArtwork);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("catania.boardTheme"))).toBe(theme.id);
+    await noHorizontalOverflow(page);
+    await screenshot(page, testInfo, `theme-${theme.id}-preview`);
+
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await privateHandIsAbsent(page);
+    await expectBoardTheme(page, theme.id);
+    expect(await themeBoardGeometry(page.locator(".handoff-island"))).toEqual(geometry);
+    await revealHand(page);
+    await showView(page, "board");
+    const board = page.getByRole("region", { name: "Game board", exact: true });
+    expect(await themeBoardGeometry(board)).toEqual(geometry);
+    await placeStartingPieces(page);
+    await revealHand(page);
+    await showView(page, "board");
+    await expectBoardTheme(page, theme.id);
+    await expect(board.getByRole("img", { name: /'s settlement at / })).toHaveCount(1);
+    await expect(board.getByRole("img", { name: /'s road at / })).toHaveCount(1);
+    await boardFrame(page);
+    await screenshot(page, testInfo, `theme-${theme.id}-game-board`, false);
+
+    await chooseGameOption(page, "End game");
+    await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+    await expect(choices.getByRole("radio", { name: theme.name, exact: true })).toBeChecked();
+    await page.reload();
+    await expectBoardTheme(page, theme.id);
+    await expect(choices.getByRole("radio", { name: theme.name, exact: true })).toBeChecked();
+  });
+}
+
+for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
+  test(`board theme falls back safely with ${storage} storage`, async ({ page }) => {
+    await page.addInitScript(storage => {
+      if (storage === "unknown") localStorage.setItem("catania.boardTheme", "not-a-board-theme");
+      if (storage === "blocked") Object.defineProperty(window, "localStorage", {
+        get() { throw new DOMException("Storage blocked", "SecurityError"); },
+      });
+      if (storage === "read-write-errors") Object.defineProperty(window, "localStorage", {
+        value: {
+          getItem() { throw new DOMException("Storage blocked", "SecurityError"); },
+          setItem() { throw new DOMException("Storage full", "QuotaExceededError"); },
+        },
+      });
+    }, storage);
+    await page.goto("/");
+    await expectBoardTheme(page, "illustrated");
+    const choices = page.getByRole("group", { name: "Board theme", exact: true });
+    await expect(choices.getByRole("radio", { name: "Illustrated Island", exact: true })).toBeChecked();
+    await choices.getByRole("radio", { name: "Space Frontier", exact: true }).check();
+    await expectBoardTheme(page, "space");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await revealHand(page);
+    await showView(page, "board");
+    await page.getByRole("button", { name: "Change theme", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Choose your theme", exact: true });
+    await dialog.getByRole("radio", { name: "Underwater Colonies", exact: true }).check();
+    await expectBoardTheme(page, "underwater");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Change theme", exact: true })).toBeFocused();
+    await page.reload();
+    await expectBoardTheme(page, "illustrated");
+    await expect(choices.getByRole("radio", { name: "Illustrated Island", exact: true })).toBeChecked();
+  });
+}
+
+test("board theme native radios support keyboard selection on the home preview", async ({ page }) => {
+  await page.goto("/");
+  const choices = page.getByRole("group", { name: "Board theme", exact: true });
+  const illustrated = choices.getByRole("radio", { name: "Illustrated Island", exact: true });
+  await illustrated.focus();
+  await page.keyboard.press("ArrowRight");
+  const ceramic = choices.getByRole("radio", { name: "Mediterranean Ceramic", exact: true });
+  await expect(ceramic).toBeFocused();
+  await expect(ceramic).toBeChecked();
+  await expectBoardTheme(page, "ceramic");
+  await page.keyboard.press("ArrowLeft");
+  await expect(illustrated).toBeFocused();
+  await expect(illustrated).toBeChecked();
+  await page.keyboard.press("ArrowUp");
+  await expect(choices.getByRole("radio", { name: "Underwater Colonies", exact: true })).toBeFocused();
+  await expectBoardTheme(page, "underwater");
+  await page.keyboard.press("ArrowDown");
+  await expect(illustrated).toBeChecked();
+  await expectBoardTheme(page, "illustrated");
+});
+
+test("theme dialog stays open while computers continue into a private human handoff", async ({ page, isMobile }, testInfo) => {
+  await page.goto("/");
+  if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
+  await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
+  await page.getByRole("button", { name: "4 players", exact: true }).click();
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("2");
+  await seedGameRandomness(page, 4);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await expect(page.getByRole("status", { name: "Computer activity", exact: true })).toContainText("Computer 2");
+  await page.getByRole("button", { name: "Change theme", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose your theme", exact: true });
+  const originalDialog = await dialog.elementHandle();
+  const selectedTheme = dialog.getByRole("radio", { name: "Space Frontier", exact: true });
+  await selectedTheme.focus();
+  await page.keyboard.press("Space");
+  await expect(selectedTheme).toBeChecked();
+  for (let move = 1; move <= 4; move++) {
+    await page.clock.runFor(450);
+    await expect(page.getByRole("img", { name: /'s settlement at /, includeHidden: true })).toHaveCount(Math.ceil(move / 2));
+    await expect(page.getByRole("img", { name: /'s road at /, includeHidden: true })).toHaveCount(Math.floor(move / 2));
+    await expect(dialog).toBeVisible();
+    await expect(selectedTheme).toBeChecked();
+    await expectBoardTheme(page, "space");
+    await privateHandIsAbsent(page);
+    expect(await originalDialog!.evaluate(element => element.isConnected)).toBe(true);
+    if (move === 2) await expect(page.getByRole("status", { name: "Computer activity", exact: true, includeHidden: true })).toContainText("Computer 1");
+  }
+  await expect(page.getByRole("heading", { name: "Pass the device to Sam.", exact: true, includeHidden: true })).toHaveCount(1);
+  await screenshot(page, testInfo, "theme-dialog-through-automatic-handoff", false);
+  await dialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  const themeButton = page.locator(".handoff-island .board-controls").getByRole("button", { name: "Change theme", exact: true });
+  await expect(themeButton).toBeInViewport({ ratio: 1 });
+  expect(await themeButton.evaluate(element => {
+    let opacity = 1;
+    for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) opacity *= Number.parseFloat(getComputedStyle(ancestor).opacity);
+    return opacity;
+  }), "Handoff artwork fades without dimming the interactive theme toolbar").toBe(1);
+  await expect(page.locator(".handoff-island .board-viewport")).toHaveCSS("opacity", "0.45");
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "theme-handoff-toolbar", false);
+  await themeButton.click();
+  await expect(selectedTheme).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(themeButton).toBeFocused();
+  expect(await revealHand(page)).toBe("Sam");
+  await expectBoardTheme(page, "space");
+});
+
+test("live board themes preserve human turn, pieces, selection, zoom and pan with keyboard dialog focus", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
+  const state = await prepareRollGame(page);
+  const player = state.players.find(player => player.id === state.activePlayerId)!;
+  await expectResourceBank(page, state.bank);
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
+  if (await dismissCollection.isVisible()) await dismissCollection.click();
+  const board = page.getByRole("region", { name: "Game board", exact: true });
+  const viewport = board.locator(".board-viewport");
+  const toolbar = board.locator(".board-controls");
+  const themeButton = toolbar.getByRole("button", { name: "Change theme", exact: true });
+  await boardFrame(page);
+  await expect(toolbar.getByRole("button")).toHaveCount(4);
+  for (const button of await toolbar.getByRole("button").all()) {
+    await expect(button).toBeInViewport({ ratio: 1 });
+    const bounds = (await button.boundingBox())!;
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
+  await screenshot(page, testInfo, "theme-toolbar", false);
+  await expect(board.getByRole("img", { name: /'s settlement at / })).toHaveCount(6);
+  await expect(board.getByRole("img", { name: /'s road at / })).toHaveCount(6);
+  const target = board.getByRole("button", { name: /^Move robber to / }).first();
+  await target.click();
+  const confirmation = page.getByRole("group", { name: "Placement confirmation", exact: true });
+  const selection = await confirmation.getAttribute("data-selection-id");
+  for (let step = 0; step < 3; step++) await board.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await target.scrollIntoViewIfNeeded();
+  await viewport.evaluate(element => element.scrollBy({ left: 17, top: 13 }));
+  const position = await viewport.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }));
+  expect(position.left > 0 || position.top > 0).toBe(true);
+  const geometry = await themeBoardGeometry(board);
+  const frames = await board.locator(".board-surface, .board-viewport, .board-map").evaluateAll(elements => elements.map(element => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height };
+  }));
+  const originalSurface = await board.locator(".board-surface").elementHandle();
+  const originalMap = await board.locator(".board-map > svg").elementHandle();
+  const bank = page.getByRole("region", { name: "Resource bank", exact: true });
+  const bankLabels = await bank.getByRole("listitem").evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+  const turn = await page.locator(".turn-header").textContent();
+  const artwork = new Set<string>();
+  const icons = new Set<string>();
+  const palettes = new Set<string>();
+
+  await themeButton.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Choose your theme", exact: true });
+  const close = dialog.getByRole("button", { name: "Close dialog", exact: true });
+  await expect(close).toBeFocused();
+  const choices = dialog.getByRole("group", { name: "Board theme", exact: true });
+  await expect(choices.locator('input[type="radio"]')).toHaveCount(6);
+  await page.keyboard.press("Tab");
+  await expect(choices.getByRole("radio", { name: "Illustrated Island", exact: true })).toBeFocused();
+  for (const theme of [...BOARD_THEMES.slice(1), BOARD_THEMES[0]]) {
+    await page.keyboard.press("ArrowRight");
+    const radio = choices.getByRole("radio", { name: theme.name, exact: true });
+    await expect(radio).toBeChecked();
+    await expect(radio).toBeFocused();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeInViewport({ ratio: 1 });
+    await expect(radio).toBeInViewport({ ratio: 1 });
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expectBoardTheme(page, theme.id);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("catania.boardTheme"))).toBe(theme.id);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(themeButton).toBeFocused();
+    await expect(target).toHaveAttribute("aria-pressed", "true");
+    await expect(confirmation).toHaveAttribute("data-selection-id", selection!);
+    await expect(confirmation).toBeVisible();
+    await expect(board.getByRole("status", { name: "Zoom level", exact: true })).toHaveText("175%");
+    expect(await viewport.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual(position);
+    expect(await themeBoardGeometry(board)).toEqual(geometry);
+    expect(await board.locator(".board-surface, .board-viewport, .board-map").evaluateAll(elements => elements.map(element => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x, y, width, height };
+    }))).toEqual(frames);
+    expect(await originalSurface!.evaluate(element => element === document.querySelector(".board-surface"))).toBe(true);
+    expect(await originalMap!.evaluate(element => element === document.querySelector(".board-map > svg"))).toBe(true);
+    expect(await bank.getByRole("listitem").evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual(bankLabels);
+    expect(await page.locator(".turn-header").textContent()).toBe(turn);
+    await expectResourceBank(page, state.bank);
+    const bankIcons = bank.locator(".bank-card svg[data-theme]");
+    await expect(bankIcons).toHaveCount(5);
+    for (const icon of await bankIcons.all()) await expect(icon).toHaveAttribute("data-theme", theme.id);
+    artwork.add(await themeTerrainArtwork(board));
+    icons.add(await bankIcons.first().innerHTML());
+    const bankPalette = await bank.locator(".bank-card").evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundColor));
+    palettes.add(JSON.stringify(bankPalette));
+    await showView(page, "hand");
+    const hand = page.getByRole("region", { name: "Private resources", exact: true });
+    await expect(page.getByRole("heading", { name: `${player.name}'s hand`, exact: true })).toBeVisible();
+    for (const resource of RESOURCES) await expect(hand.getByTitle(`${player.resources[resource]} ${RESOURCE_NAMES[resource]}`, { exact: true })).toBeVisible();
+    const handCards = hand.locator(".hand-resource-card");
+    await expect(handCards).toHaveCount(5);
+    for (const icon of await handCards.locator("svg").all()) await expect(icon).toHaveAttribute("data-theme", theme.id);
+    expect(await handCards.evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundColor))).toEqual(bankPalette);
+    await screenshot(page, testInfo, `theme-${theme.id}-resource-cards`, false);
+    await showView(page, "board");
+    await noPageOverflow(page);
+    await themeButton.click();
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(radio).toBeFocused();
+  }
+  expect(artwork.size, "Each theme has distinct board artwork").toBe(6);
+  expect(icons.size, "Each theme has distinct resource artwork").toBe(6);
+  expect(palettes.size, "Each theme has a distinct resource palette").toBe(6);
+  await screenshot(page, testInfo, "theme-dialog", false);
+  await close.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(themeButton).toBeFocused();
+  await expect(target).toHaveAttribute("aria-pressed", "true");
+  await screenshot(page, testInfo, "theme-preserved-selection-and-zoom", false);
+});
 
 for (const shuffleCount of [0, 2]) {
   test(`starting uses the selected island after ${shuffleCount} shuffles`, async ({ page }, testInfo) => {
@@ -1185,17 +1501,15 @@ async function chooseDice(page: Page, dice: [number, number]) {
   }, dice);
 }
 
-test("settlement build explains the roll requirement and missing resources without hovering", async ({ page }, testInfo) => {
+test("settlement build hides descriptions for the roll requirement and missing resources", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
   const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
   const explanation = building.locator("#settlement-build-explanation");
   await expect(settlement).toBeDisabled();
-  await expect(settlement).toHaveAccessibleDescription("Roll the dice before building a settlement.");
-  await expect(explanation).toHaveText("Roll the dice before building a settlement.");
-  await explanation.scrollIntoViewIfNeeded();
-  await expect(explanation).toBeInViewport({ ratio: 1 });
+  await expect(settlement).not.toHaveAttribute("aria-describedby");
+  await expect(explanation).toHaveCount(0);
 
   await chooseDice(page, [1, 1]);
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
@@ -1203,18 +1517,17 @@ test("settlement build explains the roll requirement and missing resources witho
   const player = state.players.find(player => player.id === state.activePlayerId)!;
   const missing = RESOURCES.filter(resource => player.resources[resource] < COSTS.settlement[resource]);
   expect(missing.length).toBeGreaterThan(0);
-  const reason = `Missing ${missing.map(resource => `${COSTS.settlement[resource] - player.resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}. Collect or trade for these resources.`;
   await expect(settlement).toBeDisabled();
-  await expect(settlement).toHaveAccessibleDescription(reason);
-  await expect(settlement).toHaveAttribute("title", reason);
-  await expect(explanation).toHaveText(reason);
-  await explanation.scrollIntoViewIfNeeded();
-  await expect(explanation).toBeInViewport({ ratio: 1 });
+  await expect(settlement).not.toHaveAttribute("aria-describedby");
+  await expect(settlement).toHaveAttribute("title", "You need more resources.");
+  await expect(explanation).toHaveCount(0);
+  await settlement.scrollIntoViewIfNeeded();
+  await expect(settlement).toBeInViewport({ ratio: 1 });
   await noPageOverflow(page);
   await screenshot(page, testInfo, "settlement-missing-resources", false);
 });
 
-test("settlement build distinguishes legal locations from exhausted pieces and recovers after a city upgrade", async ({ page, isMobile }, testInfo) => {
+test("settlement build shows a description only for exhausted pieces and recovers after a city upgrade", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
   // Give Sam room to expand and produce the required cards through real rolls, without injecting state.
@@ -1255,13 +1568,17 @@ test("settlement build distinguishes legal locations from exhausted pieces and r
   for (const [index, total] of rollTotals.entries()) {
     const dice: [number, number] = [Math.max(1, total - 6), Math.min(6, total - 1)];
     await showView(page, "hand");
+    if (index === 12) await expectUnavailable(stockReason);
     await chooseDice(page, dice);
     await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
     let diceIndex = 0;
     state = applyAction(state, state.activePlayerId, { type: "roll" }, () => (dice[diceIndex++]! - 0.5) / 6);
     await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
     if (index === 3) {
-      await expectUnavailable("No legal location. Connect your road to an empty intersection at least two edges from any settlement or city.");
+      expect(legalSettlementVertices(state, playerId)).toHaveLength(0);
+      await expect(settlement).toBeDisabled();
+      await expect(settlement).not.toHaveAttribute("aria-describedby");
+      await expect(explanation).toHaveCount(0);
       await screenshot(page, testInfo, "settlement-no-legal-location", false);
       await build("road", 40);
       await expect(settlement).toBeEnabled();
@@ -1270,7 +1587,9 @@ test("settlement build distinguishes legal locations from exhausted pieces and r
       await build("settlement", 31);
       await build("road", 42);
       expect(legalSettlementVertices(state, playerId)).toEqual(["vertex-33"]);
-      await expectUnavailable("Missing 1 Wood, 1 Wool, 1 Grain. Collect or trade for these resources.");
+      await expect(settlement).toBeDisabled();
+      await expect(settlement).not.toHaveAttribute("aria-describedby");
+      await expect(explanation).toHaveCount(0);
     } else if (index === 6) {
       await build("settlement", 33);
     } else if (index === 9) {
@@ -1602,6 +1921,13 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
 });
 
 test("played Knight counts distinguish held cards and show Largest Army in player seats", async ({ page, isMobile }, testInfo) => {
+  test.slow();
+  const browserErrors: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("requestfailed", request => browserErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   const buyerId = state.activePlayerId;
@@ -1609,6 +1935,7 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
   const buyerSeat = seats.locator(".player-seat").filter({ has: page.getByRole("group", { name: `${buyerName}'s card counts`, exact: true }) });
   const army = buyerSeat.getByRole("img", { name: /^\d+ knights? played/ });
+  const largestArmy = buyerSeat.getByRole("img", { name: "Largest Army (+2 victory points)", exact: true });
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
   // Nine purchases give three Knights. Keep them in hand, then play one on each subsequent turn.
@@ -1644,15 +1971,15 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
       const holdsAward = buyer.knightsPlayed === 3;
       await showView(page, "players");
       await buyerSeat.scrollIntoViewIfNeeded();
-      const label = `${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played${holdsAward ? "; Largest Army (+2 victory points)" : ""}`;
+      const label = `${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played`;
       await expect(army).toHaveAccessibleName(label);
       await expect(army).toHaveAttribute("title", label);
       await expect(army.locator('svg[data-development-kind="knight"]')).toBeVisible();
       await expect(army.locator("strong")).toHaveText(String(buyer.knightsPlayed));
-      await expect(army.getByText("+2", { exact: true })).toHaveCount(holdsAward ? 1 : 0);
+      await expect(largestArmy).toHaveCount(holdsAward ? 1 : 0);
       await expect(army).toBeInViewport({ ratio: 1 });
       await expect(seats.getByRole("img", { name: /Largest Army/ })).toHaveCount(holdsAward ? 1 : 0);
-      await expect(buyerSeat.getByText(/knights? played|Largest Army/)).toHaveCount(0);
+      expect(await buyerSeat.innerText()).not.toMatch(/knights? played|Largest Army|\+2/);
       await expect(buyerSeat.locator(".player-score > span")).toHaveText([holdsAward ? "4" : "2", "VP"]);
       if (turn === 27) {
         expect(buyer.developmentCards.filter(card => card.kind === "knight")).toHaveLength(3);
@@ -1671,7 +1998,8 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
   }
   expect(state.awards.largestArmy).toBe(buyerId);
   if (await dismissCollection.isVisible()) await dismissCollection.click();
-  await expect(army).toHaveCSS("color", "rgb(181, 138, 45)");
+  await expect(largestArmy).toHaveCSS("color", "rgb(181, 138, 45)");
+  await expect(largestArmy.locator("title")).toHaveText("Largest Army (+2 victory points)");
   const viewports = isMobile
     ? [{ width: 390, height: 844 }, { width: 320, height: 568 }]
     : [{ width: 1440, height: 1000 }, { width: 1024, height: 768 }, { width: 1280, height: 480 }];
@@ -1679,11 +2007,27 @@ test("played Knight counts distinguish held cards and show Largest Army in playe
     await page.setViewportSize(viewport);
     await buyerSeat.scrollIntoViewIfNeeded();
     await expect(army).toBeInViewport({ ratio: 1 });
-    await expect(army.getByText("+2", { exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(largestArmy).toBeInViewport({ ratio: 1 });
+    const iconSizes = await buyerSeat.locator(".player-card-counts svg, .player-score svg").evaluateAll(elements => elements.map(element => {
+      const { width, height } = element.getBoundingClientRect();
+      return { width, height };
+    }));
+    expect(iconSizes).toHaveLength(5);
+    for (const size of iconSizes) expect(size).toEqual(iconSizes[0]);
+    const countGaps = await buyerSeat.locator(".player-card-stat").evaluateAll(elements => elements.map(element => {
+      const icon = element.querySelector("svg")!.getBoundingClientRect();
+      const count = element.querySelector("strong")!.getBoundingClientRect();
+      return count.x - icon.right;
+    }));
+    expect(countGaps).toEqual([4, 4, 4]);
+    const knightBounds = (await army.boundingBox())!;
+    const awardBounds = (await largestArmy.boundingBox())!;
+    expect(awardBounds.x - knightBounds.x - knightBounds.width).toBeCloseTo(10);
     expect(await buyerSeat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await noPageOverflow(page);
     await screenshot(page, testInfo, `largest-army-player-seat-${viewport.width}`, false);
   }
+  expect(browserErrors).toEqual([]);
 });
 
 test("owned development cards group by type with counts, descriptions and older-copy selection", async ({ page, isMobile }, testInfo) => {
@@ -1975,6 +2319,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       await expect(summary).toHaveAttribute("data-stage", "rolling");
       await expect(summary.getByRole("list", { name: "Your roll rewards" })).toHaveCount(0);
       await expect(summary.getByRole("img", { name: "Dice rolling", exact: true })).toBeVisible();
+      for (const [index, value] of dice.entries()) {
+        await expect(summary.locator(".roll-die").nth(index).locator("circle")).toHaveCount(value);
+      }
+      await screenshot(page, testInfo, "roll-actual-faces", false);
       await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeDisabled();
       await page.getByRole("button", { name: "Game", exact: true }).click();
       await expect(page.getByRole("button", { name: "Pass device", exact: true })).toBeDisabled();
@@ -2005,6 +2353,9 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     }
 
     await expect(summary.getByRole("img", { name: `Dice: ${dice[0]} and ${dice[1]}` })).toBeVisible();
+    for (const [index, value] of dice.entries()) {
+      await expect(summary.locator(".roll-die").nth(index).locator("circle")).toHaveCount(value);
+    }
     await expect(summary.locator(".roll-summary-total, .roll-summary-details")).toHaveCount(0);
     await expect(summary).not.toContainText(/rolled|The island supplied|The robber blocked/);
     const rollRewards = summary.getByRole("list", { name: "Your roll rewards" });
@@ -2985,8 +3336,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("button", { name: "End turn", exact: true })).toBeDisabled();
   const settlement = page.getByRole("button", { name: /^Build settlement\b/ });
   await expect(settlement).toBeDisabled();
-  await expect(settlement).toHaveAccessibleDescription("Wait for your turn to build a settlement.");
-  await expect(page.getByText("Wait for your turn to build a settlement.", { exact: true })).toBeVisible();
+  await expect(settlement).not.toHaveAttribute("aria-describedby");
+  await expect(page.locator("#settlement-build-explanation")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Private resources" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Reveal my hand|Pass device|Return to /, includeHidden: true })).toHaveCount(0);
   await showView(page, "board");

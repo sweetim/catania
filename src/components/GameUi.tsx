@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { match } from "ts-pattern";
 import type { DevelopmentKind, Resource, Resources } from "../game/types";
+import { useBoardTheme } from "../themes";
+import { ResourceArtwork } from "./ThemeArtwork";
 
 export const RESOURCE_NAMES: Record<Resource, string> = {
   wood: "Wood",
@@ -10,14 +12,6 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   ore: "Ore",
 };
 
-export const RESOURCE_COLORS: Record<Resource, string> = {
-  wood: "#426c4f",
-  brick: "#b96d51",
-  wool: "#8a9c64",
-  grain: "#c6a14b",
-  ore: "#788789",
-};
-
 export function ResourceIcon({
   resource,
   className = "h-6 w-6",
@@ -25,13 +19,16 @@ export function ResourceIcon({
   resource: Resource;
   className?: string;
 }) {
+  const theme = useBoardTheme();
   return (
     <svg
+      data-theme={theme.id}
       viewBox="0 0 32 32"
       className={className}
       aria-hidden="true"
       fill="none"
     >
+      {theme.id !== "illustrated" ? <ResourceArtwork resource={resource} theme={theme} /> : <>
       {resource === "wood" && (
         <>
           <path d="M16 3 6 17h5l-6 8h22l-6-8h5L16 3Z" fill="currentColor" />
@@ -86,6 +83,7 @@ export function ResourceIcon({
           />
         </>
       )}
+      </>}
     </svg>
   );
 }
@@ -208,13 +206,14 @@ export function DevelopmentCardIcon({ kind }: { kind: DevelopmentKind }) {
 }
 
 export function BankSupply({ resources, developmentCards }: { resources: Resources; developmentCards: number }) {
+  const theme = useBoardTheme();
   return (
     <section className="bank-tray" aria-label="Resource bank">
       <h2 className="eyebrow">Bank</h2>
       <ul className="bank-supply" aria-label="Bank resources">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
           <li key={resource} aria-label={`${RESOURCE_NAMES[resource]}: ${resources[resource]} in bank`} title={`${resources[resource]} ${RESOURCE_NAMES[resource]} in bank`}>
-            <span aria-hidden="true" className="bank-card inline-flex h-10 w-8 rounded-xl p-[3px] shadow-sm" style={{ background: RESOURCE_COLORS[resource] }}>
+            <span aria-hidden="true" data-theme={theme.id} className="bank-card resource-card inline-flex h-10 w-8 rounded-xl p-[3px] shadow-sm" style={{ backgroundColor: theme.resources[resource] }}>
               <span className="flex h-full w-full flex-col items-center justify-center gap-px rounded-lg border border-white/50 text-white">
                 <ResourceIcon resource={resource} className="h-4 w-4" />
                 <strong className="w-full rounded-sm bg-paper/95 text-center text-xs font-bold leading-3 text-ink tabular-nums">{resources[resource]}</strong>
@@ -298,11 +297,13 @@ export function ResourceCard({
   iconClassName?: string;
   className?: string;
 }) {
+  const theme = useBoardTheme();
   return (
     <span
       aria-hidden="true"
-      className={`relative inline-flex flex-col items-center justify-center rounded-xl p-[3px] shadow-sm ${selected ? "ring-2 ring-forest ring-offset-2" : ""} ${className}`}
-      style={{ background: RESOURCE_COLORS[resource] }}
+      data-theme={theme.id}
+      className={`resource-card relative inline-flex flex-col items-center justify-center rounded-xl p-[3px] shadow-sm ${selected ? "ring-2 ring-forest ring-offset-2" : ""} ${className}`}
+      style={{ backgroundColor: theme.resources[resource] }}
     >
       <span className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-lg border border-white/50 px-0.5">
         <ResourceIcon
@@ -487,6 +488,7 @@ export function CardStack({
 }
 
 export function Cost({ resources }: { resources: Resources }) {
+  const theme = useBoardTheme();
   return (
     <span className="inline-flex items-center gap-1">
       {(Object.keys(RESOURCE_NAMES) as Resource[])
@@ -494,8 +496,9 @@ export function Cost({ resources }: { resources: Resources }) {
         .map((resource) => (
           <span
             key={resource}
-            className="relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm"
-            style={{ background: RESOURCE_COLORS[resource] }}
+            data-theme={theme.id}
+            className="resource-card relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm"
+            style={{ backgroundColor: theme.resources[resource] }}
             title={`${resources[resource]} ${RESOURCE_NAMES[resource]}`}
           >
             <ResourceIcon resource={resource} className="h-4 w-4 text-white" />

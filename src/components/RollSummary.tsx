@@ -59,7 +59,7 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
             <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die">
               <rect x="2" y="4" width="44" height="42" rx="10" fill="#c9b983" />
               <rect x="2" y="2" width="44" height="42" rx="10" fill="#fffaf0" stroke="#b8a777" />
-              {DIE_PIPS[rolling ? 5 : value]!.map(position => (
+              {DIE_PIPS[value]!.map(position => (
                 <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
               ))}
             </svg>

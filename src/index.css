@@ -127,6 +127,19 @@
   box-shadow: inset 0 1px #fffaf0, 0 3px 0 #d0c5ae, 0 8px 24px #423d2810;
 }
 .board-surface-fit .board-controls { flex: none; height: 60px; padding: 6px 10px; }
+.board-theme-button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; margin-right: auto; padding: 0 8px; border: 1px solid #dcdccb; border-radius: 12px; background: #fffdf5; color: #455e4d; font-size: 11px; font-weight: 600; }
+.board-theme-button:hover { background: #e9edde; }
+.board-surface[data-theme="pixel"] .terrain-hex > text { font-family: monospace; letter-spacing: 0; }
+.resource-card[data-theme="ceramic"] { background-image: linear-gradient(135deg, #ffffff26, transparent 55%, #ffffff1a); box-shadow: inset 0 0 0 1px #ffffff66, 0 2px 3px #253b3626; }
+.resource-card[data-theme="wooden"] { background-image: repeating-linear-gradient(8deg, transparent 0 5px, #2c170f26 6px, transparent 7px 11px); }
+.resource-card[data-theme="pixel"], .resource-card[data-theme="pixel"] > span { border-radius: 3px; }
+.resource-card[data-theme="space"] { background-image: linear-gradient(145deg, #ffffff1c, transparent 50%); box-shadow: inset 0 0 0 1px #b9e7ff66, 0 2px 3px #111e3640; }
+.resource-card[data-theme="underwater"] { background-image: radial-gradient(ellipse at 30% 0, #d5fff640, transparent 70%); }
+@media (max-width: 380px) {
+  .board-controls { gap: 4px; }
+  .board-theme-button { width: 44px; padding: 0; }
+  .board-theme-label { display: none; }
+}
 .placement-confirmation { position: absolute; z-index: 30; width: min(230px, calc(100% - 16px)); box-sizing: border-box; margin: 0; padding: 12px; border: 1px solid #76937c; border-radius: 12px; background: #fffaf0; box-shadow: 0 5px 20px #253b3633; overflow: auto; }
 .placement-confirmation p { margin: 0 0 8px; font-size: 12px; font-weight: 600; line-height: 16px; }
 .placement-confirmation > div { display: flex; gap: 8px; }
@@ -200,16 +213,17 @@
 .player-seat-active { outline: 2px solid #548b73; outline-offset: -2px; animation: player-turn-pulse 2400ms ease-in-out infinite; }
 .player-card-counts { display: flex; flex-shrink: 0; gap: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .player-card-stat { display: flex; align-items: center; gap: 4px; }
-.player-card-stat svg { width: 20px; height: 24px; }
-.player-card-stat strong { min-width: 2ch; color: var(--color-ink); font-size: 15px; }
-.player-card-counts-detailed { min-width: 0; flex-wrap: wrap; gap: 2px 12px; }
-.player-card-counts-detailed svg { width: 16px; height: 20px; }
+.player-card-counts svg, .player-score svg { width: 20px; height: 24px; }
+.player-card-stat strong { min-width: 1ch; color: var(--color-ink); font-size: 15px; }
+.player-card-counts-detailed { min-width: 0; flex-wrap: wrap; gap: 4px 10px; }
+.player-card-counts-detailed svg, .table-players .player-score svg { width: 16px; height: 20px; }
 .table-players { min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .table-players .player-seat { padding: 10px 14px; }
 .table-players .player-awards { margin-top: 8px; padding-top: 8px; }
 
 .handoff-table { flex: 1; min-height: 0; position: relative; display: grid; padding: 12px; }
-.handoff-island { min-height: 0; opacity: 0.45; display: flex; }
+.handoff-island { min-height: 0; display: flex; }
+.handoff-island .board-viewport { opacity: 0.45; }
 .handoff-card { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(440px, calc(100% - 32px)); max-height: 100%; overflow: auto; padding: 24px; background: #faf7eef5; box-shadow: 0 12px 40px #253b3626; }
 .computer-table { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 1200px; margin: auto; padding: 12px; }
 .computer-table > .board-surface { flex: 1; min-height: 0; }
@@ -258,9 +272,8 @@
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
-  .table-seats .player-card-counts { flex-direction: column; gap: 0; }
-  .table-seats .player-card-stat strong { min-width: 1ch; }
-  .table-seats .player-card-stat svg { width: 16px; height: 20px; }
+  .table-seats .player-card-counts { flex-direction: column; gap: 4px; }
+  .table-seats .player-card-counts svg, .table-seats .player-score svg { width: 16px; height: 20px; }
 }
 
 @media (max-height: 850px) {

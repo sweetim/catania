@@ -8,15 +8,9 @@ import {
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
 import type { Board as BoardState, Player } from "../game/types";
+import { useBoardTheme } from "../themes";
+import { TerrainArtwork } from "./ThemeArtwork";
 
-const terrainStyles = {
-  wood: { fill: "#8fa58a", ink: "#365747", label: "Forest" },
-  brick: { fill: "#cb947b", ink: "#8b4f3e", label: "Hills" },
-  wool: { fill: "#bdc695", ink: "#64734a", label: "Pasture" },
-  grain: { fill: "#dfc680", ink: "#9c7938", label: "Fields" },
-  ore: { fill: "#a7b6b4", ink: "#536a6e", label: "Mountains" },
-  desert: { fill: "#dec49b", ink: "#ab8556", label: "Desert" },
-};
 const tileElevation = 8;
 
 export function Board({
@@ -32,6 +26,7 @@ export function Board({
   selectedId,
   confirmation,
   onSelect,
+  onChangeTheme,
   interactive = true,
   compact = false,
   fit = false,
@@ -52,10 +47,12 @@ export function Board({
     onCancel: () => void;
   };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
+  onChangeTheme?: () => void;
   interactive?: boolean;
   compact?: boolean;
   fit?: boolean;
 }) {
+  const theme = useBoardTheme();
   const illustrationId = useId().replace(/:/g, "");
   const surfaceReference = useRef<HTMLDivElement>(null);
   const viewportReference = useRef<HTMLDivElement>(null);
@@ -279,6 +276,8 @@ export function Board({
   return (
     <div
       ref={surfaceReference}
+      data-theme={theme.id}
+      style={{ backgroundColor: theme.surface, borderColor: theme.id === "illustrated" ? "#dcd7c7" : theme.border }}
       className={`board-surface relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45] ${fit ? "board-surface-fit flex h-full min-h-0 flex-col" : ""}`}
       onKeyDown={(event) => {
         if (event.key === "Escape" && hasConfirmation) {
@@ -293,10 +292,10 @@ export function Board({
           className="pointer-events-none absolute left-5 top-4 z-10 hidden sm:block"
           aria-hidden="true"
         >
-          <p className="text-[10px] font-bold tracking-[0.24em] text-[#687b6e]">
+          <p className="text-[10px] font-bold tracking-[0.24em] text-[#687b6e]" style={theme.id === "illustrated" ? undefined : { color: theme.terrain.ore.ink }}>
             THE ISLAND
           </p>
-          <p className="mt-1 font-serif text-xs italic text-[#7c8879]">
+          <p className="mt-1 font-serif text-xs italic text-[#7c8879]" style={theme.id === "illustrated" ? undefined : { color: theme.terrain.ore.ink }}>
             A place to begin.
           </p>
         </div>
@@ -380,16 +379,21 @@ export function Board({
                 cy="43%"
                 r="65%"
               >
-                <stop offset="0" stopColor="#c5dcd0" />
-                <stop offset="0.78" stopColor="#a8c8bc" />
-                <stop offset="1" stopColor="#87afa5" />
+                <stop offset="0" stopColor={theme.sea[0]} />
+                <stop offset="0.78" stopColor={theme.sea[1]} />
+                <stop offset="1" stopColor={theme.sea[2]} />
               </radialGradient>
               <pattern
                 id={`${illustrationId}-texture`}
-                width="17"
-                height="19"
+                width={theme.id === "illustrated" ? 17 : 24}
+                height={theme.id === "illustrated" ? 19 : 24}
                 patternUnits="userSpaceOnUse"
               >
+                {theme.id === "ceramic" && <path d="M0 0H24V24H0ZM0 12H24M12 0V24" fill="none" stroke="#fffdf4" strokeWidth=".8" opacity=".2" />}
+                {theme.id === "wooden" && <path d="M-4 5Q6 1 15 5T28 5M-4 12Q6 8 15 12T28 12M-4 20Q6 16 15 20T28 20" fill="none" stroke="#54361e" strokeWidth=".65" opacity=".2" />}
+                {theme.id === "pixel" && <path d="M0 0H4V4H0ZM12 12H16V16H12Z" fill="#ffffff" opacity=".12" />}
+                {theme.id === "space" && <path d="M12 2V6M10 4H14M0 24 24 0" stroke="#b9e7ff" strokeWidth=".5" opacity=".18" />}
+                {theme.id === "underwater" && <circle cx="12" cy="12" r="6" fill="none" stroke="#d5fff6" strokeWidth=".6" opacity=".16" />}
                 <circle cx="3" cy="5" r="0.65" fill="#fff9e7" opacity="0.25" />
                 <circle
                   cx="13"
@@ -643,7 +647,7 @@ export function Board({
               </g>
               <g
                 filter={`url(#${illustrationId}-shadow)`}
-                stroke="#eee2bf"
+                stroke={theme.coast}
                 strokeWidth="14"
                 strokeLinecap="round"
               >
@@ -663,7 +667,7 @@ export function Board({
 
             {/* Paint raised terrain last, beneath pieces and fixed interaction targets. */}
             {board.tiles.toSorted((left, right) => Number(raisedTileIds.has(left.id)) - Number(raisedTileIds.has(right.id))).map((tile) => {
-              const terrain = terrainStyles[tile.terrain];
+              const terrain = theme.terrain[tile.terrain];
               const points = tile.vertexIds
                 .map((id) => {
                   const vertex = verticesById.get(id)!;
@@ -698,7 +702,7 @@ export function Board({
                   <polygon
                     points={points}
                     fill={terrain.fill}
-                    stroke="#eee5cf"
+                    stroke={theme.border}
                     strokeWidth="3"
                     strokeLinejoin="round"
                   />
@@ -707,10 +711,16 @@ export function Board({
                     fill={`url(#${illustrationId}-texture)`}
                     pointerEvents="none"
                   />
-                  <use
-                    href={`#${illustrationId}-${tile.terrain}`}
-                    transform={`translate(${tile.x} ${tile.y})`}
-                  />
+                  {theme.id === "illustrated" ? (
+                    <use
+                      href={`#${illustrationId}-${tile.terrain}`}
+                      transform={`translate(${tile.x} ${tile.y})`}
+                    />
+                  ) : (
+                    <g transform={`translate(${tile.x} ${tile.y})`}>
+                      <TerrainArtwork terrain={tile.terrain} theme={theme} />
+                    </g>
+                  )}
                   <text
                     x={tile.x}
                     y={tile.y + 43}
@@ -1315,6 +1325,22 @@ export function Board({
       <div
         className={`board-controls flex min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
+        {onChangeTheme && (
+          <button
+            type="button"
+            className="board-theme-button"
+            onClick={onChangeTheme}
+            aria-label="Change theme"
+            aria-haspopup="dialog"
+            title={`Change theme: ${theme.name}`}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2a4 4 0 0 0 4-4C21 6 17 3 12 3Z" />
+              <circle cx="7.5" cy="10" r="1" /><circle cx="11" cy="6.5" r="1" /><circle cx="16" cy="8" r="1" /><circle cx="7.5" cy="15" r="1" />
+            </svg>
+            <span className="board-theme-label">Theme</span>
+          </button>
+        )}
         <div
           className="flex shrink-0 items-center gap-1"
           role="group"

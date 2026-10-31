@@ -17,6 +17,9 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/game/computer.ts` | Pure computer action selection using its own hand and public information, plus required-action controller selection. |
 | `src/components/Board.tsx` | Locally drawn SVG terrain and pieces, keyboard/touch targets, and contained zoom/panning. |
 | `src/components/GameUi.tsx` | Resource controls, icons, and native accessible dialogs. |
+| `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |
+| `src/components/ThemeArtwork.tsx` | Local SVG terrain and resource artwork for theme variants. |
+| `src/components/ThemeSelector.tsx` | Shared native-radio theme picker for setup and the board toolbar dialog. |
 | `src/App.tsx` | Human/AI table setup, private human handoffs, paced computer turns, board/actions, trade responses, results, and rematch. |
 | `tests/game/` | Deterministic rule, graph, computer-decision, and full-game tests. |
 | `tests/browser/catania.spec.ts` | Real solo, mixed human/AI, and pass-and-play browser interactions. |
@@ -47,6 +50,12 @@ players never become hand viewers. Public scores exclude hidden victory-point
 cards until results. This is a shared-device privacy convention, not a security
 boundary: a later network implementation must add the authorized projections
 and identity binding described below rather than serializing the local state.
+
+Board themes are an application preference outside `GameState`, persisted under
+`catania.boardTheme` when browser storage is available. Unknown preferences fall
+back to Illustrated Island. Changing a theme updates the board and shared resource
+artwork without regenerating the island or remounting its zoom/pan controls.
+Resource identifiers, names, player colors, and game rules do not change.
 
 The current Bun service only serves the application and the original template
 API; it does not create rooms or carry gameplay. No networking package, QR

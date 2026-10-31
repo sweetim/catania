@@ -3,6 +3,8 @@ import { match } from "ts-pattern";
 import { Board } from "./components/Board";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
+import { ThemeSelector } from "./components/ThemeSelector";
+import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "./themes";
 import {
   Arrow,
   BankSupply,
@@ -56,6 +58,7 @@ type RollPresentation = {
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
 const BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY = "catania.showBlockedSettlementLocations";
+const BOARD_THEME_STORAGE_KEY = "catania.boardTheme";
 const DEVELOPMENT_NAMES: Record<DevelopmentKind, string> = {
   knight: "Knight",
   "victory-point": "Victory point",
@@ -141,6 +144,15 @@ function phaseDescription(state: GameState) {
 }
 
 export function App() {
+  const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>(() => {
+    try {
+      const savedTheme = window.localStorage.getItem(BOARD_THEME_STORAGE_KEY);
+      return savedTheme && Object.hasOwn(BOARD_THEMES, savedTheme) ? savedTheme as BoardThemeId : "illustrated";
+    } catch {
+      return "illustrated";
+    }
+  });
+  const boardTheme = BOARD_THEMES[boardThemeId];
   const [preview, setPreview] = useState(() => createBoard());
   const [names, setNames] = useState(["Alex", "Sam", "Jordan", "Robin"]);
   const [playerCount, setPlayerCount] = useState(3);
@@ -162,7 +174,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "help" | "settings" | "trade" | "development" | "players" | "restart" | null
+    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | null
   >(null);
   const gameMenu = useRef<HTMLDetailsElement>(null);
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
@@ -251,6 +263,14 @@ export function App() {
       // Keep the toggle usable when browser storage is unavailable.
     }
   }, [showBlockedSettlementLocations]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BOARD_THEME_STORAGE_KEY, boardThemeId);
+    } catch {
+      // Theme switching still works when browser storage is unavailable.
+    }
+  }, [boardThemeId]);
 
   const advanceRollPresentation = useEffectEvent((expected: RollPresentation) => {
     if (rollPresentation !== expected) return;
@@ -373,7 +393,7 @@ export function App() {
     setRollPresentation(null);
     setResourceReceipt(null);
     setHandoffTarget(playerId);
-    setDialog(null);
+    setDialog(current => current === "theme" ? current : null);
     setConfirmation(null);
     setSelected(null);
     setBuildMode(null);
@@ -415,7 +435,7 @@ export function App() {
         setViewerId(null);
         setResourceReceipt(null);
         setHandoffTarget(null);
-        setDialog(null);
+        setDialog(current => current === "theme" ? current : null);
         setConfirmation(null);
       }
     }
@@ -505,23 +525,10 @@ export function App() {
           (resource) => viewer.resources[resource] >= cost[resource],
         ),
     );
-  const settlementUnavailable = !game || !viewer ? null
-    : !isActive ? "Wait for your turn to build a settlement."
-    : rollBusy ? "Wait for the dice roll to finish before building a settlement."
-    : game.phase.type !== "actions"
-      ? match(game.phase)
-          .with({ type: "roll" }, () => "Roll the dice before building a settlement.")
-          .with({ type: "setup-settlement" }, { type: "setup-road" }, () => "Place your starting pieces on the highlighted board locations first.")
-          .with({ type: "finished" }, () => "The game has ended.")
-          .otherwise(() => "Finish the current action before building a settlement.")
-    : game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement").length >= 5
+  const settlementUnavailable = game && viewer &&
+    game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement").length >= 5
       ? "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece."
-    : !canAfford(COSTS.settlement)
-      ? `Missing ${RESOURCES.filter(resource => viewer.resources[resource] < COSTS.settlement[resource])
-          .map(resource => `${COSTS.settlement[resource] - viewer.resources[resource]} ${RESOURCE_NAMES[resource]}`).join(", ")}. Collect or trade for these resources.`
-    : !legalSettlementVertices(game, viewer.id).length
-      ? "No legal location. Connect your road to an empty intersection at least two edges from any settlement or city."
-    : null;
+      : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-settlement" || buildMode === "settlement"
@@ -574,7 +581,7 @@ export function App() {
       const score = scores[index]!;
       const isPublicScoreLeader = showPublicScoreLeaders && score.public === highestPublicScore;
       const hasLargestArmy = game.awards.largestArmy === player.id;
-      const knightLabel = `${player.knightsPlayed} ${player.knightsPlayed === 1 ? "knight" : "knights"} played${hasLargestArmy ? "; Largest Army (+2 victory points)" : ""}`;
+      const knightLabel = `${player.knightsPlayed} ${player.knightsPlayed === 1 ? "knight" : "knights"} played`;
       return (
         <div
           key={player.id}
@@ -599,10 +606,18 @@ export function App() {
                 <strong>{player.developmentCards.length}</strong>
                 {detailed && <span className="text-[10px] text-muted">development</span>}
               </span>
-              <span role="img" aria-label={knightLabel} title={knightLabel} className={`player-card-stat ${hasLargestArmy ? "text-[#b58a2d]" : "text-forest"}`}>
-                <DevelopmentCardIcon kind="knight" />
-                <strong>{player.knightsPlayed}</strong>
-                {hasLargestArmy && <span className="rounded bg-[#b58a2d]/15 px-1 text-[10px] font-bold text-[#8b6425]">+2</span>}
+              <span className="flex items-center gap-2.5">
+                <span role="img" aria-label={knightLabel} title={knightLabel} className="player-card-stat text-forest">
+                  <DevelopmentCardIcon kind="knight" />
+                  <strong>{player.knightsPlayed}</strong>
+                </span>
+                {hasLargestArmy && (
+                  <svg role="img" aria-label="Largest Army (+2 victory points)" viewBox="0 0 24 28" className="shrink-0 text-[#b58a2d]" fill="none">
+                    <title>Largest Army (+2 victory points)</title>
+                    <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
+                    <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                )}
               </span>
             </div>
             <div className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${isPublicScoreLeader ? "text-[#8b6425]" : ""}`}>
@@ -635,7 +650,8 @@ export function App() {
   }
 
   return (
-    <div className={game && !game.winnerId ? "game-shell" : "min-h-dvh"}>
+    <BoardThemeContext value={boardTheme}>
+    <div data-theme={boardThemeId} className={game && !game.winnerId ? "game-shell" : "min-h-dvh"}>
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 border-b border-line px-5 py-5 sm:px-9 lg:px-12">
         <Logo />
         <div className="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted sm:flex">
@@ -821,6 +837,9 @@ export function App() {
                     </div>
                   ))}
                 </div>
+                <div className="mt-5 border-t border-line pt-5">
+                  <ThemeSelector value={boardThemeId} onChange={setBoardThemeId} />
+                </div>
                 <button
                   className="button-primary mt-5 w-full justify-between"
                   onClick={() => startGame(preview)}
@@ -970,6 +989,7 @@ export function App() {
               robberTileId={game.robberTileId}
               showBlockedSettlementLocations={showBlockedSettlementLocations}
               interactive={false}
+              onChangeTheme={() => setDialog("theme")}
               compact
               fit
             />
@@ -1069,6 +1089,7 @@ export function App() {
                   showBlockedSettlementLocations={showBlockedSettlementLocations}
                   producingTileIds={producingTileIds}
                   rolledNumber={rolledNumber}
+                  onChangeTheme={() => setDialog("theme")}
                   fit
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
@@ -1635,7 +1656,7 @@ export function App() {
             <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} producingTileIds={producingTileIds} rolledNumber={rolledNumber} interactive={false} compact fit />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
         </main>
       )}
@@ -1644,6 +1665,16 @@ export function App() {
         <span>A tabletop state of mind.</span>
         <span>Catania / Solo &amp; pass-and-play / Wi-Fi play coming later</span>
       </footer>
+
+      {dialog === "theme" && (
+        <Dialog title="Choose your theme" onClose={() => setDialog(null)} wide>
+          <ThemeSelector value={boardThemeId} onChange={setBoardThemeId} />
+          <p className="mt-5 text-xs leading-5 text-muted">
+            Changes apply immediately to the board and resource artwork. Resource names and rules stay the same.
+            Your choice is saved in this browser when storage is available; games are not saved.
+          </p>
+        </Dialog>
+      )}
 
       {dialog === "settings" && (
         <Dialog title="Settings" onClose={() => setDialog(null)}>
@@ -2198,6 +2229,7 @@ export function App() {
         </Dialog>
       )}
     </div>
+    </BoardThemeContext>
   );
 }
 

@@ -68,7 +68,7 @@ summary and bank remain above the selected view, visible across all three game v
 Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains
-only zoom and reset controls, without instruction or legend text. Short screens can scroll
+**Theme** alongside zoom and reset controls, without instruction or legend text. Short screens can scroll
 within the hand or player panel without moving the board. On very short windows,
 the entire sidebar scrolls internally so the status card, turn controls, and hand
 tasks remain reachable. The header's **Game** menu contains **Help**, **Settings**,
@@ -78,6 +78,18 @@ shows **Setup** or the current turn number. Keyboard users can select highlighte
 positions with Enter or Space. Confirm/Cancel appears beside the selected piece
 or hex, stays inside the map, and follows zoom and pan. Confirm is focused for
 keyboard use; Escape cancels and returns focus to the selected location.
+
+Choose a **Board theme** before starting to update the island preview immediately:
+**Illustrated Island** (the default), **Mediterranean Ceramic**, **Carved Wooden Tabletop**,
+**Pixel-Art Kingdom**, **Space Frontier**, or **Underwater Colonies**. During play,
+the board footer's **Theme** button opens **Choose your theme**. Radio selections
+apply immediately without closing the dialog; Close or Escape returns focus to
+**Theme**. Themes change only board and resource artwork and palettes, not names,
+rules, pieces, turns, or resources. Switching preserves the current selection,
+zoom, and pan. This browser remembers the choice across games and reloads in
+`localStorage` under `catania.boardTheme`; unknown values or unavailable storage
+fall back to Illustrated Island. Storage failures do not prevent switching themes
+for the current session, and remembering a theme does not save the game.
 
 **Help** combines how to play, every build and purchase with costs and piece limits,
 all five development-card types with their effects, timing, and starting deck counts,
@@ -113,8 +125,9 @@ colors without detailed player cards; all private summaries disappear during han
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
 breakdown. Player seats also show each player's played-Knight count as a shield
-icon and number alongside the card totals. The Largest Army holder has a gold
-shield and compact **+2** badge; tooltips and accessible labels explain both.
+icon and number alongside the card totals, with matching icon sizes and gaps.
+A gold crossed-swords icon marks Largest Army; its tooltip and accessible label
+include the award's two victory points without adding a text badge.
 Knights still in hand do not count: play at least three to qualify, and surpass
 the current holder to take the award. A gold crown and warm gold cell highlight
 mark the highest public VP
@@ -127,11 +140,11 @@ cards do not affect the crowns or cell highlights.
 Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.
-When **Build settlement** is unavailable, a visible explanation beneath it names
-the turn or phase restriction, missing resources, exhausted settlement pieces, or
-lack of a legal location. Using all five settlements prompts a city upgrade to
-free a piece; location guidance explains road connections and the distance rule.
-These explanations are also associated with the button for screen readers.
+A visible explanation beneath **Build settlement** appears only when all five of
+your settlement pieces are on the board, prompting a city upgrade to free a piece.
+This explanation is also associated with the button for screen readers and
+disappears when a settlement piece is freed. Other restrictions still disable the
+button and retain standard tooltips, but do not add descriptions beneath it.
 Owned development cards appear below as a vertical stack, one row per card type
 with a quantity badge, a distinct icon, and a description below its title. The
 section heading counts all owned cards, including duplicates. The hand and card
@@ -147,7 +160,8 @@ previous turn phase. The map's **Cancel** or Escape only clears the selected hex
 Cancellation is unavailable after confirming the move, for a robber triggered
 by seven, or when the Knight has already won the game.
 
-Dice rolls settle before matching number tokens light up, their hexes lift with
+Dice show the actual rolled faces throughout the rolling animation, without
+placeholder values. Rolls settle before matching number tokens light up, their hexes lift with
 a deeper shadow, and resource totals update. Selected or keyboard-focused robber
 destinations also lift, while click targets stay in their original positions.
 Robber-blocked matches still lift but keep a muted, dashed token ring rather than
@@ -213,7 +227,8 @@ bunx playwright install chromium
 Rule tests use injected randomness and cover legal and illegal actions, computer
 decisions, and complete AI games.
 Browser tests exercise the local interface in desktop and mobile Chromium
-viewports and write diagnostic screenshots to `test-results/`.
+viewports and write diagnostic screenshots to `test-results/`, including each
+theme's preview, actual game board, and resource cards, plus the theme dialog.
 
 For a manual check, play solo and confirm that AI takes turns without any reveal
 prompt and that only your own hand is available. Then finish setup with two or
@@ -229,5 +244,8 @@ Check all build costs and five development-card types in Help before starting a 
 and with an empty hand, then scroll to the rules and current table on desktop and mobile.
 Check that the Game menu closes with Escape or an outside click, and that closing
 its dialogs returns focus to **Game**.
+Compare all six themes on desktop and phone boards, including a 320-pixel-wide
+viewport. Use arrow keys in the theme radios and check that Close and Escape
+restore focus to **Theme** without losing a selected location, zoom, or pan.
 Viewport automation is not a claim of physical Android/iOS or local-network
 compatibility; real-device multiplayer verification remains deferred.
