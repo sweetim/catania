@@ -1,6 +1,6 @@
 # Catania Requirements
 
-Status: The local base game, including AI opponents and solo hand visibility, is approved and implemented. The same-Wi-Fi multiplayer product described below remains a future milestone, not an implemented capability.
+Status: The local base game and the PeerJS shared-board/private-phone mode described under Current Multiplayer Scope are implemented. Broader original proposals below remain separate from the current scope.
 
 Related document: [Architecture](architecture.md).
 
@@ -37,15 +37,38 @@ and completed exchanges must give and receive different resources. The browser
 necessarily contains complete local state, so this is a
 friendly display-privacy convention rather than a security boundary.
 
-This milestone replaces neither the network requirements nor their verification
-criteria. Rooms, QR codes, separate phone controllers, board-only host mode,
-WebRTC, admission, and reconnection are not implemented or advertised as working.
-The game is in memory only; refreshing or closing the tab loses it. The UI warns
+The single-device game is in memory only; refreshing or closing the tab loses it. The UI warns
 before an intentional exit and asks the browser to warn on refresh during play.
 
 Rule tests and desktop/mobile browser tests accompany the local implementation.
 See the README for commands and the architecture document for verification
-boundaries. Physical-phone network checks below apply to the future milestone.
+boundaries. Physical-phone network checks remain separate from browser automation.
+
+## Current Multiplayer Scope
+
+- Serve the static application from Vercel. Do not deploy server-side game logic,
+  Supabase, Blob storage, or a database.
+- Use PeerJS Cloud for signaling and direct WebRTC connections for gameplay.
+  This external signaling dependency is approved; this is not a fully offline mode.
+- The shared board browser owns rules, randomness, admission, and complete game
+  state. It does not occupy a seat and must remain open throughout the game.
+- Three or four players scan the QR link, enter distinct names, and are individually
+  admitted by the host. No accounts or app installation are required.
+- The shared board is clickable for confirmed placements and robber movement.
+  Phones display their own cards and score, public player information, and controls
+  for rolls, development cards, trades, discards, theft, and ending a turn.
+- Only recipient-specific snapshots cross the connection. Other players' private
+  cards, future deck order, and credentials are not distributed or merely hidden.
+- A returning phone can reclaim its seat with a room-scoped browser credential.
+  Host refresh/closure ends the room; no host migration or saved-game recovery.
+- No internet relay fallback is configured. Wi-Fi isolation, network restrictions,
+  and suspended browsers can prevent or interrupt connections.
+- Existing single-device play and AI remain available separately. Host & Play,
+  organizer/readiness roles, multiplayer AI, and in-room rematches are not included.
+
+The following sections preserve the original broader product proposal. Where they
+describe local signaling, offline operation, noninteractive shared displays, or
+additional roles and flows, Current Multiplayer Scope takes precedence.
 
 ## Purpose
 

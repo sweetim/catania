@@ -856,6 +856,9 @@ export function App() {
                   Keep this tab open; refreshing ends the game.
                 </p>
               </section>
+              <a className="button-secondary mt-4 w-full max-w-lg" href="/?multiplayer=1">
+                Play across devices <Arrow />
+              </a>
               {error && (
                 <p className="mt-3 text-sm text-clay" role="alert">
                   {error}

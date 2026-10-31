@@ -1,6 +1,6 @@
 # Catania Architecture
 
-Status: The approved local game supports solo AI opponents and human pass-and-play. The same-Wi-Fi architecture below remains the intended next milestone, not an existing network implementation.
+Status: The local game supports solo AI opponents and human pass-and-play. The current multiplayer implementation uses a browser-authoritative shared board, PeerJS Cloud signaling, and private phone views. The older local-service proposal is retained separately below, not as a description of the deployed transport.
 
 Related document: [Requirements and page flows](requirements.md).
 
@@ -57,17 +57,64 @@ back to Illustrated Island. Changing a theme updates the board and shared resour
 artwork without regenerating the island or remounting its zoom/pan controls.
 Resource identifiers, names, player colors, and game rules do not change.
 
-The current Bun service only serves the application and the original template
-API; it does not create rooms or carry gameplay. No networking package, QR
-service, public relay, or cloud fallback has been added. Multiplayer and physical
-mobile-browser network compatibility remain unverified.
+The Bun development service serves the application and the original template
+API; it does not create rooms or carry gameplay. The browser-only multiplayer
+mode below adds PeerJS and locally rendered QR codes, not a Bun gameplay service.
+Physical mobile-browser network compatibility requires separate verification.
 
 Local verification uses Bun rule tests, Playwright Chromium desktop/mobile
 viewports, a TypeScript check, and the production build. Desktop/mobile viewport
 automation does not establish Android or iOS browser compatibility, real-device
 touch behavior, or the ability to join a Wi-Fi room.
 
-## Planned Multiplayer Architecture
+## Current PeerJS Multiplayer
+
+Vercel serves the static `dist` build configured by `vercel.json`. No application
+backend, database, Blob storage, or server-side game processing is deployed.
+`src/multiplayer/session.ts` uses PeerJS Cloud to introduce browsers, then sends
+game messages over WebRTC data channels. No STUN/TURN servers are configured;
+devices must support a direct connection, normally on the same Wi-Fi. Signaling
+requires internet connectivity and is an explicit external service dependency.
+
+`src/multiplayer/state.ts` owns admission, seat credentials, versions, accepted
+commands, rules execution, and authorized snapshots. The existing `applyAction`
+engine remains the rules boundary. Accepted state changes happen synchronously,
+independently of React rendering or dice animation timers. Duplicate requests
+cannot repeat actions, stale versions are rejected, and actor identity comes from
+the admitted connection rather than player-supplied action fields.
+
+`src/multiplayer/types.ts` separates public information from each recipient's
+private player record. Projections exclude development deck order, opponents'
+exact cards, hidden scores before results, pending Knight cancellation internals,
+and reconnect credentials. The host UI consumes a public snapshot even though
+the trusted host process necessarily holds the full state. Only the active
+player's phone may send normal turn actions; off-turn trade responses and required
+discards remain permitted by the engine. Only the shared board accepts placement
+and robber movement, with confirmation and current-state validation.
+
+`src/multiplayer/MultiplayerApp.tsx` provides the board lobby, locally rendered QR,
+exact-connection admission, public clickable board, and private phone controls.
+The host starts with three or four connected, admitted human players and occupies
+no seat. The room invitation uses a URL fragment, which is not sent to Vercel in
+the page request. The invitation secret is checked over the game data channel,
+not included in PeerJS signaling metadata. Individual reconnect credentials are
+host-issued and kept only in each phone's room-scoped `sessionStorage`. A reconnect
+replaces the old seat connection and receives a fresh authorized snapshot; knowing
+a name or the shared invitation is not enough to take over a seat.
+
+There is no host migration, saved-game persistence, multiplayer AI, organizer-phone
+role, or in-room rematch in this implementation. Keep the host browser open and
+awake. Local-network isolation and browser suspension can break direct connections;
+there is no silent server/relay fallback. Tests use a local test-only PeerServer to
+exercise real WebRTC without relying on the public signaling service. Physical
+phone and deployed public-service behavior require separate manual verification.
+
+## Historical LAN Proposal
+
+The remaining sections record the earlier, broader local-service design. Its local
+Bun signaling, Host & Play, organizer/readiness, recovery, and rematch proposals
+are not the current implementation. The Current PeerJS Multiplayer section above
+takes precedence where they differ.
 
 Use the existing Bun, React 19, TypeScript, and Tailwind foundation. A computer serves the application and a small local WebSocket signaling service. The room creator's browser owns the game state and rules. Each admitted player connects directly to that browser through a WebRTC data channel.
 

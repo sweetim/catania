@@ -1,8 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: "catania.spec.ts",
+  testMatch: ["catania.spec.ts", "multiplayer.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -11,7 +13,7 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: `http://127.0.0.1:${port}`,
     browserName: "chromium",
     actionTimeout: 10_000,
     trace: "retain-on-failure",
@@ -21,10 +23,18 @@ export default defineConfig({
     { name: "desktop", use: { viewport: { width: 1440, height: 1000 } } },
     { name: "mobile", use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
-  webServer: {
-    command: "PORT=4173 bun run src/index.ts",
-    wait: { stdout: /Server running at http:\/\/localhost:4173\// },
-    reuseExistingServer: false,
-    timeout: 30_000,
-  },
+  webServer: [
+    {
+      command: `PORT=${port} bun run src/index.ts`,
+      wait: { stdout: new RegExp(`Server running at http://localhost:${port}/`) },
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
+      command: "bun run tests/helpers/peer-server.ts",
+      wait: { stdout: /Test PeerServer listening on http:\/\/127\.0\.0\.1:4176/ },
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+  ],
 });
