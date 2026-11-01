@@ -320,6 +320,12 @@ async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Leave r
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
 
+async function selectMenuLanguage(page: Page, currentLanguage: "en" | "ja", nextLanguage: "en" | "ja") {
+  await page.getByRole("button", { name: currentLanguage === "ja" ? "ゲーム" : "Game", exact: true }).click();
+  await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
+  await page.keyboard.press("Escape");
+}
+
 test("Japanese phones localize a shared English game without changing its state or names", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("English host");
   const invitation = await hostGame(host);
@@ -332,10 +338,10 @@ test("Japanese phones localize a shared English game without changing its state 
   await japanesePhone.getByRole("textbox", { name: "あなたの名前", exact: true }).fill("太郎");
   await japanesePhone.getByRole("button", { name: "ゲームに接続", exact: true }).click();
   await host.getByRole("button", { name: "Admit 太郎", exact: true }).click();
-  await host.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await selectMenuLanguage(host, "en", "ja");
   await host.getByRole("button", { name: "コンピューターを追加", exact: true }).click();
   await expect(host.getByRole("button", { name: "コンピューター1の名前を変更", exact: true })).toBeVisible();
-  await host.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await selectMenuLanguage(host, "ja", "en");
   await expect(host.getByRole("button", { name: "Rename コンピューター1", exact: true })).toBeVisible();
   await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
@@ -362,22 +368,26 @@ test("Japanese phones localize a shared English game without changing its state 
   await japanesePhone.keyboard.press("Escape");
 
   const sentBefore = (await messages(japanesePhone)).filter(entry => entry.direction === "sent").length;
-  await japanesePhone.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await selectMenuLanguage(japanesePhone, "ja", "en");
   await expect(japanesePhone.getByRole("heading", { name: "太郎's hand", exact: true })).toBeVisible();
   await expect(host.locator("html")).toHaveAttribute("lang", "en");
   await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
   expect((await latestSnapshot(japanesePhone)).version).toBe(before.version);
   expect((await latestSnapshot(japanesePhone)).privatePlayer).toEqual(before.privatePlayer);
   expect((await messages(japanesePhone)).filter(entry => entry.direction === "sent")).toHaveLength(sentBefore);
-  await japanesePhone.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
-  await host.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await selectMenuLanguage(japanesePhone, "en", "ja");
+  await selectMenuLanguage(host, "en", "ja");
   await expect(host.getByRole("region", { name: "共用のゲームボード", exact: true })).toBeVisible();
   await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "japanese-shared-board");
   await japanesePhone.setViewportSize({ width: 320, height: 568 });
   await noHorizontalOverflow(japanesePhone);
+  await expect(japanesePhone.getByRole("button", { name: "ゲーム", exact: true })).toBeInViewport({ ratio: 1 });
+  await japanesePhone.getByRole("button", { name: "ゲーム", exact: true }).click();
   await expect(japanesePhone.getByRole("combobox", { name: "言語", exact: true })).toBeInViewport({ ratio: 1 });
+  await screenshot(japanesePhone, testInfo, "japanese-private-phone-game-menu");
+  await japanesePhone.keyboard.press("Escape");
   await screenshot(japanesePhone, testInfo, "japanese-private-phone");
 });
 
@@ -386,12 +396,14 @@ test("room Game menu shares navigation and preserves host and player leave behav
   const invitation = await hostGame(host);
   await host.getByRole("button", { name: "Game", exact: true }).click();
   await expect(host.getByRole("group", { name: "Game menu" }).getByRole("button")).toHaveText(["Help", "Settings", "Leave room"]);
+  await expect(host.getByRole("group", { name: "Game menu" }).getByRole("combobox", { name: "Language", exact: true })).toBeVisible();
   await host.keyboard.press("Escape");
   const phone = await multiplayer.newPage("Alex", true);
   await requestSeat(phone, invitation, "Alex");
   await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
   await phone.getByRole("button", { name: "Game", exact: true }).click();
   await expect(phone.getByRole("group", { name: "Game menu" }).getByRole("button")).toHaveText(["Help", "Leave room"]);
+  await expect(phone.getByRole("group", { name: "Game menu" }).getByRole("combobox", { name: "Language", exact: true })).toBeVisible();
   await phone.keyboard.press("Escape");
   for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
   await host.getByRole("button", { name: "Start game", exact: true }).click();
@@ -404,10 +416,12 @@ test("room Game menu shares navigation and preserves host and player leave behav
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
     const gameButton = page.getByRole("button", { name: "Game", exact: true });
     const menu = page.getByRole("group", { name: "Game menu", exact: true });
+    const languageSelector = menu.getByRole("combobox", { name: "Language", exact: true });
     const content = name === "host" ? page.getByTestId("game-phase") : page.getByLabel("Your hand and actions", { exact: true });
     const bounds = await content.boundingBox();
     await expect(gameButton).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: "Leave room", exact: true })).toBeHidden();
+    await expect(page.getByRole("combobox")).toHaveCount(0);
     await gameButton.focus();
     await page.keyboard.press("Enter");
     await expect(gameButton).toHaveAttribute("aria-expanded", "true");
@@ -417,6 +431,8 @@ test("room Game menu shares navigation and preserves host and player leave behav
       await expect(option).toBeInViewport({ ratio: 1 });
       expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
+    await expect(languageSelector).toBeInViewport({ ratio: 1 });
+    expect((await languageSelector.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     expect(await content.boundingBox()).toEqual(bounds);
     await screenshot(page, testInfo, `${name}-game-menu`);
     await page.keyboard.press("Tab");
@@ -430,7 +446,16 @@ test("room Game menu shares navigation and preserves host and player leave behav
     await expect(menu).toBeHidden();
     await gameButton.focus();
     await page.keyboard.press("Enter");
-    for (let step = 0; step <= options.length; step++) await page.keyboard.press("Tab");
+    for (let step = 0; step < options.length; step++) await page.keyboard.press("Tab");
+    await expect(languageSelector).toBeFocused();
+    await languageSelector.selectOption("ja");
+    await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+    await expect(page.getByRole("group", { name: "ゲームメニュー", exact: true })).toBeVisible();
+    await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(menu).toBeVisible();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
     await expect(menu).toBeHidden();
 
     await chooseGameOption(page, "Help");
@@ -1138,6 +1163,7 @@ test("private build rows match the sidebar without stretching when development c
   const hand = phone.getByRole("region", { name: "Your cards", exact: true });
   const building = hand.getByRole("region", { name: "Build a little bigger", exact: true });
   const rows = building.locator(".build-options > button");
+  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
   for (const kinds of [[], ["victory-point"], ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"]] as const) {
     player.developmentCards = kinds.map((kind, index) => ({ id: `development-${index}`, kind, purchasedTurn: 1 }));
     snapshot.privateScore = kinds.some(kind => kind === "victory-point") ? 1 : 0;
@@ -1246,6 +1272,7 @@ test("host and three private phones play over real PeerJS channels and recover a
   for (const [name, phone] of phones) {
     await expect(phone.getByRole("region", { name: "Your cards", exact: true })).toBeVisible();
     await expect(phone.getByRole("region", { name: "Your current resources", exact: true })).toHaveCount(1);
+    await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
     for (const action of ["Roll the dice", "End turn", "Build road", "Build settlement", "Upgrade to city", "Buy a card"]) {
       await expect(phone.getByRole("button", { name: action, exact: true })).toBeVisible();
     }
@@ -1654,6 +1681,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
 
   await present();
   await privateScreenFits(phone);
+  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
   await phone.getByRole("button", { name: "All players and bank", exact: true }).click();
   const table = phone.getByRole("dialog", { name: "All players and bank", exact: true });
   await expect(table.getByRole("region", { name: "Resource bank", exact: true })).toBeVisible();
@@ -1794,6 +1822,84 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(phone.getByRole("dialog")).toHaveCount(0);
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
   await privateScreenFits(phone);
+});
+
+test("dismissed mandatory private dialogs stay reachable while builds are collapsed", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  const opponent = game.players.find(other => other.id !== player.id)!;
+  const buildDisclosure = phone.getByRole("button", { name: "Build a little bigger", exact: true });
+
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+    await phone.setViewportSize(viewport);
+    await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(phone.getByRole("button", { name: "Buy a card", exact: true })).toHaveCount(0);
+    await expect(phone.getByRole("button", { name: "Make a trade", exact: true })).toHaveCount(0);
+
+    game.phase = { type: "discard", required: { [player.id]: 2 } };
+    game.trade = null;
+    await present();
+    const discard = phone.getByRole("dialog", { name: "Discard 2 cards", exact: true });
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "Close dialog", exact: true }).click();
+    const discardReentry = phone.getByRole("button", { name: "Discard 2", exact: true });
+    await expect(discardReentry).toBeInViewport();
+    await discardReentry.click();
+    await expect(discard).toBeVisible();
+    await discard.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+    game.phase = { type: "steal", victimIds: [opponent.id], returnPhase: "actions" };
+    await present();
+    const theft = phone.getByRole("dialog", { name: "Choose a player to steal from", exact: true });
+    await expect(theft).toBeVisible();
+    await theft.getByRole("button", { name: "Close dialog", exact: true }).click();
+    const stealReentry = phone.getByRole("button", { name: "Choose player", exact: true });
+    await expect(stealReentry).toBeInViewport();
+    await stealReentry.click();
+    await expect(theft).toBeVisible();
+    await theft.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+    game.phase = { type: "actions" };
+    game.trade = { offeredBy: opponent.id, give: { ...emptyResources(), wood: 1 }, receive: { ...emptyResources(), ore: 1 }, responses: {} };
+    await present();
+    const offer = phone.getByRole("dialog", { name: "Trade offer", exact: true });
+    await expect(offer).toBeVisible();
+    await offer.getByRole("button", { name: "Close dialog", exact: true }).click();
+    const tradeReentry = phone.getByRole("button", { name: "View trade", exact: true });
+    await expect(tradeReentry).toBeInViewport();
+    await tradeReentry.click();
+    await expect(offer).toBeVisible();
+    await offer.getByRole("button", { name: "Close dialog", exact: true }).click();
+    await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
+    await screenshot(phone, testInfo, `private-mandatory-reentry-${viewport.width}`);
+    await noHorizontalOverflow(phone);
+  }
+});
+
+test("private phones keep the turn and dice panel in view while the hand scrolls", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  snapshot.privatePlayer!.developmentCards = (["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"] as const).map((kind, index) => ({ id: `development-${index}`, kind, purchasedTurn: 1 }));
+  snapshot.game!.phase = { type: "roll" };
+  await present();
+  const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
+  const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
+  const rollButton = phone.getByRole("button", { name: "Roll the dice", exact: true });
+  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
+
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await phone.setViewportSize(viewport);
+    await expect(rollButton).toBeVisible();
+    expect(await dashboard.evaluate(element => element.scrollHeight)).toBeGreaterThan(await dashboard.evaluate(element => element.clientHeight));
+    await dashboard.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(turnControls).toBeInViewport({ ratio: 1 });
+    await expect(rollButton).toBeInViewport({ ratio: 1 });
+    await dashboard.evaluate(element => { element.scrollTop = 0; });
+    await expect(turnControls).toBeInViewport({ ratio: 1 });
+    await expect(rollButton).toBeInViewport({ ratio: 1 });
+    await noHorizontalOverflow(phone);
+    await screenshot(phone, testInfo, `private-pinned-turn-${viewport.width}`);
+  }
 });
 
 test("private trade responses preserve drafts and confirmations across version changes", async ({ multiplayer }, testInfo) => {
@@ -1951,6 +2057,8 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
   const ratio = getTradeRatio(beforeBank.game!, beforeBank.playerId!, give);
   expect(beforeBank.privatePlayer!.resources[give]).toBeGreaterThanOrEqual(ratio);
   const receive = RESOURCES.find(resource => resource !== give && beforeBank.game!.bank[resource] > 0)!;
+  const buildToggle = activePhone.getByRole("button", { name: "Build a little bigger", exact: true });
+  if (await buildToggle.getAttribute("aria-expanded") === "false") await buildToggle.click();
   await activePhone.getByRole("button", { name: "Make a trade", exact: true }).click();
   const editor = activePhone.getByRole("dialog", { name: "A fair exchange", exact: true });
   await editor.getByRole("button", { name: `Give ${RESOURCE_NAMES[give]}`, exact: true }).click();

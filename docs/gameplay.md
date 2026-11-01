@@ -53,19 +53,20 @@ card without a repeated turn-owner label, and the persistent **Roll the dice** a
 **End turn** buttons, which stay in place and become disabled when unavailable.
 
 The board fills the full height beside all three panels. On phones,
-the turn-status card and controls stay at the bottom of **Hand**, while the dice
-summary and bank remain above the selected view, visible across all three game views.
+the turn-status card and controls stay visible below **Hand**, **Board**, and
+**Players**, while the dice summary and bank remain above the selected view.
 Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains
 **Theme** alongside zoom and reset controls, without instruction or legend text.
 Short screens can scroll within the hand or player panel without moving the board.
-On very short windows, the entire sidebar scrolls internally so the status card,
-turn controls, and hand tasks remain reachable.
+On very short desktop windows, the entire sidebar scrolls internally so the status
+card, turn controls, and hand tasks remain reachable.
 
-The header's **Game** menu contains **Help**, **Settings**, and **Pass device** when
-multiple humans have a hand revealed. **End game** sits below a divider and still
-requires confirmation. The turn header shows **Setup** or the current turn number.
+The header's **Game** menu contains **Language**, **Help**, and **Settings**, plus
+**Pass device** when multiple humans have a hand revealed. **End game** sits below
+a divider and still requires confirmation. The turn header shows **Setup** or the
+current turn number.
 Keyboard users can select highlighted positions with Enter or Space.
 Confirm/Cancel appears beside the selected piece or hex, stays inside the map,
 and follows zoom and pan. Confirm is focused for keyboard use; Escape cancels
@@ -150,8 +151,10 @@ colors without detailed player cards; all private summaries disappear during han
 
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
-breakdown. Player seats also show each player's played-Knight count as a shield
-icon and number, followed by a road icon and their longest connected-road count,
+breakdown. On tablets and desktops, all seats fit above the map without horizontal
+scrolling. Narrow cards put the name above a horizontal row of counts; wider cards
+retain the single-row layout. Player seats also show each player's played-Knight
+count as a shield icon and number, followed by a road icon and their longest connected-road count,
 including zero, on desktop and phones. These use matching icon sizes and gaps.
 A gold crossed-swords icon marks Largest Army, and a matching gold road icon marks
 Longest Road. These reward icons sit together immediately to the right of VP,
@@ -170,6 +173,8 @@ active player. Hidden victory-point cards do not affect the cell highlights.
 
 ## Building And Development Cards
 
+**Build a little bigger** expands or collapses the build and trade controls. It
+starts collapsed on phones and expanded on larger screens.
 Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.

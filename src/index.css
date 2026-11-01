@@ -209,6 +209,7 @@
 .game-menu > summary::-webkit-details-marker { display: none; }
 .game-menu[open] > summary { background: var(--color-moss); }
 .game-menu[open] > summary svg { transform: rotate(180deg); }
+.game-menu select { width: 100%; max-width: none; }
 
 .game-table {
   display: flex;
@@ -230,7 +231,16 @@
 .bank-supply { display: flex; align-items: center; gap: 6px; }
 .bank-development { display: flex; flex: none; flex-direction: column; align-items: center; justify-content: center; width: 30px; height: 40px; border: 1px solid #c2ad7c; border-radius: 8px; background: #faf4e4; color: #947231; font-size: 12px; line-height: 12px; font-variant-numeric: tabular-nums; }
 .bank-development svg { width: 18px; height: 20px; }
-.table-play-area { flex: 1; min-height: 0; min-width: 0; display: grid; }
+.table-play-area { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.table-play-area > * { flex: 1 1 0; min-height: 0; }
+@media (max-width: 1023px) {
+  /* The dice panel stays on screen on every game view; only the private cards change tabs. */
+  .table-play-area[data-view="board"] .hand-content,
+  .table-play-area[data-view="players"] .hand-content { display: none; }
+  /* Size containment would collapse the dice-only panel, so lift it while the hand is hidden. */
+  .table-play-area[data-view="board"] .table-hand,
+  .table-play-area[data-view="players"] .table-hand { flex: none; container-type: normal; }
+}
 .table-board { min-height: 0; flex-direction: column; }
 .board-instruction { height: 80px; flex: none; overflow: auto; }
 .board-tablemat {
@@ -409,6 +419,7 @@
   .private-player-summary .player-card-stat strong { font-size: 13px; }
 }
 .private-hand.hand-content { flex: none; overflow: visible; }
+.private-turn { position: sticky; bottom: 0; z-index: 10; }
 .private-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .private-navigation > button, .private-turn .turn-action > button { min-width: 0; padding: 6px 8px; font-size: 12px; }
 .private-instructions .turn-title, .private-instructions .turn-description { height: auto; overflow: visible; overflow-wrap: anywhere; }
@@ -454,6 +465,23 @@
   .table-seats .player-card-counts svg, .table-seats .player-score svg { width: 16px; height: 20px; }
 }
 
+/* Tablets keep every public player card above the island without scrolling:
+   narrow seats move the name to an upper level and keep the counts in one
+   horizontal second row. Wider single-device layouts keep their existing
+   style, and short landscape phones keep the tabbed phone layout. */
+@media (min-width: 700px) and (max-width: 1023px) and (min-height: 700px) {
+  .table-seats { display: grid; }
+  .table-seats .player-seat { padding: 7px 12px; }
+  .table-seats .player-seat > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+  .table-seats .player-number { grid-row: 1 / 3; }
+  .table-seats .player-name { grid-column: 2; grid-row: 1; }
+  .table-seats .player-card-counts { grid-column: 2 / -1; grid-row: 2; flex-direction: row; gap: 6px; }
+  .table-seats .player-card-stat { gap: 3px; }
+  .table-seats .player-card-stat strong { font-size: 12px; }
+  .table-seats .player-card-counts svg, .table-seats .player-score svg { width: 14px; height: 18px; }
+  .table-seats.shared-table-seats { grid-auto-columns: minmax(0, 1fr); overflow-x: visible; }
+}
+
 @media (max-height: 850px) {
   .hand-content { gap: 8px; padding: 8px 12px 12px; }
   .hand-dice { padding: 8px; }
@@ -465,6 +493,7 @@
 @media (max-width: 1023px) and (max-height: 740px) {
   .game-shell > header { padding: 4px 16px; }
   .game-table { gap: 4px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .table-play-area { gap: 4px; }
   .table-hand { margin-top: 4px; }
   .table-navigation { padding: 0; }
   .table-feedback { gap: 4px; }

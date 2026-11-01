@@ -149,6 +149,14 @@ async function showView(page: Page, view: "board" | "hand" | "players") {
   }
 }
 
+async function revealBuildSection(page: Page) {
+  const toggle = page.getByRole("button", { name: "Build a little bigger", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) === "false") {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
 async function showHomeView(page: Page, view: "Setup" | "Island") {
   const navigation = page.getByRole("navigation", { name: "Home views", exact: true });
   if (await navigation.isVisible()) {
@@ -956,6 +964,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await expect(page.getByRole("region", { name: "Private resources" })).toContainText("2 public + 0 hidden = 2");
   const development = page.getByRole("region", { name: "Your development cards", exact: true });
   await expect(development).toHaveCount(0);
+  await revealBuildSection(page);
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
   const diceLabel = await page.getByRole("img", { name: /^Dice: / }).getAttribute("aria-label");
@@ -1494,6 +1503,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
       expect(await bank.boundingBox()).toEqual(bankFrame);
       await noPageOverflow(page);
       if (view === "hand") {
+        await revealBuildSection(page);
         const sidebar = page.getByRole("complementary", { name: "Your hand and actions" });
         const cards = sidebar.getByRole("region", { name: "Your cards", exact: true });
         const controls = sidebar.getByRole("region", { name: "Turn controls", exact: true });
@@ -1709,6 +1719,170 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
   }
 });
 
+test("turn controls stay visible and stable on every phone and tablet game view", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  // Tablets exercise the same tabbed layout through a resized desktop viewport.
+  if (!isMobile) await page.setViewportSize({ width: 768, height: 1024 });
+  await prepareRollGame(page);
+  const controls = page.getByRole("region", { name: "Turn controls", exact: true });
+  const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
+  const endTurn = page.getByRole("button", { name: "End turn & pass device", exact: true });
+  const privateResources = page.getByRole("region", { name: "Private resources", exact: true });
+  let stableFrame: { x: number; y: number; width: number; height: number } | undefined;
+  for (const view of ["hand", "board", "players"] as const) {
+    await showView(page, view);
+    await expect(controls).toBeInViewport({ ratio: 1 });
+    await expect(roll).toBeInViewport({ ratio: 1 });
+    await expect(endTurn).toBeInViewport({ ratio: 1 });
+    const frame = (await controls.boundingBox())!;
+    if (stableFrame) expect(frame).toEqual(stableFrame);
+    stableFrame = frame;
+    if (view === "hand") {
+      await expect(privateResources).toBeVisible();
+    } else {
+      await expect(privateResources).toBeHidden();
+    }
+    await noPageOverflow(page);
+    await screenshot(page, testInfo, `turn-controls-${view}-${page.viewportSize()!.width}`, false);
+  }
+});
+
+test("build section collapses on phones and starts expanded on larger screens", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  // Mount the game at a tablet width so the disclosure default follows the viewport.
+  if (!isMobile) await page.setViewportSize({ width: 820, height: 1180 });
+  await prepareRollGame(page);
+  await showView(page, "hand");
+  const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
+  const toggle = page.getByRole("button", { name: "Build a little bigger", exact: true });
+  const buildOptions = building.locator(".build-options");
+  const buildRoad = building.getByRole("button", { name: /^Build road\b/ });
+  const defaultExpanded = !isMobile;
+  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
+  if (!defaultExpanded) {
+    await expect(buildRoad).toBeHidden();
+    await screenshot(page, testInfo, "build-collapsed-phone", false);
+  }
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "false" : "true");
+  if (defaultExpanded) {
+    await expect(buildRoad).toBeHidden();
+  } else {
+    await expect(buildOptions).toBeVisible();
+    await expect(buildRoad).toBeVisible();
+  }
+  await screenshot(page, testInfo, "build-toggled", false);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
+  if (!defaultExpanded) await expect(buildRoad).toBeHidden();
+});
+
+test("tablets keep every public player card above the island without scrolling", async ({ page, isMobile }, testInfo) => {
+  test.skip(isMobile, "Tablet widths run from the desktop project");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const playerCount of [3, 4] as const) {
+    await page.goto("/");
+    if (playerCount === 4) await page.getByRole("button", { name: "4 players", exact: true }).click();
+    await seedGameRandomness(page);
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
+    const board = page.getByRole("region", { name: "Game board", exact: true });
+    for (const viewport of [{ width: 768, height: 1024 }, { width: 820, height: 1180 }, { width: 1024, height: 768 }]) {
+      await page.setViewportSize(viewport);
+      await showView(page, "board");
+      const seats = page.locator(".table-seats");
+      await expect(seats).toBeVisible();
+      const seatCards = seats.locator(".player-seat");
+      await expect(seatCards).toHaveCount(playerCount);
+      const seatBounds = await seatCards.evaluateAll(cards => cards.map(card => card.getBoundingClientRect()));
+      const boardBounds = (await board.boundingBox())!;
+      for (const bounds of seatBounds) {
+        expect(bounds.width).toBeGreaterThan(0);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(boardBounds.y + 1);
+        expect(bounds.x).toBeGreaterThanOrEqual(0);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+      }
+      // All seats share one row above the island and stay inside the screen.
+      expect(seatBounds.map(bounds => Math.round(bounds.y))).toEqual(seatBounds.map(() => Math.round(seatBounds[0]!.y)));
+      await expect(board).toBeInViewport();
+      await expect(seatCards.first()).toBeInViewport({ ratio: 1 });
+      await expect(seatCards.last()).toBeInViewport({ ratio: 1 });
+      if (viewport.width < 1024) {
+        // Narrow tablet seats put the name on an upper level and the four counts
+        // in one horizontal second row below it.
+        for (const card of await seatCards.all()) {
+          const cardBounds = await card.evaluate(element => {
+            const seat = element.getBoundingClientRect();
+            const name = element.querySelector(".player-name")!.getBoundingClientRect();
+            const counts = [...element.querySelectorAll(".player-card-counts .player-card-stat strong")].map(
+              stat => stat.getBoundingClientRect(),
+            );
+            return { seat, name, counts };
+          });
+          expect(cardBounds.name.bottom).toBeLessThanOrEqual(cardBounds.counts[0]!.y + 1);
+          const countRows = new Set(cardBounds.counts.map(bounds => Math.round(bounds.y)));
+          expect(countRows.size, "Counts stay on one horizontal row").toBe(1);
+          expect(Math.max(...cardBounds.counts.map(bounds => bounds.right))).toBeLessThanOrEqual(cardBounds.seat.right + 1);
+        }
+      }
+      await noHorizontalOverflow(page);
+      await screenshot(page, testInfo, `tablet-seats-${playerCount}p-${viewport.width}`, false);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    // Wide single-device screens keep the existing one-row seat style.
+    const wideStyle = await page.locator(".table-seats .player-seat").first().evaluate(element => ({
+      layout: getComputedStyle(element.firstElementChild!).display,
+      counts: getComputedStyle(element.querySelector(".player-card-counts")!).flexDirection,
+    }));
+    expect(wideStyle.layout).toBe("flex");
+    if (playerCount === 3) expect(wideStyle.counts).toBe("row");
+    await page.getByRole("button", { name: "Game", exact: true }).click();
+    await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+    await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Let's settle in", exact: true })).toBeVisible();
+  }
+});
+
+test("shared-board seats keep one row on tablets", async ({ page, isMobile }, testInfo) => {
+  test.skip(isMobile, "Tablet widths run from the desktop project");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
+  const seatMarkup = await page.locator(".table-seats .player-seat").first().evaluate(element => element.outerHTML);
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 820, height: 1180 }]) {
+    await page.setViewportSize(viewport);
+    // Reuse a real rendered seat so the shared-board styles are checked against
+    // live markup; the full shared-board flow belongs to multiplayer.spec.ts.
+    await page.evaluate(markup => {
+      document.querySelector(".shared-table-seats")?.remove();
+      const list = document.createElement("ul");
+      list.className = "table-seats shared-table-seats";
+      list.setAttribute("aria-label", "shared seats fixture");
+      for (let seat = 0; seat < 4; seat++) {
+        const item = document.createElement("li");
+        item.className = "min-w-0";
+        item.innerHTML = markup;
+        list.append(item);
+      }
+      document.querySelector(".game-table")!.prepend(list);
+    }, seatMarkup);
+    const shared = page.getByRole("list", { name: "shared seats fixture", exact: true });
+    await expect(shared).toBeVisible();
+    const seats = shared.locator(".player-seat");
+    await expect(seats).toHaveCount(4);
+    expect(await shared.evaluate(element => element.scrollWidth <= element.clientWidth), "No horizontal seat scrolling").toBe(true);
+    await expect(shared).toHaveCSS("overflow-x", "visible");
+    const seatBounds = await seats.evaluateAll(cards => cards.map(card => card.getBoundingClientRect()));
+    expect(seatBounds.map(bounds => Math.round(bounds.y)), "Seats stay on one row").toEqual(seatBounds.map(() => Math.round(seatBounds[0]!.y)));
+    for (const bounds of seatBounds) {
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+    }
+    await screenshot(page, testInfo, `shared-tablet-seats-${viewport.width}`, false);
+  }
+});
+
 async function seedRandomness(page: Page, initialSeed: number, initialValues: number[] = []) {
   await page.evaluate(({ initialSeed, initialValues }) => {
     let seed = initialSeed;
@@ -1912,6 +2086,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
 test("settlement build hides descriptions for the roll requirement and missing resources", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
   const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
   const explanation = building.locator("#settlement-build-explanation");
@@ -1940,6 +2115,7 @@ test("settlement build shows a description only for exhausted pieces and recover
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
   // Give Sam room to expand and produce the required cards through real rolls, without injecting state.
   let state = await prepareRollGame(page, [[20, 41], [0, 0], [2, 1], [4, 3], [7, 7], [15, 33]]);
+  await revealBuildSection(page);
   const playerId = state.activePlayerId;
   const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
   const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
@@ -2034,6 +2210,7 @@ test("settlement build shows a description only for exhausted pieces and recover
 test("development card purchase requires resources and keyboard confirmation", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   const buyerId = state.activePlayerId;
   const buy = page.getByRole("button", { name: "Buy a card 1 Wool 1 Grain 1 Ore", exact: true });
   const developmentHand = page.getByRole("region", { name: "Your development cards", exact: true });
@@ -2131,6 +2308,7 @@ test("development card purchase requires resources and keyboard confirmation", a
 test("Cancel Knight restores the card and turn until the robber move is confirmed", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   const buyerId = state.activePlayerId;
   const buyerName = state.players.find(player => player.id === buyerId)!.name;
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
@@ -2140,7 +2318,8 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
   const developmentHand = page.getByRole("region", { name: "Your development cards", exact: true, includeHidden: true });
   const knight = developmentHand.getByRole("button", { name: /^Knight 1 card Move the robber/ });
   const development = page.getByRole("dialog", { name: "A card up your sleeve", exact: true });
-  const cancelKnight = page.getByRole("button", { name: "Cancel Knight", exact: true });
+  // The dice panel now stays visible on the board view, so target its Cancel Knight copy explicitly.
+  const cancelKnight = page.getByRole("region", { name: "Turn controls", exact: true }).getByRole("button", { name: "Cancel Knight", exact: true });
   const board = page.getByRole("region", { name: "Game board", exact: true });
   const placement = page.getByRole("group", { name: "Placement confirmation", exact: true, includeHidden: true });
   const rolls: [number, number][] = [[1, 2], [2, 6], [1, 1], [1, 1]];
@@ -2338,6 +2517,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   page.on("requestfailed", request => browserErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   const buyerId = state.activePlayerId;
   const buyerName = state.players.find(player => player.id === buyerId)!.name;
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
@@ -2501,6 +2681,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
 test("owned development cards group by type with counts, descriptions and older-copy selection", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   const buyerId = state.activePlayerId;
   const developmentHand = page.getByRole("region", { name: "Your development cards", exact: true });
   const development = page.getByRole("dialog", { name: "A card up your sleeve", exact: true });
@@ -2697,6 +2878,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
     await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
     const state = await prepareRollGame(page);
+    await revealBuildSection(page);
     const tile = state.board.tiles.find(candidate => candidate.number && candidate.vertexIds.some(
       vertexId => state.board.vertices.find(vertex => vertex.id === vertexId)?.building?.playerId === state.activePlayerId,
     ))!;
@@ -3105,6 +3287,7 @@ test("very short windows keep hand tasks and turn controls reachable", async ({ 
   await rollButton.click();
   await expect(rollButton).toBeDisabled();
   await expect(endTurnButton).toBeEnabled();
+  await revealBuildSection(page);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
   const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
   await trade.getByRole("button", { name: "Player trade", exact: true }).click();
@@ -3129,6 +3312,7 @@ test("very short windows keep hand tasks and turn controls reachable", async ({ 
 test("request-first trades compare prices and only exchange cards after confirmation", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   await chooseDice(page, [2, 6]);
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
   let diceIndex = 0;
@@ -3321,6 +3505,7 @@ test("owned resources stay visible through private trades and mandatory discards
   await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   await expectResourceBank(page, state.bank);
   await chooseDice(page, [2, 6]);
   for (let turn = 0; turn < 3; turn++) {
@@ -3480,6 +3665,7 @@ test("bank receipts animate identical gains again and expire independently", asy
   await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
   let state = await prepareRollGame(page);
+  await revealBuildSection(page);
   await chooseDice(page, [2, 6]);
   for (let turn = 0; turn < 4; turn++) {
     await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
@@ -3639,6 +3825,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   for (let placement = 0; placement < 2; placement++) await placeStartingPieces(page);
   await showView(page, "hand");
+  await revealBuildSection(page);
   await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
   const robbery = state.thefts.find(theft => theft.victimId === requesterId)!;
   expect(robbery).toBeDefined();
@@ -3775,6 +3962,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   }
   await expect(page.getByRole("img", { name: /'s road at /, includeHidden: true })).toHaveCount(6, { timeout: 15_000 });
   await showView(page, "hand");
+  await revealBuildSection(page);
   await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 15_000 });
   await resolveHumanRoll(page);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();

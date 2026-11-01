@@ -48,11 +48,14 @@ The shared screen hosts the game without occupying a player seat.
 
 Active gameplay shows only public player seats above the island, using the same
 player cards and map as single-device play. The map fills the remaining viewport
-without page scrolling. On narrow screens, the player strip scrolls horizontally
-while the map remains visible. Theme, zoom, and placement confirmation stay on the
-map. The header uses the same **Game** dropdown as single-device play, in both the
-lobby and the game. **Help** includes the rules, build costs, development-card
-reference, and shared-board/private-phone guidance. **Settings** on the shared
+without page scrolling. On tablets and larger screens, all seats fit without
+horizontal scrolling; narrow cards place the name above a horizontal row of counts.
+On phones, the player strip scrolls horizontally while the map remains visible.
+Theme, zoom, and placement confirmation stay on the map. The header uses the same
+**Game** dropdown as single-device play, in both the lobby and the game.
+**Language** changes this device's interface language.
+**Help** includes the rules, build costs, development-card reference, and
+shared-board/private-phone guidance. **Settings** on the shared
 screen controls blocked settlement markers and whether water fills the map;
 these preferences are saved in this browser and shared with single-device play.
 **Leave room** opens the existing confirmation: leaving as host ends the room for
@@ -68,8 +71,8 @@ Build selection, turn guidance, rolls, and private actions remain on players' ph
 
 ## Private Player Screen
 
-The header's **Game** dropdown contains **Help** and **Leave room**. Board-only
-settings and single-device handoff controls are omitted from private phones.
+The header's **Game** dropdown contains **Language**, **Help**, and **Leave room**.
+Board-only settings and single-device handoff controls are omitted from private phones.
 
 A separate player-summary card sits above the hand, showing your seat number,
 name, resource and development-card counts, played Knights, connected roads, and
@@ -81,10 +84,11 @@ The private screen uses the single-device hand sidebar's heading, resource-card
 count, illustrated resources, and public + hidden = total victory-point breakdown.
 The hidden score stays on your device only. **Build a little bigger** contains the
 same full-width build and card-purchase rows, icons, and costs, followed by **Make a
-trade**. Your hand and the turn controls stay in a vertical stack on desktop and
-mobile. Panels fit their contents without stretching into empty space; the stack
-scrolls inside the viewport when needed, without page scrolling or shrinking the
-action buttons. Phase guidance uses the same green instruction panel, headings,
+trade**. This section is collapsible, initially closed on phones and open on larger
+screens. Your hand and the turn controls stay in a vertical stack on desktop and
+mobile. On phones, the turn/dice panel stays visible while the hand scrolls above
+it. Larger screens scroll the stack when needed, without page scrolling or shrinking
+the action buttons. Phase guidance uses the same green instruction panel, headings,
 and explanations as single-device play, with placement directions referring to
 the shared board.
 

@@ -22,6 +22,12 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
+async function selectInGameLanguage(page: Page, currentLanguage: "en" | "ja", nextLanguage: "en" | "ja") {
+  await page.getByRole("button", { name: currentLanguage === "ja" ? "ゲーム" : "Game", exact: true }).click();
+  await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
+  await page.keyboard.press("Escape");
+}
+
 test.describe("Japanese browser locale", () => {
   test.use({ locale: "ja-JP" });
 
@@ -87,6 +93,49 @@ test("uses the browser language when its preferred-language list is empty", asyn
   await expectLanguage(page, "ja");
 });
 
+test("in-game language selection lives inside the Game menu", async ({ page, isMobile }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Let's settle in" }).click();
+  const gameButton = page.getByRole("button", { name: "Game", exact: true });
+  const menu = page.getByRole("group", { name: "Game menu", exact: true });
+  const languageSelector = page.getByRole("combobox", { name: "Language", exact: true });
+
+  await expect(gameButton).toBeVisible();
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await gameButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(gameButton).toHaveAttribute("aria-expanded", "true");
+  await expect(languageSelector).toBeVisible();
+  await expect(languageSelector).toBeInViewport({ ratio: 1 });
+  expect((await languageSelector.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.keyboard.press("Tab");
+  await expect(menu.getByRole("button", { name: "Help", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(menu.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(languageSelector).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("game-menu-language-open.png"), fullPage: true });
+  await languageSelector.selectOption("ja");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+  await expect(page.getByRole("group", { name: "ゲームメニュー", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(menu).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("catania.language"))).toBe("en");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(gameButton).toBeFocused();
+
+  if (isMobile) {
+    await gameButton.tap();
+    await expect(languageSelector).toBeVisible();
+    await languageSelector.selectOption("ja");
+    await expect(page.getByRole("group", { name: "ゲームメニュー", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+  }
+});
+
 test("Japanese help, themes, handoffs, board controls, and settings remain usable", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
@@ -138,10 +187,10 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   const confirmation = page.getByRole("group", { name: "配置の確認", exact: true });
   await expect(confirmation.getByRole("button", { name: "配置を確定", exact: true })).toBeFocused();
   const selection = await confirmation.getAttribute("data-selection-id");
-  await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await selectInGameLanguage(page, "ja", "en");
   await expect(page.getByRole("group", { name: "Placement confirmation", exact: true })).toHaveAttribute("data-selection-id", selection!);
   await expect(page.getByText("Settle here?", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await selectInGameLanguage(page, "en", "ja");
   await expect(confirmation).toHaveAttribute("data-selection-id", selection!);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("japanese-placement.png"), fullPage: true });
@@ -155,7 +204,10 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await page.screenshot({ path: testInfo.outputPath("japanese-hand.png"), fullPage: true });
   await page.setViewportSize({ width: 320, height: 568 });
   await expectNoHorizontalOverflow(page);
-  await expect(page.getByRole("combobox", { name: "言語", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("button", { name: "ゲーム", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await page.getByRole("button", { name: "ゲーム", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "言語", exact: true })).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: testInfo.outputPath("japanese-narrow-hand.png"), fullPage: true });
 });

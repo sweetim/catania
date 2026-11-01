@@ -14,6 +14,7 @@ import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstru
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { TheftNotice } from "../components/TheftNotice";
+import { CollapsibleSection } from "../components/CollapsibleSection";
 import { COSTS, emptyResources, RESOURCES, resourceTotal } from "../game/engine";
 import type { GameAction, Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
@@ -196,8 +197,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
           <span className="text-xs font-semibold">{translateText("{public} public + {hidden} hidden = {total}", { public: ownStatistics.score, hidden: totalScore - ownStatistics.score, total: totalScore })}</span>
         </div>
       </section>
-      <section className="hand-building" aria-label={translateText("Build a little bigger")}>
-        <h2 className="eyebrow mb-2">{translateText("Build a little bigger")}</h2>
+      <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building">
         <div className="build-options flex flex-col gap-2">
           {(["road", "settlement", "city"] as const).map(piece => <BuildButton key={piece} piece={piece} color={player.color} resources={COSTS[piece]} aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })} aria-pressed={snapshot.buildMode === piece}
             disabled={disabled || !normalActions || !canPay(COSTS[piece])}
@@ -209,11 +209,13 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
             version: snapshot.version,
           })} />
         </div>
-        {discardCount !== undefined ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
-          : active && game.phase.type === "steal" ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
-          : trade ? <button className="button-primary mt-2 w-full px-2" onClick={() => { setResponseVersion(null); setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
-          : <button className="button-secondary mt-2 w-full px-2" disabled={disabled || !normalActions} onClick={() => { setEditorVersion(snapshot.version); setEditor("trade"); }}>{translateText("Make a trade")}</button>}
-      </section>
+        <button className="button-secondary mt-2 w-full px-2" disabled={disabled || !normalActions} onClick={() => { setEditorVersion(snapshot.version); setEditor("trade"); }}>{translateText("Make a trade")}</button>
+      </CollapsibleSection>
+      {/* Mandatory actions stay reachable even while the build disclosure is collapsed. */}
+      {discardCount !== undefined ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
+        : active && game.phase.type === "steal" ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
+        : trade ? <button className="button-primary mt-2 w-full px-2" onClick={() => { setResponseVersion(null); setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
+        : null}
       <DevelopmentHand cards={player.developmentCards} turnNumber={game.turnNumber} onSelect={cardId => { setDevelopmentCardId(cardId); setEditorVersion(snapshot.version); setEditor("development"); }} />
     </section>
 
@@ -364,11 +366,13 @@ export function MultiplayerApp() {
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
         {privateGame ? <span className="private-connection max-sm:sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span> : sharedGame ? <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span> : <span className="hidden text-xs text-muted sm:block">{translateText("One island. Your own hand.")}</span>}
-        <LanguageSelector />
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
-        ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <a className="min-w-0 text-xs underline underline-offset-4 sm:text-sm" href="/">{translateText("Single-device play")}</a>}
+        ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <>
+          <LanguageSelector />
+          <a className="min-w-0 text-xs underline underline-offset-4 sm:text-sm" href="/">{translateText("Single-device play")}</a>
+        </>}
       </header>
       <main className={privateGame ? "private-game-main" : sharedGame ? "shared-game-main" : hostLobby ? "multiplayer-lobby-main" : `mx-auto max-w-[1600px] px-4 pb-10 sm:px-8 ${game ? "pt-4" : "pt-10 sm:pt-16"}`}>
         {!view && <section className="mx-auto max-w-xl">

@@ -13,6 +13,7 @@ import { TradeDialog } from "./components/TradeDialog";
 import { OpenTrade } from "./components/OpenTrade";
 import { PlayerSeat } from "./components/PlayerSeat";
 import { DevelopmentHand } from "./components/DevelopmentHand";
+import { CollapsibleSection, COLLAPSIBLE_EXPANDED_MEDIA } from "./components/CollapsibleSection";
 import { getPhaseInstructions, TurnInstructions } from "./components/TurnInstructions";
 import {
   ActionConfirmation,
@@ -123,6 +124,9 @@ export function App() {
   const [buildMode, setBuildMode] = useState<
     "road" | "settlement" | "city" | null
   >(null);
+  const [buildSectionOpen, setBuildSectionOpen] = useState(() =>
+    window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
+  );
   const [selected, setSelected] = useState<{
     kind: "vertex" | "edge" | "tile";
     id: string;
@@ -491,7 +495,6 @@ export function App() {
           {translateText(game ? "A little friendly competition" : "Made for gathering around")}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          <LanguageSelector />
           {game && !game.winnerId ? (
             <GameMenu actions={[
               { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
@@ -499,18 +502,21 @@ export function App() {
               ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
             ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />
           ) : (
-            <button
-              className="min-h-11 text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
-              onClick={() => {
-                setDialog("help");
-                setError("");
-              }}
-            >
-              {translateText("Help")}{" "}
-              <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
-                ?
-              </span>
-            </button>
+            <>
+              <LanguageSelector />
+              <button
+                className="min-h-11 text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
+                onClick={() => {
+                  setDialog("help");
+                  setError("");
+                }}
+              >
+                {translateText("Help")}{" "}
+                <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
+                  ?
+                </span>
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -850,7 +856,7 @@ export function App() {
             receipt={resourceReceipt?.playerId === viewer.id ? resourceReceipt : null}
             onDismiss={() => setResourceReceipt(null)}
           />
-          <div className="table-play-area">
+          <div className="table-play-area" data-view={mobileView}>
             <section
               className={`table-board min-w-0 ${mobileView !== "board" ? "hidden lg:flex" : "flex"}`}
               aria-label={translateText("Game board")}
@@ -910,8 +916,14 @@ export function App() {
               </div>
             </section>
 
+            <section
+              aria-label={translateText("Players and awards")}
+              className={`table-players space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
+            >
+              {playerCards(true)}
+            </section>
             <aside
-              className={`table-hand min-w-0 ${mobileView !== "hand" ? "hidden lg:flex" : "flex"}`}
+              className="table-hand min-w-0 flex"
               aria-label={translateText("Your hand and actions")}
             >
               <div className="hand-content" role="region" aria-label={translateText("Your cards")}>
@@ -1016,8 +1028,13 @@ export function App() {
                   </button>
                 )}
 
-              <section inert={handTaskOpen} className="hand-building" aria-label={translateText("Build a little bigger")}>
-                <h2 className="eyebrow mb-2">{translateText("Build a little bigger")}</h2>
+              <CollapsibleSection
+                title={translateText("Build a little bigger")}
+                className="hand-building"
+                inert={handTaskOpen}
+                open={buildSectionOpen}
+                onToggle={setBuildSectionOpen}
+              >
                 <div className="build-options flex flex-col gap-2">
                   {(["road", "settlement", "city"] as const).map((piece) => {
                     const locations =
@@ -1094,7 +1111,7 @@ export function App() {
                 >
                   {translateText("Make a trade")}
                 </button>
-              </section>
+              </CollapsibleSection>
               <DevelopmentHand
                 cards={viewer.developmentCards}
                 turnNumber={game.turnNumber}
@@ -1198,12 +1215,6 @@ export function App() {
                 </div>
               </div>
             </aside>
-            <section
-              aria-label={translateText("Players and awards")}
-              className={`table-players space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
-            >
-              {playerCards(true)}
-            </section>
           </div>
         </main>
       ) : (

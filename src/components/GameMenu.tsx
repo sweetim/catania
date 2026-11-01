@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "../localization";
+import { LanguageSelector, useTranslation } from "../localization";
 import { boardTranslations } from "../translations/board";
 
 type GameMenuAction = {
@@ -40,7 +40,8 @@ export function GameMenu({ actions, exitAction }: {
     className="game-menu relative shrink-0"
     onToggle={(event) => setOpen(event.currentTarget.open)}
     onBlur={(event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+      // Ignore focus lost to the native select popup so language choice stays usable.
+      if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
     }}
     onKeyDown={(event) => {
       if (event.key === "Escape" && event.currentTarget.open) {
@@ -61,6 +62,9 @@ export function GameMenu({ actions, exitAction }: {
       {actions.map(action => <button key={action.label} className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={action.disabled} onClick={() => selectAction(action)}>
         {action.label}
       </button>)}
+      <div className="mt-1 border-t border-line pt-1">
+        <LanguageSelector />
+      </div>
       <div className="mt-1 border-t border-line pt-1">
         <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-clay hover:bg-clay/10" disabled={exitAction.disabled} onClick={() => selectAction(exitAction)}>
           {exitAction.label}

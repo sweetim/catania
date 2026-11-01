@@ -32,8 +32,9 @@ The initial language follows the first supported language in your browser's
 preferences: Japanese (`ja`, including `ja-JP`) or English (`en`, including regional
 variants). If neither is listed, the interface uses English.
 
-Use the header's **English / 日本語** selector to change language. Close any open
-dialog to access the header.
+Use **Game > Language** to choose **English / 日本語** wherever the Game menu is
+available. Other screens keep the selector in the header. Close any open dialog
+to access these controls.
 A manual choice is saved under `catania.language` in `localStorage` and overrides
 browser preferences on later visits. Invalid saved values are ignored. When storage
 is blocked, switching still works for the current visit and the next visit uses the

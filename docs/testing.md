@@ -51,9 +51,11 @@ victim/thief notices across handoffs, computer thefts in solo play, and phone
 notice queues, five-second expiry, anchored overlays without layout shifts, off-screen timer cleanup,
 reconnect acknowledgements, resource-loss false positives, and reduced motion.
 Shared-board layout checks cover the single-device player seats and map, viewport
-containment, horizontally scrolling seats, and confirmed placements at desktop and
-320-pixel widths. They also verify that bank/build/turn panels, tabs, and private
-hands or actions do not appear on the shared screen.
+containment, horizontally scrolling phone seats, and confirmed placements at desktop
+and 320-pixel widths. Responsive checks cover all seats fitting on tablets, narrow
+two-level player cards, persistent mobile turn controls across tabs, and collapsible
+build controls. Shared-board checks also verify that bank/build/turn panels, tabs,
+and private hands or actions do not appear on the shared screen.
 
 Language tests cover Japanese browser locales, regional language matching,
 unsupported-locale fallback, saved overrides across both modes, invalid and blocked
@@ -104,8 +106,9 @@ and discovery override are not part of the deployment.
 7. Compare all six themes on desktop and phone boards, including a 320-pixel-wide
    viewport. Use arrow keys in the theme radios and check that Close and Escape
     restore focus to **Theme** without losing a selected location, zoom, or pan.
-8. Start with a Japanese browser locale, then switch **English / 日本語** in the
-   header. Check help, resource labels, and placement instructions; confirm a manual
+8. Start with a Japanese browser locale, then switch **English / 日本語** through
+   **Game > Language** (or the header selector on screens without Game). Check help,
+   resource labels, and placement instructions; confirm a manual
    choice survives reloads. In multiplayer, use different languages on the host
    and a phone and compare their activity messages. Visually inspect Japanese text
    on a system with Japanese fonts; no remote font download is required by the app.
