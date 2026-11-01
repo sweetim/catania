@@ -1,4 +1,4 @@
-import type { Board, GameAction, GamePhase, GameState, Player, TheftEvent } from "../game/types";
+import type { Board, GameAction, GamePhase, GameState, MonopolyEvent, Player, TheftEvent } from "../game/types";
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
 
@@ -38,6 +38,7 @@ export type RoomSnapshot = {
   playerId: string | null;
   privatePlayer: Player | null;
   privateThefts: TheftEvent[];
+  privateMonopolies: MonopolyEvent[];
   privateScore: number | null;
   buildMode: BuildMode;
   boardTargets: { vertices: string[]; edges: string[]; tiles: string[] };

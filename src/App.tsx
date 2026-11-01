@@ -6,7 +6,7 @@ import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
-import { TheftNotice } from "./components/TheftNotice";
+import { PrivateNotices } from "./components/PrivateNotices";
 import { ThemeSelector } from "./components/ThemeSelector";
 import { TerrainArtwork } from "./components/ThemeArtwork";
 import { TradeDialog } from "./components/TradeDialog";
@@ -106,7 +106,7 @@ export function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
-  const [theftNoticeTarget, setTheftNoticeTarget] = useState<HTMLDivElement | null>(null);
+  const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
   const boardSettings = useBoardSettings();
   const { showBlockedSettlementLocations, fillBoardWithWater } = boardSettings;
   const [reducedMotion, setReducedMotion] = useState(
@@ -1161,7 +1161,7 @@ export function App() {
               )}
               </div>
               <div className="hand-dice" role="region" aria-label={translateText("Turn controls")}>
-                <div ref={setTheftNoticeTarget} className="theft-notice-anchor" />
+                <div ref={setPrivateNoticeTarget} className="private-notice-anchor" />
                 <div className="turn-header">
                   <h2 className="turn-owner">
                     <span className="truncate" title={activePlayer?.name}>{activePlayer?.name}</span>
@@ -1236,7 +1236,7 @@ export function App() {
 
       {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
-      {game && !game.winnerId && <TheftNotice thefts={game.thefts} playerId={viewer?.id ?? null} players={game.players} target={theftNoticeTarget} />}
+      {game && !game.winnerId && <PrivateNotices thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
         <Dialog title={translateText("Pass the device")} onClose={() => setDialog(null)}>
           <p className="mb-5 text-sm leading-6 text-muted">

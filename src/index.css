@@ -547,7 +547,7 @@
   100% { opacity: 1; }
 }
 
-.theft-notice-anchor {
+.private-notice-anchor {
   position: absolute;
   z-index: 40;
   top: -1px;
@@ -556,7 +556,7 @@
   height: 0;
 }
 
-.theft-notice {
+.private-notice {
   position: absolute;
   bottom: 8px;
   left: 0;

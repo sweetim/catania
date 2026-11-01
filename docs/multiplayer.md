@@ -84,8 +84,8 @@ The private screen uses the single-device hand sidebar's heading, resource-card
 count, illustrated resources, and public + hidden = total victory-point breakdown.
 The hidden score stays on your device only. **Build a little bigger** contains the
 same full-width build and card-purchase rows, icons, and costs, followed by **Make a
-trade**. This section is collapsible, initially closed on phones and open on larger
-screens. Your hand and the turn controls stay in a vertical stack on desktop and
+trade**. This section is collapsible and starts open on every device, unlike
+single-device play where phones start it closed. Your hand and the turn controls stay in a vertical stack on desktop and
 mobile. On phones, the turn/dice panel stays visible while the hand scrolls above
 it. Larger screens scroll the stack when needed, without page scrolling or shrinking
 the action buttons. Phase guidance uses the same green instruction panel, headings,

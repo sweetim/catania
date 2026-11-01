@@ -1169,7 +1169,6 @@ test("private build rows match the sidebar without stretching when development c
   const hand = phone.getByRole("region", { name: "Your cards", exact: true });
   const building = hand.getByRole("region", { name: "Build a little bigger", exact: true });
   const rows = building.locator(".build-options > button");
-  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
   for (const kinds of [[], ["victory-point"], ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"]] as const) {
     player.developmentCards = kinds.map((kind, index) => ({ id: `development-${index}`, kind, purchasedTurn: 1 }));
     snapshot.privateScore = kinds.some(kind => kind === "victory-point") ? 1 : 0;
@@ -1221,7 +1220,6 @@ test("private build buttons explain resources, legal spots and exhausted settlem
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
-  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
   await present();
   const building = phone.getByRole("region", { name: "Build a little bigger", exact: true });
   const road = building.getByRole("button", { name: /^Build road\b/ });
@@ -1335,7 +1333,6 @@ test("host and three private phones play over real PeerJS channels and recover a
   for (const [name, phone] of phones) {
     await expect(phone.getByRole("region", { name: "Your cards", exact: true })).toBeVisible();
     await expect(phone.getByRole("region", { name: "Your current resources", exact: true })).toHaveCount(1);
-    await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
     for (const action of ["Roll the dice", "End turn", "Build road", "Build settlement", "Upgrade to city", "Buy a card"]) {
       await expect(phone.getByRole("button", { name: action, exact: true })).toBeVisible();
     }
@@ -1658,6 +1655,50 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await expect(notice.getByText(/more theft notice/)).toHaveCount(0);
 });
 
+test("private monopoly notices report each victim's losses and queue behind unread theft notices", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplierPlaceholder());
+  await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z")});
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  const opponent = game.players.find(other => other.id !== player.id)!;
+  snapshot.privateThefts = [];
+  const monopolyNotice = phone.getByRole("region", { name: "Monopoly notification", exact: true });
+  const monopolyAnnouncement = phone.getByRole("status", { name: "Monopoly result", exact: true });
+  const robberyNotice = phone.getByRole("region", { name: "Robbery notification", exact: true });
+  const robberyAnnouncement = phone.getByRole("status", { name: "Robbery result", exact: true });
+
+  snapshot.privateMonopolies = [{ id: 2, playerId: opponent.id, resource: "ore", losses: { [player.id]: 3 } }];
+  player.resources.ore = 2;
+  await present();
+  await expect(monopolyNotice).toHaveCount(1);
+  await expect(monopolyNotice.getByRole("heading", { name: `${opponent.name} took all your ${RESOURCE_NAMES.ore}`, exact: true })).toBeVisible();
+  await expect(monopolyNotice.getByText(`Lost 3 ${RESOURCE_NAMES.ore}`, { exact: true })).toBeVisible();
+  await expect(monopolyNotice.getByText(`-3 ${RESOURCE_NAMES.ore}`, { exact: true })).toBeVisible();
+  await expect(monopolyAnnouncement).toHaveText(`You lost 3 ${RESOURCE_NAMES.ore} to ${opponent.name}'s Monopoly.`);
+  await expect(monopolyNotice.getByText(/more monopoly notice/)).toHaveCount(0);
+  await expect(robberyNotice).toHaveCount(0);
+  await monopolyNotice.scrollIntoViewIfNeeded();
+  await expect(monopolyNotice).toBeInViewport({ ratio: 1 });
+  await noHorizontalOverflow(phone);
+  await screenshot(phone, testInfo, "private-monopoly-victim");
+
+  // A later unread theft queues behind the monopoly notice instead of overlapping it.
+  snapshot.privateThefts.push({ id: 3, thiefId: opponent.id, victimId: player.id, resource: "wool" });
+  await present();
+  await expect(monopolyNotice).toHaveCount(1);
+  await expect(monopolyNotice.getByText("1 more theft notice", { exact: true })).toBeVisible();
+  await expect(robberyNotice).toHaveCount(0);
+  await expect(robberyAnnouncement).toHaveText("");
+
+  await monopolyNotice.getByRole("button", { name: "Dismiss Monopoly notification", exact: true }).click();
+  await expect(monopolyNotice).toHaveCount(0);
+  await expect(monopolyAnnouncement).toHaveText("");
+  await expect(robberyNotice).toHaveCount(1);
+  await expect(robberyAnnouncement).toHaveText(`${opponent.name} robbed you of 1 ${RESOURCE_NAMES.wool}.`);
+  expect(await sentActions(phone)).toEqual([]);
+});
+
 test("private instructions and grouped development cards match single-device gameplay", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
@@ -1739,7 +1780,6 @@ test("private dialogs keep development cards, discards, theft and trades accessi
 
   await present();
   await privateScreenFits(phone);
-  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
   await phone.getByRole("region", { name: "Your development cards", exact: true }).getByRole("button", { name: /^Knight/ }).click();
   const cards = phone.getByRole("dialog", { name: "A card up your sleeve", exact: true });
   await expect(cards.getByRole("button", { name: /^Knight/ })).toHaveCount(2);
@@ -1880,6 +1920,10 @@ test("dismissed mandatory private dialogs stay reachable while builds are collap
   const game = snapshot.game!;
   const opponent = game.players.find(other => other.id !== player.id)!;
   const buildDisclosure = phone.getByRole("button", { name: "Build a little bigger", exact: true });
+  // Cross-device hands start with the build section expanded; collapse it to
+  // verify the mandatory-dialog reentry buttons while builds are hidden.
+  await expect(buildDisclosure).toHaveAttribute("aria-expanded", "true");
+  await buildDisclosure.click();
 
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
     await phone.setViewportSize(viewport);
@@ -1935,7 +1979,6 @@ test("private phones keep the turn and dice panel in view while the hand scrolls
   const hand = phone.locator(".private-hand");
   const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
   const rollButton = phone.getByRole("button", { name: "Roll the dice", exact: true });
-  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
     await phone.setViewportSize(viewport);

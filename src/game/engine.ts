@@ -70,7 +70,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")!.id,
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
-    log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], trade: null, developmentPlayed: false,
+    log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], monopolies: [], trade: null, developmentPlayed: false,
   };
 }
 
@@ -219,6 +219,9 @@ function produce(state: GameState, number: number): void {
     if (demand > state.bank[resource] && recipients.length > 1) {
       state.log.push({ key: "The bank cannot supply {resource}; nobody receives that resource this roll.", parameters: { resource } });
       continue;
+    }
+    if (demand > state.bank[resource]) {
+      state.log.push({ key: "The bank has only {count} {resource} left; {player} receives less than earned this roll.", parameters: { count: state.bank[resource], resource, player: recipients[0]!.name } });
     }
     for (const player of recipients) {
       const amount = Math.min(state.bank[resource], claims[player.id]![resource]);
@@ -433,6 +436,7 @@ export function applyAction(
       requireActions();
       requireRule(state.trade && state.trade.offeredBy === playerId, "You have no open trade offer to cancel.");
       state.trade = null;
+      state.log.push({ key: "{player} withdraws the trade offer.", parameters: { player: player.name } });
     })
     .with({ type: "buy-development" }, () => {
       requireActions();
@@ -475,10 +479,16 @@ export function applyAction(
         })
         .with("monopoly", () => {
           requireRule(action.resource && RESOURCES.includes(action.resource), "Choose the resource to collect with Monopoly.");
+          const losses: Record<string, number> = {};
           for (const other of state.players) {
             if (other.id === playerId) continue;
+            if (other.resources[action.resource] > 0) losses[other.id] = other.resources[action.resource];
             player.resources[action.resource] += other.resources[action.resource];
             other.resources[action.resource] = 0;
+          }
+          if (Object.keys(losses).length > 0) {
+            state.monopolies.push({ id: (state.monopolies.at(-1)?.id ?? 0) + 1, playerId, resource: action.resource, losses });
+            state.monopolies = state.monopolies.slice(-100);
           }
         })
         .exhaustive();

@@ -13,7 +13,7 @@ import { DevelopmentHand } from "../components/DevelopmentHand";
 import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstructions";
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
-import { TheftNotice } from "../components/TheftNotice";
+import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal } from "../game/engine";
 import type { GameAction, Resources } from "../game/types";
@@ -90,13 +90,13 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
   </>;
 }
 
-function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onTheftNoticeTarget, turnMenu }: {
+function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPrivateNoticeTarget, turnMenu }: {
   snapshot: RoomSnapshot;
   disabled: boolean;
   error: string;
   perform: (action: GameAction, expectedVersion: number) => void;
   selectBuild: (piece: BuildMode) => void;
-  onTheftNoticeTarget: (target: HTMLDivElement | null) => void;
+  onPrivateNoticeTarget: (target: HTMLDivElement | null) => void;
   turnMenu?: ReactNode;
 }) {
   const { language } = useLanguage();
@@ -201,7 +201,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
           <span className="text-xs font-semibold">{translateText("{public} public + {hidden} hidden = {total}", { public: ownStatistics.score, hidden: totalScore - ownStatistics.score, total: totalScore })}</span>
         </div>
       </section>
-      <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building">
+      <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building" defaultOpen>
         <div className="build-options flex flex-col gap-2">
           {(["road", "settlement", "city"] as const).map(piece => {
             const locations = piece === "road"
@@ -241,7 +241,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      <div ref={onTheftNoticeTarget} className="theft-notice-anchor" />
+      <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
         <span className="turn-number">{game.turnNumber === 0 ? translateText("Setup") : translateText("Turn {turn}", { turn: game.turnNumber })}</span>
@@ -320,7 +320,7 @@ export function MultiplayerApp() {
   const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [theftNoticeTarget, setTheftNoticeTarget] = useState<HTMLDivElement | null>(null);
+  const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
   const copyFeedbackTimer = useRef<number | undefined>(undefined);
   const snapshot = view?.snapshot;
   const game = snapshot?.game;
@@ -525,13 +525,13 @@ export function MultiplayerApp() {
           </section>
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onTheftNoticeTarget={setTheftNoticeTarget} turnMenu={<GameMenu icon actions={[
+          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
           ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
         </div>}
       </main>
-      {!host && game && !game.winnerId && snapshot?.privatePlayer && <TheftNotice thefts={snapshot.privateThefts} playerId={snapshot.privatePlayer.id} players={game.players} target={theftNoticeTarget} />}
+      {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
       {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
       {dialog === "help" && <HelpDialog multiplayer onClose={() => setDialog(null)} />}
       {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}

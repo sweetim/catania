@@ -279,6 +279,7 @@ export class HostRoom {
       game: game ? publicGame(game, players) : null,
       playerId: seat?.player.id ?? null, privatePlayer,
       privateThefts: game && privatePlayer ? game.thefts.filter(theft => theft.thiefId === privatePlayer.id || theft.victimId === privatePlayer.id) : [],
+      privateMonopolies: game && privatePlayer ? game.monopolies.filter(monopoly => (monopoly.losses[privatePlayer.id] ?? 0) > 0) : [],
       privateScore: game && privatePlayer ? getScore(game, privatePlayer.id).total : null,
       buildMode: game ? this.buildMode : null,
       boardTargets: game ? this.targets() : { vertices: [], edges: [], tiles: [] },

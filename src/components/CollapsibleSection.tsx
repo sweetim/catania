@@ -3,16 +3,17 @@ import { useId, useState, type ReactNode } from "react";
 // Phone layouts collapse busy sections by default; larger screens start expanded.
 export const COLLAPSIBLE_EXPANDED_MEDIA = "(min-width: 700px)";
 
-export function CollapsibleSection({ title, className, inert = false, open, onToggle, children }: {
+export function CollapsibleSection({ title, className, inert = false, defaultOpen, open, onToggle, children }: {
   title: string;
   className?: string;
   inert?: boolean;
+  defaultOpen?: boolean;
   open?: boolean;
   onToggle?: (open: boolean) => void;
   children: ReactNode;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(() =>
-    window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
+    defaultOpen ?? window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
   );
   const expanded = open ?? uncontrolledOpen;
   const contentId = useId();

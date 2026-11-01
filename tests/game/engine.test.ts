@@ -393,6 +393,8 @@ describe("dice and finite production", () => {
     expect(result.players[0]!.resources.wood).toBe(0);
     expect(result.players[1]!.resources.wood).toBe(0);
     expect(result.bank.wood).toBe(2);
+    expect(result.log).toContainEqual({ key: "The bank cannot supply {resource}; nobody receives that resource this roll.", parameters: { resource: "wood" } });
+    expect(result.log.some(entry => entry.key === "The bank has only {count} {resource} left; {player} receives less than earned this roll.")).toBe(false);
     assertConservation(result);
   });
 
@@ -403,6 +405,7 @@ describe("dice and finite production", () => {
     const result = applyAction(state, firstPlayer, { type: "roll" }, () => 0.4);
     expect(result.players[0]!.resources.wood).toBe(2);
     expect(result.bank.wood).toBe(0);
+    expect(result.log).toContainEqual({ key: "The bank has only {count} {resource} left; {player} receives less than earned this roll.", parameters: { count: 2, resource: "wood", player: state.players[0]!.name } });
     assertConservation(result);
   });
 
@@ -738,9 +741,15 @@ describe("domestic and maritime trade", () => {
       ? { type: "offer-trade", give: resources({ wood: 1 }), receive: resources({ ore: 1 }) }
       : { type: "request-trade", receive: resources({ ore: 1 }) };
     state = applyAction(state, firstPlayer, offer);
-    expect(applyAction(state, firstPlayer, { type: "cancel-trade" }).trade).toBeNull();
-    expect(applyAction(state, firstPlayer, { type: "end-turn" }).trade).toBeNull();
-    expect(applyAction(state, firstPlayer, { type: "bank-trade", give: "wood", receive: "ore" }).trade).toBeNull();
+    const cancelled = applyAction(state, firstPlayer, { type: "cancel-trade" });
+    expect(cancelled.trade).toBeNull();
+    expect(cancelled.log.at(-1)).toEqual({ key: "{player} withdraws the trade offer.", parameters: { player: state.players[0]!.name } });
+    const ended = applyAction(state, firstPlayer, { type: "end-turn" });
+    expect(ended.trade).toBeNull();
+    expect(ended.log.some(entry => entry.key === "{player} withdraws the trade offer.")).toBe(false);
+    const traded = applyAction(state, firstPlayer, { type: "bank-trade", give: "wood", receive: "ore" });
+    expect(traded.trade).toBeNull();
+    expect(traded.log.some(entry => entry.key === "{player} withdraws the trade offer.")).toBe(false);
     reject(state, { type: "cancel-trade" }, "Wait for your turn", secondPlayer);
     const expired = applyAction(state, firstPlayer, { type: "end-turn" });
     reject(expired, { type: "respond-trade", accept: true }, "Roll the dice", thirdPlayer);
@@ -944,6 +953,7 @@ describe("development cards", () => {
     expect(result.players[2]!.resources.ore).toBe(0);
     expect(result.bank).toEqual(state.bank);
     expect(result.phase.type).toBe("roll");
+    expect(result.monopolies).toEqual([{ id: 1, playerId: firstPlayer, resource: "ore", losses: { [secondPlayer]: 3, [thirdPlayer]: 5 } }]);
     assertConservation(result);
   });
 
@@ -953,6 +963,28 @@ describe("development cards", () => {
     const result = applyAction(state, firstPlayer, { type: "play-development", cardId: development, resource: "ore" });
     expect(result.players[0]!.resources).toEqual(emptyResources());
     expect(result.developmentPlayed).toBe(true);
+    expect(result.monopolies).toEqual([]);
+  });
+
+  test("monopoly events have consecutive IDs across players, survive ordinary actions, and retain only the latest 100", () => {
+    let state = actionState();
+    for (let id = 1; id <= 102; id++) {
+      const monopolist = id % 2 === 1 ? firstPlayer : secondPlayer;
+      const victim = id % 2 === 1 ? secondPlayer : firstPlayer;
+      const victimPlayer = state.players.find(player => player.id === victim)!;
+      if (victimPlayer.resources.ore === 0) give(state, victim, { ore: 1 });
+      state.activePlayerId = monopolist;
+      state.developmentPlayed = false;
+      state = applyAction(state, monopolist, { type: "play-development", cardId: card(state, "monopoly", monopolist), resource: "ore" });
+      expect(state.monopolies.at(-1)).toEqual({ id, playerId: monopolist, resource: "ore", losses: { [victim]: 1 } });
+      expect(state.monopolies).toHaveLength(Math.min(id, 100));
+    }
+    expect(state.monopolies.map(monopoly => monopoly.id)).toEqual(Array.from({ length: 100 }, (_, index) => index + 3));
+    const monopolies = structuredClone(state.monopolies);
+    state = applyAction(state, state.activePlayerId, { type: "end-turn" });
+    state = applyAction(state, state.activePlayerId, { type: "roll" }, () => 0);
+    expect(state.monopolies).toEqual(monopolies);
+    assertConservation(state);
   });
 
   test("Road Building places two free roads sequentially with normal connectivity and restores pre-roll", () => {

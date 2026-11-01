@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { chooseComputerAction } from "../../src/game/computer";
 import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
 import { formatGameMessage } from "../../src/game/messages";
-import type { GameAction, GamePhase, GameState, Resources } from "../../src/game/types";
+import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
 import type { MultiplayerSession, SessionView } from "../../src/multiplayer/types";
@@ -667,6 +667,48 @@ describe("private theft feedback", () => {
     expect(room.game!.thefts).toEqual(thefts);
   });
 
+  test("only losing players receive monopoly events, without public or monopolist leaks", () => {
+    const { room } = started(4);
+    give(room.game!, "player-2", { ore: 3 });
+    give(room.game!, "player-4", { ore: 1 });
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "actions" };
+    room.game!.turnNumber = 5;
+    room.game!.players.find(player => player.id === "player-1")!.developmentCards.push({ id: "development-1", kind: "monopoly", purchasedTurn: 1 });
+    expect(send(room, "connection-1", { type: "play-development", cardId: "development-1", resource: "ore" }).error).toBeNull();
+    const event: MonopolyEvent = { id: 1, playerId: "player-1", resource: "ore", losses: { "player-2": 3, "player-4": 1 } };
+    expect(room.game!.monopolies).toEqual([event]);
+    for (const connectionId of [undefined, "outsider", "connection-1", "connection-2", "connection-3", "connection-4"]) {
+      const snapshot = room.snapshot(connectionId);
+      expect(snapshot.privateMonopolies).toEqual(connectionId === "connection-2" || connectionId === "connection-4" ? [event] : []);
+      expect(snapshot.game).not.toHaveProperty("monopolies");
+      expect(snapshot.game).not.toHaveProperty("privateMonopolies");
+      expect(JSON.stringify(snapshot.game)).not.toContain("losses");
+      if (connectionId !== undefined) expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+    }
+    room.snapshot("connection-2").privateMonopolies[0]!.losses["player-2"] = 19;
+    expect(room.game!.monopolies).toEqual([event]);
+  });
+
+  test.each(["player-2", "player-4"])("reconnect retains monopoly history for losing player %s", playerId => {
+    const { room, credentials } = started(4);
+    room.game!.activePlayerId = "player-1";
+    room.game!.phase = { type: "actions" };
+    room.game!.turnNumber = 5;
+    give(room.game!, playerId, { ore: 2 });
+    room.game!.players.find(player => player.id === "player-1")!.developmentCards.push({ id: "development-1", kind: "monopoly", purchasedTurn: 1 });
+    expect(send(room, "connection-1", { type: "play-development", cardId: "development-1", resource: "ore" }).error).toBeNull();
+    const original = room.snapshot(connectionFor(playerId)).privateMonopolies;
+    expect(original).toEqual([{ id: 1, playerId: "player-1", resource: "ore", losses: { [playerId]: 2 } }]);
+    room.disconnect(connectionFor(playerId));
+    expect(room.snapshot(connectionFor(playerId)).privateMonopolies).toEqual([]);
+    const credential = credentials[Number(playerId.split("-")[1]) - 1]!;
+    room.join("replacement", { type: "join", secret, name: "Reconnected", credential });
+    const snapshot = room.snapshot("replacement");
+    expect(snapshot.privateMonopolies).toEqual(original);
+    expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+  });
+
   test.each(["player-1", "player-2"])("reconnect retains theft history for %s and revokes the old connection", playerId => {
     const { room, credentials } = started();
     room.game!.activePlayerId = "player-1";
@@ -839,6 +881,42 @@ describe("untrusted multiplayer protocol", () => {
       { ...snapshot, game: { ...snapshot.game, privateThefts } },
       { ...lobby().room.snapshot("connection-1"), privateThefts },
       { ...room.snapshot("outsider"), privateThefts },
+    ]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: invalid })).toThrow();
+    }
+  });
+
+  test("requires bounded, strictly ordered monopoly events with exact fields, victim-only ownership, and positive losses", () => {
+    const { room } = started();
+    const snapshot = room.snapshot("connection-1");
+    const monopoly: MonopolyEvent = { id: 1, playerId: "player-3", resource: "ore", losses: { "player-1": 2, "player-2": 3 } };
+    for (const privateMonopolies of [[], [monopoly], [monopoly, { ...monopoly, id: 3 }], Array.from({ length: 100 }, (_, index) => ({ ...monopoly, id: index + 1 }))]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privateMonopolies } })).not.toThrow();
+    }
+    const missing = { ...snapshot };
+    Reflect.deleteProperty(missing, "privateMonopolies");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: missing })).toThrow();
+    for (const privateMonopolies of [
+      undefined, null, {}, "monopoly", [null], [{}],
+      ...[0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "1"].map(id => [{ ...monopoly, id }]),
+      ...[undefined, null, "gold", "desert"].map(resource => [{ ...monopoly, resource }]),
+      [{ ...monopoly, playerId: "player-9" }], [{ ...monopoly, playerId: "player-1", losses: { "player-2": 3 } }], [{ ...monopoly, playerId: "player-1" }], [{ ...monopoly, losses: { "player-2": 3 } }],
+      [{ ...monopoly, losses: {} }], [{ ...monopoly, losses: { "player-2": 0 } }], [{ ...monopoly, losses: { "player-2": -1 } }],
+      [{ ...monopoly, losses: { "player-2": 20 } }], [{ ...monopoly, losses: { "player-2": 1.5 } }],
+      [{ ...monopoly, losses: { "player-9": 1 } }], [{ ...monopoly, losses: { "player-3": 1 } }],
+      [{ ...monopoly, extra: true }], [{ id: 1, playerId: "player-1", resource: "ore" }],
+      [monopoly, monopoly], [{ ...monopoly, id: 2 }, monopoly],
+      Array.from({ length: 101 }, (_, index) => ({ ...monopoly, id: index + 1 })),
+    ]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privateMonopolies } })).toThrow();
+    }
+    for (const invalid of [
+      { ...snapshot, privateMonopolies: [monopoly], privatePlayer: null },
+      { ...snapshot, privateMonopolies: [monopoly], playerId: null, privatePlayer: null },
+      { ...snapshot, privateMonopolies: [monopoly], game: null },
+      { ...snapshot, privateMonopolies: [monopoly], game: { ...snapshot.game, players: snapshot.game!.players.filter(player => player.id !== "player-3") } },
+      { ...snapshot, game: { ...snapshot.game, monopolies: [monopoly] } },
+      { ...snapshot, game: { ...snapshot.game, privateMonopolies: [monopoly] } },
     ]) {
       expect(() => parseServerMessage({ type: "snapshot", snapshot: invalid })).toThrow();
     }

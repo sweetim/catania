@@ -156,8 +156,9 @@ function publicGame(value: unknown): boolean {
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
-  if (!record(value) || !fields(value, ["version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateScore", "buildMode", "boardTargets"])) return false;
+  if (!record(value) || !fields(value, ["version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"])) return false;
   let previousTheftId = 0;
+  let previousMonopolyId = 0;
   return integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&
     (value.playerId === null || (identifier(value.playerId, "player") && (value.players as RecordValue[]).some(player => player.id === value.playerId && player.control === "human"))) &&
     (value.privatePlayer === null || (privatePlayer(value.privatePlayer) && (value.privatePlayer as RecordValue).id === value.playerId)) &&
@@ -169,6 +170,16 @@ function snapshot(value: unknown): value is RoomSnapshot {
         !(value.game.players as RecordValue[]).some(player => player.id === theft.thiefId) ||
         !(value.game.players as RecordValue[]).some(player => player.id === theft.victimId)) return false;
       previousTheftId = theft.id;
+      return true;
+    }) &&
+    array(value.privateMonopolies, 100, monopoly => {
+      if (!record(monopoly) || !fields(monopoly, ["id", "playerId", "resource", "losses"]) || !integer(monopoly.id) || monopoly.id <= previousMonopolyId ||
+        !identifier(monopoly.playerId, "player") || !resource(monopoly.resource) || !record(monopoly.losses)) return false;
+      const ownerId = (value.privatePlayer as RecordValue).id;
+      if (typeof ownerId !== "string" || monopoly.playerId === ownerId || !Object.hasOwn(monopoly.losses, ownerId) ||
+        !Object.entries(monopoly.losses).every(([playerId, count]) => identifier(playerId, "player") && integer(count, 19) && count > 0) ||
+        !record(value.game) || !(value.game.players as RecordValue[]).some(player => player.id === monopoly.playerId)) return false;
+      previousMonopolyId = monopoly.id;
       return true;
     }) &&
     (value.privateScore === null || integer(value.privateScore, 30)) && buildMode(value.buildMode) && record(value.boardTargets) && fields(value.boardTargets, ["vertices", "edges", "tiles"]) &&
