@@ -98,9 +98,10 @@ when empty. Selecting a row opens its inspector and prefers a copy eligible by
 purchase turn. A long list scrolls with the rest of the hand; owning cards does not
 change the build layout or stretch the hand panel.
 
-**Players & bank** and **Activity** open dialogs rather than extending the page.
-Discard, theft, and incoming trade choices also open in dialogs; dismissing
-one keeps its action available on the main screen. Dialog contents can scroll on
+Public player information is shown on the shared board; private phones omit the
+Players & bank and Activity navigation buttons. Discard, theft, and
+incoming trade choices open in dialogs; dismissing one keeps its action available
+in the turn controls, even while builds are collapsed. Dialog contents can scroll on
 small screens. Trades use illustrated **Bank & ports** selectors with rates, counts,
 and an exchange preview, or **Player trade** with **Request cards** and **Exact
 offer** choices. Open trades show every opponent's response, proposed prices, and
@@ -124,7 +125,7 @@ sees who they stole from and the card gained (**+1**). Notices overlay immediate
 above the turn/dice panel without shifting the hand or controls, one at a time,
 and disappear after five seconds
 on-screen or manual dismissal. Off-screen notices wait until scrolled into view.
-Activity remains generic and the shared
+Public log entries remain generic and the shared
 board receives no private theft details. Theft events and notice dismissals survive
 reconnecting in the same page; reloading the page resets local notice dismissals.
 

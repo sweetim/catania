@@ -211,11 +211,6 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
         </div>
         <button className="button-secondary mt-2 w-full px-2" disabled={disabled || !normalActions} onClick={() => { setEditorVersion(snapshot.version); setEditor("trade"); }}>{translateText("Make a trade")}</button>
       </CollapsibleSection>
-      {/* Mandatory actions stay reachable even while the build disclosure is collapsed. */}
-      {discardCount !== undefined ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
-        : active && game.phase.type === "steal" ? <button className="button-primary mt-2 w-full px-2" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
-        : trade ? <button className="button-primary mt-2 w-full px-2" onClick={() => { setResponseVersion(null); setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
-        : null}
       <DevelopmentHand cards={player.developmentCards} turnNumber={game.turnNumber} onSelect={cardId => { setDevelopmentCardId(cardId); setEditorVersion(snapshot.version); setEditor("development"); }} />
     </section>
 
@@ -230,17 +225,16 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
         <TurnInstructions title={instructionTitle} description={instructionDescription} computerActivity={!awaitingPlayer && activePlayer.control === "computer"} />
       </div>
       <div className="turn-action">
-        {active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
+        {discardCount !== undefined ? <button className="button-primary" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
+          : active && game.phase.type === "steal" ? <button className="button-primary" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
+          : trade ? <button className="button-primary" onClick={() => { setResponseVersion(null); setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
+          : active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
           : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}>{translateText("Roll the dice")}</button>}
         {active && game.phase.type === "road-building" && snapshot.boardTargets.edges.length === 0 ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "skip-roads" })}>{translateText("Finish Road Building")}</button>
           : <button className="button-secondary" disabled={disabled || !normalActions} onClick={() => send({ type: "end-turn" })}>{translateText("End turn")}</button>}
       </div>
     </section>
 
-    <nav className="private-navigation" aria-label={translateText("Table information")}>
-      <button className="button-secondary" aria-label={translateText("All players and bank")} onClick={() => setDetails("table")}>{translateText("Players & bank")}</button>
-      <button className="button-secondary" aria-label={translateText("Table activity")} onClick={() => setDetails("activity")}>{translateText("Activity")}</button>
-    </nav>
 
     {details === "table" && <Dialog title={translateText("All players and bank")} onClose={() => setDetails(null)} wide><div className="space-y-4"><PlayerList snapshot={snapshot} /><BankSupply resources={game.bank} developmentCards={game.developmentRemaining} /></div></Dialog>}
     {details === "activity" && <Dialog title={translateText("Table activity")} onClose={() => setDetails(null)}><ol className="space-y-3 text-sm text-muted">{game.log.slice(-12).map((entry, index) => <li key={index}>{formatGameMessage(language, entry)}</li>)}</ol></Dialog>}

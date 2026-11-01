@@ -55,6 +55,7 @@ card without a repeated turn-owner label, and the persistent **Roll the dice** a
 The board fills the full height beside all three panels. On phones,
 the turn-status card and controls stay visible below **Hand**, **Board**, and
 **Players**, while the dice summary and bank remain above the selected view.
+Short landscape phones place the selected view and turn controls side by side.
 Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains

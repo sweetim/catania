@@ -861,19 +861,6 @@ export function App() {
               className={`table-board min-w-0 ${mobileView !== "board" ? "hidden lg:flex" : "flex"}`}
               aria-label={translateText("Game board")}
             >
-              <div className="board-instruction flex items-start gap-2 lg:hidden">
-                <div className="min-w-0 flex-1">
-                  <h1 className="font-serif text-lg">{instructionTitle}</h1>
-                  <p role={computerPlayer ? "status" : undefined} aria-label={computerPlayer ? translateText("Computer activity") : undefined} className="text-xs leading-4 text-muted">
-                    {instructionDescription}
-                  </p>
-                </div>
-                {canCancelKnight && (
-                  <button className="button-secondary shrink-0 px-3 text-xs" onClick={() => perform({ type: "cancel-knight" })}>
-                    {translateText("Cancel Knight")}
-                  </button>
-                )}
-              </div>
               <div className="board-tablemat">
                 <Board
                   board={game.board}

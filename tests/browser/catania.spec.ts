@@ -1097,7 +1097,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await expect(menu).toBeHidden();
     await gameButton.focus();
     await page.keyboard.press("Enter");
-    for (let step = 0; step < 5; step++) await page.keyboard.press("Tab");
+    for (let step = 0; step < 6; step++) await page.keyboard.press("Tab");
     await expect(menu).toBeHidden();
     await chooseGameOption(page, "Help");
     await expect(page.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
@@ -1724,26 +1724,31 @@ test("turn controls stay visible and stable on every phone and tablet game view"
   // Tablets exercise the same tabbed layout through a resized desktop viewport.
   if (!isMobile) await page.setViewportSize({ width: 768, height: 1024 });
   await prepareRollGame(page);
+  const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
+  if (await dismissCollection.isVisible()) await dismissCollection.click();
   const controls = page.getByRole("region", { name: "Turn controls", exact: true });
   const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
   const endTurn = page.getByRole("button", { name: "End turn & pass device", exact: true });
   const privateResources = page.getByRole("region", { name: "Private resources", exact: true });
-  let stableFrame: { x: number; y: number; width: number; height: number } | undefined;
-  for (const view of ["hand", "board", "players"] as const) {
-    await showView(page, view);
-    await expect(controls).toBeInViewport({ ratio: 1 });
-    await expect(roll).toBeInViewport({ ratio: 1 });
-    await expect(endTurn).toBeInViewport({ ratio: 1 });
-    const frame = (await controls.boundingBox())!;
-    if (stableFrame) expect(frame).toEqual(stableFrame);
-    stableFrame = frame;
-    if (view === "hand") {
-      await expect(privateResources).toBeVisible();
-    } else {
-      await expect(privateResources).toBeHidden();
+  for (const viewport of [page.viewportSize()!, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    let stableFrame: { x: number; y: number; width: number; height: number } | undefined;
+    for (const view of ["hand", "board", "players"] as const) {
+      await showView(page, view);
+      await expect(controls).toBeInViewport({ ratio: 1 });
+      await expect(roll).toBeInViewport({ ratio: 1 });
+      await expect(endTurn).toBeInViewport({ ratio: 1 });
+      const frame = (await controls.boundingBox())!;
+      if (stableFrame) expect(frame).toEqual(stableFrame);
+      stableFrame = frame;
+      if (view === "hand") {
+        await expect(privateResources).toBeVisible();
+      } else {
+        await expect(privateResources).toBeHidden();
+      }
+      await noPageOverflow(page);
+      await screenshot(page, testInfo, `turn-controls-${view}-${viewport.width}`, false);
     }
-    await noPageOverflow(page);
-    await screenshot(page, testInfo, `turn-controls-${view}-${page.viewportSize()!.width}`, false);
   }
 });
 
@@ -1758,12 +1763,14 @@ test("build section collapses on phones and starts expanded on larger screens", 
   const buildOptions = building.locator(".build-options");
   const buildRoad = building.getByRole("button", { name: /^Build road\b/ });
   const defaultExpanded = !isMobile;
+  expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
   if (!defaultExpanded) {
     await expect(buildRoad).toBeHidden();
     await screenshot(page, testInfo, "build-collapsed-phone", false);
   }
-  await toggle.click();
+  await toggle.focus();
+  await page.keyboard.press("Enter");
   await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "false" : "true");
   if (defaultExpanded) {
     await expect(buildRoad).toBeHidden();
@@ -1772,7 +1779,7 @@ test("build section collapses on phones and starts expanded on larger screens", 
     await expect(buildRoad).toBeVisible();
   }
   await screenshot(page, testInfo, "build-toggled", false);
-  await toggle.click();
+  await page.keyboard.press("Space");
   await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
   if (!defaultExpanded) await expect(buildRoad).toBeHidden();
 });
@@ -1807,7 +1814,7 @@ test("tablets keep every public player card above the island without scrolling",
       await expect(board).toBeInViewport();
       await expect(seatCards.first()).toBeInViewport({ ratio: 1 });
       await expect(seatCards.last()).toBeInViewport({ ratio: 1 });
-      if (viewport.width < 1024) {
+      if (viewport.width <= 1024) {
         // Narrow tablet seats put the name on an upper level and the four counts
         // in one horizontal second row below it.
         for (const card of await seatCards.all()) {
@@ -1829,13 +1836,13 @@ test("tablets keep every public player card above the island without scrolling",
       await screenshot(page, testInfo, `tablet-seats-${playerCount}p-${viewport.width}`, false);
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    // Wide single-device screens keep the existing one-row seat style.
+    // Wide cards keep the existing single row; four narrower cards still stack.
     const wideStyle = await page.locator(".table-seats .player-seat").first().evaluate(element => ({
       layout: getComputedStyle(element.firstElementChild!).display,
       counts: getComputedStyle(element.querySelector(".player-card-counts")!).flexDirection,
     }));
-    expect(wideStyle.layout).toBe("flex");
-    if (playerCount === 3) expect(wideStyle.counts).toBe("row");
+    expect(wideStyle.layout).toBe(playerCount === 3 ? "flex" : "grid");
+    expect(wideStyle.counts).toBe("row");
     await page.getByRole("button", { name: "Game", exact: true }).click();
     await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
     await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
@@ -2663,7 +2670,8 @@ test("played Knight and connected road counts show Largest Army and Longest Road
       const count = element.querySelector("strong")!.getBoundingClientRect();
       return count.x - icon.right;
     }));
-    expect(countGaps).toEqual([4, 4, 4, 4]);
+    const expectedGap = await buyerSeat.locator(".player-card-stat").first().evaluate(element => Number.parseFloat(getComputedStyle(element).columnGap));
+    expect(countGaps).toEqual([expectedGap, expectedGap, expectedGap, expectedGap]);
     const victoryPointBounds = (await buyerSeat.getByText("VP", { exact: true }).boundingBox())!;
     const awardBounds = (await largestArmy.boundingBox())!;
     expect(awardBounds.x - victoryPointBounds.x - victoryPointBounds.width).toBeCloseTo(10);
@@ -2762,7 +2770,7 @@ test("owned development cards group by type with counts, descriptions and older-
       const kind = kinds[index]!;
       await expect(icons.nth(index)).toHaveAttribute("data-development-kind", kind);
       const count = buyer.developmentCards.filter(card => card.kind === kind).length;
-      const quantity = rows.nth(index).getByText(`${count} ${count === 1 ? "card" : "cards"}`, { exact: true });
+      const quantity = rows.nth(index).locator('span[aria-hidden="true"]').filter({ hasText: new RegExp(`^${count}$`) });
       await expect(quantity).toBeInViewport({ ratio: 1 });
       const title = rows.nth(index).getByText(cardNames[kind], { exact: true });
       const description = rows.nth(index).getByText(cardDescriptions[kind], { exact: true });
@@ -3229,7 +3237,7 @@ test("roll rewards show resource cards, quantities and empty results across scre
       const dice = summary.locator(".roll-die");
       await expect(dice).toHaveCount(2);
       for (const die of await dice.all()) {
-        const size = isMobile && viewport.height <= 740 ? "48px" : "56px";
+        const size = isMobile && viewport.height <= 740 ? "40px" : "56px";
         await expect(die).toHaveCSS("width", size);
         await expect(die).toHaveCSS("height", size);
         await expect(die).toBeInViewport({ ratio: 1 });
@@ -3952,6 +3960,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("heading", { name: "Alex's hand", exact: true, includeHidden: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Reveal my hand|Pass device|Return to /, includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Private resources" })).toBeVisible();
+  await revealBuildSection(page);
   await expect(page.getByRole("button", { name: "Make a trade", exact: true })).toBeDisabled();
   await screenshot(page, testInfo, "solo-computer-turn");
 

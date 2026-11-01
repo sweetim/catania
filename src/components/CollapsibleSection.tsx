@@ -21,7 +21,7 @@ export function CollapsibleSection({ title, className, inert = false, open, onTo
       <h2 className="eyebrow mb-2">
         <button
           type="button"
-          className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-moss"
+          className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-moss"
           aria-expanded={expanded}
           aria-controls={contentId}
           onClick={() => {

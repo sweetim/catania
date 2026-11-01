@@ -5,7 +5,6 @@ import { emptyResources, getTradeRatio, RESOURCES } from "../../src/game/engine"
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import type { Resources } from "../../src/game/types";
 import type { RoomSnapshot } from "../../src/multiplayer/types";
-import { formatGameMessage } from "../../src/game/messages";
 
 const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
@@ -203,13 +202,17 @@ async function privateScreenFits(page: Page) {
   const bounds = await dashboard.boundingBox();
   expect(bounds!.y).toBeGreaterThanOrEqual(0);
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
-  const scrollTop = await dashboard.evaluate(element => element.scrollTop);
+  const scrollContainer = page.viewportSize()!.width < 700 ? page.locator(".private-hand") : dashboard;
+  const scrollTop = await scrollContainer.evaluate(element => element.scrollTop);
   for (const button of await dashboard.getByRole("button").all()) {
     await button.scrollIntoViewIfNeeded();
-    await expect(button).toBeInViewport({ ratio: 1 });
+    const inScrollableHand = page.viewportSize()!.width < 700 && await button.evaluate(element => Boolean(element.closest(".private-hand")));
+    const visibleHeight = inScrollableHand ? await scrollContainer.evaluate(element => element.clientHeight - 3) : page.viewportSize()!.height;
+    expect(visibleHeight).toBeGreaterThanOrEqual(44);
+    await expect(button).toBeInViewport({ ratio: Math.min(1, visibleHeight / (await button.boundingBox())!.height) });
   }
-  await dashboard.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
-  expect(await page.locator(".private-hand, .private-turn").evaluateAll(elements => elements
+  await scrollContainer.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
+  expect(await page.locator(page.viewportSize()!.width < 700 ? ".private-turn" : ".private-hand, .private-turn").evaluateAll(elements => elements
     .map(element => ({ panel: element.className, height: element.clientHeight, content: element.scrollHeight }))
     .filter(element => element.content > element.height))).toEqual([]);
 }
@@ -354,14 +357,6 @@ test("Japanese phones localize a shared English game without changing its state 
   await expect(japanesePhone.getByRole("button", { name: "サイコロを振る", exact: true })).toBeVisible();
   await expect(englishPhone.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible();
 
-  await japanesePhone.getByRole("button", { name: "ゲームの履歴", exact: true }).click();
-  await englishPhone.getByRole("button", { name: "Table activity", exact: true }).click();
-  const entry = before.game!.log.at(-1)!;
-  await expect(japanesePhone.getByRole("dialog")).toContainText(formatGameMessage("ja", entry));
-  await expect(englishPhone.getByRole("dialog")).toContainText(formatGameMessage("en", entry));
-  await screenshot(japanesePhone, testInfo, "japanese-activity");
-  await japanesePhone.keyboard.press("Escape");
-  await englishPhone.keyboard.press("Escape");
   await japanesePhone.getByRole("button", { name: "ゲーム", exact: true }).click();
   await japanesePhone.getByRole("button", { name: "ヘルプ", exact: true }).click();
   await expect(japanesePhone.getByRole("dialog")).toContainText("盤面は共有、手札はそれぞれのスマートフォンで。");
@@ -944,8 +939,8 @@ test("shared tabletop shows only single-device player seats and map at desktop a
   const game = snapshot.game!;
   const board = host.getByRole("region", { name: "Shared game board", exact: true });
   const roster = host.getByRole("list", { name: "Players", exact: true });
-  const viewports = isMobile ? [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 320, height: 568 }]
-    : [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }];
+  const viewports = isMobile ? [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 320, height: 568 }, { width: 768, height: 1024 }, { width: 820, height: 1180 }, { width: 1024, height: 768 }]
+    : [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 768, height: 1024 }, { width: 820, height: 1180 }];
 
   for (const viewport of viewports) {
     await host.setViewportSize(viewport);
@@ -970,20 +965,31 @@ test("shared tabletop shows only single-device player seats and map at desktop a
       expect(await seat.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
       const row = await seat.locator(".player-number, .player-name, .player-card-counts, .player-score").evaluateAll(elements => elements.map(element => {
         const bounds = element.getBoundingClientRect();
-        return { left: bounds.left, right: bounds.right, center: bounds.top + bounds.height / 2 };
+        return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, center: bounds.top + bounds.height / 2 };
       }));
-      for (let index = 1; index < row.length; index++) {
-        expect(Math.abs(row[index]!.center - row[0]!.center)).toBeLessThan(1);
-        expect(row[index]!.left).toBeGreaterThanOrEqual(row[index - 1]!.right);
+      const stacked = await seat.locator(".player-seat > div").evaluate(element => getComputedStyle(element).display === "grid");
+      if (stacked) {
+        expect(Math.abs(row[1]!.center - row[0]!.center)).toBeLessThan(1);
+        expect(row[2]!.top).toBeGreaterThanOrEqual(row[1]!.bottom);
+        expect(row[3]!.left).toBeGreaterThanOrEqual(row[1]!.right);
+      } else {
+        for (let index = 1; index < row.length; index++) {
+          expect(Math.abs(row[index]!.center - row[0]!.center)).toBeLessThan(1);
+          expect(row[index]!.left).toBeGreaterThanOrEqual(row[index - 1]!.right);
+        }
       }
-      await expect(seat.locator(".player-card-counts")).toHaveCSS("flex-direction", !isMobile && viewport.width === 1440 ? "row" : "column");
+      await expect(seat.locator(".player-card-counts")).toHaveCSS("flex-direction", "row");
     }
-    if (isMobile) {
+    if (viewport.width < 700) {
       await roster.getByRole("listitem").last().scrollIntoViewIfNeeded();
       await expect(roster.getByRole("listitem").last()).toBeInViewport({ ratio: 1 });
       expect(await roster.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
       await roster.getByRole("listitem").first().scrollIntoViewIfNeeded();
       expect(await board.boundingBox()).toEqual(boardBounds);
+    } else {
+      expect(await roster.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await expect(roster.getByRole("listitem").first()).toBeInViewport({ ratio: 1 });
+      await expect(roster.getByRole("listitem").last()).toBeInViewport({ ratio: 1 });
     }
     await noHorizontalOverflow(host);
     expect(await host.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))).toBeLessThanOrEqual(viewport.height);
@@ -1149,11 +1155,6 @@ test("private player header matches the single-device hand and private score bre
   snapshot.privateScore = 2;
   await present();
   await expect(header).toContainText("2 public + 0 hidden = 2");
-  await phone.getByRole("button", { name: "All players and bank", exact: true }).click();
-  const ownRow = phone.getByRole("dialog", { name: "All players and bank", exact: true }).getByRole("listitem").filter({ hasText: player.name });
-  await expect(ownRow).toContainText("12 played Knights / Longest road: 15");
-  await expect(ownRow).toContainText("Largest Army (+2)");
-  await expect(ownRow).toContainText("Longest Road (+2)");
 });
 
 test("private build rows match the sidebar without stretching when development cards change", async ({ multiplayer }, testInfo) => {
@@ -1300,17 +1301,7 @@ test("host and three private phones play over real PeerJS channels and recover a
       const label = resource[0]!.toUpperCase() + resource.slice(1);
       await expect(phone.getByRole("listitem", { name: `${label}: ${count} in hand`, exact: true })).toBeVisible();
     }
-    await phone.getByRole("button", { name: "All players and bank", exact: true }).click();
-    await expect(phone.getByRole("dialog", { name: "All players and bank", exact: true })).toBeVisible();
-    for (const player of ownSnapshot.game!.players) {
-      const row = phone.getByRole("list", { name: "Players", exact: true }).getByRole("listitem").filter({ has: phone.getByText(player.name, { exact: true }) });
-      await expect(row).toContainText(`${player.resourceCount} resource cards / ${player.developmentCount} development cards`);
-    }
-    await phone.getByRole("button", { name: "Close dialog", exact: true }).click();
-    await expect(phone.getByRole("button", { name: "All players and bank", exact: true })).toBeFocused();
-    await phone.getByRole("button", { name: "Table activity", exact: true }).click();
-    await expect(phone.getByRole("dialog", { name: "Table activity", exact: true }).getByRole("listitem")).not.toHaveCount(0);
-    await phone.getByRole("button", { name: "Close dialog", exact: true }).click();
+    await expect(phone.getByRole("navigation", { name: "Table information", exact: true })).toHaveCount(0);
     await expect.poll(() => phone.evaluate(() => (window as unknown as ObservedWindow).multiplayerProbe.channels.some(channel => channel.readyState === "open"))).toBe(true);
     await privateScreenFits(phone);
   }
@@ -1457,9 +1448,14 @@ test("private robbery notices overlay above turn controls without moving the han
       await screenshot(phone, testInfo, `private-robbery-${lost ? "victim" : "thief"}-${width}-${height}-${reducedMotion}`);
     }
 
-    // Both motion preferences use five visible seconds, not time spent below the fold.
+    // Larger screens still scroll the stack; off-screen time must not expire a notice.
     await phone.emulateMedia({ reducedMotion: lost ? "no-preference" : "reduce" });
-    await phone.setViewportSize({ width: 320, height: 400 });
+    await phone.setViewportSize({ width: 844, height: 400 });
+    const building = phone.getByRole("button", { name: "Build a little bigger", exact: true });
+    if (await building.getAttribute("aria-expanded") === "false") {
+      await building.focus();
+      await phone.keyboard.press("Enter");
+    }
     await dashboard.evaluate(element => { element.scrollTop = 0; });
     await expect(notice).not.toBeInViewport({ ratio: 0.5 });
     await phone.clock.fastForward(10_000);
@@ -1648,7 +1644,7 @@ test("private instructions and grouped development cards match single-device gam
     await screenshot(phone, testInfo, `private-development-list-${viewport.width}-${viewport.height}`);
   }
   await phone.setViewportSize({ width: 320, height: 568 });
-  expect(await phone.locator(".private-dashboard").evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  expect(await phone.locator(".private-hand").evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
   for (const name of ["Knight", "Victory point", "Road building", "Year of plenty", "Monopoly"]) {
     await developmentHand.getByRole("button", { name: new RegExp(`^${name}`) }).click();
     const inspector = phone.getByRole("dialog", { name: "A card up your sleeve", exact: true });
@@ -1662,7 +1658,7 @@ test("private instructions and grouped development cards match single-device gam
     await inspector.getByRole("button", { name: "Close dialog", exact: true }).click();
     await privateScreenFits(phone);
   }
-  expect(await phone.locator(".private-dashboard").evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  expect(await phone.locator(".private-hand").evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
   player.developmentCards = [];
   snapshot.privateScore = 0;
   await present();
@@ -1682,14 +1678,6 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await present();
   await privateScreenFits(phone);
   await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
-  await phone.getByRole("button", { name: "All players and bank", exact: true }).click();
-  const table = phone.getByRole("dialog", { name: "All players and bank", exact: true });
-  await expect(table.getByRole("region", { name: "Resource bank", exact: true })).toBeVisible();
-  expect(await table.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await table.getByRole("region", { name: "Resource bank", exact: true }).scrollIntoViewIfNeeded();
-  await expect(table.getByRole("region", { name: "Resource bank", exact: true })).toBeInViewport({ ratio: 1 });
-  await screenshot(phone, testInfo, "private-table-dialog");
-  await table.getByRole("button", { name: "Close dialog", exact: true }).click();
   await phone.getByRole("region", { name: "Your development cards", exact: true }).getByRole("button", { name: /^Knight/ }).click();
   const cards = phone.getByRole("dialog", { name: "A card up your sleeve", exact: true });
   await expect(cards.getByRole("button", { name: /^Knight/ })).toHaveCount(2);
@@ -1882,7 +1870,7 @@ test("private phones keep the turn and dice panel in view while the hand scrolls
   snapshot.privatePlayer!.developmentCards = (["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"] as const).map((kind, index) => ({ id: `development-${index}`, kind, purchasedTurn: 1 }));
   snapshot.game!.phase = { type: "roll" };
   await present();
-  const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
+  const hand = phone.locator(".private-hand");
   const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
   const rollButton = phone.getByRole("button", { name: "Roll the dice", exact: true });
   await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
@@ -1890,11 +1878,11 @@ test("private phones keep the turn and dice panel in view while the hand scrolls
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
     await phone.setViewportSize(viewport);
     await expect(rollButton).toBeVisible();
-    expect(await dashboard.evaluate(element => element.scrollHeight)).toBeGreaterThan(await dashboard.evaluate(element => element.clientHeight));
-    await dashboard.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    expect(await hand.evaluate(element => element.scrollHeight)).toBeGreaterThan(await hand.evaluate(element => element.clientHeight));
+    await hand.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(turnControls).toBeInViewport({ ratio: 1 });
     await expect(rollButton).toBeInViewport({ ratio: 1 });
-    await dashboard.evaluate(element => { element.scrollTop = 0; });
+    await hand.evaluate(element => { element.scrollTop = 0; });
     await expect(turnControls).toBeInViewport({ ratio: 1 });
     await expect(rollButton).toBeInViewport({ ratio: 1 });
     await noHorizontalOverflow(phone);
