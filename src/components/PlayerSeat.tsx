@@ -1,3 +1,4 @@
+import { type CSSProperties } from "react";
 import { CardTypeIcon, DevelopmentCardIcon, PieceIcon } from "./GameUi";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -17,7 +18,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
   const roadLabel = translateText(player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
 
-  return <div className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
+  return <div style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
     <div className={stacked ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
       <span className="player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: player.color }}>{number}</span>
       <p className="player-name min-w-0 flex-1 truncate text-sm font-semibold" title={player.name}>{player.name}</p>

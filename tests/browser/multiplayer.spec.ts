@@ -1,7 +1,7 @@
 import { expect, test as base, type BrowserContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { pack, unpack } from "peerjs-js-binarypack";
 import QRCode from "qrcode";
-import { emptyResources, getTradeRatio, RESOURCES } from "../../src/game/engine";
+import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import type { Resources } from "../../src/game/types";
 import type { RoomSnapshot } from "../../src/multiplayer/types";
@@ -409,6 +409,11 @@ test("room Game menu shares navigation and preserves host and player leave behav
     ["phone", phone, ["Help", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+    if (name === "phone") {
+      // The private player screen has no header bar; its Game menu lives in the turn controls.
+      await expect(page.getByRole("banner")).toHaveCount(0);
+      await expect(page.locator(".private-turn").getByRole("button", { name: "Game", exact: true })).toBeVisible();
+    }
     const gameButton = page.getByRole("button", { name: "Game", exact: true });
     const menu = page.getByRole("group", { name: "Game menu", exact: true });
     const languageSelector = menu.getByRole("combobox", { name: "Language", exact: true });
@@ -437,7 +442,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
     await expect(gameButton).toBeFocused();
     await page.keyboard.press("Space");
     await expect(menu).toBeVisible();
-    await page.locator("header").click({ position: { x: 8, y: 8 } });
+    await (name === "host" ? page.locator("header") : page.locator(".private-player-summary")).click({ position: { x: 8, y: 8 } });
     await expect(menu).toBeHidden();
     await gameButton.focus();
     await page.keyboard.press("Enter");
@@ -489,7 +494,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await chooseGameOption(host, "Leave room");
   await host.getByRole("dialog", { name: "Close this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
   await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
-  await expect(phone.getByRole("banner").getByRole("status")).toHaveText("Offline");
+  await expect(phone.getByRole("status").filter({ hasText: "Offline" })).toBeVisible();
   await chooseGameOption(phone, "Help");
   await expect(phone.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
 });
@@ -1210,6 +1215,63 @@ test("private build rows match the sidebar without stretching when development c
   await expect(rows.nth(2)).toHaveAttribute("aria-pressed", "true");
   await expect(rows.nth(2)).toHaveClass(/border-forest bg-moss/);
   await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
+});
+
+test("private build buttons explain resources, legal spots and exhausted settlement stock", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  await phone.getByRole("button", { name: "Build a little bigger", exact: true }).click();
+  await present();
+  const building = phone.getByRole("region", { name: "Build a little bigger", exact: true });
+  const road = building.getByRole("button", { name: /^Build road\b/ });
+  const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
+  const city = building.getByRole("button", { name: "Upgrade to city", exact: true });
+  const explanation = building.locator("#settlement-build-explanation");
+  const stockReason = "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.";
+
+  // The empty board offers no legal spot; missing brick explains road and settlement.
+  await expect(road).toBeDisabled();
+  await expect(road).toHaveAttribute("title", "You need more resources.");
+  await expect(settlement).toBeDisabled();
+  await expect(settlement).toHaveAttribute("title", "You need more resources.");
+  await expect(city).toBeDisabled();
+  await expect(city).toHaveAttribute("title", "No legal position or no pieces remaining.");
+  await expect(explanation).toHaveCount(0);
+
+  // Five settlements exhaust the stock even with resources and roads to spare.
+  const neighborIds = (vertexId: string) => game.board.edges.filter(edge => edge.vertexIds.includes(vertexId))
+    .flatMap(edge => edge.vertexIds.filter(id => id !== vertexId));
+  const roadSpot = game.board.vertices[0]!;
+  const roadEdge = game.board.edges.find(edge => edge.vertexIds.includes(roadSpot.id))!;
+  const farEnd = roadEdge.vertexIds.find(id => id !== roadSpot.id)!;
+  const forbidden = new Set([roadSpot.id, farEnd, ...neighborIds(roadSpot.id), ...neighborIds(farEnd)]);
+  const homes = game.board.vertices.filter(vertex => !forbidden.has(vertex.id)).slice(0, 5);
+  expect(homes).toHaveLength(5);
+  for (const vertex of homes) vertex.building = { playerId: player.id, kind: "settlement" };
+  roadEdge.playerId = player.id;
+  player.resources = { wood: 5, brick: 5, wool: 5, grain: 5, ore: 5 };
+  await present();
+  await expect(settlement).toBeDisabled();
+  await expect(settlement).toHaveAttribute("title", stockReason);
+  await expect(settlement).toHaveAttribute("aria-describedby", "settlement-build-explanation");
+  await expect(settlement).toHaveAccessibleDescription(stockReason);
+  await expect(explanation).toHaveText(stockReason);
+  await settlement.scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(phone);
+  await screenshot(phone, testInfo, "private-settlement-stock-exhausted");
+
+  // Upgrading one settlement to a city frees the piece next to the player's road.
+  homes[0]!.building = { playerId: player.id, kind: "city" };
+  await present();
+  expect(legalSettlementVertices(game, player.id)).toContain(roadSpot.id);
+  await expect(settlement).toBeEnabled();
+  await expect(settlement).toHaveAttribute("title", "Select a location on the board.");
+  await expect(settlement).not.toHaveAttribute("aria-describedby");
+  await expect(explanation).toHaveCount(0);
+  await expect(city).toBeEnabled();
+  await expect(road).toBeEnabled();
+  await screenshot(phone, testInfo, "private-settlement-stock-recovered");
 });
 
 test("host and three private phones play over real PeerJS channels and recover a refreshed seat", async ({ multiplayer }, testInfo) => {

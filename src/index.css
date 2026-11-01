@@ -310,7 +310,7 @@
 .hand-content:has(.hand-task) { overflow: hidden; }
 .hand-content:has(.hand-task) > :not(.hand-task):not([role="alert"]) { display: none; }
 .hand-content > [role="alert"] { position: absolute; inset: auto 8px 8px; z-index: 30; margin: 0; background: #fff5ea; }
-.turn-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 24px; }
+.turn-header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 24px; }
 .turn-owner { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 0; font-size: 13px; font-weight: 600; line-height: 20px; }
 .turn-number { display: inline-flex; justify-self: end; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .turn-card { padding: 12px; }
@@ -350,7 +350,11 @@
 .build-cost > span > span { width: 24px; height: 32px; }
 .build-options button:disabled { opacity: 0.65; }
 .player-seat-leading { border-color: #b58a2d; background: linear-gradient(115deg, #fff6dc, #f2e1b5); box-shadow: inset 3px 0 #b58a2d, inset 0 1px #fffaf0, 0 3px 9px #8b642524; }
-.player-seat-active { outline: 2px solid #548b73; outline-offset: -2px; animation: player-turn-pulse 2400ms ease-in-out infinite; }
+.player-seat-active { position: relative; isolation: isolate; }
+.player-seat-active::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--seat-pulse-color, #548b73); opacity: 0; animation: player-turn-pulse 2400ms ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .player-seat-active::before { opacity: 0.18; }
+}
 .player-card-counts { display: flex; flex-shrink: 0; gap: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .player-card-stat { display: flex; align-items: center; gap: 4px; }
 .player-card-counts svg, .player-score svg { width: 20px; height: 24px; }
@@ -404,8 +408,6 @@
 .roll-summary-resource { width: 38px; height: 46px; }
 .roll-summary-resource > span > span { letter-spacing: 0; }
 .roll-summary-gain { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 22px; height: 20px; padding: 0 3px; border: 2px solid #f4edda; border-radius: 999px; background: var(--color-ink); color: var(--color-paper); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
-.private-game-shell > header { max-width: none; gap: 10px; }
-.private-connection { margin-left: auto; font-size: 10px; color: var(--color-muted); }
 .private-game-main { position: relative; display: grid; flex: 1; min-height: 0; padding: 16px 12px max(12px, env(safe-area-inset-bottom)); }
 .private-game-content { display: grid; min-height: 0; align-items: start; }
 .private-dashboard { display: flex; flex-direction: column; width: 100%; max-width: 420px; max-height: 100%; min-width: 0; min-height: 0; margin: 0 auto; gap: 8px; padding-bottom: 4px; overflow: auto; scroll-padding-block: 4px; overscroll-behavior: contain; scrollbar-width: thin; }
@@ -436,9 +438,6 @@
   .private-hand.hand-content { flex: 0 1 auto; overflow: auto; }
 }
 @media (max-width: 380px) {
-  .private-connection { font-size: 0; }
-  .private-connection::before { content: ""; display: block; width: 7px; height: 7px; border-radius: 50%; background: var(--color-clay); }
-  .private-connection[data-status="connected"]::before { background: #548b73; }
   .private-dashboard dialog .bank-tray { display: grid; grid-template-columns: minmax(0, 1fr) auto; height: auto; }
   .private-dashboard dialog .bank-tray > h2 { grid-column: 1 / -1; }
   .private-dashboard dialog .bank-supply { gap: 4px; }
@@ -617,8 +616,8 @@
 }
 
 @keyframes player-turn-pulse {
-  0%, 100% { outline-color: #548b7340; }
-  50% { outline-color: #548b73; }
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.4; }
 }
 
 @keyframes dice-tumble {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { match } from "ts-pattern";
 import { Board } from "../components/Board";
@@ -15,7 +15,7 @@ import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { TheftNotice } from "../components/TheftNotice";
 import { CollapsibleSection } from "../components/CollapsibleSection";
-import { COSTS, emptyResources, RESOURCES, resourceTotal } from "../game/engine";
+import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal } from "../game/engine";
 import type { GameAction, Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
@@ -44,7 +44,7 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
   return <><ul aria-label={translateText("Players")} className={`grid gap-2 ${snapshot.game ? "sm:grid-cols-2 lg:grid-cols-4" : ""}`}>
     {players.map(player => {
       const statistics = snapshot.game?.players.find(candidate => candidate.id === player.id);
-      return <li key={player.id} className={`panel min-w-0 p-3 ${snapshot.game?.activePlayerId === player.id ? "player-seat-active" : ""}`}>
+      return <li key={player.id} style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`panel min-w-0 p-3 ${snapshot.game?.activePlayerId === player.id ? "player-seat-active" : ""}`}>
       <div className="flex items-center gap-2">
         <svg role="img" aria-label={translateText(player.control === "computer" ? "Computer player" : "Human player")} className="h-8 w-8 shrink-0 rounded-full border p-1.5" style={{ color: player.color, borderColor: `${player.color}66`, backgroundColor: `${player.color}14` }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           {player.control === "computer" ? <>
@@ -90,13 +90,14 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
   </>;
 }
 
-function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onTheftNoticeTarget }: {
+function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onTheftNoticeTarget, turnMenu }: {
   snapshot: RoomSnapshot;
   disabled: boolean;
   error: string;
   perform: (action: GameAction, expectedVersion: number) => void;
   selectBuild: (piece: BuildMode) => void;
   onTheftNoticeTarget: (target: HTMLDivElement | null) => void;
+  turnMenu?: ReactNode;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
@@ -126,6 +127,9 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
   const [chosen, setChosen] = useState(emptyResources);
   const discardCount = game.phase.type === "discard" ? game.phase.required[player.id] : undefined;
   const canPay = (cost: Resources) => RESOURCES.every(resource => player.resources[resource] >= cost[resource]);
+  const settlementUnavailable = game.board.vertices.filter(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "settlement").length >= 5
+    ? translateText("All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.")
+    : null;
   const trade = game.trade;
   const tradeIdentity = trade ? JSON.stringify([trade.offeredBy, trade.give, trade.receive]) : null;
   const staleMessage = translateText("The game changed. Close and reopen this dialog to review the latest state.");
@@ -199,9 +203,30 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
       </section>
       <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building">
         <div className="build-options flex flex-col gap-2">
-          {(["road", "settlement", "city"] as const).map(piece => <BuildButton key={piece} piece={piece} color={player.color} resources={COSTS[piece]} aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })} aria-pressed={snapshot.buildMode === piece}
-            disabled={disabled || !normalActions || !canPay(COSTS[piece])}
-            onClick={() => selectBuild(snapshot.buildMode === piece ? null : piece)} />)}
+          {(["road", "settlement", "city"] as const).map(piece => {
+            const locations = piece === "road"
+              ? legalRoadEdges(game, player.id)
+              : piece === "city"
+                ? legalCityVertices(game, player.id)
+                : legalSettlementVertices(game, player.id);
+            const explanation = piece === "settlement" ? settlementUnavailable : null;
+            const unavailable = explanation ?? (!normalActions
+              ? translateText("Available after rolling on your turn.")
+              : !canPay(COSTS[piece])
+                ? translateText("You need more resources.")
+                : !locations.length
+                  ? translateText("No legal position or no pieces remaining.")
+                  : translateText("Select a location on the board."));
+            return <Fragment key={piece}>
+              <BuildButton piece={piece} color={player.color} resources={COSTS[piece]}
+                aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })}
+                aria-pressed={snapshot.buildMode === piece} aria-describedby={explanation ? "settlement-build-explanation" : undefined}
+                title={unavailable}
+                disabled={disabled || !normalActions || !canPay(COSTS[piece]) || !locations.length}
+                onClick={() => selectBuild(snapshot.buildMode === piece ? null : piece)} />
+              {explanation && <p id="settlement-build-explanation" className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
+            </Fragment>;
+          })}
           <BuildButton piece="development" color={player.color} resources={COSTS.development} aria-label={translateText("Buy a card")} disabled={disabled || !normalActions || !canPay(COSTS.development) || game.developmentRemaining === 0} onClick={() => setConfirmation({
             action: { type: "buy-development" },
             title: "Invest in a development card",
@@ -209,6 +234,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
             version: snapshot.version,
           })} />
         </div>
+        <p className="sr-only">{translateText("Building needs resources, an available piece, and a legal connection after your roll.")}</p>
         <button className="button-secondary mt-2 w-full px-2" disabled={disabled || !normalActions} onClick={() => { setEditorVersion(snapshot.version); setEditor("trade"); }}>{translateText("Make a trade")}</button>
       </CollapsibleSection>
       <DevelopmentHand cards={player.developmentCards} turnNumber={game.turnNumber} onSelect={cardId => { setDevelopmentCardId(cardId); setEditorVersion(snapshot.version); setEditor("development"); }} />
@@ -219,6 +245,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onThe
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
         <span className="turn-number">{game.turnNumber === 0 ? translateText("Setup") : translateText("Turn {turn}", { turn: game.turnNumber })}</span>
+        {turnMenu}
       </div>
       <MultiplayerDice game={game} />
       <div data-testid="game-phase" data-phase={game.phase.type} data-active-player={activePlayer.name} className="private-instructions" aria-live="polite">
@@ -357,9 +384,9 @@ export function MultiplayerApp() {
 
   return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
     <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
-      <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
+      {!privateGame && <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
-        {privateGame ? <span className="private-connection max-sm:sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span> : sharedGame ? <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span> : <span className="hidden text-xs text-muted sm:block">{translateText("One island. Your own hand.")}</span>}
+        {sharedGame ? <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span> : <span className="hidden text-xs text-muted sm:block">{translateText("One island. Your own hand.")}</span>}
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
@@ -367,7 +394,8 @@ export function MultiplayerApp() {
           <LanguageSelector />
           <a className="min-w-0 text-xs underline underline-offset-4 sm:text-sm" href="/">{translateText("Single-device play")}</a>
         </>}
-      </header>
+      </header>}
+      {privateGame && <span className="sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span>}
       <main className={privateGame ? "private-game-main" : sharedGame ? "shared-game-main" : hostLobby ? "multiplayer-lobby-main" : `mx-auto max-w-[1600px] px-4 pb-10 sm:px-8 ${game ? "pt-4" : "pt-10 sm:pt-16"}`}>
         {!view && <section className="mx-auto max-w-xl">
           <p className="eyebrow">{translateText("Gather around")}</p>
@@ -497,7 +525,9 @@ export function MultiplayerApp() {
           </section>
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onTheftNoticeTarget={setTheftNoticeTarget} />
+          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onTheftNoticeTarget={setTheftNoticeTarget} turnMenu={<GameMenu icon actions={[
+            { label: translateText("Help"), onSelect: () => setDialog("help") },
+          ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
         </div>}
       </main>

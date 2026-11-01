@@ -1125,7 +1125,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
   }
 });
 
-test("player score highlights and active-turn borders follow public VP leaders without crowns", async ({ page, isMobile }, testInfo) => {
+test("player score highlights and active-turn seat pulses follow public VP leaders without crowns", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1024, height: 768 });
   await page.goto("/");
@@ -1193,7 +1193,7 @@ test("player score highlights and active-turn borders follow public VP leaders w
       await expect(seat.getByText(/^(Your turn|Playing)$/)).toHaveCount(0);
       if (name === currentPlayer) {
         await expect(seat).toHaveClass(/player-seat-active/);
-        await expect(seat).toHaveCSS("outline-color", "rgb(84, 139, 115)");
+        await expect(seat).toHaveCSS("outline-style", "none");
       } else {
         await expect(seat).not.toHaveClass(/player-seat-active/);
       }
@@ -1211,36 +1211,41 @@ test("player score highlights and active-turn borders follow public VP leaders w
       const activeSeat = seats.locator(".player-seat-active");
       await activeSeat.scrollIntoViewIfNeeded();
       await page.emulateMedia({ reducedMotion: "no-preference" });
-      await expect(activeSeat).toHaveCSS("animation-name", "player-turn-pulse");
-      const { duration, iterations, frames } = await activeSeat.evaluate(element => {
-        const animation = element.getAnimations().find(animation => animation instanceof CSSAnimation && animation.animationName === "player-turn-pulse");
-        if (!animation?.effect) throw new Error("Missing active-turn border pulse");
+      await expect(activeSeat).toHaveCSS("animation-name", "none");
+      const playerColors = ["rgb(184, 93, 71)", "rgb(71, 124, 145)", "rgb(193, 149, 61)", "rgb(118, 96, 140)"];
+      const expectedColor = playerColors[names.indexOf(currentPlayer)]!;
+      const { duration, iterations, frames } = await activeSeat.evaluate((element, expectedColor) => {
+        const animation = element.getAnimations({ subtree: true }).find(animation => animation instanceof CSSAnimation && animation.animationName === "player-turn-pulse");
+        if (!animation?.effect) throw new Error("Missing active-turn area pulse");
         const timing = animation.effect.getTiming();
         animation.pause();
         const frames = [0, 0.5, 1].map(progress => {
           animation.currentTime = Number(timing.duration) * progress;
+          const overlay = getComputedStyle(element, "::before");
           const style = getComputedStyle(element);
           const { x, y, width, height } = element.getBoundingClientRect();
-          return { outline: style.outlineColor, background: style.backgroundImage, border: style.borderTopColor, bounds: { x, y, width, height } };
+          return { opacity: overlay.opacity, color: overlay.backgroundColor, background: style.backgroundImage, border: style.borderTopColor, bounds: { x, y, width, height } };
         });
         animation.currentTime = Number(timing.duration) / 2;
         return { duration: timing.duration, iterations: timing.iterations, frames };
-      });
+      }, expectedColor);
       expect(duration).toBe(2400);
       expect(iterations).toBe(Infinity);
-      expect(frames[1]!.outline).not.toBe(frames[0]!.outline);
-      expect(frames[2]!.outline).toBe(frames[0]!.outline);
+      expect(frames[1]!.opacity).not.toBe(frames[0]!.opacity);
+      expect(frames[2]!.opacity).toBe(frames[0]!.opacity);
       for (const frame of frames) {
         expect(frame.bounds).toEqual(frames[0]!.bounds);
         expect(frame.background).toBe(frames[0]!.background);
         expect(frame.border).toBe("rgb(181, 138, 45)");
+        expect(frame.color).toBe(expectedColor);
       }
-      await screenshot(page, testInfo, "active-player-border-pulse", false);
+      await screenshot(page, testInfo, "active-player-area-pulse", false);
       await page.emulateMedia({ reducedMotion: "reduce" });
       await expect(activeSeat).toHaveCSS("animation-name", "none");
-      await expect(activeSeat).toHaveCSS("outline-style", "solid");
-      await expect(activeSeat).toHaveCSS("outline-color", "rgb(84, 139, 115)");
-      expect(await activeSeat.evaluate(element => element.getAnimations().length)).toBe(0);
+      expect(await activeSeat.evaluate(element => {
+        const overlay = getComputedStyle(element, "::before");
+        return element.getAnimations({ subtree: true }).length === 0 && overlay.animationName === "none" && overlay.opacity === "0.18";
+      })).toBe(true);
     }
     if (placement === 0 || placement === 1) {
       await seats.locator(".player-seat-leading").first().scrollIntoViewIfNeeded();
@@ -2775,6 +2780,8 @@ test("owned development cards group by type with counts, descriptions and older-
       const title = rows.nth(index).getByText(cardNames[kind], { exact: true });
       const description = rows.nth(index).getByText(cardDescriptions[kind], { exact: true });
       await expect(description).toBeInViewport({ ratio: 1 });
+      await expect(description).toHaveCSS("-webkit-line-clamp", "2");
+      await expect(description).toHaveCSS("overflow", "hidden");
       const titleBounds = (await title.boundingBox())!;
       const quantityBounds = (await quantity.boundingBox())!;
       const descriptionBounds = (await description.boundingBox())!;

@@ -74,7 +74,9 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
   };
 }
 
-function pieceCount(state: GameState, playerId: string, kind: "road" | "settlement" | "city"): number {
+type PlacementState = Pick<GameState, "board" | "activePlayerId" | "phase"> & { players: Pick<Player, "id">[] };
+
+function pieceCount(state: Pick<GameState, "board">, playerId: string, kind: "road" | "settlement" | "city"): number {
   return kind === "road"
     ? state.board.edges.filter(edge => edge.playerId === playerId).length
     : state.board.vertices.filter(vertex => vertex.building?.playerId === playerId && vertex.building.kind === kind).length;
@@ -89,7 +91,7 @@ export function blockedSettlementVertices(board: Board): string[] {
   }).map(vertex => vertex.id);
 }
 
-export function legalSettlementVertices(state: GameState, playerId: string): string[] {
+export function legalSettlementVertices(state: PlacementState, playerId: string): string[] {
   if (state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
     !["setup-settlement", "actions"].includes(state.phase.type) || pieceCount(state, playerId, "settlement") >= 5) return [];
   const blockedVertices = new Set(blockedSettlementVertices(state.board));
@@ -100,13 +102,13 @@ export function legalSettlementVertices(state: GameState, playerId: string): str
   }).map(vertex => vertex.id);
 }
 
-export function legalCityVertices(state: GameState, playerId: string): string[] {
+export function legalCityVertices(state: PlacementState, playerId: string): string[] {
   if (state.phase.type !== "actions" || state.activePlayerId !== playerId || pieceCount(state, playerId, "city") >= 4) return [];
   return state.board.vertices.filter(vertex => vertex.building?.playerId === playerId && vertex.building.kind === "settlement")
     .map(vertex => vertex.id);
 }
 
-export function legalRoadEdges(state: GameState, playerId: string): string[] {
+export function legalRoadEdges(state: PlacementState, playerId: string): string[] {
   if (state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
     !["setup-road", "actions", "road-building"].includes(state.phase.type) || pieceCount(state, playerId, "road") >= 15) return [];
   return state.board.edges.filter(edge => {

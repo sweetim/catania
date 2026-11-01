@@ -54,7 +54,7 @@ export function DevelopmentHand({
                       <span aria-hidden="true">{groupedCards.length}</span><span className="sr-only">{translateText(groupedCards.length === 1 ? "{count} card" : "{count} cards", { count: groupedCards.length })}</span>
                     </span>
                   </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted">
+                  <span className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
                     {developmentDescriptions[kind]}
                   </span>
                 </span>

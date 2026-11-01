@@ -167,10 +167,12 @@ Knights still in hand do not count: play at least three to qualify, and surpass
 the current holder to take the award. A warm gold cell highlight marks the highest
 public VP score without a crown icon, shared by tied leaders unless everyone is tied.
 Names are vertically centered beside their avatars, without a repeated turn-status
-line or dot. The active cell has a gentle border pulse that becomes a static outline
-with reduced motion enabled; it moves to the next player's cell when the turn
-changes without moving the layout. The separate turn controls also identify the
-active player. Hidden victory-point cards do not affect the cell highlights.
+line or dot. The active cell pulses its whole area in the active player's own
+color, layered above any leader highlight but beneath the cell's contents;
+reduced motion settles the pulse into a static tint of the same color. It moves
+to the next player's cell when the turn changes without moving the layout. The
+separate turn controls also identify the active player. Hidden victory-point
+cards do not affect the cell highlights.
 
 ## Building And Development Cards
 
