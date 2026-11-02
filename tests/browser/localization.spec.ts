@@ -14,7 +14,8 @@ const test = base.extend({
 
 async function expectLanguage(page: Page, language: "en" | "ja") {
   await expect(page.locator("html")).toHaveAttribute("lang", language);
-  await expect(page.getByRole("combobox", { name: language === "ja" ? "言語" : "Language", exact: true })).toHaveValue(language);
+  // The selector can live inside a closed menu, where role queries cannot reach it.
+  await expect(page.locator(`select[aria-label="${language === "ja" ? "言語" : "Language"}"]`)).toHaveValue(language);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -24,6 +25,12 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 async function selectInGameLanguage(page: Page, currentLanguage: "en" | "ja", nextLanguage: "en" | "ja") {
   await page.getByRole("button", { name: currentLanguage === "ja" ? "ゲーム" : "Game", exact: true }).click();
+  await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
+  await page.keyboard.press("Escape");
+}
+
+async function selectHomeLanguage(page: Page, currentLanguage: "en" | "ja", nextLanguage: "en" | "ja") {
+  await page.getByRole("button", { name: currentLanguage === "ja" ? "メニュー" : "Menu", exact: true }).click();
   await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
   await page.keyboard.press("Escape");
 }
@@ -40,7 +47,7 @@ test.describe("Japanese browser locale", () => {
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath("japanese-home.png"), fullPage: true });
 
-    await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+    await selectHomeLanguage(page, "ja", "en");
     await expectLanguage(page, "en");
     await expect(page.getByRole("button", { name: "Let's settle in" })).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem("catania.language"))).toBe("en");
@@ -68,7 +75,7 @@ test.describe("Japanese browser locale", () => {
     });
     await page.reload();
     await expectLanguage(page, "ja");
-    await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+    await selectHomeLanguage(page, "ja", "en");
     await expectLanguage(page, "en");
     await expect(page.getByRole("button", { name: "Let's settle in" })).toBeVisible();
   });
@@ -138,7 +145,8 @@ test("in-game language selection lives inside the Game menu", async ({ page, isM
 
 test("Japanese help, themes, handoffs, board controls, and settings remain usable", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
-  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await selectHomeLanguage(page, "en", "ja");
+  await page.getByRole("button", { name: "メニュー", exact: true }).click();
   await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
   const help = page.getByRole("dialog", { name: "ヘルプ", exact: true });
   await expect(help.getByRole("heading", { name: "遊び方", exact: true })).toBeVisible();

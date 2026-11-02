@@ -8,12 +8,16 @@ type GameMenuAction = {
   disabled?: boolean;
 };
 
-export function GameMenu({ actions, exitAction, icon = false }: {
+export function GameMenu({ actions, exitAction, icon = false, triggerLabel, groupLabel }: {
   actions: GameMenuAction[];
-  exitAction: GameMenuAction;
+  exitAction?: GameMenuAction;
   icon?: boolean;
+  triggerLabel?: string;
+  groupLabel?: string;
 }) {
   const translateText = useTranslation(boardTranslations);
+  const triggerName = triggerLabel ?? translateText("Game");
+  const groupName = groupLabel ?? translateText("Game menu");
   const menu = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
 
@@ -54,30 +58,32 @@ export function GameMenu({ actions, exitAction, icon = false }: {
       }
     }}
   >
-    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon ? translateText("Game") : undefined} title={icon ? translateText("Game") : undefined} className={icon
+    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon ? triggerName : undefined} title={icon ? triggerName : undefined} className={icon
       ? "flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
       : "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"}>
       {icon
         ? <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
         </svg>
-        : <>{translateText("Game")}
+        : <>{triggerName}
           <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="m3 4.5 3 3 3-3" />
           </svg></>}
     </summary>
-    <div id="game-menu" role="group" aria-label={translateText("Game menu")} className={`absolute right-0 z-50 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${icon ? "bottom-full mb-1" : "top-full mt-1"}`}>
+    <div id="game-menu" role="group" aria-label={groupName} className={`absolute right-0 z-50 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${icon ? "bottom-full mb-1" : "top-full mt-1"}`}>
       {actions.map(action => <button key={action.label} className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={action.disabled} onClick={() => selectAction(action)}>
         {action.label}
       </button>)}
       <div className="mt-1 border-t border-line pt-1">
         <LanguageSelector />
       </div>
-      <div className="mt-1 border-t border-line pt-1">
-        <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-clay hover:bg-clay/10" disabled={exitAction.disabled} onClick={() => selectAction(exitAction)}>
-          {exitAction.label}
-        </button>
-      </div>
+      {exitAction && (
+        <div className="mt-1 border-t border-line pt-1">
+          <button className="min-h-11 w-full rounded-lg px-3 text-left text-sm text-clay hover:bg-clay/10" disabled={exitAction.disabled} onClick={() => selectAction(exitAction)}>
+            {exitAction.label}
+          </button>
+        </div>
+      )}
     </div>
   </details>;
 }

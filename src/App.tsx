@@ -508,10 +508,6 @@ export function App() {
     <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId || !showVictoryScreen ? "game-shell" : "min-h-dvh"}>
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
         <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
-        <div className="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-forest" />
-          {translateText(game ? "A little friendly competition" : "Made for gathering around")}
-        </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           {game && !game.winnerId ? (
             <GameMenu actions={[
@@ -519,6 +515,14 @@ export function App() {
               { label: translateText("Settings"), onSelect: () => setDialog("settings") },
               ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
             ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />
+          ) : !game ? (
+            <GameMenu
+              triggerLabel={translateText("Menu")}
+              groupLabel={translateText("Home menu")}
+              actions={[
+                { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
+              ]}
+            />
           ) : (
             <>
               <LanguageSelector />
