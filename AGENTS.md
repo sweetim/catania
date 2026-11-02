@@ -105,3 +105,5 @@ work") require constant clarification.
 - Prefer [`ts-pattern@5`](https://github.com/gvergnaud/ts-pattern) for pattern
   matching and exhaustive type handling whenever possible.
 - Don't use abbreviations, always use full names.
+- Use `tsgo` instead of `tsc` for typechecking (e.g. `bun run typecheck` or
+  `tsgo --noEmit`); the project uses `@typescript/native-preview`.

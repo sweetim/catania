@@ -101,13 +101,15 @@ and discovery override are not part of the deployment.
 5. Check all build costs and five development-card types in Help before starting
    a game and with an empty hand. Scroll to the rules on desktop and mobile, and
    confirm that Help contains no current-table activity or player details.
-6. Check that the Game menu closes with Escape or an outside click, and that
-   closing its dialogs returns focus to **Game**.
+6. Check that the Game and Menu dropdowns close with Escape or an outside click,
+   and that closing their dialogs returns focus to the opener (**Game** or
+   **Menu**).
 7. Compare all six themes on desktop and phone boards, including a 320-pixel-wide
    viewport. Use arrow keys in the theme radios and check that Close and Escape
-    restore focus to **Theme** without losing a selected location, zoom, or pan.
+     restore focus to **Theme** without losing a selected location, zoom, or pan.
 8. Start with a Japanese browser locale, then switch **English / 日本語** through
-   **Game > Language** (or the header selector on screens without Game). Check help,
+    **Game > Language** during play or **Menu > Language** on the home,
+    multiplayer setup, and results screens. Check help,
    resource labels, and placement instructions; confirm a manual
    choice survives reloads. In multiplayer, use different languages on the host
    and a phone and compare their activity messages. Visually inspect Japanese text

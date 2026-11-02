@@ -24,13 +24,14 @@ import {
 } from "./components/GameplayDialogs";
 import { BOARD_THEMES, BoardThemeContext, getThemeName, type BoardThemeId } from "./themes";
 import { defaultComputerName, resourceName, type Language, type TranslationParameters } from "./i18n";
-import { LanguageSelector, useLanguage, useTranslation } from "./localization";
+import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
 import { formatGameMessage, gameErrorMessage, type GameMessage } from "./game/messages";
 import {
   Arrow,
   BankSupply,
   BuildButton,
+  DevelopmentCardIcon,
   Dialog,
   Logo,
   ResourceCard,
@@ -419,6 +420,9 @@ export function App() {
   const rolledNumber = rollPresentation && rollPresentation.stage !== "rolling"
     ? rollPresentation.outcome.dice[0] + rollPresentation.outcome.dice[1] : undefined;
   const receivedResources = resourceReceipt?.playerId === viewerId ? resourceReceipt?.gains : undefined;
+  const viewerVictoryPointCards = viewer
+    ? viewer.developmentCards.filter((card) => card.kind === "victory-point").length
+    : 0;
   const awaitingViewer = viewer && (
     viewer.id === controllingPlayer?.id ||
     (game?.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0)
@@ -499,7 +503,8 @@ export function App() {
       return <PlayerSeat key={player.id} number={index + 1} detailed={detailed}
         player={{ ...player, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length, longestRoad: getLongestRoadLength(game, player.id), score: game.winnerId ? score.total : score.public }}
         active={game.activePlayerId === player.id} leading={showPublicScoreLeaders && score.public === highestPublicScore}
-        largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id} />;
+        largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        privateScore={player.id === viewerId ? score.total : undefined} />;
     });
   }
 
@@ -515,30 +520,14 @@ export function App() {
               { label: translateText("Settings"), onSelect: () => setDialog("settings") },
               ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
             ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />
-          ) : !game ? (
+          ) : (
             <GameMenu
               triggerLabel={translateText("Menu")}
-              groupLabel={translateText("Home menu")}
+              groupLabel={translateText("Main menu")}
               actions={[
                 { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
               ]}
             />
-          ) : (
-            <>
-              <LanguageSelector />
-              <button
-                className="min-h-11 text-xs font-semibold underline decoration-line underline-offset-4 hover:decoration-forest"
-                onClick={() => {
-                  setDialog("help");
-                  setError("");
-                }}
-              >
-                {translateText("Help")}{" "}
-                <span aria-hidden="true" className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-line font-serif">
-                  ?
-                </span>
-              </button>
-            </>
           )}
         </div>
       </header>
@@ -934,9 +923,20 @@ export function App() {
               <section inert={handTaskOpen} className="hand-resources" aria-label={translateText("Private resources")}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h2 className="eyebrow min-w-0 truncate">{translateText("{name}'s hand", { name: viewer.name })}</h2>
-                  <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums">
-                    {translateText("{count} cards", { count: resourceTotal(viewer.resources) })}
-                  </strong>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <strong className={`rounded-md px-2 py-1 text-sm text-ink tabular-nums ${resourceTotal(viewer.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
+                      {translateText("{count} cards", { count: resourceTotal(viewer.resources) })}
+                    </strong>
+                    <span
+                      role="img"
+                      aria-label={translateText("{count} victory point cards", { count: viewerVictoryPointCards })}
+                      title={translateText("{count} victory point cards", { count: viewerVictoryPointCards })}
+                      className="flex items-center gap-1 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums"
+                    >
+                      <span className="text-[#947231] [&>svg]:h-4 [&>svg]:w-4"><DevelopmentCardIcon kind="victory-point" /></span>
+                      <strong className="font-semibold">{viewerVictoryPointCards}</strong>
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                   {RESOURCES.map((resource) => (
@@ -974,12 +974,6 @@ export function App() {
                       </span>
                     </div>
                   ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-moss/80 px-3 py-1.5">
-                  <span className="text-[11px]">{translateText("Your victory points")}</span>
-                  <span className="text-xs font-semibold">
-                    {translateText("{public} public + {hidden} hidden = {total}", getScore(game, viewer.id))}
-                  </span>
                 </div>
               </section>
 
@@ -1230,11 +1224,11 @@ export function App() {
               pointsUnit={translateText("points")}
               summary={translateText("Ten points. Countless good deals. One more game?")}
               breakdown={[
-                { label: translateText("Settlements"), points: winnerScore.settlements },
-                { label: translateText("Cities"), points: winnerScore.cities },
-                { label: translateText("Longest Road"), points: winnerScore.longestRoad },
-                { label: translateText("Largest Army"), points: winnerScore.largestArmy },
-                { label: translateText("Revealed victory-point cards"), points: winnerScore.hidden },
+                { kind: "settlements", label: translateText("Settlements"), note: winnerScore.settlements ? translateText("{count} × {points} VP", { count: winnerScore.settlements, points: 1 }) : undefined, points: winnerScore.settlements },
+                { kind: "cities", label: translateText("Cities"), note: winnerScore.cities ? translateText("{count} × {points} VP", { count: winnerScore.cities / 2, points: 2 }) : undefined, points: winnerScore.cities },
+                { kind: "longest-road", label: translateText("Longest Road"), points: winnerScore.longestRoad },
+                { kind: "largest-army", label: translateText("Largest Army"), points: winnerScore.largestArmy },
+                { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
             >
               <button className="button-primary" onClick={() => startGame()}>

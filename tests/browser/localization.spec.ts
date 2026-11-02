@@ -55,6 +55,8 @@ test.describe("Japanese browser locale", () => {
     await expectLanguage(page, "en");
     await page.getByRole("link", { name: "Play across devices" }).click();
     await expectLanguage(page, "en");
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await expect(page.getByRole("group", { name: "Main menu", exact: true }).getByRole("button")).toHaveText(["Help", "Single-device play"]);
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
     await expectLanguage(page, "ja");
     await expect(page.locator("h1")).toContainText(/[\u3040-\u30ff\u3400-\u9fff]/);
@@ -98,6 +100,36 @@ test("uses the browser language when its preferred-language list is empty", asyn
   });
   await page.goto("/");
   await expectLanguage(page, "ja");
+});
+
+test("home language selection and help live inside the Menu dropdown", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const menuButton = page.getByRole("button", { name: "Menu", exact: true });
+  const menu = page.getByRole("group", { name: "Main menu", exact: true });
+  const languageSelector = page.getByRole("combobox", { name: "Language", exact: true });
+
+  await expect(menuButton).toBeVisible();
+  await expect(languageSelector).toHaveCount(0);
+  await menuButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+  await expect(menu.getByRole("button")).toHaveText(["Help"]);
+  await expect(languageSelector).toBeVisible();
+  await expect(languageSelector).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: testInfo.outputPath("home-menu-language-open.png"), fullPage: true });
+  await languageSelector.selectOption("ja");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+  await expect(page.getByRole("group", { name: "メインメニュー", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "メインメニュー", exact: true })).toBeHidden();
+  await expect(page.getByRole("button", { name: "メニュー", exact: true })).toBeFocused();
+
+  await page.getByRole("button", { name: "メニュー", exact: true }).click();
+  await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+  const help = page.getByRole("dialog", { name: "ヘルプ", exact: true });
+  await expect(help).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "メニュー", exact: true })).toBeFocused();
 });
 
 test("in-game language selection lives inside the Game menu", async ({ page, isMobile }, testInfo) => {
@@ -170,9 +202,9 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await page.getByRole("textbox", { name: "プレイヤー3の名前" }).fill("Alex");
   await page.getByRole("button", { name: "開拓を始めよう" }).click();
   await expect(page.getByRole("alert")).toContainText("異なる名前");
-  await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+  await selectHomeLanguage(page, "ja", "en");
   await expect(page.getByRole("alert")).toHaveText("Use a different name for each player so private handoffs are clear.");
-  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await selectHomeLanguage(page, "en", "ja");
   await page.getByRole("textbox", { name: "プレイヤー2の名前" }).fill("花子");
   await page.getByRole("button", { name: "開拓を始めよう" }).click();
   await expect(page.getByRole("heading", { name: /に端末を渡してください。$/ })).toBeVisible();

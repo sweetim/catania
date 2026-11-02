@@ -772,6 +772,9 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await noPageOverflow(page);
   await screenshot(page, testInfo, "home", false);
 
+  const menuButton = page.getByRole("button", { name: "Menu", exact: true });
+  await menuButton.focus();
+  await page.keyboard.press("Enter");
   const helpButton = page.getByRole("button", { name: "Help", exact: true });
   await helpButton.focus();
   await page.keyboard.press("Enter");
@@ -783,7 +786,8 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await screenshot(page, testInfo, "help");
   await page.keyboard.press("Escape");
   await expect(help).toHaveCount(0);
-  await expect(helpButton).toBeFocused();
+  // Closing the dialog returns focus to the Menu trigger, not the hidden menu item.
+  await expect(menuButton).toBeFocused();
 
   await page.getByRole("textbox", { name: "Player 2 name", exact: true }).fill("Alex");
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
@@ -829,6 +833,7 @@ test("Help shows starting card counts and rules without current table details be
   const close = help.getByRole("button", { name: "Close dialog", exact: true });
   for (const stage of ["before-play", "empty-hand"] as const) {
     if (stage === "before-play") {
+      await page.getByRole("button", { name: "Menu", exact: true }).click();
       await page.getByRole("button", { name: "Help", exact: true }).click();
     } else {
       await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -963,7 +968,8 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await noHorizontalOverflow(page);
   await screenshot(page, testInfo, "completed-setup-board");
   await showView(page, "hand");
-  await expect(page.getByRole("region", { name: "Private resources" })).toContainText("2 public + 0 hidden = 2");
+  await expect(page.getByRole("img", { name: "0 victory point cards", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Private resources" })).not.toContainText("public +");
   const development = page.getByRole("region", { name: "Your development cards", exact: true });
   await expect(development).toHaveCount(0);
   await revealBuildSection(page);
@@ -2904,6 +2910,14 @@ test("a won game pops the winner up over the board with the point breakdown and 
   await expect(victory.locator("dd")).toHaveText([
     String(score.settlements), String(score.cities), String(score.longestRoad), String(score.largestArmy), String(score.hidden),
   ]);
+  // Each breakdown row leads with an icon and spells out the count math behind the points.
+  await expect(victory.locator("dl > div svg")).toHaveCount(5);
+  if (score.settlements > 0) await expect(victory).toContainText(`${score.settlements} × 1 VP`);
+  if (score.cities > 0) await expect(victory).toContainText(`${score.cities / 2} × 2 VP`);
+  if (score.hidden > 0) await expect(victory).toContainText(`${score.hidden} × 1 VP`);
+  await expect(victory).not.toContainText("0 ×");
+  // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
+  await expect(victory.locator(".confetti-piece")).toHaveCount(28);
   await expect(victory.getByRole("button", { name: "Play a rematch", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "See full results", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "Back to the table", exact: true })).toBeVisible();
@@ -3807,6 +3821,10 @@ test("owned resources stay visible through private trades and mandatory discards
   await openTrade.getByRole("button", { name: `Pass to ${responder.name}`, exact: true }).click();
   expect(await revealHand(page)).toBe(responder.name);
   await showView(page, "hand");
+  // More than seven resource cards puts the hand at risk of a rolled seven; the count badge warns.
+  const responderCount = page.getByRole("region", { name: "Private resources", exact: true }).getByText(`${resourceTotal(responder.resources)} cards`, { exact: true });
+  await expect(responderCount).toBeVisible();
+  await expect(responderCount).toHaveClass(/card-count-at-risk/);
   const responseInventory = await expectResourceInventory(openTrade, responder.resources);
   await expect(page.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: `${trader.name}'s hand`, exact: true, includeHidden: true })).toHaveCount(0);
@@ -3905,7 +3923,13 @@ test("owned resources stay visible through private trades and mandatory discards
   await expect(privateResources.getByText(/^\d+ (Wood|Brick|Wool|Grain|Ore)$/)).toHaveText(
     RESOURCES.map(resource => `${remainingResources[resource]} ${RESOURCE_NAMES[resource]}`),
   );
-  await expect(privateResources.getByText(`${resourceTotal(remainingResources)} cards`, { exact: true })).toBeVisible();
+  const remainingCount = privateResources.getByText(`${resourceTotal(remainingResources)} cards`, { exact: true });
+  await expect(remainingCount).toBeVisible();
+  if (resourceTotal(remainingResources) > 7) {
+    await expect(remainingCount).toHaveClass(/card-count-at-risk/);
+  } else {
+    await expect(remainingCount).not.toHaveClass(/card-count-at-risk/);
+  }
   await expectPublicCardCounts(page, state);
 });
 

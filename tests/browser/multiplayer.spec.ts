@@ -1111,8 +1111,8 @@ test("private player header matches the single-device hand and private score bre
   const heading = header.getByRole("heading", { name: `${player.name}'s hand`, exact: true });
   await expect(heading).toBeVisible();
   await expect(header.getByText("95 cards", { exact: true })).toBeVisible();
-  await expect(header).toContainText("Your victory points");
-  await expect(header).toContainText("7 public + 1 hidden = 8");
+  await expect(header.getByText("95 cards", { exact: true })).toHaveClass(/card-count-at-risk/);
+  await expect(header.getByRole("img", { name: "1 victory point cards", exact: true })).toBeVisible();
   await expect(header.locator(".player-seat")).toHaveCount(0);
   const summary = phone.getByRole("region", { name: "Your player summary", exact: true });
   const seat = summary.locator(".player-seat");
@@ -1123,7 +1123,7 @@ test("private player header matches the single-device hand and private score bre
   await expect(seat).toHaveClass(/player-seat-active/);
   await expect(seat).toHaveClass(/player-seat-leading/);
   await expect(seat.locator(".player-score > .font-serif")).toHaveText("7");
-  await expect(seat).not.toContainText("8 total");
+  await expect(seat).toContainText("8 total");
   for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)"]) {
     await expect(seat.getByRole("img", { name: label, exact: true })).toBeVisible();
   }
@@ -1156,10 +1156,12 @@ test("private player header matches the single-device hand and private score bre
   await expect(seat).not.toHaveClass(/player-seat-active/);
   await expect(seat).not.toHaveClass(/player-seat-leading/);
   await expect(seat.locator(".player-score > .font-serif")).toHaveText("2");
-  await expect(header).toContainText("2 public + 2 hidden = 4");
+  await expect(seat).toContainText("4 total");
   snapshot.privateScore = 2;
+  player.resources = { wood: 1, brick: 1, wool: 1, grain: 1, ore: 1 };
   await present();
-  await expect(header).toContainText("2 public + 0 hidden = 2");
+  await expect(seat).not.toContainText("total");
+  await expect(header.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
 });
 
 test("private build rows match the sidebar without stretching when development cards change", async ({ multiplayer }, testInfo) => {
@@ -1914,6 +1916,11 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory).toBeVisible();
   await expect(victory).toContainText("10");
   await expect(victory.locator("dd")).toHaveText(["2", "4", "2", "1", "1"]);
+  await expect(victory.locator("dl > div svg")).toHaveCount(5);
+  await expect(victory).toContainText("2 × 1 VP");
+  await expect(victory).toContainText("2 × 2 VP");
+  await expect(victory).toContainText("1 × 1 VP");
+  await expect(victory.locator(".confetti-piece")).toHaveCount(28);
   await expect(victory.getByRole("button", { name: "Leave room", exact: true })).toBeVisible();
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "victory-popup-phone");

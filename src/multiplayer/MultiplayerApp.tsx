@@ -5,7 +5,7 @@ import { Board } from "../components/Board";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
-import { BankSupply, BuildButton, Cost, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
+import { BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
 import { OpenTrade } from "../components/OpenTrade";
 import { PlayerSeat } from "../components/PlayerSeat";
@@ -20,7 +20,7 @@ import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettleme
 import type { GameAction, Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
-import { LanguageSelector, useLanguage, useTranslation } from "../localization";
+import { useLanguage, useTranslation } from "../localization";
 import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "../themes";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { hostSession, joinSession } from "./session";
@@ -93,15 +93,15 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
 
 function victoryBreakdownRows(
   breakdown: PublicGame["players"][number]["scoreBreakdown"],
-  translateText: (key: keyof typeof multiplayerUiTranslations) => string,
+  translateText: (key: keyof typeof multiplayerUiTranslations, parameters?: TranslationParameters) => string,
 ): VictoryBreakdownRow[] {
   if (!breakdown) return [];
   return [
-    { label: translateText("Settlements"), points: breakdown.settlements },
-    { label: translateText("Cities"), points: breakdown.cities },
-    { label: translateText("Longest Road"), points: breakdown.longestRoad },
-    { label: translateText("Largest Army"), points: breakdown.largestArmy },
-    { label: translateText("Revealed victory-point cards"), points: breakdown.hidden },
+    { kind: "settlements", label: translateText("Settlements"), note: breakdown.settlements ? translateText("{count} × {points} VP", { count: breakdown.settlements, points: 1 }) : undefined, points: breakdown.settlements },
+    { kind: "cities", label: translateText("Cities"), note: breakdown.cities ? translateText("{count} × {points} VP", { count: breakdown.cities / 2, points: 2 }) : undefined, points: breakdown.cities },
+    { kind: "longest-road", label: translateText("Longest Road"), points: breakdown.longestRoad },
+    { kind: "largest-army", label: translateText("Largest Army"), points: breakdown.largestArmy },
+    { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: breakdown.hidden ? translateText("{count} × {points} VP", { count: breakdown.hidden, points: 1 }) : undefined, points: breakdown.hidden },
   ];
 }
 
@@ -123,6 +123,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   const ownStatistics = game.players.find(other => other.id === player.id)!;
   const highestPublicScore = Math.max(...game.players.map(other => other.score));
   const totalScore = snapshot.privateScore ?? ownStatistics.score;
+  const victoryPointCards = player.developmentCards.filter(card => card.kind === "victory-point").length;
   const normalActions = active && game.phase.type === "actions" && !game.winnerId;
   const [details, setDetails] = useState<"table" | "activity" | "discard" | "steal" | "trade-response" | null>(null);
   const [editor, setEditor] = useState<"trade" | "development" | null>(null);
@@ -198,23 +199,31 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         number={game.players.findIndex(other => other.id === player.id) + 1} active={active}
         leading={ownStatistics.score === highestPublicScore && game.players.some(other => other.score < highestPublicScore)}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        privateScore={totalScore}
         stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id} />
     </section>
     <section className="hand-content private-hand" aria-label={translateText("Your cards")}>
       <section className="hand-resources" aria-label={translateText("Your current resources")}>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="eyebrow min-w-0 truncate">{translateText("{name}'s hand", { name: player.name })}</h2>
-          <strong className="shrink-0 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums">{translateText("{count} cards", { count: resourceTotal(player.resources) })}</strong>
+          <div className="flex shrink-0 items-center gap-2">
+            <strong className={`rounded-md px-2 py-1 text-sm text-ink tabular-nums ${resourceTotal(player.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>{translateText("{count} cards", { count: resourceTotal(player.resources) })}</strong>
+            <span
+              role="img"
+              aria-label={translateText("{count} victory point cards", { count: victoryPointCards })}
+              title={translateText("{count} victory point cards", { count: victoryPointCards })}
+              className="flex items-center gap-1 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums"
+            >
+              <span className="text-[#947231] [&>svg]:h-4 [&>svg]:w-4"><DevelopmentCardIcon kind="victory-point" /></span>
+              <strong className="font-semibold">{victoryPointCards}</strong>
+            </span>
+          </div>
         </div>
         <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-1.5 sm:gap-2">
           {RESOURCES.map(resource => <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: player.resources[resource] })}>
             <ResourceCard resource={resource} count={player.resources[resource]} iconClassName="h-8 w-8" className="hand-resource-card w-full" />
           </li>)}
         </ul>
-        <div className="mt-3 flex items-center justify-between rounded-lg bg-moss/80 px-3 py-1.5">
-          <span className="text-[11px]">{translateText("Your victory points")}</span>
-          <span className="text-xs font-semibold">{translateText("{public} public + {hidden} hidden = {total}", { public: ownStatistics.score, hidden: totalScore - ownStatistics.score, total: totalScore })}</span>
-        </div>
       </section>
       <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building" defaultOpen>
         <div className="build-options flex flex-col gap-2">
@@ -412,10 +421,14 @@ export function MultiplayerApp() {
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
-        ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <>
-          <LanguageSelector />
-          <a className="min-w-0 text-xs underline underline-offset-4 sm:text-sm" href="/">{translateText("Single-device play")}</a>
-        </>}
+        ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <GameMenu
+          triggerLabel={translateText("Menu")}
+          groupLabel={translateText("Main menu")}
+          actions={[
+            { label: translateText("Help"), onSelect: () => setDialog("help") },
+          ]}
+          exitAction={{ label: translateText("Single-device play"), onSelect: () => { window.location.href = "/"; } }}
+        />}
       </header>}
       {privateGame && <span className="sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span>}
       <main className={privateGame ? "private-game-main" : sharedGame ? "shared-game-main" : hostLobby ? "multiplayer-lobby-main" : `mx-auto max-w-[1600px] px-4 pb-10 sm:px-8 ${game ? "pt-4" : "pt-10 sm:pt-16"}`}>
