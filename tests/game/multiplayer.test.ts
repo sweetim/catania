@@ -624,6 +624,58 @@ describe("public and private multiplayer projections", () => {
   });
 });
 
+describe("victory results and lobby return", () => {
+  test("finished games broadcast each player's full score breakdown; unfinished games keep it private", () => {
+    const { room } = started();
+    const game = room.game!;
+    game.phase = { type: "actions" };
+    expect(room.snapshot("connection-1").game!.players.every(player => !("scoreBreakdown" in player))).toBe(true);
+
+    game.board.vertices[0]!.building = { playerId: "player-1", kind: "city" };
+    game.players.find(player => player.id === "player-1")!.developmentCards.push({ id: "development-1", kind: "victory-point", purchasedTurn: 1 });
+    game.phase = { type: "finished" };
+    game.winnerId = "player-1";
+    const snapshot = room.snapshot("connection-1");
+    const winner = snapshot.game!.players.find(player => player.id === "player-1")!;
+    expect(winner.score).toBe(getScore(game, "player-1").total);
+    expect(winner.scoreBreakdown).toEqual(getScore(game, "player-1"));
+    expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+
+    for (const scoreBreakdown of [
+      null, "1", {}, { ...winner.scoreBreakdown!, total: 99 },
+      { ...winner.scoreBreakdown!, public: winner.scoreBreakdown!.public + 1 },
+      { ...winner.scoreBreakdown!, extra: true },
+    ]) {
+      const players = snapshot.game!.players.map(player => ({ ...player, ...(player.id === "player-1" ? { scoreBreakdown } : {}) }));
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, game: { ...snapshot.game!, players } } })).toThrow();
+    }
+  });
+
+  test("endGame requires a finished game, then returns every screen to the lobby with seats intact", () => {
+    const { room, credentials } = started();
+    expect(() => room.endGame()).toThrow("Finish the game");
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = room.game!.activePlayerId;
+    const version = room.version;
+    room.endGame();
+    expect(room.version).toBe(version + 1);
+    expect(room.game).toBeNull();
+    expect(room.buildMode).toBeNull();
+    // The lobby returns with its preview, connected seats and reconnectable credentials.
+    expect(room.snapshot().previewBoard).toBeDefined();
+    expect(room.snapshot().players.map(player => player.name)).toEqual(["Ada", "Grace", "Linus"]);
+    expect(room.snapshot("connection-1").game).toBeNull();
+    expect(room.snapshot("connection-1").privatePlayer).toBeNull();
+    expect(room.snapshot("connection-1").privateScore).toBeNull();
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: room.snapshot("connection-1") })).not.toThrow();
+    room.disconnect("connection-1");
+    room.join("replacement", { type: "join", secret, name: "Reconnected", credential: credentials[0]! });
+    room.start();
+    expect(room.game).not.toBeNull();
+    expect(() => room.endGame()).toThrow("Finish the game");
+  });
+});
+
 describe("private theft feedback", () => {
   test("host, admitted players, pending guests and outsiders have no theft events in the lobby", () => {
     const { room } = lobby();

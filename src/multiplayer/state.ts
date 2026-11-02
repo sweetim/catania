@@ -38,13 +38,18 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
     // Engine logs describe public events, never drawn cards, discarded kinds, or stolen resources.
     log: game.log, developmentPlayed: game.developmentPlayed,
-    players: game.players.map(player => ({
-      id: player.id, name: player.name, color: player.color, control: player.control,
-      connected: players.some(seat => seat.id === player.id && seat.connected),
-      resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
-      knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
-      score: game.phase.type === "finished" ? getScore(game, player.id).total : getScore(game, player.id).public,
-    })),
+    players: game.players.map(player => {
+      const score = getScore(game, player.id);
+      return {
+        id: player.id, name: player.name, color: player.color, control: player.control,
+        connected: players.some(seat => seat.id === player.id && seat.connected),
+        resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
+        knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
+        score: game.phase.type === "finished" ? score.total : score.public,
+        // The game is over: revealed victory points are public and each screen shows the full breakdown.
+        ...(game.phase.type === "finished" ? { scoreBreakdown: score } : {}),
+      };
+    }),
     phase, canCancelKnight: game.phase.type === "robber" && !!game.phase.pendingKnight,
     developmentRemaining: game.developmentDeck.length,
   });
@@ -172,6 +177,14 @@ export class HostRoom {
     this.game.activePlayerId = playerIds.get(this.game.activePlayerId)!;
     this.game.setupOrder = this.game.setupOrder.map(playerId => playerIds.get(playerId)!);
     this.waiting.clear();
+    this.version++;
+  }
+
+  endGame(): void {
+    requireRoom(this.game, "The game has not started.");
+    requireRoom(this.game.phase.type === "finished", "Finish the game before returning to the lobby.");
+    this.game = null;
+    this.buildMode = null;
     this.version++;
   }
 

@@ -210,6 +210,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
       room.start();
       for (const pending of waiting) deny(pending.connectionId, { key: "The game started before you were admitted." });
     }),
+    endGame: () => perform(() => room.endGame()),
     admit: connectionId => perform(() => {
       const entry = connections.get(connectionId);
       if (!entry?.joined || !entry.connection.open) throw new GameError("That exact join request is no longer connected.");
@@ -373,7 +374,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly,
+    startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

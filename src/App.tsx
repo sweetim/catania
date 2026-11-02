@@ -13,6 +13,7 @@ import { TradeDialog } from "./components/TradeDialog";
 import { OpenTrade } from "./components/OpenTrade";
 import { PlayerSeat } from "./components/PlayerSeat";
 import { DevelopmentHand } from "./components/DevelopmentHand";
+import { VictoryDialog } from "./components/VictoryDialog";
 import { CollapsibleSection, COLLAPSIBLE_EXPANDED_MEDIA } from "./components/CollapsibleSection";
 import { getPhaseInstructions, TurnInstructions } from "./components/TurnInstructions";
 import {
@@ -104,6 +105,7 @@ export function App() {
   const [humanCount, setHumanCount] = useState(1);
   const [homeView, setHomeView] = useState<"setup" | "island">("setup");
   const [game, setGame] = useState<GameState | null>(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
   const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
@@ -281,6 +283,7 @@ export function App() {
       setConfirmation(null);
       setChosenResources(emptyResources());
       setDevelopmentCardId(null);
+      setResultsOpen(false);
       setMobileView("board");
       setHomeView("setup");
       setError("");
@@ -325,10 +328,11 @@ export function App() {
     if (next.winnerId) {
       setRollPresentation(null);
       setResourceReceipt(null);
-      setViewerId(null);
-      setHandoffTarget(null);
       setDialog(null);
       setConfirmation(null);
+      setResultsOpen(false);
+      // Keep the game table mounted so the victory pops up over the board.
+      setMobileView("board");
       return;
     }
     const nextController = getController(next);
@@ -401,6 +405,12 @@ export function App() {
   const handoffPlayer = game?.players.find(
     (player) => player.id === handoffTarget,
   );
+  const winner = game?.winnerId
+    ? game.players.find((player) => player.id === game.winnerId)!
+    : null;
+  const winnerScore = game && winner ? getScore(game, winner.id) : null;
+  // Without a revealed viewer there is no hand to keep mounted, so the win goes straight to results.
+  const showVictoryScreen = Boolean(game?.winnerId && (resultsOpen || !viewer));
   const isActive = Boolean(viewer && viewer.id === activePlayer?.id);
   const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
   const canCancelKnight = isActive && !rollBusy && game?.phase.type === "robber" && Boolean(game.phase.pendingKnight);
@@ -471,6 +481,14 @@ export function App() {
               vertexId: selected.id,
             };
 
+  function returnToTable() {
+    setGame(null);
+    setRollPresentation(null);
+    setResourceReceipt(null);
+    setViewerId(null);
+    setResultsOpen(false);
+  }
+
   function playerCards(detailed = false) {
     if (!game) return null;
     const scores = game.players.map(player => getScore(game, player.id));
@@ -487,7 +505,7 @@ export function App() {
 
   return (
     <BoardThemeContext value={boardTheme}>
-    <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId ? "game-shell" : "min-h-dvh"}>
+    <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId || !showVictoryScreen ? "game-shell" : "min-h-dvh"}>
       <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
         <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
         <div className="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[.16em] text-muted sm:flex">
@@ -716,7 +734,7 @@ export function App() {
             </div>
           </section>
         </main>
-      ) : game.winnerId ? (
+      ) : game.winnerId && showVictoryScreen ? (
         <main className="mx-auto max-w-5xl px-5 py-12 text-center">
           <p className="eyebrow">{translateText("The island has a new legend")}</p>
           <h1 className="mt-4 font-serif text-5xl">
@@ -759,12 +777,7 @@ export function App() {
           <div className="flex justify-center gap-3">
             <button
               className="button-secondary"
-              onClick={() => {
-                setGame(null);
-                setRollPresentation(null);
-                setResourceReceipt(null);
-                setViewerId(null);
-              }}
+              onClick={returnToTable}
             >
               {translateText("Back to the table")}
             </button>
@@ -1203,6 +1216,34 @@ export function App() {
               </div>
             </aside>
           </div>
+          {winner && winnerScore && (
+            <VictoryDialog
+              eyebrow={translateText("The island has a new legend")}
+              headline={translateText("{name} takes the island.", { name: winner.name })}
+              winnerName={winner.name}
+              winnerColor={winner.color}
+              totalPoints={winnerScore.total}
+              pointsUnit={translateText("points")}
+              summary={translateText("Ten points. Countless good deals. One more game?")}
+              breakdown={[
+                { label: translateText("Settlements"), points: winnerScore.settlements },
+                { label: translateText("Cities"), points: winnerScore.cities },
+                { label: translateText("Longest Road"), points: winnerScore.longestRoad },
+                { label: translateText("Largest Army"), points: winnerScore.largestArmy },
+                { label: translateText("Revealed victory-point cards"), points: winnerScore.hidden },
+              ]}
+            >
+              <button className="button-primary" onClick={() => startGame()}>
+                {translateText("Play a rematch")} <Arrow />
+              </button>
+              <button className="button-secondary" onClick={() => setResultsOpen(true)}>
+                {translateText("See full results")}
+              </button>
+              <button className="button-secondary" onClick={returnToTable}>
+                {translateText("Back to the table")}
+              </button>
+            </VictoryDialog>
+          )}
         </main>
       ) : (
         <main className="computer-table">

@@ -105,13 +105,25 @@ export function parseClientMessage(value: unknown): JoinMessage | Command {
 function array(value: unknown, maximum: number, check: (value: unknown) => boolean): boolean {
   return Array.isArray(value) && value.length <= maximum && value.every(check);
 }
+const SCORE_BREAKDOWN_FIELDS = ["public", "total", "settlements", "cities", "longestRoad", "largestArmy", "hidden"] as const;
+
+function scoreBreakdown(value: unknown): boolean {
+  if (!record(value) || !fields(value, [...SCORE_BREAKDOWN_FIELDS])) return false;
+  if (!SCORE_BREAKDOWN_FIELDS.every(field => integer(value[field], 30))) return false;
+  const parts = value as Record<typeof SCORE_BREAKDOWN_FIELDS[number], number>;
+  return parts.public === parts.settlements + parts.cities + parts.longestRoad + parts.largestArmy &&
+    parts.total === parts.public + parts.hidden;
+}
+
 function roomPlayer(value: unknown, publicPlayer = false): boolean {
   if (!record(value) || !fields(value, publicPlayer
     ? ["id", "name", "color", "control", "connected", "resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"]
-    : ["id", "name", "color", "control", "connected"])) return false;
+    : ["id", "name", "color", "control", "connected"], publicPlayer ? ["scoreBreakdown"] : [])) return false;
   return identifier(value.id, "player") && validName(value.name) && typeof value.color === "string" && /^#[a-f0-9]{6}$/i.test(value.color) &&
     (value.control === "human" || value.control === "computer") &&
-    typeof value.connected === "boolean" && (!publicPlayer || ["resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"].every(key => integer(value[key], 95)));
+    typeof value.connected === "boolean" &&
+    (!publicPlayer || (["resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"].every(key => integer(value[key], 95)) &&
+      (!Object.hasOwn(value, "scoreBreakdown") || scoreBreakdown(value.scoreBreakdown))));
 }
 function privatePlayer(value: unknown): boolean {
   return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed"]) &&

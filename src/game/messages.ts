@@ -89,6 +89,7 @@ export const gameMessages = {
   "Players can only be removed in the lobby.": "プレイヤーを削除できるのはロビー内だけです。",
   "Choose a player in this lobby to remove.": "このロビーから削除するプレイヤーを選んでください。",
   "Computers can only be renamed in the lobby.": "コンピューターの名前を変更できるのはロビー内だけです。",
+  "Finish the game before returning to the lobby.": "ゲームを終了してからロビーに戻ってください。",
   "Choose a computer in this lobby to rename.": "このロビーで名前を変更するコンピューターを選んでください。",
   "Choose a name with 1 to 20 characters and no control characters.": "制御文字を含まない1〜20文字の名前を入力してください。",
   "Choose a different name; that name is already in the room.": "その名前はルーム内で使われています。別の名前を選んでください。",

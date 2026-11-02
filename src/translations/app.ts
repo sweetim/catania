@@ -56,6 +56,8 @@ export const appTranslations = {
   "Revealed victory-point cards": "公開された勝利点カード",
   "Back to the table": "準備画面に戻る",
   "Play a rematch": "もう一度遊ぶ",
+  "points": "点",
+  "See full results": "結果の詳細を見る",
   "A moment between friends": "仲間に手番をつなごう",
   "Pass the device to {name}.": "{name}に端末を渡してください。",
   "Everyone else, eyes on the island. Your private hand will appear when you're ready.": "ほかの人は島を見ていてください。準備ができたら、あなただけの手札を表示します。",

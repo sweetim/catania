@@ -1471,8 +1471,7 @@ test("private robbery notices overlay above turn controls without moving the han
     const description = lost ? `${opponent.name} robbed you of 1 Ore.` : `You stole 1 Ore from ${opponent.name}.`;
     await expect(notice).toHaveCount(1);
     await expect(notice.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    await expect(notice.getByText(`${lost ? "Lost" : "Received"} 1 Ore`, { exact: true })).toBeVisible();
-    await expect(notice.getByText(`${lost ? "-1" : "+1"} Ore`, { exact: true })).toBeVisible();
+    await expect(notice.getByText(`${lost ? "-1" : "+1"}`, { exact: true })).toBeVisible();
     await expect(notice.locator(".resource-card")).toBeVisible();
     await expect(announcement).toHaveText(description);
     await expect(announcement).toHaveAttribute("aria-atomic", "true");
@@ -1580,7 +1579,6 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await present();
   await expect(notice).toHaveCount(1);
   await expect(notice.getByRole("heading", { name: `${thief!.name} robbed you`, exact: true })).toBeVisible();
-  await expect(notice.getByText("Lost 1 Ore", { exact: true })).toBeVisible();
   await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim!.name}`, exact: true })).toHaveCount(0);
   await notice.scrollIntoViewIfNeeded();
@@ -1592,7 +1590,7 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await present();
   await expect(notice).toHaveCount(1);
   await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
-  await expect(notice.getByText("2 more theft notices", { exact: true })).toBeVisible();
+  await expect(notice.getByText("2 more", { exact: true })).toBeVisible();
   await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
   await noHorizontalOverflow(phone);
@@ -1603,8 +1601,7 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await phone.clock.fastForward(1);
   await expect(notice).toHaveCount(1);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim!.name}`, exact: true })).toBeVisible();
-  await expect(notice.getByText("Received 1 Wool", { exact: true })).toBeVisible();
-  await expect(notice.getByText("+1 Wool", { exact: true })).toBeVisible();
+  await expect(notice.getByText("+1", { exact: true })).toBeVisible();
   await expect(announcement).toHaveText(`You stole 1 Wool from ${victim!.name}.`);
   await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
@@ -1619,9 +1616,8 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await expect(notice.getByRole("heading", { name: `${thief!.name} robbed you`, exact: true })).toBeVisible();
   await expect(dismiss).toBeFocused();
   await expect(announcement).toHaveText(`${thief!.name} robbed you of 1 Ore.`);
-  await expect(notice.getByText("Lost 1 Ore", { exact: true })).toBeVisible();
-  await expect(notice.getByText("-1 Ore", { exact: true })).toBeVisible();
-  await expect(notice.getByText(/more theft notice/)).toHaveCount(0);
+  await expect(notice.getByText("-1", { exact: true })).toBeVisible();
+  await expect(notice.getByText(/more/)).toHaveCount(0);
   await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
   await phone.clock.fastForward(4_999);
@@ -1651,14 +1647,14 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await expect(announcement).toHaveText("");
   snapshot.privateThefts.push({ id: 4, thiefId: thief!.id, victimId: player.id, resource: "grain" });
   await present();
-  await expect(notice.getByText("Lost 1 Grain", { exact: true })).toBeVisible();
-  await expect(notice.getByText(/more theft notice/)).toHaveCount(0);
+  await expect(notice.getByRole("heading", { name: `${thief!.name} robbed you`, exact: true })).toBeVisible();
+  await expect(notice.getByText(/more/)).toHaveCount(0);
 });
 
 test("private monopoly notices report each victim's losses and queue behind unread theft notices", async ({ multiplayer }, testInfo) => {
-  const { phone, snapshot, present } = await privateDialogFixture(multiplierPlaceholder());
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
-  await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z")});
+  await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
   const opponent = game.players.find(other => other.id !== player.id)!;
@@ -1672,11 +1668,10 @@ test("private monopoly notices report each victim's losses and queue behind unre
   player.resources.ore = 2;
   await present();
   await expect(monopolyNotice).toHaveCount(1);
-  await expect(monopolyNotice.getByRole("heading", { name: `${opponent.name} took all your ${RESOURCE_NAMES.ore}`, exact: true })).toBeVisible();
-  await expect(monopolyNotice.getByText(`Lost 3 ${RESOURCE_NAMES.ore}`, { exact: true })).toBeVisible();
-  await expect(monopolyNotice.getByText(`-3 ${RESOURCE_NAMES.ore}`, { exact: true })).toBeVisible();
+  await expect(monopolyNotice.getByRole("heading", { name: `${opponent.name}'s Monopoly`, exact: true })).toBeVisible();
+  await expect(monopolyNotice.getByText("-3", { exact: true })).toBeVisible();
   await expect(monopolyAnnouncement).toHaveText(`You lost 3 ${RESOURCE_NAMES.ore} to ${opponent.name}'s Monopoly.`);
-  await expect(monopolyNotice.getByText(/more monopoly notice/)).toHaveCount(0);
+  await expect(monopolyNotice.getByText(/more/)).toHaveCount(0);
   await expect(robberyNotice).toHaveCount(0);
   await monopolyNotice.scrollIntoViewIfNeeded();
   await expect(monopolyNotice).toBeInViewport({ ratio: 1 });
@@ -1687,7 +1682,7 @@ test("private monopoly notices report each victim's losses and queue behind unre
   snapshot.privateThefts.push({ id: 3, thiefId: opponent.id, victimId: player.id, resource: "wool" });
   await present();
   await expect(monopolyNotice).toHaveCount(1);
-  await expect(monopolyNotice.getByText("1 more theft notice", { exact: true })).toBeVisible();
+  await expect(monopolyNotice.getByText("1 more", { exact: true })).toBeVisible();
   await expect(robberyNotice).toHaveCount(0);
   await expect(robberyAnnouncement).toHaveText("");
 
@@ -1908,8 +1903,22 @@ test("private dialogs keep development cards, discards, theft and trades accessi
 
   game.phase = { type: "finished" };
   game.winnerId = opponent.id;
+  const winner = game.players.find(player => player.id === opponent.id)!;
+  winner.score = 10;
+  winner.scoreBreakdown = { public: 9, total: 10, settlements: 2, cities: 4, longestRoad: 2, largestArmy: 1, hidden: 1 };
   await present();
-  await expect(phone.getByRole("dialog")).toHaveCount(0);
+  // No gameplay dialog blocks the finished game; the victory pops up over the phone instead.
+  await expect(phone.locator("dialog")).toHaveCount(0);
+  await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
+  const victory = phone.getByRole("dialog", { name: `${opponent.name} takes the island.`, exact: true });
+  await expect(victory).toBeVisible();
+  await expect(victory).toContainText("10");
+  await expect(victory.locator("dd")).toHaveText(["2", "4", "2", "1", "1"]);
+  await expect(victory.getByRole("button", { name: "Leave room", exact: true })).toBeVisible();
+  await noHorizontalOverflow(phone);
+  await screenshot(phone, testInfo, "victory-popup-phone");
+  await victory.getByRole("button", { name: "View the island", exact: true }).click();
+  await expect(victory).toHaveCount(0);
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
   await privateScreenFits(phone);
 });

@@ -14,6 +14,17 @@ export type PublicPlayer = RoomPlayer & {
   knightsPlayed: number;
   longestRoad: number;
   score: number;
+  scoreBreakdown?: ScoreBreakdown;
+};
+
+export type ScoreBreakdown = {
+  public: number;
+  total: number;
+  settlements: number;
+  cities: number;
+  longestRoad: number;
+  largestArmy: number;
+  hidden: number;
 };
 
 export type PublicGame = Pick<GameState,
@@ -57,6 +68,7 @@ export type SessionView = {
 
 export type MultiplayerSession = {
   startGame: () => void;
+  endGame: () => void;
   shuffleBoard: () => void;
   admit: (connectionId: string) => void;
   reject: (connectionId: string) => void;

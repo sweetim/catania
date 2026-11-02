@@ -10,6 +10,7 @@ import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices }
 import { OpenTrade } from "../components/OpenTrade";
 import { PlayerSeat } from "../components/PlayerSeat";
 import { DevelopmentHand } from "../components/DevelopmentHand";
+import { VictoryDialog, type VictoryBreakdownRow } from "../components/VictoryDialog";
 import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstructions";
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
@@ -25,7 +26,7 @@ import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { hostSession, joinSession } from "./session";
 import { validName } from "./protocol";
 import { MultiplayerDice } from "./MultiplayerDice";
-import type { BuildMode, Invitation, MultiplayerSession, RoomSnapshot, SessionView } from "./types";
+import type { BuildMode, Invitation, MultiplayerSession, PublicGame, RoomSnapshot, SessionView } from "./types";
 import "../index.css";
 
 function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
@@ -88,6 +89,20 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
       </form>
     </Dialog>}
   </>;
+}
+
+function victoryBreakdownRows(
+  breakdown: PublicGame["players"][number]["scoreBreakdown"],
+  translateText: (key: keyof typeof multiplayerUiTranslations) => string,
+): VictoryBreakdownRow[] {
+  if (!breakdown) return [];
+  return [
+    { label: translateText("Settlements"), points: breakdown.settlements },
+    { label: translateText("Cities"), points: breakdown.cities },
+    { label: translateText("Longest Road"), points: breakdown.longestRoad },
+    { label: translateText("Largest Army"), points: breakdown.largestArmy },
+    { label: translateText("Revealed victory-point cards"), points: breakdown.hidden },
+  ];
 }
 
 function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPrivateNoticeTarget, turnMenu }: {
@@ -321,6 +336,7 @@ export function MultiplayerApp() {
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
+  const [victoryDismissed, setVictoryDismissed] = useState(false);
   const copyFeedbackTimer = useRef<number | undefined>(undefined);
   const snapshot = view?.snapshot;
   const game = snapshot?.game;
@@ -335,6 +351,12 @@ export function MultiplayerApp() {
   const missingPlayers = Math.max(0, 3 - playerCount);
   const disconnectedPlayers = snapshot?.players.filter(player => player.control === "human" && !player.connected) ?? [];
   const sessionError = view?.error ? formatGameMessage(language, view.error) : "";
+  const victoryWinner = game?.winnerId ? game.players.find(player => player.id === game.winnerId) : undefined;
+
+  useEffect(() => {
+    // A fresh game (or a return to the lobby) brings the victory popup back.
+    if (!game?.winnerId) setVictoryDismissed(false);
+  }, [Boolean(game), Boolean(game?.winnerId)]);
 
   function connect() {
     if (!invitation || !name.trim()) return;
@@ -523,12 +545,50 @@ export function MultiplayerApp() {
               />
             </div>
           </section>
+          {victoryWinner && !victoryDismissed && (
+            <VictoryDialog
+              eyebrow={translateText("The island has a new legend")}
+              headline={translateText("{name} takes the island.", { name: victoryWinner.name })}
+              winnerName={victoryWinner.name}
+              winnerColor={victoryWinner.color}
+              totalPoints={victoryWinner.score}
+              pointsUnit={translateText("points")}
+              summary={translateText("The room keeps its players and invitation. Start the next game from the lobby.")}
+              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText)}
+            >
+              <button className="button-primary" disabled={disabled} onClick={() => session.current?.endGame()}>
+                {translateText("Return to lobby")}
+              </button>
+              <button className="button-secondary" onClick={() => setVictoryDismissed(true)}>
+                {translateText("View the island")}
+              </button>
+            </VictoryDialog>
+          )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
           {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
           ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
+          {victoryWinner && !victoryDismissed && (
+            <VictoryDialog
+              eyebrow={translateText("The island has a new legend")}
+              headline={translateText("{name} takes the island.", { name: victoryWinner.name })}
+              winnerName={victoryWinner.name}
+              winnerColor={victoryWinner.color}
+              totalPoints={victoryWinner.score}
+              pointsUnit={translateText("points")}
+              summary={translateText("The host can return everyone to the lobby for a rematch.")}
+              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText)}
+            >
+              <button className="button-primary" onClick={() => setDialog("leave")}>
+                {translateText("Leave room")}
+              </button>
+              <button className="button-secondary" onClick={() => setVictoryDismissed(true)}>
+                {translateText("View the island")}
+              </button>
+            </VictoryDialog>
+          )}
         </div>}
       </main>
       {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}

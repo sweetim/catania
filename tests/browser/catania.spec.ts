@@ -1,6 +1,6 @@
 import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { createBoard } from "../../src/game/board";
-import { applyAction, COSTS, createGame, emptyResources, getTradeRatio, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal } from "../../src/game/engine";
+import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal } from "../../src/game/engine";
 import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
@@ -128,6 +128,8 @@ async function privateHandIsAbsent(page: Page) {
   await expect(page.getByRole("status", { name: "Resource receipt", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Robbery notification", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("status", { name: "Robbery result", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Monopoly notification", includeHidden: true })).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Monopoly result", includeHidden: true })).toHaveCount(0);
   await expect(page.getByRole("list", { name: "Your roll rewards", includeHidden: true })).toHaveCount(0);
 }
 
@@ -1977,6 +1979,52 @@ async function prepareRollGame(page: Page, startingPieces?: readonly (readonly [
   return state;
 }
 
+// Like prepareRollGame, but with a chosen initial seed so the preview board, player order
+// and development deck match a deterministic script computed against the engine in Node.
+async function prepareSeededRollGame(page: Page, initialSeed: number, startingPieces: readonly (readonly [number, number])[]) {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  let seed = initialSeed;
+  const nextRandomValue = () => seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+  const playerOrderValues = Array.from({ length: 2 }, nextRandomValue);
+  const previewSeed = seed;
+  createBoard(() => nextRandomValue() / 0x100000000);
+  await seedRandomness(page, previewSeed);
+  await showHomeView(page, "Island");
+  await page.getByRole("button", { name: "Shuffle island preview", exact: true }).click();
+  await showHomeView(page, "Setup");
+  await seedRandomness(page, initialSeed, playerOrderValues);
+  let mirrorSeed = initialSeed;
+  let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
+  })), () => {
+    mirrorSeed = (Math.imul(mirrorSeed, 1664525) + 1013904223) >>> 0;
+    return mirrorSeed / 0x100000000;
+  });
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  for (let placement = 0; placement < 6; placement++) {
+    if (placement !== 3) await revealHand(page);
+    await showView(page, "board");
+    const vertexId = `vertex-${startingPieces[placement]![0]}`;
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    if (placement >= 3) {
+      await expect(collection).toBeInViewport({ ratio: 1 });
+      await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click().catch(() => {});
+    } else {
+      await expect(collection).toHaveCount(0);
+    }
+    const edgeId = `edge-${startingPieces[placement]![1]}`;
+    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId });
+  }
+  await showView(page, "hand");
+  return state;
+}
+
 async function chooseDice(page: Page, dice: [number, number]) {
   await page.evaluate(values => {
     let index = 0;
@@ -2040,7 +2088,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   expect(turnBounds.x).toBeCloseTo(noticeBounds.x, 0);
   expect(turnBounds.width).toBeCloseTo(noticeBounds.width, 0);
   await expect(notice.getByRole("heading", { name: `You stole from ${victim.name}`, exact: true })).toBeVisible();
-  await expect(notice.getByText(`+1 ${resource}`, { exact: true })).toBeVisible();
+  await expect(notice.getByText("+1", { exact: true })).toBeVisible();
   await expect(result).toHaveText(`You stole 1 ${resource} from ${victim.name}.`);
   await expect(page.getByRole("region", { name: "Resource collection", includeHidden: true })).toHaveCount(0);
   await noPageOverflow(page);
@@ -2061,7 +2109,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   await notice.scrollIntoViewIfNeeded();
   await expect(notice).toBeInViewport({ ratio: 1 });
   await expect(notice.getByRole("heading", { name: `${thief.name} robbed you`, exact: true })).toBeVisible();
-  await expect(notice.getByText(`-1 ${resource}`, { exact: true })).toBeVisible();
+  await expect(notice.getByText("-1", { exact: true })).toBeVisible();
   await expect(result).toHaveText(`${thief.name} robbed you of 1 ${resource}.`);
   await expect(dismiss).toBeInViewport({ ratio: 1 });
   await noPageOverflow(page);
@@ -2080,7 +2128,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   // Dismissing the victim's notice must not acknowledge the thief's notice.
   await passTo(thief.name);
   await notice.scrollIntoViewIfNeeded();
-  await expect(notice.getByText(`+1 ${resource}`, { exact: true })).toBeVisible();
+  await expect(notice.getByText("+1", { exact: true })).toBeVisible();
   await page.clock.runFor(4999);
   await expect(notice).toHaveCount(1);
   await page.clock.runFor(1);
@@ -2688,6 +2736,192 @@ test("played Knight and connected road counts show Largest Army and Longest Road
     await noPageOverflow(page);
     await screenshot(page, testInfo, `player-awards-${viewport.width}`, false);
   }
+  expect(browserErrors).toEqual([]);
+});
+
+test("a won game pops the winner up over the board with the point breakdown and rematch choices", async ({ page, isMobile }, testInfo) => {
+  test.slow();
+  const browserErrors: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("requestfailed", request => browserErrors.push(`${request.failure()?.errorText}: ${request.url()}`));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+
+  // The board, player order and script below come from a deterministic simulation against
+  // the engine: with initial seed 206 the first roller wins in forty turns.
+  let state = await prepareSeededRollGame(page, 206, [[40, 50], [0, 0], [2, 1], [4, 3], [7, 7], [42, 54]]);
+  await revealBuildSection(page);
+  const buyerId = state.activePlayerId;
+  const buyerName = state.players.find(player => player.id === buyerId)!.name;
+  const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
+  const endTurn = page.getByRole("button", { name: "End turn & pass device", exact: true });
+  const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
+
+  const scriptCosts = {
+    road: { wood: 1, brick: 1 },
+    settlement: { wood: 1, brick: 1, wool: 1, grain: 1 },
+    city: { grain: 2, ore: 3 },
+  } as const;
+  const production = (number: number) => {
+    let total = 0;
+    for (const tile of state.board.tiles) {
+      if (tile.id === state.robberTileId || tile.number !== number || tile.terrain === "desert") continue;
+      for (const vertexId of tile.vertexIds) {
+        const building = state.board.vertices.find(vertex => vertex.id === vertexId)!.building;
+        if (building && building.playerId === buyerId) total += building.kind === "city" ? 2 : 1;
+      }
+    }
+    return total;
+  };
+  const canAfford = (cost: Partial<Record<Resource, number>>) => {
+    const player = state.players.find(player => player.id === buyerId)!;
+    return Object.entries(cost).every(([resource, amount]) => player.resources[resource as Resource] >= amount!);
+  };
+  const needsRoad = () =>
+    getLongestRoadLength(state, buyerId) < 5 || legalSettlementVertices(state, buyerId).length === 0;
+  const bestRoadEdge = (): string | null => {
+    if (!needsRoad()) return null;
+    const edges = legalRoadEdges(state, buyerId);
+    if (!edges.length || !canAfford(scriptCosts.road)) return null;
+    let best: string | null = null;
+    let bestLength = getLongestRoadLength(state, buyerId);
+    for (const edgeId of edges) {
+      let length: number;
+      try { length = getLongestRoadLength(applyAction(state, buyerId, { type: "place-road", edgeId }), buyerId); }
+      catch { continue; }
+      if (length > bestLength) { bestLength = length; best = edgeId; }
+    }
+    return best ?? edges[0]!;
+  };
+  const nextBuildNeed = (): Partial<Record<Resource, number>> | null => {
+    if (canAfford(scriptCosts.city) && legalCityVertices(state, buyerId).length > 0) return { ...scriptCosts.city };
+    if (legalSettlementVertices(state, buyerId).length > 0) return { ...scriptCosts.settlement };
+    if (needsRoad() && legalRoadEdges(state, buyerId).length > 0) return { ...scriptCosts.road };
+    if (legalCityVertices(state, buyerId).length > 0) return { ...scriptCosts.city };
+    return null;
+  };
+  const scriptAction = () => {
+    if (state.phase.type !== "actions") return null;
+    if (canAfford(scriptCosts.city) && legalCityVertices(state, buyerId).length > 0) {
+      return { type: "place-city" as const, vertexId: legalCityVertices(state, buyerId)[0]! };
+    }
+    if (canAfford(scriptCosts.settlement) && legalSettlementVertices(state, buyerId).length > 0) {
+      return { type: "place-settlement" as const, vertexId: legalSettlementVertices(state, buyerId)[0]! };
+    }
+    const edgeId = bestRoadEdge();
+    if (edgeId) return { type: "place-road" as const, edgeId };
+    return null;
+  };
+  const tradeToward = () => {
+    const player = state.players.find(player => player.id === buyerId)!;
+    const need = nextBuildNeed();
+    if (!need) return null;
+    for (const [resource, amount] of Object.entries(need)) {
+      if (player.resources[resource as Resource] >= amount!) continue;
+      if (state.bank[resource as Resource] <= 0) continue;
+      const surplus = RESOURCES
+        .filter(source => player.resources[source] >= getTradeRatio(state, buyerId, source) + (need[source] ?? 0))
+        .sort((first, second) => player.resources[second] - player.resources[first])[0];
+      if (surplus) return { type: "bank-trade" as const, give: surplus, receive: resource as Resource };
+    }
+    return null;
+  };
+  const diceFor = (total: number): [number, number] => [Math.min(6, total - 1), total - Math.min(6, total - 1)];
+  const rollAndMirror = async (playerId: string, dice: [number, number]) => {
+    await chooseDice(page, dice);
+    await roll.click();
+    let diceIndex = 0;
+    state = applyAction(state, playerId, { type: "roll" }, () => (dice[diceIndex++ % 2]! - 0.5) / 6);
+    await expect(endTurn).toBeEnabled();
+    if (await dismissCollection.isVisible()) await dismissCollection.click();
+  };
+
+  async function playScriptedAction(action: NonNullable<ReturnType<typeof scriptAction>> | NonNullable<ReturnType<typeof tradeToward>>) {
+    if (action.type === "bank-trade") {
+      await showView(page, "hand");
+      await page.getByRole("button", { name: "Make a trade", exact: true }).click();
+      const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
+      await trade.getByRole("button", { name: `Give ${RESOURCE_NAMES[action.give]}`, exact: true }).click();
+      await trade.getByRole("button", { name: `Receive ${RESOURCE_NAMES[action.receive]}`, exact: true }).click();
+      await trade.getByRole("button", { name: "Confirm exchange", exact: true }).click();
+    } else {
+      const label = action.type === "place-city" ? "Upgrade to city" : action.type === "place-settlement" ? "Build settlement" : "Build road";
+      await showView(page, "hand");
+      await page.getByRole("button", { name: new RegExp(`^${label}\\b`) }).click();
+      await showView(page, "board");
+      const target = action.type === "place-road"
+        ? `Build road at ${action.edgeId}`
+        : `${action.type === "place-city" ? "Upgrade to city" : "Place settlement"} at ${action.vertexId}`;
+      await page.getByRole("button", { name: target, exact: true }).click();
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
+    state = applyAction(state, buyerId, action);
+  }
+
+  let turns = 0;
+  while (!state.winnerId && turns < 90) {
+    await showView(page, "hand");
+    const active = state.activePlayerId;
+    if (active === buyerId) {
+      let best = 6;
+      for (const number of [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]) {
+        if (production(number) > production(best)) best = number;
+      }
+      await rollAndMirror(buyerId, diceFor(best));
+      let guard = 0;
+      while (!state.winnerId && state.phase.type === "actions" && guard++ < 24) {
+        const action = scriptAction() ?? tradeToward();
+        if (!action) break;
+        await playScriptedAction(action);
+      }
+    } else {
+      let idle = 2;
+      for (const number of [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]) {
+        const anyProduction = state.board.tiles.some(tile =>
+          tile.id !== state.robberTileId && tile.number === number && tile.terrain !== "desert" &&
+          tile.vertexIds.some(vertexId => state.board.vertices.find(vertex => vertex.id === vertexId)!.building));
+        if (!anyProduction) { idle = number; break; }
+      }
+      await rollAndMirror(active, diceFor(idle));
+    }
+    if (!state.winnerId) {
+      await showView(page, "hand");
+      await endTurn.click();
+      state = applyAction(state, state.activePlayerId, { type: "end-turn" });
+      await revealHand(page);
+    }
+    turns++;
+  }
+  expect(state.winnerId, "The scripted buyer reaches ten victory points").toBe(buyerId);
+
+  const score = getScore(state, buyerId);
+  const victory = page.getByRole("dialog", { name: `${buyerName} takes the island.`, exact: true });
+  await expect(victory).toBeVisible();
+  await expect(victory).toContainText(`${score.total}`);
+  await expect(victory.locator("dd")).toHaveText([
+    String(score.settlements), String(score.cities), String(score.longestRoad), String(score.largestArmy), String(score.hidden),
+  ]);
+  await expect(victory.getByRole("button", { name: "Play a rematch", exact: true })).toBeVisible();
+  await expect(victory.getByRole("button", { name: "See full results", exact: true })).toBeVisible();
+  await expect(victory.getByRole("button", { name: "Back to the table", exact: true })).toBeVisible();
+  // The winning island stays mounted behind the popup.
+  await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "victory-popup", false);
+
+  await victory.getByRole("button", { name: "See full results", exact: true }).click();
+  await expect(page.getByRole("heading", { name: `${buyerName} takes the island.`, exact: true })).toBeVisible();
+  await expect(page.getByText(`${buyerName} / Winner`, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Play a rematch", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
+  await expect(victory).toHaveCount(0);
+  await revealHand(page);
+  await showView(page, "board");
+  await expect(page.getByRole("button", { name: /^Place settlement at/ }).first()).toBeVisible({ timeout: 15_000 });
   expect(browserErrors).toEqual([]);
 });
 
@@ -3848,7 +4082,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   const robberyNotice = page.getByRole("region", { name: "Robbery notification", exact: true });
   await robberyNotice.scrollIntoViewIfNeeded();
   await expect(robberyNotice.getByRole("heading", { name: `${robberName} robbed you`, exact: true })).toBeVisible();
-  await expect(robberyNotice.getByText(`Lost 1 ${RESOURCE_NAMES[robbery.resource]}`, { exact: true })).toBeVisible();
+  await expect(robberyNotice.getByText("-1", { exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: "Robbery result", exact: true })).toHaveText(`${robberName} robbed you of 1 ${RESOURCE_NAMES[robbery.resource]}.`);
   await screenshot(page, testInfo, "solo-robbery-victim", false);
   await robberyNotice.getByRole("button", { name: "Dismiss robbery notification", exact: true }).click();
