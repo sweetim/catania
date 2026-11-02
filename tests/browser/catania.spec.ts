@@ -1589,7 +1589,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
     })).toBe(true);
     await noPageOverflow(page);
     await screenshot(page, testInfo, `zoomed-board-${artifact}`, false);
-    await board.getByRole("button", { name: "Reset board view", exact: true }).click();
+    for (let step = 0; step < 6; step++) await board.getByRole("button", { name: "Zoom out", exact: true }).click();
     await expect(board.getByRole("status", { name: "Zoom level" })).toHaveText("100%");
     await expect(board.getByRole("button", { name: "Zoom out", exact: true })).toBeDisabled();
     expect(await map.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 0, top: 0 });
@@ -1638,7 +1638,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
     await expect(settlement).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByRole("button", { name: "Confirm placement", includeHidden: true })).toHaveCount(0);
     expect(await map.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual(pannedPosition);
-    await board.getByRole("button", { name: "Reset board view", exact: true }).click();
+    for (let step = 0; step < 6; step++) await board.getByRole("button", { name: "Zoom out", exact: true }).click();
     await expectBoardFrame(page, initialFrame);
     await showView(page, "hand");
     const hand = page.getByRole("region", { name: "Private resources", exact: true });

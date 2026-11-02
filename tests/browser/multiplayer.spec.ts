@@ -868,7 +868,7 @@ for (const shuffleCount of [0, 2]) {
     expect(await islandLayout(preview)).toEqual(selectedIsland);
     await preview.getByRole("button", { name: "Zoom in", exact: true }).click();
     await expect(preview.getByLabel("Zoom level", { exact: true })).toHaveText("125%");
-    await preview.getByRole("button", { name: "Reset board view", exact: true }).click();
+    await preview.getByRole("button", { name: "Zoom out", exact: true }).click();
     await expect(preview.getByLabel("Zoom level", { exact: true })).toHaveText("100%");
     await noHorizontalOverflow(host);
     await screenshot(host, testInfo, "selected-lobby-map");

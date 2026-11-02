@@ -37,7 +37,6 @@ export const boardTranslations = {
   "Zoom out": "縮小",
   "Zoom level": "拡大率",
   "Zoom in": "拡大",
-  "Reset board view": "盤面の表示をリセット",
   "Settings": "設定",
   "Show blocked settlement locations": "開拓地を建設できない場所を表示",
   "Crosses mark empty corners next to any settlement or city, where the distance rule prevents building. Unmarked corners still require the usual roads, resources, and available pieces on your turn.": "開拓地や都市に隣接し、距離のルールによって建設できない空き交差点に×印を表示します。印のない交差点でも、自分の手番に建設するには通常どおり街道、資源、未使用のコマが必要です。",

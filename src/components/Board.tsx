@@ -1403,30 +1403,6 @@ export function Board({
           >
             +
           </button>
-          <button
-            type="button"
-            aria-label={translateText("Reset board view")}
-            onClick={() => {
-              zoomCenterReference.current = { x: 0.5, y: 0.5 };
-              setZoom(1);
-              viewportReference.current?.scrollTo({ left: 0, top: 0 });
-            }}
-            className="ml-1 flex size-11 items-center justify-center rounded-xl text-[#64735e] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]"
-          >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M3 8a7 7 0 1 1 0 5M3 3v5h5" />
-            </svg>
-          </button>
         </div>
       </div>
     </div>
