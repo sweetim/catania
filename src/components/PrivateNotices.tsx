@@ -80,44 +80,40 @@ export function PrivateNotices({ thefts, monopolies, playerId, players, target }
       <span key={monopoly ? `${playerId}-monopoly-${monopoly.id}` : "empty"}>{monopolyDescription}</span>
     </p>
     {theft && theftPlayer && <section ref={notice} aria-label={translateText("Robbery notification")}
-      className={`private-notice rounded-xl border bg-paper p-3 shadow-lg ${lostResources ? "border-clay" : "border-[#91ad9b]"}`}>
-      <div className="flex items-center gap-3">
-        <div className="shrink-0" aria-hidden="true">
-          <ResourceCard resource={theft.resource} compact iconClassName="h-6 w-6" className="h-16 w-11" />
-          <span className={`mt-1 block text-center text-sm font-bold tabular-nums ${lostResources ? "text-[#934c36]" : "text-ink"}`}>
-            {stolenCount}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="break-words text-sm font-semibold leading-snug">{translateText(lostResources ? "{player} robbed you" : "You stole from {player}", { player: theftPlayer.name })}</h2>
-          {footer}
-        </div>
+      className={`private-notice rounded-xl border bg-paper p-4 shadow-lg ${lostResources ? "border-clay" : "border-[#91ad9b]"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="min-w-0 break-words font-serif text-xl leading-tight">{translateText(lostResources ? "{player} robbed you" : "You stole from {player}", { player: theftPlayer.name })}</h2>
         <button type="button" aria-label={translateText("Dismiss robbery notification")}
-          className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
           onClick={() => setDismissedThefts(previous => ({ ...previous, [playerId]: theft.id }))}>
           &times;
         </button>
       </div>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <ResourceCard resource={theft.resource} compact iconClassName="h-6 w-6" className="h-16 w-11" />
+        <span aria-hidden="true" className={`text-3xl font-bold leading-none tabular-nums ${lostResources ? "text-[#934c36]" : "text-ink"}`}>
+          {stolenCount}
+        </span>
+      </div>
+      {footer}
     </section>}
     {monopoly && monopolist && <section ref={notice} aria-label={translateText("Monopoly notification")}
-      className="private-notice rounded-xl border border-clay bg-paper p-3 shadow-lg">
-      <div className="flex items-center gap-3">
-        <div className="shrink-0" aria-hidden="true">
-          <ResourceCard resource={monopoly.resource} compact iconClassName="h-6 w-6" className="h-16 w-11" />
-          <span className="mt-1 block text-center text-sm font-bold tabular-nums text-[#934c36]">
-            {`-${lostCount}`}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="break-words text-sm font-semibold leading-snug">{translateText("{player}'s Monopoly", { player: monopolist.name })}</h2>
-          {footer}
-        </div>
+      className="private-notice rounded-xl border border-clay bg-paper p-4 shadow-lg">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="min-w-0 break-words font-serif text-xl leading-tight">{translateText("{player}'s Monopoly", { player: monopolist.name })}</h2>
         <button type="button" aria-label={translateText("Dismiss Monopoly notification")}
-          className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
+          className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
           onClick={() => setDismissedMonopolies(previous => ({ ...previous, [playerId]: monopoly.id }))}>
           &times;
         </button>
       </div>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <ResourceCard resource={monopoly.resource} compact iconClassName="h-6 w-6" className="h-16 w-11" />
+        <span aria-hidden="true" className="text-3xl font-bold leading-none tabular-nums text-[#934c36]">
+          {`-${lostCount}`}
+        </span>
+      </div>
+      {footer}
     </section>}
   </>, target);
 }
