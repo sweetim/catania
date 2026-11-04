@@ -14,7 +14,7 @@ import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
-import { TerrainArtwork } from "./ThemeArtwork";
+import { ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
 
@@ -57,6 +57,7 @@ export function Board({
   selectedId?: string | null;
   confirmation?: {
     title: string;
+    player?: { name: string; color: string };
     onConfirm: () => void;
     onCancel: () => void;
   };
@@ -888,45 +889,99 @@ export function Board({
                     strokeDasharray="2 3"
                   />
                   <g transform={`translate(${portX} ${portY})`}>
-                    <rect
-                      x="-27"
-                      y="-15"
-                      width="54"
-                      height="33"
-                      rx="9"
-                      fill="#547f72"
-                      opacity="0.12"
-                    />
-                    <rect
-                      x="-27"
-                      y="-17"
-                      width="54"
-                      height="33"
-                      rx="9"
-                      fill="#f7f0d9"
-                      stroke="#a8b6a0"
-                      strokeWidth="1"
-                    />
-                    <text
-                      y="-2"
-                      textAnchor="middle"
-                      fill="#425c4d"
-                      fontSize="13"
-                      fontWeight="750"
-                      fontFamily="Georgia, 'Times New Roman', serif"
-                    >
-                      {ratio}
-                    </text>
-                    <text
-                      y="9"
-                      textAnchor="middle"
-                      fill="#61715c"
-                      fontSize="7.5"
-                      fontWeight="700"
-                      letterSpacing="0.8"
-                    >
-                      {port.resource === "any" ? translateText("ANY") : resourceName(language, port.resource).toUpperCase()}
-                    </text>
+                    {port.resource === "any" ? (
+                      <>
+                        <rect
+                          x="-27"
+                          y="-15"
+                          width="54"
+                          height="33"
+                          rx="9"
+                          fill="#547f72"
+                          opacity="0.12"
+                        />
+                        <rect
+                          x="-27"
+                          y="-17"
+                          width="54"
+                          height="33"
+                          rx="9"
+                          fill="#f7f0d9"
+                          stroke="#a8b6a0"
+                          strokeWidth="1"
+                        />
+                        <text
+                          y="-2"
+                          textAnchor="middle"
+                          fill="#425c4d"
+                          fontSize="13"
+                          fontWeight="750"
+                          fontFamily="Georgia, 'Times New Roman', serif"
+                        >
+                          {ratio}
+                        </text>
+                        <text
+                          y="9"
+                          textAnchor="middle"
+                          fill="#61715c"
+                          fontSize="7.5"
+                          fontWeight="700"
+                          letterSpacing="0.8"
+                        >
+                          {translateText("ANY")}
+                        </text>
+                      </>
+                    ) : (
+                      <>
+                        <rect
+                          x="-27"
+                          y="-15"
+                          width="54"
+                          height="33"
+                          rx="9"
+                          fill={theme.resources[port.resource]}
+                          opacity="0.25"
+                        />
+                        <rect
+                          x="-27"
+                          y="-17"
+                          width="54"
+                          height="33"
+                          rx="9"
+                          fill={theme.resources[port.resource]}
+                          stroke="#ffffff"
+                          strokeOpacity="0.5"
+                          strokeWidth="1"
+                        />
+                        <text
+                          y="-5"
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="13"
+                          fontWeight="750"
+                          fontFamily="Georgia, 'Times New Roman', serif"
+                        >
+                          {ratio}
+                        </text>
+                        <g
+                          transform="translate(-23 0) scale(0.44)"
+                          color="#ffffff"
+                        >
+                          <ResourceArtwork resource={port.resource} theme={theme} />
+                        </g>
+                        <text
+                          x="-5"
+                          y="10"
+                          textAnchor="start"
+                          fill="#ffffff"
+                          fontSize="7"
+                          fontWeight="700"
+                          letterSpacing="0.5"
+                        >
+                          {resourceName(language, port.resource).toUpperCase()}
+                        </text>
+                      </>
+                    )}
                   </g>
                 </g>
               );
@@ -1360,6 +1415,12 @@ export function Board({
           className="placement-confirmation"
           style={{ position: "absolute", left: 0, top: 0, visibility: "hidden" }}
         >
+          {confirmation.player && (
+            <p className="placement-confirmation-player">
+              <span className="placement-confirmation-player-dot" style={{ backgroundColor: confirmation.player.color }} />
+              {confirmation.player.name}
+            </p>
+          )}
           <p id={`${illustrationId}-confirmation-title`}>{confirmation.title}</p>
           <div>
             <button type="button" className="button-secondary" onClick={cancelConfirmation}>

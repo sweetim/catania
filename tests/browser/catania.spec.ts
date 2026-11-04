@@ -4,6 +4,7 @@ import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, g
 import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
+import { BOARD_THEMES as ALL_THEMES } from "../../src/themes";
 
 const test = base.extend({
   page: async ({ page }, use, testInfo) => {
@@ -555,6 +556,44 @@ test("cross-device play opens its own setup without using local player settings"
   await expect(page.getByRole("button", { name: "Host board", exact: true })).toBeEnabled();
   await expect(page.getByRole("region", { name: "Set up your table", exact: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("island harbors carry their resource color, icon and trade ratio", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await showHomeView(page, "Island");
+  const island = page.getByRole("region", { name: "Island preview", exact: true });
+  const harbors = island.locator(".board-map g[role='img'][aria-label*='harbor, trade']");
+  await expect(harbors).toHaveCount(9);
+  const labels = await harbors.evaluateAll(groups => groups.map(group => group.getAttribute("aria-label") ?? ""));
+  const theme = ALL_THEMES.illustrated;
+  const seenResources: Resource[] = [];
+  let anyHarbors = 0;
+  for (const [index, label] of labels.entries()) {
+    const harbor = harbors.nth(index);
+    const resource = (Object.keys(RESOURCE_NAMES) as Resource[]).find(name =>
+      label === `${RESOURCE_NAMES[name].toLowerCase()} harbor, trade 2:1`,
+    );
+    if (resource) {
+      seenResources.push(resource);
+      const badge = harbor.locator("rect").last();
+      await expect(badge, `${resource} badge uses its resource color`).toHaveAttribute("fill", theme.resources[resource]);
+      await expect(harbor.locator("text"), "resource harbor shows the ratio and name texts").toHaveCount(2);
+      await expect(harbor.getByText("2:1")).toBeVisible();
+      await expect(harbor.getByText(RESOURCE_NAMES[resource].toUpperCase())).toBeVisible();
+      const icon = harbor.locator("g[color]");
+      await expect(icon, `${resource} icon is drawn in white`).toHaveAttribute("color", "#ffffff");
+      expect(await icon.locator("path, circle, ellipse").count(), `${resource} icon has artwork`).toBeGreaterThan(0);
+    } else {
+      anyHarbors++;
+      expect(label, "any harbor label").toBe("Any resource harbor, trade 3:1");
+      await expect(harbor.locator("rect").last()).toHaveAttribute("fill", "#f7f0d9");
+      await expect(harbor.getByText("3:1")).toBeVisible();
+      await expect(harbor.getByText("ANY")).toBeVisible();
+    }
+  }
+  expect(seenResources.sort()).toEqual([...(Object.keys(RESOURCE_NAMES) as Resource[])].sort());
+  expect(anyHarbors).toBe(4);
+  await screenshot(page, testInfo, "island-harbors", false);
 });
 
 test("theme dialog stays open while computers continue into a private human handoff", async ({ page, isMobile }, testInfo) => {

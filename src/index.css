@@ -271,6 +271,8 @@
 }
 .placement-confirmation { position: absolute; z-index: 30; width: min(230px, calc(100% - 16px)); box-sizing: border-box; margin: 0; padding: 12px; border: 1px solid #76937c; border-radius: 12px; background: #fffaf0; box-shadow: 0 5px 20px #253b3633; overflow: auto; }
 .placement-confirmation p { margin: 0 0 8px; font-size: 12px; font-weight: 600; line-height: 16px; }
+.placement-confirmation .placement-confirmation-player { display: flex; align-items: center; gap: 5px; margin: 0 0 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7a7263; }
+.placement-confirmation .placement-confirmation-player-dot { width: 8px; height: 8px; flex: none; border-radius: 9999px; }
 .placement-confirmation > div { display: flex; gap: 8px; }
 .placement-confirmation button { flex: 1; min-height: 44px; padding: 8px 10px; font-size: 12px; white-space: nowrap; }
 .board-error { position: absolute; bottom: 72px; left: 12px; right: 12px; z-index: 35; background: var(--color-paper); padding: 8px; }

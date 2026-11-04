@@ -182,8 +182,18 @@ export function DevelopmentDialog({
   );
 }
 
+export function PlayerBadge({ player }: { player: { name: string; color: string } }) {
+  return (
+    <span className="eyebrow flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: player.color }} />
+      {player.name}
+    </span>
+  );
+}
+
 export function ActionConfirmation({
   title,
+  player,
   description,
   exchange,
   resources,
@@ -193,6 +203,7 @@ export function ActionConfirmation({
   onConfirm,
 }: {
   title: string;
+  player?: { name: string; color: string };
   description?: string;
   exchange?: { give: Resources; receive: Resources };
   resources?: Resources;
@@ -203,7 +214,7 @@ export function ActionConfirmation({
 }) {
   const translateText = useTranslation(gameplayTranslations);
   return (
-    <Dialog title={title} summary={resources ? <ResourceInventory resources={resources} /> : undefined} onClose={onClose}>
+    <Dialog title={title} eyebrow={player ? <PlayerBadge player={player} /> : undefined} summary={resources ? <ResourceInventory resources={resources} /> : undefined} onClose={onClose}>
       {exchange ? <div className="flex items-center justify-center gap-4 rounded-xl bg-moss p-4">
         <CardStack label={translateText("You give")} resources={exchange.give} />
         <Arrow className="h-5 w-5 shrink-0 text-forest" />

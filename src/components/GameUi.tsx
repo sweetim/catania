@@ -238,12 +238,14 @@ export function BankSupply({ resources, developmentCards }: { resources: Resourc
 
 export function Dialog({
   title,
+  eyebrow,
   children,
   onClose,
   wide = false,
   summary,
 }: {
   title: string;
+  eyebrow?: ReactNode;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
@@ -273,7 +275,10 @@ export function Dialog({
     >
       <div className="sticky top-0 z-10 border-b border-line bg-paper">
         <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <h2 className="font-serif text-2xl">{title}</h2>
+          <div className="min-w-0">
+            {eyebrow && <div className="mb-1">{eyebrow}</div>}
+            <h2 className="font-serif text-2xl">{title}</h2>
+          </div>
           <button
             onClick={onClose}
             aria-label={translateText("Close dialog")}

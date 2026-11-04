@@ -44,7 +44,7 @@ The shared screen hosts the game without occupying a player seat.
    remain visible.
 4. Place settlements, cities, and roads, and move the robber on the shared board.
    Select a build on the active player's phone, then confirm its location
-   on the board. Phones keep their own cards visible and handle rolls, discards,
+   on the board; the confirmation shows the acting player's name and color. Phones keep their own cards visible and handle rolls, discards,
    trades, theft choices, development cards, and ending turns. Computers handle their
    own placements, turns, discards, and trade responses automatically; board input is
    disabled during their turns. Seats cannot be added, removed, or renamed mid-game.
@@ -121,7 +121,8 @@ and an exchange preview, or **Player trade** with **Request cards** and **Exact
 offer** choices. Open trades show every opponent's response, proposed prices, and
 missing cards. **Change offer** edits a draft; closing it leaves the original offer
 and responses unchanged. Choosing a trade partner, a theft victim, or **Buy a card**
-opens a **Cancel** / **Confirm** dialog before sending the action. Development cards
+opens a **Cancel** / **Confirm** dialog showing your name and color before sending
+the action. Development cards
 remain selectable for inspection, including hidden victory points and cards that
 cannot yet be played; eligible action cards are confirmed in the same dialog.
 Resource-affecting choices show your hand, and discards show selected and remaining

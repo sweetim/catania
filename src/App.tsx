@@ -935,6 +935,7 @@ export function App() {
                         : buildMode === "city"
                           ? translateText("Upgrade to a city?")
                           : translateText("Settle here?"),
+                    player: { name: viewer.name, color: viewer.color },
                     onConfirm: () => perform(selectedAction),
                     onCancel: () => setSelected(null),
                   } : undefined}
@@ -1406,6 +1407,7 @@ export function App() {
       {confirmation && (
         <ActionConfirmation
           title={translateText(confirmation.title, confirmation.parameters)}
+          player={viewer ? { name: viewer.name, color: viewer.color } : undefined}
           description={confirmation.description && translateText(confirmation.description, confirmation.parameters)}
           exchange={confirmation.exchange}
           resources={viewer && confirmation.action.type !== "steal" ? viewer.resources : undefined}

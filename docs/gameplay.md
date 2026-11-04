@@ -113,7 +113,8 @@ a divider and still requires confirmation. The turn header shows **Setup** or th
 current turn number. During a private handoff, the menu stays in the page header.
 Keyboard users can select highlighted positions with Enter or Space.
 Confirm/Cancel appears beside the selected piece or hex, stays inside the map,
-and follows zoom and pan. Confirm is focused for keyboard use; Escape cancels
+and follows zoom and pan, with the acting player's name and color above the
+prompt. Confirm is focused for keyboard use; Escape cancels
 and returns focus to the selected location.
 
 ## Themes And Settings

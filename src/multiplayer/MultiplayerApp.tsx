@@ -330,7 +330,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       onClose={() => { setEditor(null); if (trade) setDetails("trade-response"); }} onSubmit={action => send(action, editorVersion)} />}
     {editor === "development" && <DevelopmentDialog variant={game.variant} player={player} bank={game.bank} turnNumber={game.turnNumber} phaseType={game.phase.type} developmentPlayed={game.developmentPlayed} initialCardId={developmentCardId} active={active} disabled={disabled || editorStale} error={editorStale ? staleMessage : error}
       onClose={() => setEditor(null)} onSubmit={action => send(action, editorVersion)} />}
-    {confirmation && <ActionConfirmation title={translateText(confirmation.title, confirmation.parameters)} description={confirmation.description ? translateText(confirmation.description, confirmation.parameters) : undefined} exchange={confirmation.exchange} resources={confirmation.action.type === "steal" ? undefined : player.resources}
+    {confirmation && <ActionConfirmation title={translateText(confirmation.title, confirmation.parameters)} player={{ name: player.name, color: player.color }} description={confirmation.description ? translateText(confirmation.description, confirmation.parameters) : undefined} exchange={confirmation.exchange} resources={confirmation.action.type === "steal" ? undefined : player.resources}
       disabled={disabled || confirmation.version !== snapshot.version} error={confirmation.version !== snapshot.version ? staleMessage : error}
       onClose={() => { setConfirmation(null); if (confirmation.returnTo) setDetails(confirmation.returnTo); }} onConfirm={() => send(confirmation.action, confirmation.version)} />}
   </div>;
@@ -588,6 +588,7 @@ export function MultiplayerApp() {
                   : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
                   : selectedAction.type === "move-ship" ? translateText("Move the ship here?")
                   : translateText("Confirm {piece}?", { piece: pieceName(language, selectedAction.type === "place-ship" ? "ship" : selectedAction.type === "place-road" ? "road" : selectedAction.type === "place-city" ? "city" : "settlement") }),
+                  player: activePlayer ? { name: activePlayer.name, color: activePlayer.color } : undefined,
                   onConfirm: () => { session.current?.perform(selectedAction, currentSelection!.version); setSelected(null); setMovingShip(null); }, onCancel: () => setSelected(null) } : undefined}
               />
             </div>
