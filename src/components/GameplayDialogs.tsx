@@ -282,7 +282,7 @@ export function TheftChoices({
   disabled = false,
   onSelect,
 }: {
-  players: { id: string; name: string; resourceCount: number }[];
+  players: { id: string; name: string; color: string; number: number; resourceCount: number }[];
   disabled?: boolean;
   onSelect: (playerId: string) => void;
 }) {
@@ -294,7 +294,10 @@ export function TheftChoices({
       disabled={disabled}
       onClick={() => onSelect(player.id)}
     >
-      <span>{player.name}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="player-number flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ background: player.color }}>{player.number}</span>
+        <span className="truncate">{player.name}</span>
+      </span>
       <span className="text-xs text-muted">{translateText("{count} resources", { count: player.resourceCount })}</span>
     </button>
   ));

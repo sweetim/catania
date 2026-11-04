@@ -19,6 +19,9 @@
   body {
     @apply m-0 min-w-[320px];
   }
+  body.game-in-progress {
+    overscroll-behavior-y: none;
+  }
   button,
   input,
   select {

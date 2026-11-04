@@ -308,7 +308,10 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       <DiscardSelection resources={player.resources} required={discardCount} chosenResources={chosen} onChangeResources={setChosen} disabled={disabled} onConfirm={() => send({ type: "discard", resources: chosen })} />
     </Dialog>}
     {details === "steal" && active && game.phase.type === "steal" && <Dialog title={translateText("Choose a player to steal from")} onClose={() => setDetails(null)}>
-      <div className="space-y-2"><TheftChoices players={game.phase.victimIds.map(playerId => game.players.find(other => other.id === playerId)!)} disabled={disabled} onSelect={playerId => {
+      <div className="space-y-2"><TheftChoices players={game.phase.victimIds.map(playerId => {
+        const victim = game.players.find(other => other.id === playerId)!;
+        return { id: victim.id, name: victim.name, color: victim.color, number: game.players.indexOf(victim) + 1, resourceCount: victim.resourceCount };
+      })} disabled={disabled} onSelect={playerId => {
         const victim = game.players.find(other => other.id === playerId)!;
         setDetails(null);
         setConfirmation({ action: { type: "steal", playerId }, title: "Confirm theft", description: victim.resourceCount > 0 ? "Steal one random resource from {name}." : "{name} has no resources. Finish without taking a card.", parameters: { name: victim.name }, version: snapshot.version, returnTo: "steal" });

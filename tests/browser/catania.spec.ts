@@ -201,6 +201,7 @@ async function expectResourceInventory(context: Locator, resources: Resources) {
     const card = cards.getByRole("listitem", { name: `${RESOURCE_NAMES[resource]}: ${resources[resource]} in hand`, exact: true });
     await expect(card.getByText(RESOURCE_NAMES[resource], { exact: true })).toBeVisible();
     await expect(card.getByText(String(resources[resource]), { exact: true })).toBeVisible();
+    await expect(card.locator(".resource-card")).toHaveCSS("filter", resources[resource] === 0 ? "grayscale(1)" : "none");
   }
   return inventory;
 }
@@ -2004,6 +2005,22 @@ test("shared-board seats keep one row on tablets", async ({ page, isMobile }, te
   }
 });
 
+test("game session blocks pull-to-refresh at the page root, home does not", async ({ page }) => {
+  await page.goto("/");
+  const body = page.locator("body");
+  await expect(body).not.toHaveClass(/game-in-progress/);
+  await expect(body).toHaveCSS("overscroll-behavior-y", "auto");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Game", exact: true })).toBeVisible();
+  await expect(body).toHaveClass(/game-in-progress/);
+  await expect(body).toHaveCSS("overscroll-behavior-y", "none");
+  await chooseGameOption(page, "End game");
+  await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Let's settle in", exact: true })).toBeVisible();
+  await expect(body).not.toHaveClass(/game-in-progress/);
+  await expect(body).toHaveCSS("overscroll-behavior-y", "auto");
+});
+
 test("Seafarers selection changes the preview independently of themes and can return to Original", async ({ page }, testInfo) => {
   await page.goto("/");
   const versions = page.getByRole("combobox", { name: "Game version", exact: true });
@@ -2244,7 +2261,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   await showView(page, "hand");
-  await page.getByRole("button", { name: `${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
+  await page.getByRole("button", { name: `${state.players.findIndex(player => player.id === victim.id) + 1} ${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
   await chooseDice(page, [1, 1]);
   await page.getByRole("dialog", { name: "Confirm theft", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
   state = applyAction(state, thief.id, { type: "steal", playerId: victim.id }, () => 0.5 / 6);
@@ -2721,7 +2738,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
   const victims = page.getByRole("heading", { name: "Choose a player to steal from", exact: true }).locator("..");
   await expect(victims).toBeVisible();
   await screenshot(page, testInfo, "knight-theft-pending", false);
-  await victims.getByRole("button", { name: `${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
+  await victims.getByRole("button", { name: `${state.players.findIndex(player => player.id === victim.id) + 1} ${victim.name} ${resourceTotal(victim.resources)} resources`, exact: true }).click();
   await chooseDice(page, [1, 1]);
   const theft = page.getByRole("dialog", { name: "Confirm theft", exact: true });
   await expect(theft).toContainText(`Steal one random resource from ${victim.name}.`);
@@ -3931,13 +3948,15 @@ test("request-first trades compare prices and only exchange cards after confirma
   await openTrade.getByRole("button", { name: "Pass to Jordan", exact: true }).click();
   expect(await revealHand(page)).toBe(responder.name);
   await expectResourceInventory(openTrade, state.players.find(player => player.id === responder.id)!.resources);
-  // The responder paid away all Ore in the confirmed trade, so the requested card blurs instead of showing a hint.
+  // The responder paid away all Ore, so the requested card stays sharp but dimmed.
   const requestedOre = openTrade.getByRole("img", { name: "You give: 1 Ore", exact: true });
-  await expect(requestedOre.locator(".resource-card")).toHaveClass(/blur/);
+  await expect(requestedOre.locator(".resource-card")).toHaveCSS("filter", "none");
+  await expect(requestedOre.locator(".resource-card")).toHaveCSS("opacity", "0.5");
   await expect(openTrade.getByText("Choose different cards in return.", { exact: true })).toHaveCount(0);
   await expect(openTrade.getByText("You do not have all the requested cards to offer this trade.", { exact: true })).toHaveCount(0);
   await openTrade.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
   await expect(propose).toBeDisabled();
+  await requestedOre.screenshot({ path: testInfo.outputPath("sharp-unavailable-trade-card.png") });
   await openTrade.getByRole("button", { name: "Decline", exact: true }).click();
   expect(await revealHand(page)).toBe(requester.name);
   await expect(affordable).toContainText("declined");

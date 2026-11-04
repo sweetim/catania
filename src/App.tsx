@@ -254,7 +254,12 @@ export function App() {
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    // Suppress mobile pull-to-refresh, which reloads without the beforeunload dialog.
+    document.body.classList.add("game-in-progress");
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.body.classList.remove("game-in-progress");
+    };
   }, [Boolean(game), Boolean(game?.winnerId)]);
 
   function startGame(selectedBoard?: GameState["board"]) {
@@ -1051,7 +1056,7 @@ export function App() {
                   <TheftChoices
                     players={game.phase.victimIds.map(playerId => {
                       const victim = game.players.find(player => player.id === playerId)!;
-                      return { id: victim.id, name: victim.name, resourceCount: resourceTotal(victim.resources) };
+                      return { id: victim.id, name: victim.name, color: victim.color, number: game.players.indexOf(victim) + 1, resourceCount: resourceTotal(victim.resources) };
                     })}
                     onSelect={playerId => {
                       const victim = game.players.find(player => player.id === playerId)!;

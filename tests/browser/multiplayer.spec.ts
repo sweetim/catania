@@ -1973,7 +1973,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await present();
   await expect(discard).toHaveCount(0);
   const theft = phone.getByRole("dialog", { name: "Choose a player to steal from", exact: true });
-  const victim = theft.getByRole("button", { name: `${opponent.name} 3 resources`, exact: true });
+  const victim = theft.getByRole("button", { name: `${game.players.findIndex(other => other.id === opponent.id) + 1} ${opponent.name} 3 resources`, exact: true });
   await victim.click();
   const confirmTheft = phone.getByRole("dialog", { name: "Confirm theft", exact: true });
   await expect(confirmTheft).toContainText(`Steal one random resource from ${opponent.name}.`);
@@ -2167,12 +2167,16 @@ test("private trade responses preserve drafts and confirmations across version c
   await present();
   await expect(offer.getByRole("button", { name: "Accept offer", exact: true })).toBeDisabled();
   await expect(offer.getByRole("button", { name: "Decline", exact: true })).toBeEnabled();
-  // The hand holds five Wood, so the six requested Wood cards blur.
-  await expect(offer.getByRole("img", { name: "You give: 6 Wood", exact: true }).locator(".resource-card")).toHaveClass(/blur/);
+  // The hand holds five Wood, so the six requested Wood cards stay sharp but dimmed.
+  const unavailableWood = offer.getByRole("img", { name: "You give: 6 Wood", exact: true }).locator(".resource-card");
+  await expect(unavailableWood).toHaveCSS("filter", "none");
+  await expect(unavailableWood).toHaveCSS("opacity", "0.5");
   game.trade.receive.wood = 1;
   await present();
   await expect(offer.getByRole("button", { name: "Accept offer", exact: true })).toBeEnabled();
-  await expect(offer.getByRole("img", { name: "You give: 1 Wood", exact: true }).locator(".resource-card")).not.toHaveClass(/blur/);
+  const availableWood = offer.getByRole("img", { name: "You give: 1 Wood", exact: true }).locator(".resource-card");
+  await expect(availableWood).toHaveCSS("filter", "none");
+  await expect(availableWood).toHaveCSS("opacity", "1");
   game.trade.give = null;
   game.trade.expiresAt = Date.now() + 15_000;
   await present();

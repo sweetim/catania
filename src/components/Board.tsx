@@ -1042,11 +1042,11 @@ export function Board({
                 const player = playersById.get(edge.playerId!)!;
                 if (edge.kind === "ship") return <g key={edge.id} role="img"
                   aria-label={translateText("{player}'s ship at {location}", { player: player.name, location: edge.id })}
-                  transform={`translate(${x} ${y})`} pointerEvents="none">
+                  transform={`translate(${x} ${y}) scale(0.65)`} pointerEvents="none">
                   {selectedId === edge.id && <ellipse rx="23" ry="27" fill="none" stroke="#8c672e" strokeWidth="3" />}
                   <path d="M-19 6h38l-7 12H-12Z" fill={player.color} stroke="#fff5dc" strokeWidth="2" />
                   <path d="M0-22V6M3-20 18 2H3ZM-4-15-16 2h12Z" fill={player.color} stroke="#fff5dc" strokeWidth="1.5" />
-                  <text y="15" textAnchor="middle" fill="#fff5dc" fontSize="8" fontWeight="800">
+                  <text y="15" textAnchor="middle" fill="#fff5dc" fontSize="10" fontWeight="800">
                     {players.findIndex(candidate => candidate.id === player.id) + 1}
                   </text>
                 </g>;

@@ -365,7 +365,7 @@ export function ResourceInventory({ resources }: { resources: Resources }) {
       <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-2">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
           <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: resources[resource] })} className="flex min-w-0 flex-col items-center gap-1">
-            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-5 w-5" className="h-11 w-9" />
+            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-5 w-5" className={`h-11 w-9 ${resources[resource] === 0 ? "grayscale" : ""}`} />
             <span className="text-[10px] font-semibold">{resourceName(language, resource)}</span>
           </li>
         ))}
@@ -520,7 +520,7 @@ export function CardStack({
             count={resources[resource]}
             compact
             iconClassName="h-5 w-5"
-            className={`h-13 w-9${available !== undefined && available[resource] < resources[resource] ? " blur-[1.5px] opacity-50" : ""}`}
+            className={`h-13 w-9${available !== undefined && available[resource] < resources[resource] ? " opacity-50" : ""}`}
           />
         ))}
       </span>

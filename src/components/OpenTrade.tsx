@@ -78,7 +78,7 @@ export function OpenTrade({
                 </span>}
                 {response ? (
                   <div className="flex w-full flex-wrap items-center justify-between gap-3 pt-1">
-                    {!trade.give && <CardStack label={translateText("You give")} resources={response} />}
+                    {!trade.give && <CardStack label={translateText("You give")} resources={response} available={viewer.resources} />}
                     <div className="ml-auto flex min-w-0 max-w-full flex-col items-end gap-1.5">
                       <button
                         className="button-primary !min-h-11 !px-3 !text-xs"
