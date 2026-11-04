@@ -31,7 +31,7 @@ preview; multiplayer players and a new island are set up independently.
 4. Roll, gather resources, build, trade, and play eligible development cards.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
-6. Reach 10 victory points in Original, or 14 in Seafarers, on your own turn. Inspect the revealed score breakdown
+6. Reach 10 victory points in Original, or 13 in Seafarers, on your own turn. Inspect the revealed score breakdown
    and start a fresh rematch or return to the table.
 
 The game includes the standard terrain and tokens, nine ports, finite resource
@@ -75,7 +75,7 @@ Game version cannot change during play and is not saved across reloads.
 - Your first settlement on each small island earns two extra points, independently
   for every player. Further settlements on that island do not repeat the bonus,
   and upgrading to a city preserves it. Island points appear in the final breakdown.
-  Win at 14 points on your own turn.
+  Win at 13 points on your own turn.
 
 Computer opponents can settle the islands, build ships, resolve pirate/theft and
 gold choices, and complete games under the same rules as humans.

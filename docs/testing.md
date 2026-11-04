@@ -29,7 +29,7 @@ browser tests; run those separately with `bun run test:browser`.
 Seafarers coverage checks the 42-hex scenario topology, terrain and token supplies,
 mainland setup, ship costs and piece limits, shipping connections and movement,
 mixed Longest Route, pirate theft/blocking, finite gold choices, island bonuses,
-14-point victory, multiplayer serialization, and complete three-/four-player AI games.
+13-point victory, multiplayer serialization, and complete three-/four-player AI games.
 Focused checks:
 
 ```bash

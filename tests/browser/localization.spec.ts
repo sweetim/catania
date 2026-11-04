@@ -48,7 +48,7 @@ test.describe("Japanese browser locale", () => {
     await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
     const help = page.getByRole("dialog", { name: "ヘルプ", exact: true });
     await expect(help.getByRole("heading", { name: "航海者のルール", exact: true })).toBeVisible();
-    await expect(help.getByText("よき隣人、巧みな交易。目指すは14勝利点。", { exact: true })).toBeVisible();
+    await expect(help.getByText("よき隣人、巧みな交易。目指すは13勝利点。", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await selectHomeLanguage(page, "ja", "en");
     await expect(page.getByRole("combobox", { name: "Game version", exact: true })).toHaveValue("seafarers");

@@ -166,7 +166,7 @@ export function legalShipDestinations(state: GameState | (PlacementState & Pick<
 }
 
 export function victoryTarget(variant: GameVariant): number {
-  return variant === "seafarers" ? 14 : 10;
+  return variant === "seafarers" ? 13 : 10;
 }
 
 export function getTradeRatio(state: { board: Board; players: Pick<Player, "id">[] }, playerId: string, resource: Resource): number {

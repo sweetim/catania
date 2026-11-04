@@ -86,8 +86,11 @@ async function expectPlacementConfirmation(page: Page, target: Locator, selectio
   await expect(confirmation).toHaveClass(/placement-confirmation/);
   await expect(confirmation).toHaveAttribute("data-selection-id", selectionId);
   await expect(confirmation).not.toHaveAttribute("aria-modal", "true");
-  await expect(confirmation.locator("p")).toBeVisible();
-  await expect(confirmation.locator("p")).not.toBeEmpty();
+  await expect(confirmation.locator(".placement-confirmation-player")).toBeVisible();
+  await expect(confirmation.locator(".placement-confirmation-player")).not.toBeEmpty();
+  const title = confirmation.locator('p[id$="-confirmation-title"]');
+  await expect(title).toBeVisible();
+  await expect(title).not.toBeEmpty();
   await expect(target).toHaveAttribute("aria-pressed", "true");
   await expect(async () => {
     const popup = (await confirmation.boundingBox())!;
@@ -583,6 +586,13 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
       const icon = harbor.locator("g[color]");
       await expect(icon, `${resource} icon is drawn in white`).toHaveAttribute("color", "#ffffff");
       expect(await icon.locator("path, circle, ellipse").count(), `${resource} icon has artwork`).toBeGreaterThan(0);
+      expect(await harbor.evaluate(group => {
+        const badge = group.querySelector("rect:last-of-type")!;
+        const name = group.querySelectorAll("text")[1]!;
+        const badgeBounds = badge.getBoundingClientRect();
+        const nameBounds = name.getBoundingClientRect();
+        return nameBounds.left >= badgeBounds.left && nameBounds.right <= badgeBounds.right;
+      }), `${resource} name stays inside the badge`).toBe(true);
     } else {
       anyHarbors++;
       expect(label, "any harbor label").toBe("Any resource harbor, trade 3:1");
@@ -973,6 +983,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
     await expect(page.getByRole("img", { name: /'s settlement at / })).toHaveCount(placement);
     if (placement === 0) {
       const confirmation = await expectPlacementConfirmation(page, settlement, settlementName);
+      await expect(confirmation.locator(".placement-confirmation-player")).toHaveText(currentPlayer);
       await expect(confirmation.getByRole("button", { name: "Confirm placement", exact: true })).toBeFocused();
       await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect(page.getByRole("button", { name: "Confirm placement" })).toHaveCount(0);
@@ -2019,7 +2030,7 @@ test("Seafarers starts on its exact preview and confirms a free coastal ship wit
   await chooseGameOption(page, "Help");
   const help = page.getByRole("dialog", { name: "Help", exact: true });
   await expect(help.getByRole("heading", { name: "Seafarers rules", exact: true })).toBeVisible();
-  await expect(help.getByText("Good neighbors. Clever trades. Fourteen victory points.", { exact: true })).toBeVisible();
+  await expect(help.getByText("Good neighbors. Clever trades. Thirteen victory points.", { exact: true })).toBeVisible();
   await expect(help.getByText("Ship", { exact: true })).toHaveCount(1);
 });
 
@@ -2434,6 +2445,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   await page.keyboard.press("Enter");
   const confirmation = page.getByRole("dialog", { name: "Invest in a development card", exact: true });
   await expect(confirmation).toBeVisible();
+  await expect(confirmation.locator(".eyebrow")).toHaveText(state.players.find(player => player.id === buyerId)!.name);
   await expect(confirmation).toContainText("Pay one wool, one grain, and one ore. Your new card stays private. Action cards cannot be played until a later turn.");
   await expect(confirmation.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
   await expectResourceInventory(confirmation, beforePurchase.resources);

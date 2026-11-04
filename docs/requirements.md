@@ -16,7 +16,7 @@ Local setup and the multiplayer host lobby offer **Original** (default) or
 **Seafarers**. The initial Seafarers scope is Heading for New Shores, using the
 randomized four-player layout for three or four players: ships with independent
 piece supplies, open-ended ship movement, the pirate, gold choices, mixed Longest
-Route, two-point bonuses per newly settled small island, and a 14-point victory.
+Route, two-point bonuses per newly settled small island, and a 13-point victory.
 Both human and computer players use the same validated engine. Other Seafarers
 scenarios are outside this delivery; [gameplay](gameplay.md#seafarers-heading-for-new-shores)
 documents the available rules.

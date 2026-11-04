@@ -57,7 +57,7 @@ Gold production is a mandatory phase whose ordered obligations determine the
 current controller, including off-turn humans/computers. Public island bonuses
 derive from buildings and island identifiers, so city upgrades preserve them.
 Original retains its existing board, costs, ten-point target, and score shape.
-Seafarers adds island points and a fourteen-point target. The current scenario
+Seafarers adds island points and a thirteen-point target. The current scenario
 is Heading for New Shores using the randomized four-player layout at either
 supported table size.
 

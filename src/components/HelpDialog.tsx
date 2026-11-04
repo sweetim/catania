@@ -14,11 +14,11 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
     <Dialog title={translateText("Help")} onClose={onClose} wide>
       <div className="space-y-8 text-sm leading-7 text-muted">
         <p className="font-serif text-xl text-ink">
-          {translateText(variant === "seafarers" ? "Good neighbors. Clever trades. Fourteen victory points." : "Good neighbors. Clever trades. Ten victory points.")}
+          {translateText(variant === "seafarers" ? "Good neighbors. Clever trades. Thirteen victory points." : "Good neighbors. Clever trades. Ten victory points.")}
         </p>
         {variant === "seafarers" && <section aria-labelledby="help-seafarers" className="space-y-3">
           <h3 id="help-seafarers" className="font-serif text-2xl text-ink">{translateText("Seafarers rules")}</h3>
-          <p>{translateText("Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 14 points on your own turn to win.")}</p>
+          <p>{translateText("Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.")}</p>
           <p>{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
           <p>{translateText("After rolling, move at most one open-ended ship per turn, never one built this turn. Ships between your buildings cannot move. The pirate blocks building and moving ships on its hex, but does not break existing routes or block harbors.")}</p>
           <p>{translateText("On a seven or Knight, move either the robber to another land hex or the pirate to another sea hex or off the board. The pirate steals from a player with an adjacent ship. Gold fields grant one resource of choice per settlement, or two per city. Choose from the bank in turn order, starting with the active player.")}</p>
@@ -36,7 +36,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
             </li>
             <li>
               <strong className="text-ink">{translateText("Trade, build, and pass.")}</strong>{" "}
-              {variant === "seafarers" ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach 14 points on your own turn to win.")
+              {variant === "seafarers" ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach 13 points on your own turn to win.")
                 : translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach 10 points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board") })}
             </li>
           </ol>
@@ -114,7 +114,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
           </p>
           <p>
             <strong className="text-ink">{translateText("Points and victory.")}</strong>{" "}
-            {translateText(variant === "seafarers" ? "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 14 points on your own turn to win." : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
+            {translateText(variant === "seafarers" ? "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win." : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
           </p>
           <p>
             <strong className="text-ink">{translateText("Longest Road and Largest Army.")}</strong>{" "}

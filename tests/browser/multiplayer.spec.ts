@@ -1009,6 +1009,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
 
   await board.getByRole("button", { name: /^Place settlement at / }).first().click();
   await expect(board.getByRole("button", { name: "Confirm placement", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(board.getByRole("group", { name: "Placement confirmation", exact: true }).locator(".placement-confirmation-player")).toHaveText("AlexandertheExplorer");
   await board.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expectPhase([host, phone], "setup-road", "AlexandertheExplorer");
 });
@@ -1939,6 +1940,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await phone.getByRole("button", { name: "Buy a card", exact: true }).click();
   const buy = phone.getByRole("dialog", { name: "Invest in a development card", exact: true });
   await expectInventory(buy, player.resources);
+  await expect(buy.locator(".eyebrow")).toHaveText(player.name);
   await expect(buy).toContainText("Pay one wool, one grain, and one ore");
   expect(await sentActions(phone)).toEqual([]);
   await buy.getByRole("button", { name: "Cancel", exact: true }).click();

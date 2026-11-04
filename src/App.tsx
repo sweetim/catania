@@ -642,7 +642,7 @@ export function App() {
               </div>
               {variant === "seafarers" && <p className="text-xs leading-5 text-muted">
                 <strong>{translateText("Heading for New Shores")}</strong>{" "}
-                {translateText("Main island setup. Discover three islands. First to 14 points wins.")}
+                {translateText("Main island setup. Discover three islands. First to 13 points wins.")}
               </p>}
               <div className="grid grid-cols-2 gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
@@ -770,7 +770,7 @@ export function App() {
             {translateText("{name} takes the island.", { name: game.players.find((player) => player.id === game.winnerId)?.name ?? "" })}
           </h1>
           <p className="mt-4 text-muted">
-            {translateText(game.variant === "seafarers" ? "Fourteen points. Countless good deals. One more game?" : "Ten points. Countless good deals. One more game?")}
+            {translateText(game.variant === "seafarers" ? "Thirteen points. Countless good deals. One more game?" : "Ten points. Countless good deals. One more game?")}
           </p>
           <div className="my-10 grid gap-4 text-left sm:grid-cols-2">
             {game.players.map((player) => {

@@ -80,7 +80,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "finished" }, () => ({
       title: translateText("An island. A new legend."),
-      description: translateText(variant === "seafarers" ? "The first player to reach fourteen victory points on their turn wins." : "The first player to reach ten victory points on their turn wins."),
+      description: translateText(variant === "seafarers" ? "The first player to reach thirteen victory points on their turn wins." : "The first player to reach ten victory points on their turn wins."),
     }))
     .exhaustive();
 }

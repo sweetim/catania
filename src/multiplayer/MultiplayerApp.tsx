@@ -485,7 +485,7 @@ export function MultiplayerApp() {
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
                 <Board board={snapshot.previewBoard} players={[]} robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id} pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id} fillBoardWithWater={boardSettings.fillBoardWithWater} interactive={false} compact fit onChangeTheme={() => setDialog("theme")} />
               </div>
-              <p className="mt-4 text-xs leading-5 text-muted">{snapshot.variant === "seafarers" ? <><strong>{translateText("Heading for New Shores")}</strong>{" "}{translateText("Main island setup. Discover three islands. First to 14 points wins.")}</> : translateText("Shuffle until you find your island. Starting the game keeps this exact map.")}</p>
+              <p className="mt-4 text-xs leading-5 text-muted">{snapshot.variant === "seafarers" ? <><strong>{translateText("Heading for New Shores")}</strong>{" "}{translateText("Main island setup. Discover three islands. First to 13 points wins.")}</> : translateText("Shuffle until you find your island. Starting the game keeps this exact map.")}</p>
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
           {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">

@@ -13,7 +13,7 @@ assets are local.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Choose **Original** (default) or **Seafarers** before starting, locally or in the host lobby.
   Seafarers includes **Heading for New Shores**, ships and movement, the pirate,
-  gold fields, island bonuses, and a 14-point victory target, with computer opponents.
+  gold fields, island bonuses, and a 13-point victory target, with computer opponents.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - English and Japanese interfaces, including help, accessible controls, activity, and errors.
 

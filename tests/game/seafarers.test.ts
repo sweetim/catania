@@ -313,7 +313,7 @@ describe("pirate and gold", () => {
 });
 
 describe("island scoring and multiplayer", () => {
-  test("each player gains two points per settled remote island, retained on city upgrades; victory needs fourteen", () => {
+  test("each player gains two points per settled remote island, retained on city upgrades; victory needs thirteen", () => {
     let state = newGame();
     const playerId = state.activePlayerId;
     state.phase = { type: "actions" };
@@ -325,18 +325,17 @@ describe("island scoring and multiplayer", () => {
     const city = state.board.vertices.find(vertex => vertex.id === vertices[0])!;
     city.building = { playerId, kind: "city" };
     expect(getScore(state, playerId).islands).toBe(2);
-    for (const islandId of ["island-2", "island-3"]) {
-      const tile = state.board.tiles.find(tile => tile.islandId === islandId)!;
-      state.board.vertices.find(vertex => vertex.id === tile.vertexIds[0])!.building = { playerId, kind: "city" };
-    }
+    const remote = ["island-2", "island-3"].map(islandId => state.board.tiles.find(tile => tile.islandId === islandId)!);
+    state.board.vertices.find(vertex => vertex.id === remote[0]!.vertexIds[0])!.building = { playerId, kind: "city" };
+    state.board.vertices.find(vertex => vertex.id === remote[1]!.vertexIds[0])!.building = { playerId, kind: "settlement" };
     expect(getScore(state, playerId).islands).toBe(6);
-    expect(getScore(state, playerId).total).toBe(13);
+    expect(getScore(state, playerId).total).toBe(12);
     const notWon = applyAction(state, playerId, { type: "end-turn" });
     expect(notWon.winnerId).toBeNull();
     give(state, playerId, COSTS.city);
-    state = applyAction(state, playerId, { type: "place-city", vertexId: vertices[1]! });
+    state = applyAction(state, playerId, { type: "place-city", vertexId: remote[1]!.vertexIds[0]! });
     expect(state.winnerId).toBe(playerId);
-    expect(getScore(state, playerId).total).toBe(14);
+    expect(getScore(state, playerId).total).toBe(13);
   });
 
   test("host selects and shuffles the variant, preserves preview and roster, and broadcasts a validated larger board", () => {
@@ -428,7 +427,7 @@ describe("island scoring and multiplayer", () => {
 });
 
 describe("Seafarers computer games", () => {
-  test.each([3, 4])("%s computers finish legal games with ships, gold, and fourteen-point scoring", count => {
+  test.each([3, 4])("%s computers finish legal games with ships, gold, and thirteen-point scoring", count => {
     const random = randomFromSeed(count);
     let state = createGame(profiles.slice(0, count).map(profile => ({ ...profile, control: "computer" })), random, undefined, "seafarers");
     let actions = 0;
@@ -447,6 +446,6 @@ describe("Seafarers computer games", () => {
     }
     expect(state.winnerId).not.toBeNull();
     expect(ships).toBeGreaterThan(0);
-    expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(14);
+    expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(13);
   }, 30000);
 });
