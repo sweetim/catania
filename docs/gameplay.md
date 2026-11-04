@@ -74,8 +74,9 @@ Game version cannot change during play and is not saved across reloads.
   The robber blocks gold production as it does ordinary terrain.
 - Your first settlement on each small island earns two extra points, independently
   for every player. Further settlements on that island do not repeat the bonus,
-  and upgrading to a city preserves it. Island points appear in the final breakdown.
-  Win at 13 points on your own turn.
+  and upgrading to a city preserves it. A gold island badge next to each player's
+  VP indicates earned island points, and island points appear in the final
+  breakdown. Win at 13 points on your own turn.
 
 Computer opponents can settle the islands, build ships, resolve pirate/theft and
 gold choices, and complete games under the same rules as humans.
@@ -204,9 +205,11 @@ retain the single-row layout. Player seats also show each player's played-Knight
 count as a shield icon and number, followed by a road icon and their longest connected-road count,
 including zero, on desktop and phones. These use matching icon sizes and gaps.
 A gold crossed-swords icon marks Largest Army, and a matching gold road icon marks
-Longest Road. These reward icons sit together immediately to the right of VP,
+Longest Road. In Seafarers games a matching gold island icon marks earned island
+bonus points, with its exact total in the tooltip. These reward icons sit together
+immediately to the right of VP,
 separate from the Knight and road counts. Each tooltip and accessible label includes
-the award's two victory points without adding a text badge. Player details retain
+the award's victory points without adding a text badge. Player details retain
 the connected-road count.
 
 Knights still in hand do not count: play at least three to qualify, and surpass

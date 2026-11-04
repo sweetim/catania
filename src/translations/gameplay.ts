@@ -94,8 +94,6 @@ export const gameplayTranslations = {
   "Withdraw offer": "提案を取り下げる",
   "Withdraw request": "募集を取り下げる",
   "You want in return": "見返りに求めるカード",
-  "Choose different cards in return.": "見返りには異なる種類のカードを選んでください。",
-  "You do not have all the requested cards to offer this trade.": "この交易に必要なカードが手札にそろっていません。",
   "Decline": "辞退する",
   "Accept offer": "提案を承諾",
   "Propose price": "交換条件を提案",

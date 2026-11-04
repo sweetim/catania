@@ -123,11 +123,12 @@ function scoreBreakdown(value: unknown): boolean {
 function roomPlayer(value: unknown, publicPlayer = false): boolean {
   if (!record(value) || !fields(value, publicPlayer
     ? ["id", "name", "color", "control", "connected", "resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"]
-    : ["id", "name", "color", "control", "connected"], publicPlayer ? ["scoreBreakdown"] : [])) return false;
+    : ["id", "name", "color", "control", "connected"], publicPlayer ? ["islands", "scoreBreakdown"] : [])) return false;
   return identifier(value.id, "player") && validName(value.name) && typeof value.color === "string" && /^#[a-f0-9]{6}$/i.test(value.color) &&
     (value.control === "human" || value.control === "computer") &&
     typeof value.connected === "boolean" &&
     (!publicPlayer || (["resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"].every(key => integer(value[key], 95)) &&
+      (!Object.hasOwn(value, "islands") || integer(value.islands, 6)) &&
       (!Object.hasOwn(value, "scoreBreakdown") || scoreBreakdown(value.scoreBreakdown))));
 }
 function privatePlayer(value: unknown): boolean {

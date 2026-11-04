@@ -21,6 +21,7 @@ export const seafarersTranslations = {
   "Move the robber or pirate.": "盗賊または海賊を移動してください。",
   "Move pirate off board": "海賊を盤外へ移動",
   "Island bonuses": "島の開拓ボーナス",
+  "Island bonus (+{points} victory points)": "島の開拓ボーナス（勝利点+{points}）",
   "Choose your gold resources": "金鉱から受け取る資源を選択",
   "Collect resources": "資源を受け取る",
   "Choose {count} available resource cards.": "バンクにある資源カードを{count}枚選択してください。",

@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { match } from "ts-pattern";
-import { DevelopmentCardIcon, PieceIcon } from "./GameUi";
+import { DevelopmentCardIcon, IslandIcon, PieceIcon } from "./GameUi";
 
 export type VictoryBreakdownKind =
   | "settlements"
@@ -71,7 +71,10 @@ function BreakdownIcon({ kind }: { kind: VictoryBreakdownKind }) {
         </svg>
       </span>
     ))
-    .with("victory-point-cards", "islands", () => (
+    .with("islands", () => (
+      <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]"><IslandIcon /></span>
+    ))
+    .with("victory-point-cards", () => (
       <span className="victory-chip bg-[#947231]/15 text-[#947231]"><DevelopmentCardIcon kind="victory-point" /></span>
     ))
     .exhaustive();

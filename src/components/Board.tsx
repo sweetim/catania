@@ -878,12 +878,12 @@ export function Board({
                     : translateText("{resource} harbor, trade {ratio}", { resource: resourceName(language, port.resource).toLowerCase(), ratio })}
                 >
                   <path
-                    d={`M${x + directionX * 8} ${y + directionY * 8}L${portX} ${portY}`}
+                    d={`M${x} ${y}L${portX} ${portY}`}
                     stroke="#e8d8ac"
                     strokeWidth="8"
                   />
                   <path
-                    d={`M${x + directionX * 8} ${y + directionY * 8}L${portX} ${portY}`}
+                    d={`M${x} ${y}L${portX} ${portY}`}
                     stroke="#9a8864"
                     strokeWidth="1.4"
                     strokeDasharray="2 3"

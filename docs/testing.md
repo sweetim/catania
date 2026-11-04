@@ -48,6 +48,8 @@ through [`playwright.config.ts`](../playwright.config.ts).
 Tests exercise the interface in desktop and mobile Chromium viewports and write
 diagnostic screenshots to `test-results/`, including each theme's preview, actual
 game board, and resource cards, plus the theme dialog.
+Harbor regressions check that both pier strokes meet the coastline on Original
+and Seafarers boards without moving the offshore badges.
 Multiplayer coverage includes required/optional lobby seats, computer add/remove
 controls and capacity, human removal and fresh readmission, validated computer
 renaming and left-side player avatars, exact lobby-map preservation after zero or

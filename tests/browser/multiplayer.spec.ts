@@ -1186,6 +1186,7 @@ test("private player header matches the single-device hand and total score", asy
   statistics.knightsPlayed = 12;
   statistics.longestRoad = 15;
   statistics.score = 7;
+  statistics.islands = 2;
   snapshot.privateScore = 8;
   game.awards = { largestArmy: player.id, longestRoad: player.id };
   await present();
@@ -1207,7 +1208,7 @@ test("private player header matches the single-device hand and total score", asy
   await expect(seat).toHaveClass(/player-seat-leading/);
   await expect(seat.locator(".player-score > span")).toHaveText(["VP", "8"]);
   await expect(seat).not.toContainText("total");
-  for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)"]) {
+  for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)", "Island bonus (+2 victory points)"]) {
     await expect(seat.getByRole("img", { name: label, exact: true })).toBeVisible();
   }
 
@@ -1992,17 +1993,20 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   game.phase = { type: "finished" };
   game.winnerId = opponent.id;
   const winner = game.players.find(player => player.id === opponent.id)!;
-  winner.score = 10;
-  winner.scoreBreakdown = { public: 9, total: 10, settlements: 2, cities: 4, longestRoad: 2, largestArmy: 1, hidden: 1 };
+  winner.score = 12;
+  winner.scoreBreakdown = { public: 11, total: 12, settlements: 2, cities: 4, longestRoad: 2, largestArmy: 1, islands: 2, hidden: 1 };
   await present();
   // No gameplay dialog blocks the finished game; the victory pops up over the phone instead.
   await expect(phone.locator("dialog")).toHaveCount(0);
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
   const victory = phone.getByRole("dialog", { name: `${opponent.name} takes the island.`, exact: true });
   await expect(victory).toBeVisible();
-  await expect(victory).toContainText("10");
-  await expect(victory.locator("dd")).toHaveText(["2", "4", "2", "1", "1"]);
-  await expect(victory.locator("dl > div svg")).toHaveCount(5);
+  await expect(victory).toContainText("12");
+  await expect(victory.locator("dd")).toHaveText(["2", "4", "2", "1", "2", "1"]);
+  await expect(victory.locator("dl > div svg")).toHaveCount(6);
+  const islandRow = victory.locator("dl > div").filter({ hasText: "Island bonuses" });
+  await expect(islandRow.locator("dd")).toHaveText("2");
+  await expect(islandRow.locator(".victory-chip")).toHaveClass(/text-\[#b58a2d\]/);
   await expect(victory).toContainText("2 × 1 VP");
   await expect(victory).toContainText("2 × 2 VP");
   await expect(victory).toContainText("1 × 1 VP");
@@ -2163,9 +2167,12 @@ test("private trade responses preserve drafts and confirmations across version c
   await present();
   await expect(offer.getByRole("button", { name: "Accept offer", exact: true })).toBeDisabled();
   await expect(offer.getByRole("button", { name: "Decline", exact: true })).toBeEnabled();
+  // The hand holds five Wood, so the six requested Wood cards blur.
+  await expect(offer.getByRole("img", { name: "You give: 6 Wood", exact: true }).locator(".resource-card")).toHaveClass(/blur/);
   game.trade.receive.wood = 1;
   await present();
   await expect(offer.getByRole("button", { name: "Accept offer", exact: true })).toBeEnabled();
+  await expect(offer.getByRole("img", { name: "You give: 1 Wood", exact: true }).locator(".resource-card")).not.toHaveClass(/blur/);
   game.trade.give = null;
   game.trade.expiresAt = Date.now() + 15_000;
   await present();

@@ -14,6 +14,7 @@ export type PublicPlayer = RoomPlayer & {
   knightsPlayed: number;
   longestRoad: number;
   score: number;
+  islands?: number;
   scoreBreakdown?: ScoreBreakdown;
 };
 

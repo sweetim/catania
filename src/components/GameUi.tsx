@@ -154,6 +154,18 @@ export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "
   );
 }
 
+export function IslandIcon({ className = "h-6 w-5 shrink-0" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 28" className={className} aria-hidden="true" fill="none">
+      <path d="M4.5 22.5c2.4-1.9 12.6-1.9 15 0-1.3 2.3-4.2 3.5-7.5 3.5s-6.2-1.2-7.5-3.5Z" fill="currentColor" />
+      <path d="M12 22.5c.6-4.6.4-9-.6-13.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M11.5 9.5C9.8 6.7 6.3 6 3.6 7.5c1.2-3.1 5.5-3.7 7.4-1.1L11.5 9.5Z" fill="currentColor" />
+      <path d="M12.5 9.5c1.7-2.8 5.2-3.5 7.9-2-1.2-3.1-5.5-3.7-7.4-1.1l-.5 3.1Z" fill="currentColor" />
+      <path d="M11.8 9.2C10.8 6.4 11.4 3.6 13.5 1.5c.3 3-.1 5.5-1.4 7.4l-.3.3Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function CardTypeIcon({ kind }: { kind: "resource" | "development" }) {
   return (
     <svg viewBox="0 0 24 28" className="h-6 w-5 shrink-0" aria-hidden="true" fill="none">
@@ -474,10 +486,12 @@ export function CardStack({
   resources,
   emptyText,
   label,
+  available,
 }: {
   resources: Resources;
   emptyText?: string;
   label?: string;
+  available?: Resources;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
@@ -506,7 +520,7 @@ export function CardStack({
             count={resources[resource]}
             compact
             iconClassName="h-5 w-5"
-            className="h-13 w-9"
+            className={`h-13 w-9${available !== undefined && available[resource] < resources[resource] ? " blur-[1.5px] opacity-50" : ""}`}
           />
         ))}
       </span>

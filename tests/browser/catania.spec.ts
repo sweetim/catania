@@ -606,6 +606,44 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
   await screenshot(page, testInfo, "island-harbors", false);
 });
 
+for (const variant of ["original", "seafarers"] as const) {
+  test(`${variant === "original" ? "Original" : "Seafarers"} harbor piers connect directly to the coastline`, async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await showHomeView(page, "Island");
+    const island = page.getByRole("region", { name: "Island preview", exact: true });
+    await expect(island.locator(".board-surface")).toHaveAttribute("data-variant", variant);
+    const coastMidpoints = await island.locator('g[stroke="#b8a777"] > line').evaluateAll(lines => lines.map(element => {
+      const line = element as SVGLineElement;
+      return {
+        x: (line.x1.baseVal.value + line.x2.baseVal.value) / 2,
+        y: (line.y1.baseVal.value + line.y2.baseVal.value) / 2,
+      };
+    }));
+    expect(coastMidpoints.length).toBeGreaterThan(0);
+    const harbors = island.getByRole("img", { name: /harbor, trade/ });
+    await expect(harbors).toHaveCount(9);
+    const connections = await harbors.evaluateAll((groups, midpoints) => groups.map(group =>
+      Array.from(group.querySelectorAll<SVGPathElement>(":scope > path"), path => {
+        const start = path.getPointAtLength(0);
+        return {
+          coastGap: Math.min(...midpoints.map(midpoint => Math.hypot(start.x - midpoint.x, start.y - midpoint.y))),
+          length: path.getTotalLength(),
+        };
+      }),
+    ), coastMidpoints);
+    for (const strokes of connections) {
+      expect(strokes, "Both pier strokes reach the coast").toHaveLength(2);
+      for (const stroke of strokes) {
+        expect(stroke.coastGap, "Pier starts at the coastal-edge midpoint").toBeCloseTo(0, 4);
+        expect(stroke.length, "Badge stays 51 units offshore").toBeCloseTo(51, 4);
+      }
+    }
+    await noHorizontalOverflow(page);
+    await screenshot(page, testInfo, `${variant}-harbor-connections`, false);
+  });
+}
+
 test("theme dialog stays open while computers continue into a private human handoff", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
@@ -3893,6 +3931,11 @@ test("request-first trades compare prices and only exchange cards after confirma
   await openTrade.getByRole("button", { name: "Pass to Jordan", exact: true }).click();
   expect(await revealHand(page)).toBe(responder.name);
   await expectResourceInventory(openTrade, state.players.find(player => player.id === responder.id)!.resources);
+  // The responder paid away all Ore in the confirmed trade, so the requested card blurs instead of showing a hint.
+  const requestedOre = openTrade.getByRole("img", { name: "You give: 1 Ore", exact: true });
+  await expect(requestedOre.locator(".resource-card")).toHaveClass(/blur/);
+  await expect(openTrade.getByText("Choose different cards in return.", { exact: true })).toHaveCount(0);
+  await expect(openTrade.getByText("You do not have all the requested cards to offer this trade.", { exact: true })).toHaveCount(0);
   await openTrade.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
   await expect(propose).toBeDisabled();
   await openTrade.getByRole("button", { name: "Decline", exact: true }).click();

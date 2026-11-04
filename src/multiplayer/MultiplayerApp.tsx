@@ -204,8 +204,9 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         number={game.players.findIndex(other => other.id === player.id) + 1} active={active}
         leading={ownStatistics.score === highestPublicScore && game.players.some(other => other.score < highestPublicScore)}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        islandBonus={ownStatistics.islands ?? 0}
         privateScore={totalScore}
-        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id} />
+        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id || (ownStatistics.islands ?? 0) > 0} />
     </section>
     <section className="hand-content private-hand" aria-label={translateText("Your cards")}>
       <section className="hand-resources" aria-label={translateText("Your current resources")}>
@@ -560,7 +561,8 @@ export function MultiplayerApp() {
             {game.players.map((player, index) => <li key={player.id} className="min-w-0" aria-label={translateText("{name}, {status}", { name: player.name, status: translateText(player.control === "computer" ? "Computer player" : player.connected ? "Connected" : "Disconnected") })}>
               <PlayerSeat variant={game.variant} player={player} number={index + 1} active={player.id === game.activePlayerId}
                 leading={player.score === highestPublicScore && game.players.some(other => other.score < highestPublicScore)}
-                largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id} />
+                largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+                islandBonus={player.islands ?? 0} />
               {player.control === "human" && !player.connected && <p role="status" className="mt-1 px-3 text-xs text-clay">{translateText("{name} disconnected", { name: player.name })}</p>}
             </li>)}
           </ul>

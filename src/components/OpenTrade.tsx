@@ -32,11 +32,12 @@ export function OpenTrade({
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
+  const responding = viewer.id !== trade.offeredBy;
   const canAfford = (resources: Resources) => RESOURCES.every(resource => viewer.resources[resource] >= resources[resource]);
 
   return (
     <>
-      {viewer.id !== trade.offeredBy && <p className="mt-1 text-xs text-muted">
+      {responding && <p className="mt-1 text-xs text-muted">
         {translateText("From {player}", { player: players.find(player => player.id === trade.offeredBy)?.name ?? "" })}
       </p>}
       {trade.expiresAt !== undefined && (
@@ -44,10 +45,10 @@ export function OpenTrade({
       )}
       <div className="my-3 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3">
         {trade.give ? <>
-          <CardStack label={translateText("You give")} resources={viewer.id === trade.offeredBy ? trade.give : trade.receive} />
+          <CardStack label={translateText("You give")} resources={responding ? trade.receive : trade.give} available={responding ? viewer.resources : undefined} />
           <Arrow className="h-5 w-5 shrink-0 text-forest" />
-          <CardStack label={translateText("You receive")} resources={viewer.id === trade.offeredBy ? trade.receive : trade.give} />
-        </> : <CardStack label={translateText(viewer.id === trade.offeredBy ? "You receive" : "You give")} resources={trade.receive} />}
+          <CardStack label={translateText("You receive")} resources={responding ? trade.give : trade.receive} />
+        </> : <CardStack label={translateText(responding ? "You give" : "You receive")} resources={trade.receive} available={responding ? viewer.resources : undefined} />}
       </div>
       {viewer.id === trade.offeredBy ? (
         <div className="space-y-2">
@@ -127,12 +128,6 @@ export function OpenTrade({
           {!trade.give && (
             <fieldset disabled={disabled} className="mb-4 space-y-3">
               <ResourceCardStepper label={translateText("You want in return")} values={chosenResources} onChange={onChangeResources} />
-              <p className="text-xs leading-5 text-muted">
-                {translateText("Choose different cards in return.")}
-              </p>
-              {!canAfford(trade.receive) && (
-                <p className="text-xs text-clay">{translateText("You do not have all the requested cards to offer this trade.")}</p>
-              )}
             </fieldset>
           )}
           <div className="grid grid-cols-2 gap-2">

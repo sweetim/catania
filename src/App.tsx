@@ -529,6 +529,7 @@ export function App() {
         player={{ ...player, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length, longestRoad: getLongestRoadLength(game, player.id), score: game.winnerId ? score.total : score.public }}
         active={game.activePlayerId === player.id} leading={showPublicScoreLeaders && score.public === highestPublicScore}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        islandBonus={score.islands ?? 0}
         privateScore={player.id === viewerId ? score.total : undefined} />;
     });
   }

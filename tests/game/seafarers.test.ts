@@ -354,11 +354,21 @@ describe("island scoring and multiplayer", () => {
     room.start();
     expect(room.game!.board).toEqual(preview);
     expect(() => room.setVariant("original")).toThrow("lobby");
+    // Island bonus points are public snapshot data derived from buildings and island identifiers.
+    const settlerId = room.game!.activePlayerId;
+    const islandVertex = room.game!.board.vertices.find(vertex => vertex.id ===
+      room.game!.board.tiles.find(tile => tile.islandId === "island-1")!.vertexIds[0])!;
+    islandVertex.building = { playerId: settlerId, kind: "settlement" };
     const snapshot = room.snapshot("phone");
     expect(parseServerMessage({ type: "snapshot", snapshot })).toEqual({ type: "snapshot", snapshot });
     expect(snapshot.game!.variant).toBe("seafarers");
+    expect(snapshot.game!.players.find(player => player.id === settlerId)!.islands).toBe(2);
+    expect(snapshot.game!.players.filter(player => player.id !== settlerId).every(player => player.islands === 0)).toBe(true);
     expect(snapshot.privatePlayer!.resources).toEqual(emptyResources());
     expect(snapshot.game!.players.every(player => !("resources" in player))).toBe(true);
+    const outOfRange = structuredClone(snapshot);
+    outOfRange.game!.players.forEach(player => { player.islands = 7; });
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: outOfRange })).toThrow();
   });
 
   test("network parsing accepts larger identifiers and exact ship, pirate, and gold commands, but rejects unexpected fields", () => {

@@ -48,6 +48,8 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
         resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
         knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
         score: game.phase.type === "finished" ? score.total : score.public,
+        // Island bonus points are public: they derive from buildings and island identifiers.
+        ...(game.variant === "seafarers" ? { islands: score.islands } : {}),
         // The game is over: revealed victory points are public and each screen shows the full breakdown.
         ...(game.phase.type === "finished" ? { scoreBreakdown: score } : {}),
       };

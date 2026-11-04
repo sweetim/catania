@@ -1,10 +1,10 @@
 import { type CSSProperties } from "react";
-import { CardTypeIcon, DevelopmentCardIcon, PieceIcon } from "./GameUi";
+import { CardTypeIcon, DevelopmentCardIcon, IslandIcon, PieceIcon } from "./GameUi";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import type { GameVariant } from "../game/types";
 
-export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, detailed = false, stacked = detailed, privateScore, variant = "original" }: {
+export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, detailed = false, stacked = detailed, privateScore, variant = "original" }: {
   variant?: GameVariant;
   player: { name: string; color: string; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
   number: number;
@@ -12,6 +12,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   leading: boolean;
   largestArmy: boolean;
   longestRoadAward: boolean;
+  islandBonus?: number;
   detailed?: boolean;
   stacked?: boolean;
   privateScore?: number;
@@ -19,6 +20,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   const translateText = useTranslation(gameplayTranslations);
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
   const roadLabel = translateText(variant === "seafarers" ? "{count} connected roads and ships" : player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
+  const islandLabel = translateText("Island bonus (+{points} victory points)", { points: islandBonus });
 
   return <div style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
     <div className={stacked ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
@@ -43,7 +45,8 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
       <div role="group" aria-label={translateText("{player}'s victory points", { player: player.name })} className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${leading ? "text-[#8b6425]" : ""}`}>
         <span className="text-[9px] text-muted">{translateText("VP")}</span>
         <span className="font-serif text-2xl">{privateScore ?? player.score}</span>
-        {(largestArmy || longestRoadAward) && <div role="group" aria-label={translateText("Victory point awards")} className="ml-1.5 flex shrink-0 items-center gap-2.5">
+        {(largestArmy || longestRoadAward || islandBonus > 0) && <div role="group" aria-label={translateText("Victory point awards")} className="ml-1.5 flex shrink-0 items-center gap-2.5">
+          {islandBonus > 0 && <span role="img" aria-label={islandLabel} title={islandLabel} className="shrink-0 text-[#b58a2d]"><IslandIcon className="shrink-0" /></span>}
           {largestArmy && <svg role="img" aria-label={translateText("Largest Army (+2 victory points)")} viewBox="0 0 24 28" className="shrink-0 text-[#b58a2d]" fill="none">
             <title>{translateText("Largest Army (+2 victory points)")}</title>
             <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
