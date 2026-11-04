@@ -7,7 +7,8 @@ export type VictoryBreakdownKind =
   | "cities"
   | "longest-road"
   | "largest-army"
-  | "victory-point-cards";
+  | "victory-point-cards"
+  | "islands";
 
 export type VictoryBreakdownRow = {
   kind: VictoryBreakdownKind;
@@ -70,7 +71,7 @@ function BreakdownIcon({ kind }: { kind: VictoryBreakdownKind }) {
         </svg>
       </span>
     ))
-    .with("victory-point-cards", () => (
+    .with("victory-point-cards", "islands", () => (
       <span className="victory-chip bg-[#947231]/15 text-[#947231]"><DevelopmentCardIcon kind="victory-point" /></span>
     ))
     .exhaustive();

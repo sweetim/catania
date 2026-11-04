@@ -1,6 +1,6 @@
 # Catania Requirements
 
-Status: The local base game and the PeerJS shared-board/private-phone mode described under Current Multiplayer Scope are implemented. Broader original proposals below remain separate from the current scope.
+Status: Original, the initial Seafarers scenario, and the PeerJS shared-board/private-phone mode described under Current Multiplayer Scope are implemented. Broader original proposals below remain separate from the current scope.
 
 Related document: [Architecture](architecture.md).
 
@@ -11,6 +11,15 @@ styled with Tailwind CSS. It includes randomized boards and turn order, snake
 setup, finite banks and piece supplies, production, building, domestic and
 maritime trades, robber/discard sequences, development cards, awards, and a
 10-point victory with results and rematch.
+
+Local setup and the multiplayer host lobby offer **Original** (default) or
+**Seafarers**. The initial Seafarers scope is Heading for New Shores, using the
+randomized four-player layout for three or four players: ships with independent
+piece supplies, open-ended ship movement, the pirate, gold choices, mixed Longest
+Route, two-point bonuses per newly settled small island, and a 14-point victory.
+Both human and computer players use the same validated engine. Other Seafarers
+scenarios are outside this delivery; [gameplay](gameplay.md#seafarers-heading-for-new-shores)
+documents the available rules.
 
 The table has three or four total seats and a selectable human count from one
 to the seat count, defaulting to one. Local AI fills the remaining seats. Human
@@ -23,8 +32,11 @@ Computer hands cannot be opened through handoff or trade controls.
 AI handles initial placement, turns, building, development cards, discards, and
 robber/theft choices using its own hand and public information. Its basic local
 strategy uses bank/port trades, accepts or declines exact human trade offers, and
-quotes equal-count prices for resource requests when useful to its build plan;
-it does not initiate player trades or use opponents' private hands to set prices.
+quotes equal-count prices for resource requests when useful to its build plan.
+Before maritime trades, AI can request missing build cards once per turn when its
+surplus can fund equal-count prices. It completes affordable, useful exchanges,
+waits up to 15 seconds for unanswered players, and otherwise withdraws and resumes
+its turn. It never uses opponents' private hands to set prices.
 The active player can request cards without specifying payment, or create an exact
 offer. Human recipients use private handoffs to propose a price or accept/decline.
 The active player compares responses as give/receive cards and confirms one exchange,
@@ -63,9 +75,13 @@ boundaries. Physical-phone network checks remain separate from browser automatio
   optional fourth seat, and disconnected humans who must reconnect before starting.
 - The host lobby shows an island preview with a host-only **Shuffle** control.
   Starting uses the exact displayed map; player and theme changes preserve it.
+  The host-only game-version selector regenerates a matching preview and broadcasts
+  the version to admitted phones; it cannot change during play.
 - The shared board is clickable for confirmed placements and robber movement.
   Phones display their own cards and score, public player information, and controls
   for rolls, development cards, trades, discards, theft, and ending a turn.
+  Seafarers adds shared-board ship placement/movement and pirate moves, with gold
+  choices handled privately on the eligible player's phone.
 - Computer players use the existing local AI for automatic setup, turns, discards,
   and trade responses. They need no phone; their hands remain private, and shared
   board input is disabled during their turns.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { chooseComputerAction, getController } from "../../src/game/computer";
+import { chooseComputerAction, getComputerActionDelay, getController } from "../../src/game/computer";
 import {
-  applyAction, createGame, emptyResources, getScore, getTradeRatio, RESOURCES, resourceTotal,
+  applyAction, COMPUTER_TRADE_RESPONSE_MILLISECONDS, createGame, emptyResources, getScore, getTradeRatio, RESOURCES, resourceTotal,
 } from "../../src/game/engine";
 import type { DevelopmentKind, GameAction, GameState, Player, Resources } from "../../src/game/types";
 
@@ -271,6 +271,7 @@ describe("computer trades and public information", () => {
   test.each(["any", "wood", null] as const)("maritime trading uses %s port ratios, then spends on its selected build", portResource => {
     let state = settledGame();
     state.phase = { type: "actions" };
+    state.computerTradeRequested = true;
     state.board.ports = [];
     const player = state.players.find(player => player.id === state.activePlayerId)!;
     if (portResource) {
@@ -288,6 +289,7 @@ describe("computer trades and public information", () => {
   test("never trades into a depleted bank or toward an unaffordable target", () => {
     const state = settledGame();
     state.phase = { type: "actions" };
+    state.computerTradeRequested = true;
     state.board.ports = [];
     setResources(state, state.activePlayerId, resources({ wood: 4, grain: 2, ore: 2 }));
     state.bank.ore = 0;
@@ -301,6 +303,7 @@ describe("computer trades and public information", () => {
   test("successive bank trades monotonically close a build deficit and terminate in a purchase", () => {
     let state = settledGame();
     state.phase = { type: "actions" };
+    state.computerTradeRequested = true;
     state.board.ports = [];
     const playerId = state.activePlayerId;
     setResources(state, playerId, resources({ wood: 12, grain: 2 }));
@@ -435,6 +438,147 @@ describe("computer trades and public information", () => {
   );
 });
 
+describe("computer-initiated player trades", () => {
+  function requestingGame(inventory = resources({ wood: 1, grain: 2, ore: 2 })): GameState {
+    const state = settledGame();
+    state.phase = { type: "actions" };
+    setResources(state, state.activePlayerId, inventory);
+    for (const other of state.players) {
+      if (other.id !== state.activePlayerId) other.control = "human";
+    }
+    return state;
+  }
+
+  function request(state: GameState, now = 1000): GameState {
+    const action = chooseComputerAction(state, state.activePlayerId, now);
+    expect(action?.type).toBe("request-trade");
+    return applyAction(state, state.activePlayerId, action!, () => 0, now);
+  }
+
+  test.each([
+    { inventory: resources({ wood: 1, grain: 2, ore: 2 }), receive: resources({ ore: 1 }) },
+    { inventory: resources({ wood: 5 }), receive: resources({ grain: 2, ore: 3 }) },
+  ])("requests the selected build's missing cards when surplus can fund equal-count prices", ({ inventory, receive }) => {
+    const state = requestingGame(inventory);
+    const before = structuredClone(state);
+    expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "request-trade", receive });
+    expect(state).toEqual(before);
+    const next = request(state);
+    expect(next.trade).toEqual({
+      offeredBy: state.activePlayerId, give: null, receive, responses: {},
+      expiresAt: 1000 + COMPUTER_TRADE_RESPONSE_MILLISECONDS,
+    });
+    expect(next.computerTradeRequested).toBe(true);
+    expect(next.players).toEqual(state.players);
+    expect(next.bank).toEqual(state.bank);
+  });
+
+  test("does not request without surplus or delay an already affordable build", () => {
+    const state = requestingGame(resources({ grain: 2, ore: 2 }));
+    expect(chooseComputerAction(state, state.activePlayerId)?.type).toBe("end-turn");
+    setResources(state, state.activePlayerId, resources({ grain: 2, ore: 3 }));
+    expect(chooseComputerAction(state, state.activePlayerId)?.type).toBe("place-city");
+  });
+
+  test("waits the full 15 seconds for humans without resetting the deadline after a response", () => {
+    let state = request(requestingGame());
+    const requesterId = state.activePlayerId;
+    expect(chooseComputerAction(state, requesterId, 1000)).toBeNull();
+    expect(getComputerActionDelay(state, 1000)).toBe(15_000);
+    const human = state.players.find(player => player.id !== requesterId)!;
+    state = applyAction(state, human.id, { type: "respond-trade", accept: false });
+    expect(chooseComputerAction(state, requesterId, 15_999)).toBeNull();
+    expect(getComputerActionDelay(state, 15_999)).toBe(1);
+    expect(chooseComputerAction(state, requesterId, 16_000)).toEqual({ type: "cancel-trade" });
+    expect(getComputerActionDelay(state, 16_000)).toBe(450);
+    const canceled = applyAction(state, requesterId, chooseComputerAction(state, requesterId, 16_000)!);
+    expect(canceled.trade).toBeNull();
+    expect(chooseComputerAction(canceled, requesterId)?.type).toBe("end-turn");
+  });
+
+  test("completes an affordable useful human price and spends the acquired cards on its build", () => {
+    let state = requestingGame();
+    const requesterId = state.activePlayerId;
+    const human = state.players.find(player => player.id !== requesterId)!;
+    setResources(state, human.id, resources({ ore: 1 }));
+    state = request(state);
+    const bank = { ...state.bank };
+    state = applyAction(state, human.id, { type: "propose-trade", price: resources({ wood: 1 }) });
+    expect(chooseComputerAction(state, requesterId, 1001)).toEqual({ type: "complete-trade", playerId: human.id });
+    const completed = chooseAndApply(state);
+    expect(completed.state.trade).toBeNull();
+    expect(completed.state.bank).toEqual(bank);
+    expect(completed.state.players.find(player => player.id === requesterId)!.resources).toEqual(resources({ grain: 2, ore: 3 }));
+    expect(completed.state.players.find(player => player.id === human.id)!.resources).toEqual(resources({ wood: 1 }));
+    expect(chooseAndApply(completed.state).action.type).toBe("place-city");
+    setResources(completed.state, requesterId, resources({ wood: 1, grain: 2, ore: 2 }));
+    expect(chooseComputerAction(completed.state, requesterId)?.type).toBe("end-turn");
+  });
+
+  test.each([
+    { name: "unaffordable", price: resources({ wool: 1 }) },
+    { name: "too expensive", price: resources({ wood: 2 }) },
+    { name: "unhelpful", price: resources({ grain: 1 }) },
+  ])("does not accept $name prices and stops waiting once every opponent answers", ({ price }) => {
+    let state = requestingGame(resources({ wood: 2, grain: 2, ore: 2 }));
+    const requesterId = state.activePlayerId;
+    const humans = state.players.filter(player => player.id !== requesterId);
+    setResources(state, humans[0]!.id, resources({ ore: 1 }));
+    state = request(state);
+    state = applyAction(state, humans[0]!.id, { type: "propose-trade", price });
+    expect(chooseComputerAction(state, requesterId, 1001)).toBeNull();
+    state = applyAction(state, humans[1]!.id, { type: "respond-trade", accept: false });
+    expect(chooseComputerAction(state, requesterId, 1002)).toEqual({ type: "cancel-trade" });
+    state = chooseAndApply(state).state;
+    expect(chooseComputerAction(state, requesterId)?.type).toBe("end-turn");
+    state = applyAction(state, requesterId, { type: "end-turn" });
+    expect(state.computerTradeRequested).toBe(false);
+  });
+
+  test("falls back to maritime trading after a declined request without requesting again", () => {
+    let state = requestingGame(resources({ wood: 4, grain: 2, ore: 2 }));
+    state.board.ports = [];
+    const requesterId = state.activePlayerId;
+    state = request(state);
+    for (const other of state.players.filter(player => player.id !== requesterId)) {
+      state = applyAction(state, other.id, { type: "respond-trade", accept: false });
+    }
+    state = chooseAndApply(state).state;
+    expect(chooseAndApply(state).action).toEqual({ type: "bank-trade", give: "wood", receive: "ore" });
+  });
+
+  test("computers quote prices for each other and the requester completes a useful exchange", () => {
+    let state = requestingGame(resources({ grain: 3, ore: 2 }));
+    const requesterId = state.activePlayerId;
+    const other = state.players.find(player => player.id !== requesterId)!;
+    other.control = "computer";
+    setResources(state, other.id, resources({ grain: 1, ore: 4 }));
+    state.developmentDeck = [];
+    state = request(state);
+    expect(getComputerActionDelay(state, 1000)).toBe(450);
+    const response = chooseAndApply(state, other.id);
+    expect(response.action.type).toBe("propose-trade");
+    state = response.state;
+    expect(state.trade!.responses[other.id]).toEqual(resources({ grain: 1 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "complete-trade", playerId: other.id });
+  });
+
+  test("requesting and evaluating prices never inspect opponents' hidden hands", () => {
+    let state = requestingGame();
+    state = request(state);
+    const other = state.players.find(player => player.id !== state.activePlayerId)!;
+    state.trade!.responses[other.id] = resources({ wood: 1 });
+    for (const opponent of state.players.filter(player => player.id !== state.activePlayerId)) {
+      Object.defineProperty(opponent, "resources", { get() { throw new Error("Opponent resources are private"); } });
+      Object.defineProperty(opponent, "developmentCards", { get() { throw new Error("Opponent cards are private"); } });
+    }
+    expect(chooseComputerAction(state, state.activePlayerId, 1000)).toEqual({ type: "complete-trade", playerId: other.id });
+    state.trade = null;
+    state.computerTradeRequested = false;
+    expect(chooseComputerAction(state, state.activePlayerId)?.type).toBe("request-trade");
+  });
+});
+
 describe("seeded complete computer games", () => {
   for (const count of [3, 4]) {
     test.each([1, 59, 2813, 90210])(`${count} computers finish seed %s using only legal, finite actions`, seed => {
@@ -444,10 +588,11 @@ describe("seeded complete computer games", () => {
       let turnSteps = 0;
       const actions = new Set<GameAction["type"]>();
       while (!state.winnerId && steps < 5000) {
-        const playerId = getController(state);
-        const action = chooseComputerAction(state, playerId);
+        const decision = state.players.map(player => ({ playerId: player.id, action: chooseComputerAction(state, player.id) }))
+          .find(decision => decision.action);
+        const playerId = decision!.playerId;
+        const action = decision!.action;
         expect(action).not.toBeNull();
-        expect(action!.type).not.toBe("offer-trade");
         const previousTurn = state.turnNumber;
         state = applyAction(state, playerId, action!, random);
         actions.add(action!.type);

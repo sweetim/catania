@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { emptyResources, RESOURCES, resourceTotal } from "../game/engine";
-import type { DevelopmentKind, GameAction, GamePhase, Player, Resource, Resources } from "../game/types";
+import type { DevelopmentKind, GameAction, GamePhase, GameVariant, Player, Resource, Resources } from "../game/types";
 import { resourceName, translate, type Language } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -32,13 +32,20 @@ export function getDevelopmentNames(language: Language): Record<DevelopmentKind,
   )) as Record<DevelopmentKind, string>;
 }
 
-export function getDevelopmentDescriptions(language: Language): Record<DevelopmentKind, string> {
-  return Object.fromEntries(Object.entries(DEVELOPMENT_DESCRIPTIONS).map(([kind, description]) =>
+export function getDevelopmentDescriptions(language: Language, variant: GameVariant = "original"): Record<DevelopmentKind, string> {
+  const descriptions = Object.fromEntries(Object.entries(DEVELOPMENT_DESCRIPTIONS).map(([kind, description]) =>
     [kind, translate(language, gameplayTranslations, description)],
   )) as Record<DevelopmentKind, string>;
+  if (variant === "seafarers") {
+    descriptions.knight = translate(language, gameplayTranslations, "Move the robber or pirate and steal one random resource from an adjacent opponent. Played Knights count toward Largest Army.");
+    descriptions["victory-point"] = translate(language, gameplayTranslations, "One hidden victory point. Counts automatically toward victory on your turn, including when purchased.");
+    descriptions["road-building"] = translate(language, gameplayTranslations, "Place two roads or ships for free, following the usual connection and piece-limit rules.");
+  }
+  return descriptions;
 }
 
 export function DevelopmentDialog({
+  variant = "original",
   player,
   bank,
   turnNumber,
@@ -52,6 +59,7 @@ export function DevelopmentDialog({
   onSubmit,
   onClearError,
 }: {
+  variant?: GameVariant;
   player: Player;
   bank: Resources;
   turnNumber: number;
@@ -68,7 +76,7 @@ export function DevelopmentDialog({
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
   const developmentNames = getDevelopmentNames(language);
-  const developmentDescriptions = getDevelopmentDescriptions(language);
+  const developmentDescriptions = getDevelopmentDescriptions(language, variant);
   const [developmentCardId, setDevelopmentCardId] = useState(initialCardId);
   const [chosenResources, setChosenResources] = useState(emptyResources);
   const [chosenResource, setChosenResource] = useState<Resource>("wood");

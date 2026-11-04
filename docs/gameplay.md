@@ -19,7 +19,8 @@ Under **Separate multiplayer setup**, **Play across devices** opens setup for a 
 board and phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
-1. Choose three or four total players and how many are human (one by default).
+1. Choose **Original** (the default) or **Seafarers** under **Game version**,
+   then three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
    including its terrain, number tokens, and harbors.
@@ -30,13 +31,54 @@ preview; multiplayer players and a new island are set up independently.
 4. Roll, gather resources, build, trade, and play eligible development cards.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
-6. Reach 10 victory points on your own turn. Inspect the revealed score breakdown
+6. Reach 10 victory points in Original, or 14 in Seafarers, on your own turn. Inspect the revealed score breakdown
    and start a fresh rematch or return to the table.
 
 The game includes the standard terrain and tokens, nine ports, finite resource
 bank and development deck, piece limits, robber and discards, all development
 cards, Longest Road, Largest Army, and hidden victory points. Builds, trades,
 phase transitions, and turn ownership are validated by the rules engine.
+
+## Seafarers: Heading For New Shores
+
+Seafarers uses a randomized 42-hex layout: the original 19-hex main island,
+three smaller islands, and 14 sea hexes. This is the four-player scenario layout,
+also available with three players. Other Seafarers scenarios are not implemented.
+Changing versions generates a matching preview without changing player settings or
+the selected artwork theme. Shuffle preserves the version; starting keeps the
+exact preview. A rematch keeps the version and generates a new board.
+Game version cannot change during play and is not saved across reloads.
+
+- Place both starting settlements on the main island. At a coastal starting
+  settlement, choose **Build road** or **Build ship** in the board footer.
+- A ship costs one wood and one wool. Each player has 15 ships, separately from
+  their 15 roads. Ships occupy sea/coastal edges, connect to your ships or buildings,
+  and cannot pass an opponent's building. Roads require a land edge.
+- Roads and ships connect to each other only at your settlement or city.
+  Both count toward **Longest Route**, worth two points for a continuous route
+  of at least five pieces. Road Building can place either kind of piece for free.
+- After rolling, **Move ship** lets you select an old open-ended ship, then a
+  highlighted destination and confirm it. Movement is free, at most once per turn.
+  A ship built this turn, a ship in a closed route between your buildings, or a
+  ship beside the pirate cannot move. Removing a ship cannot leave its destination
+  connected only through the removed piece.
+- On a seven or Knight, choose a different land hex for the robber, a different
+  sea hex for the pirate, or **Move pirate off board**. The pirate steals from one
+  player with an adjacent ship; coastal buildings alone do not qualify. It prevents
+  building and moving ships on its hex, but does not break existing routes, block
+  ports, or stop land production. Knight can be cancelled before either token moves.
+- Gold fields produce any available bank resource: one card per settlement or two
+  per city. Eligible players choose in turn order, starting with the active player;
+  pass-and-play hands switch to the next chooser. Finish these choices before
+  continuing the turn. If the bank has fewer cards than owed, take what remains.
+  The robber blocks gold production as it does ordinary terrain.
+- Your first settlement on each small island earns two extra points, independently
+  for every player. Further settlements on that island do not repeat the bonus,
+  and upgrading to a city preserves it. Island points appear in the final breakdown.
+  Win at 14 points on your own turn.
+
+Computer opponents can settle the islands, build ships, resolve pirate/theft and
+gold choices, and complete games under the same rules as humans.
 
 ## Board And Controls
 
@@ -64,10 +106,11 @@ Short screens can scroll within the hand or player panel without moving the boar
 On very short desktop windows, the entire sidebar scrolls internally so the status
 card, turn controls, and hand tasks remain reachable.
 
-The header's **Game** menu contains **Language**, **Help**, and **Settings**, plus
+The turn header's **Game** icon menu sits beside the player name and turn-number
+badge, matching private multiplayer screens. It contains **Language**, **Help**, and **Settings**, plus
 **Pass device** when multiple humans have a hand revealed. **End game** sits below
 a divider and still requires confirmation. The turn header shows **Setup** or the
-current turn number.
+current turn number. During a private handoff, the menu stays in the page header.
 Keyboard users can select highlighted positions with Enter or Space.
 Confirm/Cancel appears beside the selected piece or hex, stays inside the map,
 and follows zoom and pan. Confirm is focused for keyboard use; Escape cancels
@@ -152,7 +195,9 @@ colors without detailed player cards; all private summaries disappear during han
 
 Player seats show public card totals as icon-and-number badges, with full labels
 in player details and accessible descriptions, never another player's resource
-breakdown. On tablets and desktops, all seats fit above the map without horizontal
+breakdown. The score reads **VP** followed by one number: your revealed seat includes
+public and hidden points, while other seats show only public points. There is no
+separate total label. On tablets and desktops, all seats fit above the map without horizontal
 scrolling. Narrow cards put the name above a horizontal row of counts; wider cards
 retain the single-row layout. Player seats also show each player's played-Knight
 count as a shield icon and number, followed by a road icon and their longest connected-road count,
@@ -173,6 +218,10 @@ reduced motion settles the pulse into a static tint of the same color. It moves
 to the next player's cell when the turn changes without moving the layout. The
 separate turn controls also identify the active player. Hidden victory-point
 cards do not affect the cell highlights.
+
+Trades and mandatory discards show the current viewer's owned resources inside
+the active task instead of the normal hand panel. Both inventories highlight the
+resource-card count when it exceeds seven.
 
 ## Building And Development Cards
 
@@ -247,7 +296,12 @@ Computer opponents run locally without an AI service. They handle setup, turns,
 building, development cards, discards, and robber choices using their own hand
 and public information. They trade with the bank/ports, respond to exact offers,
 and quote equal-count prices for resource requests when useful to their build plan.
-They do not initiate player trades or inspect opponents' hands to set prices.
+Before trading with the bank, they can request their next build's missing cards
+if their surplus can fund an equal-count price. They make at most one request
+per turn, accept affordable prices that improve their build plan, and wait up to
+15 seconds for unanswered players. If no suitable price arrives, they withdraw
+the request and continue playing. In pass-and-play, use **Pass device** to reveal
+a human hand and respond. Computers never inspect opponents' hands to set prices.
 They use a basic strategy, not an advanced difficulty system.
 
 ## Privacy And Limits

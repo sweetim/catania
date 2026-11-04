@@ -1,5 +1,5 @@
 import { match } from "ts-pattern";
-import type { GamePhase } from "../game/types";
+import type { GamePhase, GameVariant } from "../game/types";
 import { translate, type Language } from "../i18n";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -10,12 +10,14 @@ export function getPhaseInstructions({
   pendingKnight = Boolean(phase.type === "robber" && phase.pendingKnight),
   sharedBoard = false,
   language = "en",
+  variant = "original",
 }: {
   phase: GamePhase;
   secondSettlement: boolean;
   pendingKnight?: boolean;
   sharedBoard?: boolean;
   language?: Language;
+  variant?: GameVariant;
 }) {
   const translateText = (message: keyof typeof gameplayTranslations, parameters?: Record<string, string | number>) =>
     translate(language, gameplayTranslations, message, parameters);
@@ -32,7 +34,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
-      description: translateText(sharedBoard
+      description: variant === "seafarers" ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
@@ -48,9 +50,13 @@ export function getPhaseInstructions({
       title: translateText("Make room in your hand."),
       description: translateText("A seven was rolled. Players with more than seven resource cards must return half, rounded down, to the bank."),
     }))
+    .with({ type: "gold" }, () => ({
+      title: translateText("Choose your gold resources"),
+      description: translateText("Choose your gold resources"),
+    }))
     .with({ type: "robber" }, () => ({
-      title: translateText(pendingKnight ? "Move the robber." : "The robber is on the move."),
-      description: translateText(pendingKnight
+      title: translateText(variant === "seafarers" ? "Move the robber or pirate." : pendingKnight ? "Move the robber." : "The robber is on the move."),
+      description: variant === "seafarers" ? translateText("Move the robber to land or the pirate to sea, then choose a victim.") : translateText(pendingKnight
         ? sharedBoard
           ? "Confirm a new hex on the shared board or cancel Knight."
           : "Confirm a new hex or cancel Knight."
@@ -60,11 +66,11 @@ export function getPhaseInstructions({
     }))
     .with({ type: "steal" }, () => ({
       title: translateText("Choose a neighboring player."),
-      description: translateText("Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing."),
+      description: translateText(variant === "seafarers" ? "Choose an opponent beside the robber or pirate." : "Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing."),
     }))
     .with({ type: "road-building" }, phase => ({
       title: translateText("Take the road less traveled."),
-      description: translateText(sharedBoard
+      description: variant === "seafarers" ? translateText("Place {count} more roads or ships for free.", { count: phase.remaining }) : translateText(sharedBoard
         ? phase.remaining === 1
           ? "Place {count} more road for free. Confirm each placement on the shared board."
           : "Place {count} more roads for free. Confirm each placement on the shared board."
@@ -74,7 +80,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "finished" }, () => ({
       title: translateText("An island. A new legend."),
-      description: translateText("The first player to reach ten victory points on their turn wins."),
+      description: translateText(variant === "seafarers" ? "The first player to reach fourteen victory points on their turn wins." : "The first player to reach ten victory points on their turn wins."),
     }))
     .exhaustive();
 }

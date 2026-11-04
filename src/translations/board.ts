@@ -1,6 +1,14 @@
 import type { TranslationCatalog } from "../i18n";
 
 export const boardTranslations = {
+  "Sea": "海",
+  "Gold fields": "金鉱",
+  "Move pirate to sea": "海賊を海に移動",
+  "Move pirate off board": "海賊を盤外へ移動",
+  "Pirate; adjacent ships cannot be built or moved": "海賊：隣接する船の建造・移動はできません",
+  "{player}'s ship at {location}": "{location}にある{player}の船",
+  "Build ship at {location}": "{location}に船を建造",
+  "Move ship at {location}": "{location}の船を移動",
   "THE ISLAND": "島",
   "A place to begin.": "ここから始まる物語。",
   "Island map. Use the zoom controls to enlarge, then scroll or drag to pan.": "島の地図。拡大ボタンで拡大した後、スクロールまたはドラッグで表示位置を移動できます。",
@@ -51,6 +59,8 @@ export const boardTranslations = {
 } satisfies TranslationCatalog;
 
 export const themeTranslations: TranslationCatalog = {
+  "Sea": "海",
+  "Gold fields": "金鉱",
   "Illustrated Island": "手描きの島",
   "Soft hills, inked forests, and a quiet green sea.": "やわらかな丘、インクで描いた森、静かな緑の海。",
   "Mediterranean Ceramic": "地中海の陶器",

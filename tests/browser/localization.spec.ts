@@ -38,6 +38,24 @@ async function selectHomeLanguage(page: Page, currentLanguage: "en" | "ja", next
 test.describe("Japanese browser locale", () => {
   test.use({ locale: "ja-JP" });
 
+  test("Seafarers selection and rules localize without changing the selected version", async ({ page }) => {
+    await page.goto("/");
+    const versions = page.getByRole("combobox", { name: "ゲームの種類", exact: true });
+    await expect(versions).toHaveValue("original");
+    await versions.selectOption("seafarers");
+    await expect(page.locator(".terrain-hex")).toHaveCount(42);
+    await page.getByRole("button", { name: "メニュー", exact: true }).click();
+    await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+    const help = page.getByRole("dialog", { name: "ヘルプ", exact: true });
+    await expect(help.getByRole("heading", { name: "航海者のルール", exact: true })).toBeVisible();
+    await expect(help.getByText("よき隣人、巧みな交易。目指すは14勝利点。", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await selectHomeLanguage(page, "ja", "en");
+    await expect(page.getByRole("combobox", { name: "Game version", exact: true })).toHaveValue("seafarers");
+    await expect(page.locator(".terrain-hex")).toHaveCount(42);
+    await expectNoHorizontalOverflow(page);
+  });
+
   test("defaults to Japanese, remembers a manual choice, and shares it between modes", async ({ page }, testInfo) => {
     await page.goto("/");
     await expectLanguage(page, "ja");

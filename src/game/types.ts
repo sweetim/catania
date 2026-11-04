@@ -1,8 +1,9 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
+export type GameVariant = "original" | "seafarers";
 export type Resources = Record<Resource, number>;
-export type Terrain = Resource | "desert";
+export type Terrain = Resource | "desert" | "sea" | "gold";
 export type DevelopmentKind =
   | "knight"
   | "victory-point"
@@ -18,6 +19,7 @@ export type Tile = {
   terrain: Terrain;
   number: number | null;
   vertexIds: string[];
+  islandId?: string;
 };
 export type Vertex = {
   id: string;
@@ -31,9 +33,10 @@ export type Edge = {
   id: string;
   vertexIds: [string, string];
   playerId: string | null;
+  kind?: "road" | "ship";
 };
 export type Port = { edgeId: string; resource: Resource | "any" };
-export type Board = { tiles: Tile[]; vertices: Vertex[]; edges: Edge[]; ports: Port[] };
+export type Board = { tiles: Tile[]; vertices: Vertex[]; edges: Edge[]; ports: Port[]; variant?: GameVariant };
 
 export type Player = {
   id: string;
@@ -50,6 +53,7 @@ export type GamePhase =
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }
+  | { type: "gold"; required: Record<string, number> }
   | {
       type: "robber";
       returnPhase: "roll" | "actions";
@@ -67,10 +71,12 @@ export type TradeOffer = {
   give: Resources | null;
   receive: Resources;
   responses: Record<string, Resources | false>;
+  expiresAt?: number;
 };
 export type TheftEvent = { id: number; thiefId: string; victimId: string; resource: Resource };
 export type MonopolyEvent = { id: number; playerId: string; resource: Resource; losses: Record<string, number> };
 export type GameState = {
+  variant: GameVariant;
   board: Board;
   players: Player[];
   bank: Resources;
@@ -82,22 +88,30 @@ export type GameState = {
   turnNumber: number;
   dice: [number, number] | null;
   robberTileId: string;
+  pirateTileId: string | null;
+  shipMoved: boolean;
+  shipsBuiltThisTurn: string[];
   awards: { longestRoad: string | null; largestArmy: string | null };
   winnerId: string | null;
   log: GameMessage[];
   thefts: TheftEvent[];
   monopolies: MonopolyEvent[];
   trade: TradeOffer | null;
+  computerTradeRequested: boolean;
   developmentPlayed: boolean;
 };
 export type GameAction =
   | { type: "place-settlement"; vertexId: string }
   | { type: "place-city"; vertexId: string }
   | { type: "place-road"; edgeId: string }
+  | { type: "place-ship"; edgeId: string }
+  | { type: "move-ship"; edgeId: string; destinationEdgeId: string }
   | { type: "roll" }
   | { type: "end-turn" }
   | { type: "discard"; resources: Resources }
+  | { type: "choose-gold"; resources: Resources }
   | { type: "move-robber"; tileId: string }
+  | { type: "move-pirate"; tileId: string | null }
   | { type: "cancel-knight" }
   | { type: "steal"; playerId: string }
   | { type: "bank-trade"; give: Resource; receive: Resource }

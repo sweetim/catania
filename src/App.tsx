@@ -4,6 +4,8 @@ import { Board } from "./components/Board";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
+import { GameVariantSelector } from "./components/GameVariantSelector";
+import { FreeRouteChoice, GoldSelection } from "./components/SeafarersControls";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
 import { PrivateNotices } from "./components/PrivateNotices";
@@ -38,7 +40,7 @@ import {
   ResourceInventory,
 } from "./components/GameUi";
 import { createBoard } from "./game/board";
-import { chooseComputerAction, getController } from "./game/computer";
+import { chooseComputerAction, getComputerActionDelay, getController } from "./game/computer";
 import {
   applyAction,
   COSTS,
@@ -48,6 +50,9 @@ import {
   getScore,
   legalCityVertices,
   legalRoadEdges,
+  legalShipEdges,
+  legalShipDestinations,
+  movableShipEdges,
   legalSettlementVertices,
   RESOURCES,
   resourceTotal,
@@ -55,6 +60,7 @@ import {
 import type {
   GameAction,
   GameState,
+  GameVariant,
   Player,
   Resources,
 } from "./game/types";
@@ -76,6 +82,7 @@ function phaseTitle(state: GameState, language: Language) {
   return getPhaseInstructions({
     language,
     phase: state.phase,
+    variant: state.variant,
     secondSettlement: state.setupIndex >= state.players.length,
   }).title;
 }
@@ -84,6 +91,7 @@ function phaseDescription(state: GameState, language: Language) {
   return getPhaseInstructions({
     language,
     phase: state.phase,
+    variant: state.variant,
     secondSettlement: state.setupIndex >= state.players.length,
   }).description;
 }
@@ -100,6 +108,7 @@ export function App() {
     }
   });
   const boardTheme = BOARD_THEMES[boardThemeId];
+  const [variant, setVariant] = useState<GameVariant>("original");
   const [preview, setPreview] = useState(() => createBoard());
   const [names, setNames] = useState(["Alex", "Sam", "Jordan", "Robin"]);
   const [playerCount, setPlayerCount] = useState(3);
@@ -125,8 +134,9 @@ export function App() {
     "hand",
   );
   const [buildMode, setBuildMode] = useState<
-    "road" | "settlement" | "city" | null
+    "road" | "ship" | "move-ship" | "settlement" | "city" | null
   >(null);
+  const [movingShipId, setMovingShipId] = useState<string | null>(null);
   const [buildSectionOpen, setBuildSectionOpen] = useState(() =>
     window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
   );
@@ -182,9 +192,11 @@ export function App() {
 
   useEffect(() => {
     if (!game || !computerPlayer || rollBusy || dialog === "restart") return;
+    const delay = getComputerActionDelay(game);
+    if (delay === null) return;
     const timeout = window.setTimeout(
       () => takeComputerTurn(game, computerPlayer.id),
-      450,
+      delay,
     );
     return () => window.clearTimeout(timeout);
   }, [game, computerPlayer?.id, rollBusy, dialog === "restart"]);
@@ -264,7 +276,7 @@ export function App() {
         setError("Use a different name for each player so private handoffs are clear.");
         return;
       }
-      const next = createGame(profiles, undefined, selectedBoard);
+      const next = createGame(profiles, undefined, selectedBoard, variant);
       setRollPresentation(null);
       setResourceReceipt(null);
       setGame(next);
@@ -290,6 +302,7 @@ export function App() {
       setError("");
       setSelected(null);
       setBuildMode(null);
+      setMovingShipId(null);
     } catch (failure) {
       setHomeView("setup");
       setError(gameErrorMessage(failure, "The game could not be started."));
@@ -308,6 +321,7 @@ export function App() {
     setConfirmation(null);
     setSelected(null);
     setBuildMode(null);
+    setMovingShipId(null);
     setError("");
     setDevelopmentCardId(null);
     setChosenResources(emptyResources());
@@ -389,6 +403,7 @@ export function App() {
       setError("");
       setSelected(null);
       setBuildMode(null);
+      setMovingShipId(null);
       setConfirmation(null);
       setDialog(null);
       setChosenResources(emptyResources());
@@ -428,6 +443,7 @@ export function App() {
     (game?.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0)
   );
   const handTaskOpen = Boolean(viewer && game && (game.trade ||
+    (game.phase.type === "gold" && getController(game) === viewer.id) ||
     (game.phase.type === "discard" && (game.phase.required[viewer.id] ?? 0) > 0) ||
     (game.phase.type === "steal" && isActive)));
   const instructionTitle = rollBusy ? translateText("Let the island provide.") : game && awaitingViewer
@@ -436,7 +452,9 @@ export function App() {
   const instructionDescription = rollBusy
     ? translateText("Follow the dice, the matching number tokens, and the cards arriving in your hand.")
     : game && awaitingViewer
-    ? phaseDescription(game, language)
+    ? buildMode === "move-ship"
+      ? translateText(movingShipId ? "Choose a destination for your ship." : "Choose an open-ended ship, then its destination.")
+      : phaseDescription(game, language)
     : translateText("{name} is playing. You can inspect your hand and the island while you wait.", { name: controllingPlayer?.name ?? "" });
   const canAfford = (cost: ReturnType<typeof emptyResources>) =>
     Boolean(
@@ -464,22 +482,29 @@ export function App() {
     !rollBusy &&
     (game.phase.type === "setup-road" ||
       game.phase.type === "road-building" ||
-      buildMode === "road")
-      ? legalRoadEdges(game, viewer.id)
+      buildMode === "road" || buildMode === "ship" || buildMode === "move-ship")
+      ? buildMode === "move-ship"
+        ? movingShipId ? legalShipDestinations(game, viewer.id, movingShipId)
+          : movableShipEdges(game, viewer.id).filter(id => legalShipDestinations(game, viewer.id, id).length)
+        : buildMode === "ship" ? legalShipEdges(game, viewer.id)
+        : buildMode === "road" ? legalRoadEdges(game, viewer.id)
+        : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =
     game && viewer && isActive && !rollBusy && game.phase.type === "robber"
       ? game.board.tiles
-          .filter((tile) => tile.id !== game.robberTileId)
+          .filter((tile) => tile.terrain === "sea" ? tile.id !== game.pirateTileId : tile.id !== game.robberTileId)
           .map((tile) => tile.id)
       : [];
   const selectedAction: GameAction | null =
     !selected || !game
       ? null
       : selected.kind === "tile"
-        ? { type: "move-robber", tileId: selected.id }
+        ? { type: game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
         : selected.kind === "edge"
-          ? { type: "place-road", edgeId: selected.id }
+          ? buildMode === "move-ship" && movingShipId
+            ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
+            : { type: buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(selected.id) ? "place-ship" : "place-road", edgeId: selected.id }
           : {
               type: buildMode === "city" ? "place-city" : "place-settlement",
               vertexId: selected.id,
@@ -500,13 +525,19 @@ export function App() {
     const showPublicScoreLeaders = scores.some(score => score.public < highestPublicScore);
     return game.players.map((player, index) => {
       const score = scores[index]!;
-      return <PlayerSeat key={player.id} number={index + 1} detailed={detailed}
+      return <PlayerSeat key={player.id} variant={game.variant} number={index + 1} detailed={detailed}
         player={{ ...player, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length, longestRoad: getLongestRoadLength(game, player.id), score: game.winnerId ? score.total : score.public }}
         active={game.activePlayerId === player.id} leading={showPublicScoreLeaders && score.public === highestPublicScore}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
         privateScore={player.id === viewerId ? score.total : undefined} />;
     });
   }
+
+  const gameMenu = <GameMenu icon={Boolean(viewer)} actions={[
+    { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
+    { label: translateText("Settings"), onSelect: () => setDialog("settings") },
+    ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
+  ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />;
 
   return (
     <BoardThemeContext value={boardTheme}>
@@ -515,11 +546,7 @@ export function App() {
         <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           {game && !game.winnerId ? (
-            <GameMenu actions={[
-              { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
-              { label: translateText("Settings"), onSelect: () => setDialog("settings") },
-              ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
-            ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />
+            !viewer && gameMenu
           ) : (
             <GameMenu
               triggerLabel={translateText("Menu")}
@@ -586,17 +613,17 @@ export function App() {
                           setHumanCount((current) => Math.min(current, count));
                         }}
                         aria-pressed={playerCount === count}
-                        className={`min-h-11 flex-1 rounded-lg px-2 text-xs font-semibold ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
+                        className={`min-h-11 min-w-0 flex-1 rounded-lg px-0 text-[10px] font-semibold sm:px-2 sm:text-xs ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
                       >
                         {translateText("{count} players", { count })}
                       </button>
                     ))}
                   </div>
                 </div>
-                <label className="min-w-0 text-[11px] font-semibold text-muted">
+                <label className="min-w-0 text-[10px] font-semibold text-muted sm:text-[11px]">
                   <span className="mb-1.5 block">{translateText("Human players")}</span>
                   <select
-                    className="field !min-h-[52px] text-ink"
+                    className="field !min-h-[52px] !px-1 !text-[10px] text-ink sm:!px-2 sm:!text-xs"
                     value={humanCount}
                     onChange={(event) => setHumanCount(Number(event.target.value))}
                   >
@@ -608,7 +635,15 @@ export function App() {
                       ))}
                   </select>
                 </label>
+                <GameVariantSelector value={variant} onChange={nextVariant => {
+                  setVariant(nextVariant);
+                  setPreview(createBoard(undefined, nextVariant));
+                }} />
               </div>
+              {variant === "seafarers" && <p className="text-xs leading-5 text-muted">
+                <strong>{translateText("Heading for New Shores")}</strong>{" "}
+                {translateText("Main island setup. Discover three islands. First to 14 points wins.")}
+              </p>}
               <div className="grid grid-cols-2 gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                   <label
@@ -701,7 +736,7 @@ export function App() {
               </div>
               <button
                 className="button-secondary !px-3 !text-xs"
-                onClick={() => setPreview(createBoard())}
+                onClick={() => setPreview(createBoard(undefined, variant))}
                 aria-label={translateText("Shuffle island preview")}
               >
                 <span aria-hidden="true">&#8635;</span> {translateText("Shuffle")}
@@ -711,6 +746,7 @@ export function App() {
               <Board
                 board={preview}
                 players={[]}
+                pirateTileId={preview.tiles.find(tile => tile.terrain === "sea")?.id}
                 fillBoardWithWater={fillBoardWithWater}
                 robberTileId={
                   preview.tiles.find((tile) => tile.terrain === "desert")?.id
@@ -722,7 +758,7 @@ export function App() {
               />
             </div>
             <div className="flex shrink-0 flex-wrap justify-between gap-2 text-[10px] text-muted">
-              <span>{translateText("19 hexes. A new story every time.")}</span>
+              <span>{translateText(variant === "seafarers" ? "42 hexes. Three islands to discover." : "19 hexes. A new story every time.")}</span>
               <span>{translateText("3-4 settlers / 60-120 minutes")}</span>
             </div>
           </section>
@@ -734,7 +770,7 @@ export function App() {
             {translateText("{name} takes the island.", { name: game.players.find((player) => player.id === game.winnerId)?.name ?? "" })}
           </h1>
           <p className="mt-4 text-muted">
-            {translateText("Ten points. Countless good deals. One more game?")}
+            {translateText(game.variant === "seafarers" ? "Fourteen points. Countless good deals. One more game?" : "Ten points. Countless good deals. One more game?")}
           </p>
           <div className="my-10 grid gap-4 text-left sm:grid-cols-2">
             {game.players.map((player) => {
@@ -753,8 +789,9 @@ export function App() {
                     {[
                       [translateText("Settlements"), score.settlements],
                       [translateText("Cities"), score.cities],
-                      [translateText("Longest Road"), score.longestRoad],
+                      [translateText(game.variant === "seafarers" ? "Longest Route" : "Longest Road"), score.longestRoad],
                       [translateText("Largest Army"), score.largestArmy],
+                      ...(game.variant === "seafarers" ? [[translateText("Island bonuses"), score.islands ?? 0]] : []),
                       [translateText("Revealed victory-point cards"), score.hidden],
                     ].map(([label, points]) => (
                       <div className="flex justify-between" key={label}>
@@ -786,6 +823,7 @@ export function App() {
               board={game.board}
               players={game.players}
               robberTileId={game.robberTileId}
+              pirateTileId={game.pirateTileId}
               showBlockedSettlementLocations={showBlockedSettlementLocations}
               fillBoardWithWater={fillBoardWithWater}
               interactive={false}
@@ -854,7 +892,7 @@ export function App() {
           </nav>
           <div className="table-feedback">
             <div className="lg:hidden">
-              <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+              <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
             </div>
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
@@ -872,6 +910,13 @@ export function App() {
                   board={game.board}
                   players={game.players}
                   robberTileId={game.robberTileId}
+                  pirateTileId={game.pirateTileId}
+                  routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
+                  routeChoice={isActive && game.variant === "seafarers" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                    ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
+                    : undefined}
+                  onMovePirateOffBoard={isActive && !rollBusy && game.variant === "seafarers" && game.phase.type === "robber" && game.pirateTileId !== null
+                    ? () => perform({ type: "move-pirate", tileId: null }) : undefined}
                   showBlockedSettlementLocations={showBlockedSettlementLocations}
                   fillBoardWithWater={fillBoardWithWater}
                   producingTileIds={producingTileIds}
@@ -881,12 +926,12 @@ export function App() {
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
-                  selectedId={selected?.id}
+                  selectedId={selected?.id ?? movingShipId}
                   confirmation={selectedAction && selected ? {
                     title: selected.kind === "tile"
-                      ? translateText("Move the robber here?")
+                      ? translateText(selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
                       : selected.kind === "edge"
-                        ? translateText("Build a road here?")
+                        ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
                         : buildMode === "city"
                           ? translateText("Upgrade to a city?")
                           : translateText("Settle here?"),
@@ -894,6 +939,11 @@ export function App() {
                     onCancel: () => setSelected(null),
                   } : undefined}
                   onSelect={(kind, id) => {
+                    if (kind === "edge" && buildMode === "move-ship" && !movingShipId) {
+                      setMovingShipId(id);
+                      setSelected(null);
+                      return;
+                    }
                     setSelected({ kind, id });
                     setError("");
                   }}
@@ -1017,7 +1067,7 @@ export function App() {
               )}
               {game.phase.type === "road-building" &&
                 isActive &&
-                legalEdges.length === 0 && (
+                legalRoadEdges(game, viewer.id).length + legalShipEdges(game, viewer.id).length === 0 && (
                   <button
                     className="button-secondary mt-4 w-full"
                     onClick={() => perform({ type: "skip-roads" })}
@@ -1025,6 +1075,9 @@ export function App() {
                     {translateText("Finish road building")}
                   </button>
                 )}
+              {game.phase.type === "gold" && getController(game) === viewer.id && !rollBusy && <GoldSelection
+                key={`${viewer.id}-${JSON.stringify(game.phase.required)}`} bank={game.bank} count={game.phase.required[viewer.id]!}
+                onSubmit={resources => perform({ type: "choose-gold", resources })} />}
 
               <CollapsibleSection
                 title={translateText("Build a little bigger")}
@@ -1034,11 +1087,11 @@ export function App() {
                 onToggle={setBuildSectionOpen}
               >
                 <div className="build-options flex flex-col gap-2">
-                  {(["road", "settlement", "city"] as const).map((piece) => {
+                  {(["road", ...(game.variant === "seafarers" ? ["ship" as const] : []), "settlement", "city"] as const).map((piece) => {
                     const locations =
                       piece === "road"
                         ? legalRoadEdges(game, viewer.id)
-                        : piece === "city"
+                        : piece === "ship" ? legalShipEdges(game, viewer.id) : piece === "city"
                           ? legalCityVertices(game, viewer.id)
                           : legalSettlementVertices(game, viewer.id);
                     const explanation = piece === "settlement" ? settlementUnavailable : null;
@@ -1066,6 +1119,7 @@ export function App() {
                           onClick={() => {
                             setBuildMode(buildMode === piece ? null : piece);
                             setSelected(null);
+                            setMovingShipId(null);
                             setMobileView("board");
                           }}
                         />
@@ -1077,6 +1131,14 @@ export function App() {
                       </Fragment>
                     );
                   })}
+                  {game.variant === "seafarers" && <button className="button-secondary w-full"
+                    disabled={!normalActions || !movableShipEdges(game, viewer.id).some(id => legalShipDestinations(game, viewer.id, id).length)}
+                    aria-pressed={buildMode === "move-ship"} onClick={() => {
+                      setBuildMode(buildMode === "move-ship" ? null : "move-ship");
+                      setMovingShipId(null);
+                      setSelected(null);
+                      setMobileView("board");
+                    }}>{translateText("Move ship")}</button>}
                   <BuildButton
                     piece="development"
                     color={viewer.color}
@@ -1111,6 +1173,7 @@ export function App() {
                 </button>
               </CollapsibleSection>
               <DevelopmentHand
+                variant={game.variant}
                 cards={viewer.developmentCards}
                 turnNumber={game.turnNumber}
                 inert={handTaskOpen}
@@ -1181,9 +1244,10 @@ export function App() {
                   <span className="turn-number">
                     {game.phase.type.startsWith("setup") ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
                   </span>
+                  {!game.winnerId && gameMenu}
                 </div>
                 <div className="hidden lg:block">
-                  <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+                  <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
                 </div>
                 <TurnInstructions
                   title={instructionTitle}
@@ -1226,8 +1290,9 @@ export function App() {
               breakdown={[
                 { kind: "settlements", label: translateText("Settlements"), note: winnerScore.settlements ? translateText("{count} × {points} VP", { count: winnerScore.settlements, points: 1 }) : undefined, points: winnerScore.settlements },
                 { kind: "cities", label: translateText("Cities"), note: winnerScore.cities ? translateText("{count} × {points} VP", { count: winnerScore.cities / 2, points: 2 }) : undefined, points: winnerScore.cities },
-                { kind: "longest-road", label: translateText("Longest Road"), points: winnerScore.longestRoad },
+                { kind: "longest-road", label: translateText(game.variant === "seafarers" ? "Longest Route" : "Longest Road"), points: winnerScore.longestRoad },
                 { kind: "largest-army", label: translateText("Largest Army"), points: winnerScore.largestArmy },
+                ...(game.variant === "seafarers" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), points: winnerScore.islands ?? 0 }] : []),
                 { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
             >
@@ -1250,11 +1315,19 @@ export function App() {
             {translateText("{name} is playing automatically. The next human hand will stay hidden until revealed.", { name: computerPlayer?.name ?? "" })}
           </p>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{playerCards()}</div>
+          {game.trade && (
+            <section className="panel mb-5 p-4" aria-label={translateText("Open trade")}>
+              <h2 className="mb-3 font-serif text-xl">{translateText("Trade request")}</h2>
+              <button className="button-primary" onClick={() => setDialog("players")}>
+                {translateText("Pass device")}
+              </button>
+            </section>
+          )}
           <div className="table-feedback">
-            <RollSummary outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
+            <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{errorText}</p>}
         </main>
       )}
@@ -1274,7 +1347,7 @@ export function App() {
       )}
 
       {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
-      {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+      {dialog === "help" && <HelpDialog variant={game?.variant ?? variant} onClose={() => setDialog(null)} />}
       {game && !game.winnerId && <PrivateNotices thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
         <Dialog title={translateText("Pass the device")} onClose={() => setDialog(null)}>
@@ -1362,6 +1435,7 @@ export function App() {
       )}
       {dialog === "development" && game && viewer && (
         <DevelopmentDialog
+          variant={game.variant}
           player={viewer}
           bank={game.bank}
           turnNumber={game.turnNumber}

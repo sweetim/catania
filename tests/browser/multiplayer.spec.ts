@@ -2,6 +2,7 @@ import { expect, test as base, type BrowserContext, type Locator, type Page, typ
 import { pack, unpack } from "peerjs-js-binarypack";
 import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
+import { createBoard } from "../../src/game/board";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import type { Resources } from "../../src/game/types";
 import type { RoomSnapshot } from "../../src/multiplayer/types";
@@ -1012,6 +1013,82 @@ test("shared tabletop shows only single-device player seats and map at desktop a
   await expectPhase([host, phone], "setup-road", "AlexandertheExplorer");
 });
 
+test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  await expect(host.locator(".terrain-hex")).toHaveCount(42);
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  expect((await latestSnapshot(phone)).variant).toBe("seafarers");
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  for (let placement = 0; placement < 2; placement++) {
+    await expectPhase([host, phone], "setup-settlement", "Alex");
+    const snapshot = await latestSnapshot(phone);
+    const game = snapshot.game!;
+    const vertexId = snapshot.boardTargets.vertices.find(id => {
+      const vertex = game.board.vertices.find(vertex => vertex.id === id)!;
+      return game.board.edges.some(edge => vertex.edgeIds.includes(edge.id) && !edge.playerId &&
+        game.board.tiles.some(tile => tile.terrain === "sea" && tile.id !== game.pirateTileId && edge.vertexIds.every(id => tile.vertexIds.includes(id))));
+    })!;
+    expect(vertexId).toBeDefined();
+    await host.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expectPhase([host, phone], "setup-road", "Alex");
+    await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
+    const target = host.getByRole("button", { name: /^Build ship at / }).first();
+    await expect(target).toBeVisible();
+    await target.click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  }
+  await expect(phone.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20000 });
+  await host.evaluate(() => {
+    Object.defineProperty(crypto, "getRandomValues", { configurable: true, value: (values: Uint32Array) => values.fill(0) });
+  });
+  await phone.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expectPhase([host, phone], "actions", "Alex");
+  await phone.getByRole("button", { name: "Move ship", exact: true }).click();
+  await host.getByRole("button", { name: /^Move ship at / }).first().click();
+  await host.getByRole("button", { name: /^Move ship at / }).first().click();
+  await expect(host.getByText("Move the ship here?", { exact: true })).toBeVisible();
+  const before = (await latestSnapshot(phone)).privatePlayer!.resources;
+  await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect.poll(async () => (await latestSnapshot(phone)).game!.shipMoved).toBe(true);
+  expect((await latestSnapshot(phone)).privatePlayer!.resources).toEqual(before);
+  await noHorizontalOverflow(host);
+  await privateScreenFits(phone);
+  await screenshot(host, testInfo, "seafarers-shared-ships");
+  await screenshot(phone, testInfo, "seafarers-private-controls");
+});
+
+test("Seafarers gold choices are available off-turn on a narrow phone and send only selected bank resources", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  snapshot.variant = "seafarers";
+  snapshot.game!.variant = "seafarers";
+  snapshot.game!.board = createBoard(undefined, "seafarers");
+  snapshot.game!.pirateTileId = snapshot.game!.board.tiles.find(tile => tile.terrain === "sea")!.id;
+  snapshot.game!.activePlayerId = snapshot.game!.players.find(player => player.id !== snapshot.playerId)!.id;
+  snapshot.game!.phase = { type: "gold", required: { [snapshot.playerId!]: 2 } };
+  snapshot.game!.bank = { wood: 1, brick: 0, wool: 0, grain: 0, ore: 1 };
+  snapshot.boardTargets = { vertices: [], edges: [], tiles: [] };
+  await present();
+  const choices = phone.getByRole("region", { name: "Choose your gold resources", exact: true });
+  await expect(choices).toBeVisible();
+  await expect(choices.getByRole("button", { name: "Collect resources", exact: true })).toBeDisabled();
+  await choices.getByRole("button", { name: "Add Ore to Take from the bank", exact: true }).click();
+  await choices.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
+  await expect(choices.getByRole("button", { name: "Collect resources", exact: true })).toBeEnabled();
+  await privateScreenFits(phone);
+  await screenshot(phone, testInfo, "seafarers-gold-choice");
+  await choices.getByRole("button", { name: "Collect resources", exact: true }).click();
+  await expect.poll(async () => (await sentActions(phone)).at(-1)).toMatchObject({
+    type: "action", action: { type: "choose-gold", resources: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 1 } },
+  });
+});
+
 test("one private phone plays with two computers that complete setup automatically", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
@@ -1033,7 +1110,12 @@ test("one private phone plays with two computers that complete setup automatical
     await host.getByRole("button", { name: /^Build road at / }).first().click();
     await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   }
+  const tradeRequest = phone.getByRole("dialog", { name: "Trade request", exact: true });
+  await phone.addLocatorHandler(tradeRequest, async dialog => {
+    await dialog.getByRole("button", { name: "Decline", exact: true }).click();
+  });
   await expect(phone.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
+  await phone.removeLocatorHandler(tradeRequest);
   await expectPhase([host, phone], "roll", "Alex");
   const snapshots = (await messages(phone)).filter(entry => entry.direction === "received" && entry.message.type === "snapshot").map(entry => entry.message.snapshot as RoomSnapshot);
   // Computers earlier in turn order may already have built more by the human's first roll.
@@ -1089,7 +1171,7 @@ test("computer turns run without phones or shared-board input", async ({ multipl
   await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
 });
 
-test("private player header matches the single-device hand and private score breakdown", async ({ multiplayer }, testInfo) => {
+test("private player header matches the single-device hand and total score", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
@@ -1122,8 +1204,8 @@ test("private player header matches the single-device hand and private score bre
   await expect(seat.locator(".player-name")).toHaveText(player.name);
   await expect(seat).toHaveClass(/player-seat-active/);
   await expect(seat).toHaveClass(/player-seat-leading/);
-  await expect(seat.locator(".player-score > .font-serif")).toHaveText("7");
-  await expect(seat).toContainText("8 total");
+  await expect(seat.locator(".player-score > span")).toHaveText(["VP", "8"]);
+  await expect(seat).not.toContainText("total");
   for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)"]) {
     await expect(seat.getByRole("img", { name: label, exact: true })).toBeVisible();
   }
@@ -1155,11 +1237,12 @@ test("private player header matches the single-device hand and private score bre
   await present();
   await expect(seat).not.toHaveClass(/player-seat-active/);
   await expect(seat).not.toHaveClass(/player-seat-leading/);
-  await expect(seat.locator(".player-score > .font-serif")).toHaveText("2");
-  await expect(seat).toContainText("4 total");
+  await expect(seat.locator(".player-score > span")).toHaveText(["VP", "4"]);
+  await expect(seat).not.toContainText("total");
   snapshot.privateScore = 2;
   player.resources = { wood: 1, brick: 1, wool: 1, grain: 1, ore: 1 };
   await present();
+  await expect(seat.locator(".player-score > span")).toHaveText(["VP", "2"]);
   await expect(seat).not.toContainText("total");
   await expect(header.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
 });
@@ -1341,9 +1424,10 @@ test("host and three private phones play over real PeerJS channels and recover a
     const snapshots = (await messages(phone)).filter(entry => entry.direction === "received" && entry.message.type === "snapshot");
     for (const entry of snapshots) {
       const snapshot = entry.message.snapshot as RoomSnapshot;
-      expect(Object.keys(snapshot).sort()).toEqual(["version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateScore", "buildMode", "boardTargets"].sort());
+      expect(Object.keys(snapshot).sort()).toEqual(["version", "variant", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"].sort());
       expect(snapshot).not.toHaveProperty("pendingPlayers");
       expect(snapshot.privateThefts).toEqual([]);
+      expect(snapshot.privateMonopolies).toEqual([]);
       if (!snapshot.game) continue;
       expect(snapshot.privatePlayer?.name).toBe(name);
       expect(snapshot.privatePlayer?.id).toBe(snapshot.playerId);
@@ -2081,8 +2165,10 @@ test("private trade responses preserve drafts and confirmations across version c
   await present();
   await expect(offer.getByRole("button", { name: "Accept offer", exact: true })).toBeEnabled();
   game.trade.give = null;
+  game.trade.expiresAt = Date.now() + 15_000;
   await present();
   const propose = request.getByRole("button", { name: "Propose price", exact: true });
+  await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toBeVisible();
   await expectInventory(request, player.resources);
   await expect(propose).toBeDisabled();
   await request.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
@@ -2104,6 +2190,9 @@ test("private trade responses preserve drafts and confirmations across version c
   await propose.click();
   await expect.poll(() => sentActions(phone)).toEqual([expect.objectContaining({ version: snapshot.version, action: { type: "propose-trade", price: { ...emptyResources(), ore: 1 } } })]);
   await expect(phone.getByRole("alert")).toContainText("The game changed");
+  game.trade = null;
+  await present();
+  await expect(request).toHaveCount(0);
 });
 
 test("bank, exact offers and negotiated prices exchange real hands only after confirmation", async ({ multiplayer }, testInfo) => {

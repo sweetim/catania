@@ -5,8 +5,10 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
+import { edgeTiles, isResource } from "../game/board";
 import type { Board as BoardState, Player, Terrain } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -20,6 +22,9 @@ export function Board({
   board,
   players,
   robberTileId,
+  pirateTileId,
+  routeMode,
+  onMovePirateOffBoard,
   legalVertexIds = [],
   legalEdgeIds = [],
   legalTileIds = [],
@@ -31,6 +36,7 @@ export function Board({
   confirmation,
   onSelect,
   onChangeTheme,
+  routeChoice,
   interactive = true,
   compact = false,
   fit = false,
@@ -38,6 +44,9 @@ export function Board({
   board: BoardState;
   players: Pick<Player, "id" | "name" | "color">[];
   robberTileId?: string;
+  pirateTileId?: string | null;
+  routeMode?: "road" | "ship" | "move-ship" | null;
+  onMovePirateOffBoard?: () => void;
   legalVertexIds?: string[];
   legalEdgeIds?: string[];
   legalTileIds?: string[];
@@ -53,6 +62,7 @@ export function Board({
   };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   onChangeTheme?: () => void;
+  routeChoice?: ReactNode;
   interactive?: boolean;
   compact?: boolean;
   fit?: boolean;
@@ -113,9 +123,7 @@ export function Board({
       end,
       x: (start.x + end.x) / 2,
       y: (start.y + end.y) / 2,
-      coastal:
-        start.tileIds.filter((tileId) => end.tileIds.includes(tileId))
-          .length === 1,
+      coastal: edgeTiles(board, edge).filter(tile => tile.terrain !== "sea").length === 1,
     };
   });
   const selectedPoint = selectedId
@@ -243,7 +251,8 @@ export function Board({
   }
 
   function terrainResourceName(terrain: Terrain) {
-    return terrain === "desert" ? translateText("Desert").toLowerCase() : resourceName(language, terrain).toLowerCase();
+    return isResource(terrain) ? resourceName(language, terrain).toLowerCase()
+      : translateText(terrain === "sea" ? "Sea" : terrain === "gold" ? "Gold fields" : "Desert").toLowerCase();
   }
 
   function targetProperties(
@@ -288,6 +297,7 @@ export function Board({
     <div
       ref={surfaceReference}
       data-theme={theme.id}
+      data-variant={board.variant ?? "original"}
       style={{ backgroundColor: theme.surface, borderColor: theme.id === "illustrated" ? "#dcd7c7" : theme.border }}
       className={`board-surface relative isolate w-full min-w-0 overflow-hidden rounded-[1.5rem] border border-[#dcd7c7] bg-[#f4f0e5] text-[#394b42] shadow-[0_8px_30px_-18px_#354c45] ${fit ? "board-surface-fit flex h-full min-h-0 flex-col" : ""}`}
       onKeyDown={(event) => {
@@ -737,7 +747,7 @@ export function Board({
                     fill={`url(#${illustrationId}-texture)`}
                     pointerEvents="none"
                   />
-                  {theme.id === "illustrated" ? (
+                  {theme.id === "illustrated" && tile.terrain !== "sea" && tile.terrain !== "gold" ? (
                     <use
                       href={`#${illustrationId}-${tile.terrain}`}
                       transform={`translate(${tile.x} ${tile.y})`}
@@ -850,8 +860,11 @@ export function Board({
                 ({ edge }) => edge.id === port.edgeId,
               )!;
               const distance = Math.hypot(x, y);
-              const directionX = x / distance;
-              const directionY = y / distance;
+              const edge = board.edges.find(edge => edge.id === port.edgeId)!;
+              const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea")!;
+              const coastDistance = Math.hypot(x - land.x, y - land.y);
+              const directionX = board.variant === "seafarers" ? (x - land.x) / coastDistance : x / distance;
+              const directionY = board.variant === "seafarers" ? (y - land.y) / coastDistance : y / distance;
               const portX = x + directionX * 51;
               const portY = y + directionY * 51;
               const ratio = port.resource === "any" ? "3:1" : "2:1";
@@ -936,7 +949,7 @@ export function Board({
                     {...targetProperties(
                       "tile",
                       tile.id,
-                      translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
+                      tile.terrain === "sea" ? translateText("Move pirate to sea") : translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
                         resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
                       }),
                     )}
@@ -972,6 +985,16 @@ export function Board({
               .filter(({ edge }) => edge.playerId)
               .map(({ edge, start, end, x, y }) => {
                 const player = playersById.get(edge.playerId!)!;
+                if (edge.kind === "ship") return <g key={edge.id} role="img"
+                  aria-label={translateText("{player}'s ship at {location}", { player: player.name, location: edge.id })}
+                  transform={`translate(${x} ${y})`} pointerEvents="none">
+                  {selectedId === edge.id && <ellipse rx="23" ry="27" fill="none" stroke="#8c672e" strokeWidth="3" />}
+                  <path d="M-19 6h38l-7 12H-12Z" fill={player.color} stroke="#fff5dc" strokeWidth="2" />
+                  <path d="M0-22V6M3-20 18 2H3ZM-4-15-16 2h12Z" fill={player.color} stroke="#fff5dc" strokeWidth="1.5" />
+                  <text y="15" textAnchor="middle" fill="#fff5dc" fontSize="8" fontWeight="800">
+                    {players.findIndex(candidate => candidate.id === player.id) + 1}
+                  </text>
+                </g>;
                 return (
                   <g
                     key={edge.id}
@@ -1064,7 +1087,9 @@ export function Board({
                     {...targetProperties(
                       "edge",
                       edge.id,
-                      translateText("Build road at {location}", { location: edge.id }),
+                      translateText(routeMode === "move-ship" ? "Move ship at {location}" :
+                        routeMode === "ship" || edgeTiles(board, edge).every(tile => tile.terrain === "sea")
+                          ? "Build ship at {location}" : "Build road at {location}", { location: edge.id }),
                     )}
                   >
                     <circle cx={x} cy={y} r={radius} fill="transparent" />
@@ -1211,6 +1236,12 @@ export function Board({
                 );
               })}
 
+            {board.tiles.filter(tile => tile.id === pirateTileId).map(tile => <g key={`pirate-${tile.id}`}
+              transform={`translate(${tile.x} ${tile.y - 6})`} role="img"
+              aria-label={translateText("Pirate; adjacent ships cannot be built or moved")} pointerEvents="none">
+              <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
+              <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
+            </g>)}
             {board.tiles
               .filter((tile) => tile.id === robberTileId)
               .map((tile) => (
@@ -1355,8 +1386,12 @@ export function Board({
         </div>
       )}
       <div
-        className={`board-controls flex min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+        className={`board-controls flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
+        {routeChoice && <div className="basis-full">{routeChoice}</div>}
+        {onMovePirateOffBoard && <button className="button-secondary mr-auto px-2 text-xs" onClick={onMovePirateOffBoard}>
+          {translateText("Move pirate off board")}
+        </button>}
         {onChangeTheme && (
           <button
             type="button"

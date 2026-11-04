@@ -39,6 +39,9 @@ export function OpenTrade({
       {viewer.id !== trade.offeredBy && <p className="mt-1 text-xs text-muted">
         {translateText("From {player}", { player: players.find(player => player.id === trade.offeredBy)?.name ?? "" })}
       </p>}
+      {trade.expiresAt !== undefined && (
+        <p className="mt-1 text-xs text-muted">{translateText("Computer players wait up to 15 seconds for prices.")}</p>
+      )}
       <div className="my-3 flex items-center justify-center gap-4 rounded-xl bg-moss/70 p-3">
         {trade.give ? <>
           <CardStack label={translateText("You give")} resources={viewer.id === trade.offeredBy ? trade.give : trade.receive} />

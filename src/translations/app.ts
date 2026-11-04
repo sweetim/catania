@@ -1,4 +1,7 @@
+import { seafarersTranslations } from "./seafarers";
+
 export const appTranslations = {
+  ...seafarersTranslations,
   "Use a different name for each player so private handoffs are clear.": "手札を見せる相手がわかるように、プレイヤーごとに異なる名前を使ってください。",
   "Player {number}": "プレイヤー{number}",
   "Let the island provide.": "島からの恵みを待ちましょう。",

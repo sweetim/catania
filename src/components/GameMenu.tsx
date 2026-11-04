@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LanguageSelector, useTranslation } from "../localization";
 import { boardTranslations } from "../translations/board";
 
@@ -19,7 +19,31 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
   const triggerName = triggerLabel ?? translateText("Game");
   const groupName = groupLabel ?? translateText("Game menu");
   const menu = useRef<HTMLDetailsElement>(null);
+  const menuContent = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+
+  function positionMenu() {
+    const content = menuContent.current;
+    const trigger = menu.current?.querySelector("summary");
+    if (!content || !trigger) return;
+    const bounds = trigger.getBoundingClientRect();
+    content.style.left = `${Math.max(8, Math.min(bounds.right - content.offsetWidth, window.innerWidth - content.offsetWidth - 8))}px`;
+    content.style.top = `${Math.max(8, Math.min(bounds.top - content.offsetHeight - 4, window.innerHeight - content.offsetHeight - 8))}px`;
+  }
+
+  useLayoutEffect(() => {
+    const content = menuContent.current;
+    if (!icon || !open || !content) return;
+    content.showPopover();
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    document.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      document.removeEventListener("scroll", positionMenu, true);
+      content.hidePopover();
+    };
+  }, [icon, open]);
 
   useEffect(() => {
     const dismissMenu = (event: PointerEvent) => {
@@ -58,7 +82,18 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
       }
     }}
   >
-    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon ? triggerName : undefined} title={icon ? triggerName : undefined} className={icon
+    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon ? triggerName : undefined} title={icon ? triggerName : undefined} onClick={(event) => {
+      if (!icon || !menu.current || !menuContent.current) return;
+      event.preventDefault();
+      menu.current.open = !menu.current.open;
+      if (menu.current.open) {
+        menuContent.current.showPopover();
+        positionMenu();
+      } else {
+        menuContent.current.hidePopover();
+      }
+      setOpen(menu.current.open);
+    }} className={icon
       ? "flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
       : "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"}>
       {icon
@@ -70,7 +105,7 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
             <path d="m3 4.5 3 3 3-3" />
           </svg></>}
     </summary>
-    <div id="game-menu" role="group" aria-label={groupName} className={`absolute right-0 z-50 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${icon ? "bottom-full mb-1" : "top-full mt-1"}`}>
+    <div ref={menuContent} id="game-menu" role="group" aria-label={groupName} popover={icon ? "manual" : undefined} className={`z-50 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${icon ? "fixed m-0 max-h-[calc(100dvh-16px)] overflow-auto" : "absolute right-0 top-full mt-1"}`}>
       {actions.map(action => <button key={action.label} className="min-h-11 w-full rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={action.disabled} onClick={() => selectAction(action)}>
         {action.label}
       </button>)}

@@ -1,6 +1,8 @@
 import type { TranslationCatalog } from "../i18n";
+import { seafarersTranslations } from "./seafarers";
 
 export const helpTranslations = {
+  ...seafarersTranslations,
   "Help": "ヘルプ",
   "Good neighbors. Clever trades. Ten victory points.": "よき隣人、巧みな交易。目指すは10勝利点。",
   "How to play": "遊び方",
@@ -42,5 +44,5 @@ export const helpTranslations = {
   "One shared board, private phones.": "盤面は共有、手札はそれぞれのスマートフォンで。",
   "Use the shared board for placements and each player's phone for their private hand and choices. The host keeps the game in memory: refreshing or closing the host tab ends the game for everyone, with no host transfer or saved game. If a player leaves, their seat stays reserved while the host remains open. Open the invitation in the same tab to reconnect when browser session storage is available.": "配置は共有盤面で行い、非公開の手札や選択は各プレイヤーのスマートフォンで操作します。ゲームはホストのメモリー上でのみ保持されます。ホストのタブを再読み込みしたり閉じたりすると、全員のゲームが終了します。ホストの引き継ぎやゲームの保存はできません。プレイヤーが退出しても、ホストが開いている間はその席が予約されたままになります。ブラウザーのセッションストレージが利用可能なら、同じタブで招待リンクを開くと再接続できます。",
   "One device, a whole table.": "1台の端末で、みんなと遊ぶ。",
-  "Play solo against local AI with your hand always visible, or pass the device before revealing each human's hand. Computer hands cannot be opened. AI handles its own turns and trade responses, including prices for requests; it uses bank and port trades but does not initiate player trades. This is a friendly local game, not a secure multiplayer room. Games live only in this tab: refreshing or closing it ends the game.": "1人でコンピューターと対戦するときは、自分の手札が常に表示されます。複数人で遊ぶときは、次の人に端末を渡してからその人の手札を公開します。コンピューターの手札は見られません。コンピューターは自分の手番や交易への返答を自動で行い、リクエストに対する交換条件も提示します。銀行や港を使って交易しますが、自分からプレイヤー間の交易を始めることはありません。これは身近な人と楽しむローカルゲームで、安全性を保証するオンライン対戦ルームではありません。ゲームはこのタブの中だけに存在し、再読み込みしたり閉じたりすると終了します。",
+  "Play solo against local AI with your hand always visible, or pass the device before revealing each human's hand. Computer hands cannot be opened. AI handles its own turns and trade responses, including prices for requests. It can request build resources once per turn, wait up to 15 seconds for prices, and complete useful trades with humans or computers, alongside bank and port trades. This is a friendly local game, not a secure multiplayer room. Games live only in this tab: refreshing or closing it ends the game.": "1人でコンピューターと対戦するときは、自分の手札が常に表示されます。複数人で遊ぶときは、次の人に端末を渡してからその人の手札を公開します。コンピューターの手札は見られません。コンピューターは自分の手番や交易への返答を自動で行い、リクエストに対する交換条件も提示します。銀行や港での交易に加え、1ターンに1回、建設に必要な資源を募集し、交換条件を最大15秒間待ち、人間や他のコンピューターと有益な交易を行います。これは身近な人と楽しむローカルゲームで、安全性を保証するオンライン対戦ルームではありません。ゲームはこのタブの中だけに存在し、再読み込みしたり閉じたりすると終了します。",
 } satisfies TranslationCatalog;

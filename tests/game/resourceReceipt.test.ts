@@ -4,6 +4,7 @@ import {
 } from "../../src/game/engine";
 import type { DevelopmentKind, GameState, Player, Resources } from "../../src/game/types";
 import { getResourceGains } from "../../src/resourceReceipt";
+import { isResource } from "../../src/game/board";
 
 const profiles: Pick<Player, "name" | "color" | "control">[] = [
   { name: "Ada", color: "red", control: "human" }, { name: "Grace", color: "blue", control: "human" },
@@ -60,7 +61,7 @@ describe("resource receipts", () => {
       if (index >= previous.players.length) {
         for (const tileId of vertex.tileIds) {
           const tile = previous.board.tiles.find(tile => tile.id === tileId)!;
-          if (tile.terrain !== "desert") expected[tile.terrain]++;
+          if (isResource(tile.terrain)) expected[tile.terrain]++;
         }
         expect(resourceTotal(expected)).toBeGreaterThan(0);
       }

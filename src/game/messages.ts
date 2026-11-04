@@ -3,6 +3,20 @@ import type { Language, TranslationParameters } from "../i18n";
 import type { DevelopmentKind, Resource } from "./types";
 
 export const gameMessages = {
+  "Choose Original or Seafarers.": "オリジナルまたは航海者を選択してください。",
+  "The board must match the selected game version.": "選択したゲームの種類に合う盤面を使用してください。",
+  "The game version can only be changed in the lobby.": "ゲームの種類はロビーでのみ変更できます。",
+  "{player} builds a ship.": "{player}が船を建造しました。",
+  "{player} moves a ship.": "{player}が船を移動しました。",
+  "{player} moves the pirate.": "{player}が海賊を移動しました。",
+  "{player} collects gold production.": "{player}が金鉱の資源を受け取りました。",
+  "Choose an empty sea or coastal edge connected to your ships or buildings, away from the pirate; you have at most fifteen ships.": "自分の船や建物につながり、海賊に接しない空いている海または沿岸の辺を選択してください。船は最大15隻です。",
+  "Move one open-ended ship per turn, not built this turn, to a connected sea edge away from the pirate.": "その手番に建造していない航路の端の船を1隻まで、海賊に接しない接続可能な海の辺に移動してください。",
+  "Wait for your gold production choice.": "金鉱の資源を選択する順番をお待ちください。",
+  "Choose exactly {count} available resources for gold production.": "金鉱の産出としてバンクにある資源をちょうど{count}枚選択してください。",
+  "Move the pirate to a different sea hex.": "海賊を別の海タイルに移動してください。",
+  "Choose an eligible opponent beside the robber or pirate.": "盗賊または海賊に接する対象の相手を選択してください。",
+  "Place pieces and move the robber or pirate on the shared board, not a phone.": "コマの配置と盗賊・海賊の移動は、スマートフォンではなく共有盤面で行ってください。",
   "{player} begins the first settlement placement.": "{player}が最初の開拓地を配置します。",
   "{player} takes {award}.": "{player}が{award}を獲得しました。",
   "{award} is unclaimed.": "{award}の保有者はいません。",
@@ -163,7 +177,7 @@ export type GameMessage = { key: keyof typeof gameMessages; parameters?: Transla
 const developmentNames: Record<DevelopmentKind, string> = {
   knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占",
 };
-const awardNames = { "Longest Road": "最長交易路", "Largest Army": "最大騎士力" } as const;
+const awardNames = { "Longest Road": "最長交易路", "Longest Route": "最長交易路", "Largest Army": "最大騎士力" } as const;
 const resourceNames: Resource[] = ["wood", "brick", "wool", "grain", "ore"];
 
 export function formatGameMessage(language: Language, message: GameMessage): string {

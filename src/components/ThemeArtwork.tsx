@@ -67,6 +67,13 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
 
 export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: BoardTheme }) {
   const ink = theme.terrain[terrain].ink;
+  if (terrain === "sea" || terrain === "gold") {
+    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round">
+      {terrain === "sea"
+        ? <path d="M-36-14q9-8 18 0t18 0t18 0t18 0M-36 4q9-8 18 0t18 0t18 0t18 0M-26 22q9-8 18 0t18 0t18 0" />
+        : <><path d="m-40 20 17-44 20 19 18-31 27 56Z" fill={ink} fillOpacity=".2" /><path d="m-25-24 8 20m32-32 9 25" /><circle cx="-24" cy="-12" r="6" fill="#ffe59a" /><circle cx="23" cy="-14" r="7" fill="#ffe59a" /></>}
+    </g>;
+  }
   return (
     <g aria-hidden="true" pointerEvents="none" color={ink} fill="none" stroke={ink} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
       {match(theme.id)

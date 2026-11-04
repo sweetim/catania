@@ -1,6 +1,6 @@
 # Catania
 
-A Catan-style base game with single-device play for 1-4 humans (AI fills a 3-4
+A Catan-style game with Original and Seafarers modes, single-device play for 1-4 humans (AI fills a 3-4
 player table), or a shared board with private human phones and computer opponents
 at a 3-4 player table.
 Built with Bun, React 19, TypeScript, and Tailwind CSS v4. All illustrations and
@@ -11,6 +11,9 @@ assets are local.
 - Solo AI opponents or human pass-and-play on one device.
 - Shared-board multiplayer with QR invitations, private phone hands, and optional computer opponents.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
+- Choose **Original** (default) or **Seafarers** before starting, locally or in the host lobby.
+  Seafarers includes **Heading for New Shores**, ships and movement, the pirate,
+  gold fields, island bonuses, and a 14-point victory target, with computer opponents.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - English and Japanese interfaces, including help, accessible controls, activity, and errors.
 
@@ -25,6 +28,19 @@ bun run dev
 
 Open the URL printed by Bun (normally `http://localhost:3000`). Use
 `PORT=3001 bun run dev` to choose another port.
+
+When running over SSH and opening the app from another computer, restart the
+development server with the SSH computer's DNS hostname:
+
+```bash
+HOST=your-server-hostname bun run dev
+```
+
+Open `http://your-server-hostname:3000` in your browser. `HOST` binds the server
+to that hostname's network address and lets Bun accept that hostname without
+disabling its development-server host checks. Without `HOST`, the default
+listening behavior is unchanged. Only expose the development server on trusted
+networks.
 
 ## Language
 
@@ -74,6 +90,9 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
 
 - Games live in memory. Refreshing or closing the single-device game or multiplayer
   host loses the game; there is no saved-game recovery.
+- Seafarers currently includes only Heading for New Shores, using the randomized
+  four-player layout for both three- and four-player tables. Other scenarios and
+  their special rules are not included.
 - Multiplayer targets devices on the same local network, including Ethernet and
   Wi-Fi together. It uses PeerJS Cloud signaling and Google STUN address discovery,
   requires internet access, and has no relay fallback.

@@ -3,9 +3,9 @@ import { createBoard } from "../game/board";
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
-  legalRoadEdges, legalSettlementVertices, RESOURCES, resourceTotal,
+  legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal,
 } from "../game/engine";
-import type { GameAction, GameState } from "../game/types";
+import type { GameAction, GameState, GameVariant } from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
@@ -14,7 +14,7 @@ import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
-const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-city", "move-robber"]);
+const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate"]);
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
   if (!condition) throw new GameError(message);
@@ -27,12 +27,14 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
     .with({ type: "roll" }, () => ({ type: "roll" } as const))
     .with({ type: "actions" }, () => ({ type: "actions" } as const))
     .with({ type: "discard" }, phase => ({ type: "discard", required: { ...phase.required } } as const))
+    .with({ type: "gold" }, phase => ({ type: "gold", required: { ...phase.required } } as const))
     .with({ type: "robber" }, phase => ({ type: "robber", returnPhase: phase.returnPhase } as const))
     .with({ type: "steal" }, phase => ({ type: "steal" as const, victimIds: [...phase.victimIds], returnPhase: phase.returnPhase }))
     .with({ type: "road-building" }, phase => ({ type: "road-building", remaining: phase.remaining, returnPhase: phase.returnPhase } as const))
     .with({ type: "finished" }, () => ({ type: "finished" } as const))
     .exhaustive();
   return structuredClone({
+    variant: game.variant, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
     board: game.board, bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
@@ -63,6 +65,7 @@ type Seat = {
 };
 
 export class HostRoom {
+  variant: GameVariant = "original";
   version = 0;
   game: GameState | null = null;
   buildMode: BuildMode = null;
@@ -72,9 +75,18 @@ export class HostRoom {
 
   constructor(private readonly secret: string) {}
 
+  setVariant(variant: GameVariant): void {
+    requireRoom(!this.game, "The game version can only be changed in the lobby.");
+    requireRoom(variant === "original" || variant === "seafarers", "Choose Original or Seafarers.");
+    if (variant === this.variant) return;
+    this.previewBoard = createBoard(undefined, variant);
+    this.variant = variant;
+    this.version++;
+  }
+
   shuffleBoard(): void {
     requireRoom(!this.game, "The board can only be shuffled in the lobby.");
-    this.previewBoard = createBoard();
+    this.previewBoard = createBoard(undefined, this.variant);
     this.version++;
   }
 
@@ -194,9 +206,11 @@ export class HostRoom {
     requireRoom(game, "The game has not started.");
     requireRoom(game.players.find(player => player.id === game.activePlayerId)?.control === "human", "The computer controls its own turn.");
     requireRoom(connectionId === undefined || this.seats.some(seat => seat.connectionId === connectionId && seat.player.id === game.activePlayerId), "Only the active player may choose a build.");
-    requireRoom(game.phase.type === "actions", "Finish the current phase before choosing a build.");
-    requireRoom(piece === null || piece === "road" || piece === "settlement" || piece === "city", "Choose a valid build.");
-    if (piece) {
+    requireRoom(game.phase.type === "actions" || (game.variant === "seafarers" && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+      (piece === "road" || piece === "ship")), "Finish the current phase before choosing a build.");
+    requireRoom(piece === null || piece === "road" || piece === "settlement" || piece === "city" ||
+      (game.variant === "seafarers" && (piece === "ship" || piece === "move-ship")), "Choose a valid build.");
+    if (piece && piece !== "move-ship" && game.phase.type === "actions") {
       const player = game.players.find(player => player.id === game.activePlayerId)!;
       requireRoom(RESOURCES.every(resource => player.resources[resource] >= COSTS[piece][resource]), "Not enough resources for this build.");
     }
@@ -215,8 +229,16 @@ export class HostRoom {
     const authorized = match(action)
       .with({ type: "place-settlement" }, action => (game.phase.type === "setup-settlement" || this.buildMode === "settlement") && targets.vertices.includes(action.vertexId))
       .with({ type: "place-city" }, action => this.buildMode === "city" && targets.vertices.includes(action.vertexId))
-      .with({ type: "place-road" }, action => targets.edges.includes(action.edgeId))
+      .with({ type: "place-road" }, action => (this.buildMode === null || this.buildMode === "road") &&
+        targets.edges.includes(action.edgeId) && legalRoadEdges(game, game.activePlayerId).includes(action.edgeId))
+      .with({ type: "place-ship" }, action => (this.buildMode === null || this.buildMode === "ship") &&
+        targets.edges.includes(action.edgeId) && legalShipEdges(game, game.activePlayerId).includes(action.edgeId))
+      .with({ type: "move-ship" }, action => this.buildMode === "move-ship" &&
+        legalShipDestinations(game, game.activePlayerId, action.edgeId).includes(action.destinationEdgeId))
       .with({ type: "move-robber" }, action => targets.tiles.includes(action.tileId))
+      .with({ type: "move-pirate" }, action => action.tileId === null
+        ? game.variant === "seafarers" && game.phase.type === "robber" && game.pirateTileId !== null
+        : targets.tiles.includes(action.tileId))
       .otherwise(() => false);
     requireRoom(authorized, "Choose a highlighted board target for the current build or phase.");
     this.game = applyAction(game, game.activePlayerId, action);
@@ -249,7 +271,9 @@ export class HostRoom {
       if (command.type === "select-build") this.selectBuild(command.piece, connectionId);
       else {
         const action = parseAction(command.action);
-        requireRoom(!BOARD_ACTIONS.has(action.type), "Place pieces and move the robber on the shared board, not a phone.");
+        requireRoom(!BOARD_ACTIONS.has(action.type), this.game?.variant === "seafarers"
+          ? "Place pieces and move the robber or pirate on the shared board, not a phone."
+          : "Place pieces and move the robber on the shared board, not a phone.");
         requireRoom(this.game, "The game has not started.");
         this.game = applyAction(this.game, seat.player.id, action);
         this.buildMode = null;
@@ -271,10 +295,18 @@ export class HostRoom {
       targets.vertices = legalSettlementVertices(game, game.activePlayerId);
     } else if (game.phase.type === "actions" && this.buildMode === "city") {
       targets.vertices = legalCityVertices(game, game.activePlayerId);
-    } else if (game.phase.type === "setup-road" || game.phase.type === "road-building" || (game.phase.type === "actions" && this.buildMode === "road")) {
-      targets.edges = legalRoadEdges(game, game.activePlayerId);
+    } else if (game.phase.type === "actions" && this.buildMode === "move-ship") {
+      targets.edges = movableShipEdges(game, game.activePlayerId).filter(id => legalShipDestinations(game, game.activePlayerId, id).length);
+    } else if (game.phase.type === "setup-road" || game.phase.type === "road-building") {
+      targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId)
+        : this.buildMode === "road" ? legalRoadEdges(game, game.activePlayerId)
+        : [...legalRoadEdges(game, game.activePlayerId), ...legalShipEdges(game, game.activePlayerId)];
+    } else if (game.phase.type === "actions" && (this.buildMode === "road" || this.buildMode === "ship")) {
+      targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId) : legalRoadEdges(game, game.activePlayerId);
     } else if (game.phase.type === "robber") {
-      targets.tiles = game.board.tiles.filter(tile => tile.id !== game.robberTileId).map(tile => tile.id);
+      targets.tiles = game.board.tiles.filter(tile => tile.terrain === "sea"
+        ? game.variant === "seafarers" && tile.id !== game.pirateTileId
+        : tile.id !== game.robberTileId).map(tile => tile.id);
     }
     return targets;
   }
@@ -286,7 +318,7 @@ export class HostRoom {
     const game = host || seat ? this.game : null;
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
-      version: this.version, players,
+      version: this.version, players, variant: this.variant,
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
       ...(host && !this.game ? { previewBoard: this.previewBoard } : {}),
       game: game ? publicGame(game, players) : null,

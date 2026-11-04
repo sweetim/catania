@@ -35,10 +35,11 @@ export function Dice({ dice, rolling = false }: {
   );
 }
 
-export function RollSummary({ outcome, stage = "complete", viewerId }: {
+export function RollSummary({ outcome, stage = "complete", viewerId, seafarers = false }: {
   outcome?: RollOutcome;
   stage?: RollStage;
   viewerId?: string;
+  seafarers?: boolean;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
@@ -54,12 +55,13 @@ export function RollSummary({ outcome, stage = "complete", viewerId }: {
   const result = !outcome
     ? translateText("The next roll will appear here.")
     : total === 7
-      ? translateText("No resources produced. Resolve any discards, then move the robber.")
+      ? translateText(seafarers ? "No resources produced. Resolve any discards, then move the robber or pirate." : "No resources produced. Resolve any discards, then move the robber.")
       : outcome.totalReceived
         ? translateText(outcome.totalReceived === 1 ? "The island supplied {count} resource card." : "The island supplied {count} resource cards.", { count: outcome.totalReceived })
-        : translateText("No resources produced this roll.");
+        : outcome.pendingGold ? translateText("{count} resource choices await gold production.", { count: outcome.pendingGold }) : translateText("No resources produced this roll.");
   const details = [
     result,
+    outcome?.totalReceived && outcome.pendingGold ? translateText("{count} resource choices await gold production.", { count: outcome.pendingGold }) : "",
     outcome?.blockedTileIds.length ? translateText("The robber blocked a matching hex.") : "",
     outcome?.shortages.length
       ? translateText("Bank shortage: {resources}. Not all resources could be supplied.", { resources: outcome.shortages.map(resource => resourceName(language, resource)).join(language === "ja" ? "、" : ", ") })

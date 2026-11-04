@@ -43,6 +43,8 @@ export function resourceName(language: Language, resource: Resource): string {
 }
 
 const pieceNames = {
+  ship: { en: "ship", ja: "船" },
+  "move-ship": { en: "ship movement", ja: "船の移動" },
   road: { en: "road", ja: "街道" },
   settlement: { en: "settlement", ja: "開拓地" },
   city: { en: "city", ja: "都市" },

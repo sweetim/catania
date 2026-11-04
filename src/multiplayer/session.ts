@@ -1,6 +1,7 @@
 import Peer from "peerjs";
 import type { DataConnection } from "peerjs";
 import type { GameAction } from "../game/types";
+import { getComputerActionDelay } from "../game/computer";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { parseClientMessage, parseServerMessage } from "./protocol";
@@ -108,7 +109,8 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
     clearTimeout(computerTimer);
     computerTimer = undefined;
     const expectedVersion = room.version;
-    if (room.game?.players.some(player => player.control === "computer") && room.game.phase.type !== "finished") {
+    const delay = room.game ? getComputerActionDelay(room.game) : null;
+    if (delay !== null) {
       const timer = setTimeout(() => {
         if (closed || computerTimer !== timer || room.version !== expectedVersion) return;
         computerTimer = undefined;
@@ -120,7 +122,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
           view = { ...view, error: gameErrorMessage(error, "The computer could not finish its move.") };
           onChange({ ...view, error: view.error || signalingError });
         }
-      }, 450);
+      }, delay);
       computerTimer = timer;
     }
     view = { ...view, snapshot: room.snapshot() };
@@ -204,6 +206,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   }
   onChange(view);
   return {
+    setVariant: variant => perform(() => room.setVariant(variant)),
     shuffleBoard: () => perform(() => room.shuffleBoard()),
     startGame: () => perform(() => {
       const waiting = room.snapshot().pendingPlayers ?? [];
@@ -374,7 +377,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
+    setVariant: hostOnly, startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

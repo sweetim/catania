@@ -1,6 +1,6 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import { chooseComputerAction } from "../../src/game/computer";
+import { chooseComputerAction, getComputerActionDelay } from "../../src/game/computer";
 import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
 import { formatGameMessage } from "../../src/game/messages";
 import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
@@ -428,6 +428,74 @@ describe("lobby removal and computer names", () => {
 });
 
 describe("host-authoritative computer actions", () => {
+  function computerRequestRoom() {
+    const { room } = mixedRoom();
+    const game = room.game!;
+    game.activePlayerId = "player-2";
+    game.phase = { type: "actions" };
+    game.board.vertices[0]!.building = { playerId: "player-2", kind: "settlement" };
+    give(game, "player-2", { wood: 4, grain: 2, ore: 2 });
+    give(game, "player-1", { ore: 1 });
+    game.board.ports = [];
+    return room;
+  }
+
+  test("computers initiate requests, wait for a phone price, and complete trades without exposing their hand", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const room = computerRequestRoom();
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade).toMatchObject({ offeredBy: "player-2", give: null, receive: resources({ ore: 1 }), expiresAt: 16_000 });
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade!.responses["player-3"]).toBe(false);
+      const version = room.version;
+      expect(room.performComputer()).toBe(false);
+      expect(room.version).toBe(version);
+      expect(getComputerActionDelay(room.game!)).toBe(15_000);
+      const snapshot = room.snapshot("connection-1");
+      expect(parseServerMessage({ type: "snapshot", snapshot })).toMatchObject({ snapshot: { game: { trade: { expiresAt: 16_000 } } } });
+      expect(snapshot.game).not.toHaveProperty("computerTradeRequested");
+      expect(snapshot.game!.players.find(player => player.id === "player-2")).not.toHaveProperty("resources");
+      expect(send(room, "connection-1", { type: "propose-trade", price: resources({ wood: 1 }) }).error).toBeNull();
+      const bank = { ...room.game!.bank };
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade).toBeNull();
+      expect(room.game!.bank).toEqual(bank);
+      expect(room.snapshot("connection-1").privatePlayer!.resources).toEqual(resources({ wood: 1 }));
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.board.vertices[0]!.building?.kind).toBe("city");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("unanswered computer requests expire at their original deadline and resume bank trading", () => {
+    const clock = spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const room = computerRequestRoom();
+      expect(room.performComputer()).toBe(true);
+      clock.mockReturnValue(6000);
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade!.expiresAt).toBe(16_000);
+      expect(getComputerActionDelay(room.game!)).toBe(10_000);
+      expect(room.performComputer()).toBe(false);
+      clock.mockReturnValue(15_999);
+      expect(room.performComputer()).toBe(false);
+      clock.mockReturnValue(16_000);
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade).toBeNull();
+      expect(room.game!.computerTradeRequested).toBe(true);
+      expect(chooseComputerAction(room.game!, "player-2")).toEqual({ type: "bank-trade", give: "wood", receive: "ore" });
+      expect(room.performComputer()).toBe(true);
+      expect(room.game!.trade).toBeNull();
+      const snapshot = room.snapshot("connection-1");
+      snapshot.game!.trade = { offeredBy: "player-2", give: null, receive: resources({ ore: 1 }), responses: {}, expiresAt: -1 };
+      expect(() => parseServerMessage({ type: "snapshot", snapshot })).toThrow();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   test("mixed setup uses legal computer choices and rejects manual computer placements and build choices", () => {
     const { room } = mixedRoom();
     let steps = 0;
@@ -562,7 +630,7 @@ describe("public and private multiplayer projections", () => {
     const host = room.snapshot();
     const guest = room.snapshot("connection-1");
     expect(Object.keys(host.game!).sort()).toEqual([
-      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "log", "phase", "players", "robberTileId", "trade", "turnNumber", "winnerId",
+      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
     ].sort());
     expect(host.game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
     expect(host.game!.canCancelKnight).toBe(true);

@@ -1,15 +1,17 @@
-import type { Player } from "../game/types";
+import type { GameVariant, Player } from "../game/types";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { Arrow, DevelopmentCardIcon } from "./GameUi";
 import { getDevelopmentDescriptions, getDevelopmentNames } from "./GameplayDialogs";
 
 export function DevelopmentHand({
+  variant = "original",
   cards,
   turnNumber,
   inert,
   onSelect,
 }: {
+  variant?: GameVariant;
   cards: Player["developmentCards"];
   turnNumber: number;
   inert?: boolean;
@@ -18,7 +20,7 @@ export function DevelopmentHand({
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
   const developmentNames = getDevelopmentNames(language);
-  const developmentDescriptions = getDevelopmentDescriptions(language);
+  const developmentDescriptions = getDevelopmentDescriptions(language, variant);
   if (cards.length === 0) return null;
 
   return (

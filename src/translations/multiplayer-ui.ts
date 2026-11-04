@@ -1,4 +1,7 @@
+import { seafarersTranslations } from "./seafarers";
+
 export const multiplayerUiTranslations = {
+  ...seafarersTranslations,
   "Use 1 to 20 characters, without control characters.": "制御文字を使わず、1〜20文字で入力してください。",
   "That name is already in the room. Choose another name.": "その名前はすでに使われています。別の名前を選んでください。",
   "Players": "プレイヤー",

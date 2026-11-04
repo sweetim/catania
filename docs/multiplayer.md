@@ -27,6 +27,11 @@ The shared screen hosts the game without occupying a player seat.
    available with three or four total players and every human connected; disconnected
    humans are named in the readiness message. Turn order is randomized.
    The host's island preview shows the map that will be used.
+   The host chooses **Original** or **Seafarers** under **Game version**; Original
+   is the default. Changing the version regenerates the preview and synchronizes
+   the choice to all phones without changing the roster. Seafarers uses Heading
+   for New Shores with the same rules and layout described in the
+   [gameplay guide](gameplay.md#seafarers-heading-for-new-shores).
    Choose **Shuffle** to generate another island before starting. Player changes and
    theme selection preserve the map; **Start game** uses the exact preview, including
    its terrain, number tokens, ports, and initial robber location. Phones cannot shuffle.
@@ -43,6 +48,13 @@ The shared screen hosts the game without occupying a player seat.
    trades, theft choices, development cards, and ending turns. Computers handle their
    own placements, turns, discards, and trade responses automatically; board input is
    disabled during their turns. Seats cannot be added, removed, or renamed mid-game.
+   In Seafarers, ships and pirate moves also use the shared board. Choose **Build
+   ship** or **Move ship** on your phone, then select and confirm on the board;
+   moving a ship requires selecting its source and then its destination.
+   During setup or Road Building, choose roads or ships on the phone or in the
+   board footer. Gold-resource choices stay on the eligible player's private phone,
+   including when it is another player's turn. The host cannot choose private
+   gold resources, and phones cannot place or move ships directly.
 
 ## Shared Board Screen
 
@@ -66,7 +78,9 @@ dialogs returns focus to **Game**.
 Player seats show numbered colors, public points, card counts, played Knights,
 connected roads, and awards, with the same active-turn and public-score-leader
 highlights as single-device play. Disconnected human players are marked. The shared
-screen has no bank, build controls, dice/setup panel, activity panel, or view tabs.
+screen has no bank, regular build controls, dice/setup panel, activity panel, or view tabs.
+In Seafarers, the map footer includes the free road/ship choice when needed and
+the pirate's off-board move during robber/pirate movement.
 Build selection, turn guidance, rolls, and private actions remain on players' phones.
 
 ## Private Player Screen
@@ -76,12 +90,12 @@ Board-only settings and single-device handoff controls are omitted from private 
 
 A separate player-summary card sits above the hand, showing your seat number,
 name, resource and development-card counts, played Knights, connected roads, and
-public victory points. It uses the shared player row, including active-turn and
+your total victory points as **VP** followed by one number. It uses the shared player row, including active-turn and
 public-score-leader highlights and awards. On narrow screens, the counts wrap onto
 a second row.
 
 The private screen uses the single-device hand sidebar's heading, resource-card
-count, illustrated resources, and public + hidden = total victory-point breakdown.
+count, illustrated resources, and a single score combining public and hidden points.
 The hidden score stays on your device only. **Build a little bigger** contains the
 same full-width build and card-purchase rows, icons, and costs, followed by **Make a
 trade**. This section is collapsible and starts open on every device, unlike

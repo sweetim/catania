@@ -20,7 +20,27 @@ bunx playwright install chromium
 ```
 
 Rule tests use injected randomness and cover legal and illegal actions, computer
-decisions, and complete AI games. `bun run test` runs the tests in `tests/game/`.
+decisions, and complete AI games. Computer trading coverage includes once-per-turn
+requests, useful and affordable prices, computer-to-computer exchanges, hidden-hand
+privacy, exact 15-second deadlines, and resuming maritime trades after withdrawal.
+Both `bun test` and `bun run test` run the tests
+in `tests/game/`. The test root in `bunfig.toml` keeps Bun from loading Playwright
+browser tests; run those separately with `bun run test:browser`.
+Seafarers coverage checks the 42-hex scenario topology, terrain and token supplies,
+mainland setup, ship costs and piece limits, shipping connections and movement,
+mixed Longest Route, pirate theft/blocking, finite gold choices, island bonuses,
+14-point victory, multiplayer serialization, and complete three-/four-player AI games.
+Focused checks:
+
+```bash
+bun test tests/game/seafarers.test.ts
+bun run test:browser --grep Seafarers --workers=2
+```
+
+Seafarers browser tests cover switching versions and artwork, starting on the
+selected board, confirmed setup ships, real host/phone ship movement, and
+off-turn gold selections on narrow private phones. As with other private-dialog
+fixtures, gold rendering/payload checks are separate from engine authority tests.
 
 The browser suite selects `tests/browser/catania.spec.ts`,
 `tests/browser/multiplayer.spec.ts`, and `tests/browser/localization.spec.ts`
@@ -34,6 +54,11 @@ renaming and left-side player avatars, exact lobby-map preservation after zero o
 multiple shuffles, one phone with two automatic computer opponents, private-hand
 projections, and reconnect readiness. Host-session tests cover computer timer cleanup,
 stale callbacks, off-turn discards/trades, and shared-board authority restrictions.
+The one-phone setup test declines computer trade requests while waiting for the
+human's first turn, so random trades do not consume its readiness timeout.
+Desktop/mobile browser regressions cover human prices on computer requests,
+automatic withdrawal at the deadline, private phone request presentation, and
+keeping computer hands hidden throughout an exchange.
 Connection tests cover STUN-only configuration for hosts, players, and recreated
 peers; unanswered negotiations, direct ICE failures/timeouts, and missing initial
 snapshots; private-data-free diagnostics; and clearing old errors on retries.
@@ -56,6 +81,10 @@ and 320-pixel widths. Responsive checks cover all seats fitting on tablets, narr
 two-level player cards, persistent mobile turn controls across tabs, and collapsible
 build controls. Shared-board checks also verify that bank/build/turn panels, tabs,
 and private hands or actions do not appear on the shared screen.
+Score regressions check a single VP number including hidden points only for the
+revealed player or private phone, without changing public leader highlights.
+Single-device turn controls match the private phone's inline Game menu, and
+trade/discard inventories retain the over-seven-card warning.
 
 Language tests cover Japanese browser locales, regional language matching,
 unsupported-locale fallback, saved overrides across both modes, invalid and blocked

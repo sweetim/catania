@@ -1,5 +1,13 @@
 import { GameError } from "./messages";
-import type { Board, Edge, Resource, Terrain, Tile, Vertex } from "./types";
+import type { Board, Edge, GameVariant, Resource, Terrain, Tile, Vertex } from "./types";
+
+export function isResource(terrain: Terrain): terrain is Resource {
+  return terrain !== "desert" && terrain !== "sea" && terrain !== "gold";
+}
+
+export function edgeTiles(board: Board, edge: Edge): Tile[] {
+  return board.tiles.filter(tile => edge.vertexIds.every(id => tile.vertexIds.includes(id)));
+}
 
 export function secureRandom(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0]! / 0x100000000;
@@ -22,7 +30,7 @@ export function shuffle<Value>(values: Value[], random: () => number): Value[] {
   return result;
 }
 
-export function createBoard(random: () => number = secureRandom): Board {
+export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original"): Board {
   const terrain = shuffle<Terrain>([
     "wood", "wood", "wood", "wood", "brick", "brick", "brick",
     "wool", "wool", "wool", "wool", "grain", "grain", "grain", "grain",
@@ -35,16 +43,44 @@ export function createBoard(random: () => number = secureRandom): Board {
   const edgeByVertices = new Map<string, Edge>();
   const edgeTileCounts = new Map<string, number>();
 
+  const positions: { column: number; row: number; islandId?: string }[] = [];
   for (let column = -2; column <= 2; column++) {
     for (let row = -2; row <= 2; row++) {
-      if (Math.abs(column + row) > 2) continue;
+      if (Math.abs(column + row) <= 2) positions.push({ column, row, islandId: "main" });
+    }
+  }
+  if (variant === "seafarers") {
+    const islands = [
+      [[1, -4], [2, -4]],
+      [[4, -4], [4, -3], [5, -3], [4, -2], [4, -1]],
+      [[3, 1], [2, 2]],
+    ];
+    const islandTerrain = shuffle<Terrain>(["ore", "wool", "gold", "brick", "ore", "wood", "gold", "brick", "grain"], random);
+    for (const [index, island] of islands.entries()) {
+      for (const [column, row] of island) {
+        positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
+        terrain.push(islandTerrain.shift()!);
+      }
+    }
+    const rowRanges = [[1, 5], [0, 5], [-1, 5], [-1, 4], [-2, 4], [-2, 3], [-2, 2]];
+    for (const [index, range] of rowRanges.entries()) {
+      const row = index - 4;
+      for (let column = range[0]!; column <= range[1]!; column++) {
+        if (positions.some(position => position.column === column && position.row === row)) continue;
+        positions.push({ column, row });
+        terrain.push("sea");
+      }
+    }
+  }
+  for (const { column, row, islandId } of positions) {
       const tile: Tile = {
         id: `tile-${tiles.length}`,
-        x: 60 * Math.sqrt(3) * (column + row / 2),
-        y: 90 * row,
+        x: 60 * Math.sqrt(3) * (column + row / 2 - (variant === "seafarers" ? 1 : 0)),
+        y: 90 * (row + (variant === "seafarers" ? 1 : 0)),
         terrain: terrain[tiles.length]!,
         number: null,
         vertexIds: [],
+        ...(variant === "seafarers" && islandId ? { islandId } : {}),
       };
       for (let corner = 0; corner < 6; corner++) {
         const angle = (corner * 60 - 90) * Math.PI / 180;
@@ -73,16 +109,17 @@ export function createBoard(random: () => number = secureRandom): Board {
         edgeTileCounts.set(edge.id, (edgeTileCounts.get(edge.id) ?? 0) + 1);
       }
       tiles.push(tile);
-    }
   }
 
-  const producingTiles = shuffle(tiles.filter(tile => tile.terrain !== "desert"), random);
+  const producingTiles = shuffle(tiles.filter(tile => tile.terrain !== "desert" && tile.terrain !== "sea"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
-    if (redTiles.length === 4) return true;
+    if (redTiles.length === (variant === "seafarers" ? 6 : 4)) return true;
     for (let index = start; index < producingTiles.length; index++) {
       const candidate = producingTiles[index]!;
+      if (variant === "seafarers" && redTiles.filter(tile => (tile.islandId === "main") === (candidate.islandId === "main")).length >=
+        (candidate.islandId === "main" ? 4 : 2)) continue;
       if (redTiles.some(tile => tile.vertexIds.filter(id => candidate.vertexIds.includes(id)).length === 2)) continue;
       redTiles.push(candidate);
       if (selectRedTiles(index + 1)) return true;
@@ -93,9 +130,18 @@ export function createBoard(random: () => number = secureRandom): Board {
   if (!selectRedTiles(0)) throw new GameError("Unable to arrange nonadjacent red number tokens.");
   const redNumbers = shuffle([6, 6, 8, 8], random);
   const otherNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
-  for (const tile of producingTiles) tile.number = redTiles.includes(tile) ? redNumbers.pop()! : otherNumbers.pop()!;
+  const islandRedNumbers = variant === "seafarers" ? shuffle([6, 8], random) : [];
+  const islandOtherNumbers = variant === "seafarers" ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
+  for (const tile of producingTiles) {
+    const remote = variant === "seafarers" && tile.islandId !== "main";
+    tile.number = redTiles.includes(tile)
+      ? (remote ? islandRedNumbers : redNumbers).pop()!
+      : (remote ? islandOtherNumbers : otherNumbers).pop()!;
+  }
 
-  const boundary = edges.filter(edge => edgeTileCounts.get(edge.id) === 1);
+  const boundary = edges.filter(edge => variant === "seafarers"
+    ? tiles.filter(tile => tile.islandId === "main" && edge.vertexIds.every(id => tile.vertexIds.includes(id))).length === 1
+    : edgeTileCounts.get(edge.id) === 1);
   const angleOf = (edge: Edge) => {
     const first = vertices.find(vertex => vertex.id === edge.vertexIds[0])!;
     const second = vertices.find(vertex => vertex.id === edge.vertexIds[1])!;
@@ -110,5 +156,5 @@ export function createBoard(random: () => number = secureRandom): Board {
     edgeId: boundary[(offset + Math.floor(index * boundary.length / 9)) % boundary.length]!.id,
     resource,
   }));
-  return { tiles, vertices, edges, ports };
+  return { tiles, vertices, edges, ports, ...(variant === "seafarers" ? { variant } : {}) };
 }

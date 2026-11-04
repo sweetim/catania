@@ -1,4 +1,7 @@
+import { seafarersTranslations } from "./seafarers";
+
 export const gameplayTranslations = {
+  ...seafarersTranslations,
   "Resource bank": "資源バンク",
   "Bank": "バンク",
   "Bank resources": "バンクの資源",
@@ -8,6 +11,7 @@ export const gameplayTranslations = {
   "Close dialog": "ダイアログを閉じる",
   "Your current resources": "現在の手持ち資源",
   "Your hand": "あなたの手札",
+  "Computer players wait up to 15 seconds for prices.": "コンピューターは交換条件の提案を最大15秒間待ちます。",
   "{count} cards": "{count}枚",
   "{count} card": "{count}枚",
   "Cards in hand": "手札のカード",

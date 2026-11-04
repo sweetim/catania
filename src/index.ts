@@ -2,6 +2,7 @@ import { serve } from "bun";
 import index from "./index.html";
 
 const server = serve({
+  hostname: process.env.HOST,
   routes: {
     // Serve index.html for all unmatched routes.
     "/*": index,

@@ -121,10 +121,11 @@ export function Arrow({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-export function PieceIcon({ piece }: { piece: "road" | "settlement" | "city" }) {
+export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "city" }) {
   return (
     <svg className="piece-icon h-8 w-8 shrink-0" data-piece={piece} viewBox="0 0 32 32" aria-hidden="true" fill="none">
       {match(piece)
+        .with("ship", () => <><path d="M3 23h26l-5 7H8Z" fill="currentColor" /><path d="M15 3v20M17 5l11 15H17ZM12 9 4 20h8Z" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity=".5" /></>)
         .with("road", () => (
           <>
             <path d="m3 20 20-12 6 3L9 23Z" fill="currentColor" />
@@ -335,12 +336,13 @@ export function ResourceCard({
 export function ResourceInventory({ resources }: { resources: Resources }) {
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
+  const totalResources = Object.values(resources).reduce((total, count) => total + count, 0);
   return (
     <section className="resource-inventory" aria-label={translateText("Your current resources")}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold">{translateText("Your hand")}</h3>
-        <strong className="shrink-0 text-sm text-ink tabular-nums">
-          {translateText("{count} cards", { count: Object.values(resources).reduce((total, count) => total + count, 0) })}
+        <strong className={`shrink-0 rounded-md px-2 py-1 text-sm text-ink tabular-nums ${totalResources > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
+          {translateText("{count} cards", { count: totalResources })}
         </strong>
       </div>
       <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-2">
@@ -508,7 +510,7 @@ export function CardStack({
 }
 
 export function BuildButton({ piece, color, resources, ...buttonProperties }: ComponentProps<"button"> & {
-  piece: "road" | "settlement" | "city" | "development";
+  piece: "road" | "ship" | "settlement" | "city" | "development";
   color: string;
   resources: Resources;
 }) {
@@ -522,6 +524,7 @@ export function BuildButton({ piece, color, resources, ...buttonProperties }: Co
         {piece === "development" ? <span className="flex h-8 w-8 shrink-0 items-center justify-center"><CardTypeIcon kind="development" /></span> : <PieceIcon piece={piece} />}
         <span className="font-semibold text-ink">
           {match(piece)
+            .with("ship", () => translateText("Build ship"))
             .with("development", () => translateText("Buy a card"))
             .with("city", () => translateText("Upgrade to city"))
             .with("road", () => translateText("Build road"))

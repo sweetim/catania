@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard } from "../../src/game/board";
+import { createBoard, isResource } from "../../src/game/board";
 import { formatGameMessage } from "../../src/game/messages";
 import {
   applyAction, blockedSettlementVertices, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio,
@@ -157,7 +157,7 @@ describe("initialization and snake setup", () => {
       if (index >= count) {
         for (const tileId of vertex.tileIds) {
           const tile = state.board.tiles.find(tile => tile.id === tileId)!;
-          if (tile.terrain !== "desert") expected[tile.terrain]++;
+          if (isResource(tile.terrain)) expected[tile.terrain]++;
         }
       }
       const actingPlayer = state.activePlayerId;

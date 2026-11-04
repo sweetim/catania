@@ -1,4 +1,5 @@
 import { emptyResources, RESOURCES } from "./game/engine";
+import { isResource } from "./game/board";
 import type { GameState, Resource, Resources } from "./game/types";
 
 export type RollOutcome = {
@@ -10,6 +11,7 @@ export type RollOutcome = {
   blockedTileIds: string[];
   shortages: Resource[];
   totalReceived: number;
+  pendingGold?: number;
 };
 
 export function getRollOutcome(previous: GameState, next: GameState): RollOutcome {
@@ -34,7 +36,7 @@ export function getRollOutcome(previous: GameState, next: GameState): RollOutcom
   const blockedTileIds: string[] = [];
   if (rolledNumber !== 7) {
     for (const tile of next.board.tiles) {
-      if (tile.number !== rolledNumber || tile.terrain === "desert") continue;
+      if (tile.number !== rolledNumber || tile.terrain === "desert" || tile.terrain === "sea") continue;
       if (tile.id === next.robberTileId) {
         blockedTileIds.push(tile.id);
         continue;
@@ -43,8 +45,12 @@ export function getRollOutcome(previous: GameState, next: GameState): RollOutcom
       for (const vertexId of tile.vertexIds) {
         const building = next.board.vertices.find(vertex => vertex.id === vertexId)!.building;
         if (!building) continue;
-        demand[tile.terrain] += building.kind === "city" ? 2 : 1;
-        if (gains[building.playerId]![tile.terrain] > 0) produced = true;
+        if (isResource(tile.terrain)) {
+          demand[tile.terrain] += building.kind === "city" ? 2 : 1;
+          if (gains[building.playerId]![tile.terrain] > 0) produced = true;
+        } else {
+          produced = true;
+        }
       }
       if (produced) producingTileIds.push(tile.id);
     }
@@ -56,5 +62,6 @@ export function getRollOutcome(previous: GameState, next: GameState): RollOutcom
     dice, gains, producingTileIds, blockedTileIds,
     shortages: RESOURCES.filter(resource => demand[resource] > paid[resource]),
     totalReceived,
+    ...(next.phase.type === "gold" ? { pendingGold: Object.values(next.phase.required).reduce((total, count) => total + count, 0) } : {}),
   };
 }

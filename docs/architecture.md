@@ -25,6 +25,8 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/components/GameplayDialogs.tsx` | Shared development cards, discard selection, public theft choices, and action confirmations. |
 | `src/components/PlayerSeat.tsx` | Shared player identity, card counts, public score, turn/leader styling, and award indicators. |
 | `src/components/TurnInstructions.tsx` | Shared phase headings, guidance, and instruction-panel presentation. |
+| `src/components/GameVariantSelector.tsx` | Shared Original/Seafarers setup choice for local tables and the host lobby. |
+| `src/components/SeafarersControls.tsx` | Shared free road/ship choices and finite-bank gold-resource selection. |
 | `src/components/DevelopmentHand.tsx` | Shared grouped development-card list and eligible-copy selection. |
 | `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |
 | `src/components/ThemeArtwork.tsx` | Local SVG terrain and resource artwork for theme variants. |
@@ -33,7 +35,9 @@ CSS v4 foundation without a database or runtime external assets.
 | `tests/game/` | Deterministic rule, graph, computer-decision, and full-game tests. |
 | `tests/browser/catania.spec.ts` | Real solo, mixed human/AI, and pass-and-play browser interactions. |
 
-`createGame` accepts profiles and an optional random source. `applyAction` takes
+`createGame` accepts profiles, an optional random source, an optional preview board,
+and an optional game variant (Original by default, or inferred from a supplied
+Seafarers board). `applyAction` takes
 state, a player identity, an action, and an optional random source; it returns a
 new state or throws a validation error without changing the input. Production
 randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.
@@ -45,9 +49,27 @@ previous Largest Army holder for the validated `cancel-knight` action. Confirmin
 the robber move drops this cancellation state; immediate Knight victories remain
 final. Tile-preview cancellation does not undo a Knight.
 
+The Seafarers board carries its variant and land-island identifiers on the same
+hex graph as Original. Sea hexes extend that graph; optional edge kinds distinguish
+ships from roads without changing existing Original edge shapes. The engine
+tracks pirate location, ships built this turn, and the once-per-turn ship move.
+Gold production is a mandatory phase whose ordered obligations determine the
+current controller, including off-turn humans/computers. Public island bonuses
+derive from buildings and island identifiers, so city upgrades preserve them.
+Original retains its existing board, costs, ten-point target, and score shape.
+Seafarers adds island points and a fourteen-point target. The current scenario
+is Heading for New Shores using the randomized four-player layout at either
+supported table size.
+
 Profiles carry a human/computer control type through randomized turn order. A
 pure computer chooser returns one engine action at a time, including off-turn
-discards and responses to human trades. It does not propose domestic trades.
+discards, resource requests, and trade responses. Computers request missing
+build resources at most once per turn and complete affordable, useful exchanges.
+The engine records the request deadline using an injectable clock, and the chooser
+accepts an injectable current time. Local and host schedulers share the same
+action-delay calculation: ordinary moves are paced, while unanswered requests
+wait until their original 15-second deadline without polling or restarting it
+when another player responds.
 React schedules computer moves with a cleaned-up timer and a current-state
 check so stale callbacks cannot act after a move, exit, or rematch. Computer
 trade responses do not interrupt an unrelated human input or handoff.

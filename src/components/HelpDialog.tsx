@@ -1,20 +1,28 @@
 import { COSTS } from "../game/engine";
+import type { GameVariant } from "../game/types";
 import { useLanguage, useTranslation } from "../localization";
 import { helpTranslations } from "../translations/help";
 import { getDevelopmentNames, getDevelopmentDescriptions } from "./GameplayDialogs";
 import { CardTypeIcon, Cost, DevelopmentCardIcon, Dialog, PieceIcon } from "./GameUi";
 
-export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => void; multiplayer?: boolean }) {
+export function HelpDialog({ onClose, multiplayer = false, variant = "original" }: { onClose: () => void; multiplayer?: boolean; variant?: GameVariant }) {
   const { language } = useLanguage();
   const translateText = useTranslation(helpTranslations);
   const developmentNames = getDevelopmentNames(language);
-  const developmentDescriptions = getDevelopmentDescriptions(language);
+  const developmentDescriptions = getDevelopmentDescriptions(language, variant);
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>
       <div className="space-y-8 text-sm leading-7 text-muted">
         <p className="font-serif text-xl text-ink">
-          {translateText("Good neighbors. Clever trades. Ten victory points.")}
+          {translateText(variant === "seafarers" ? "Good neighbors. Clever trades. Fourteen victory points." : "Good neighbors. Clever trades. Ten victory points.")}
         </p>
+        {variant === "seafarers" && <section aria-labelledby="help-seafarers" className="space-y-3">
+          <h3 id="help-seafarers" className="font-serif text-2xl text-ink">{translateText("Seafarers rules")}</h3>
+          <p>{translateText("Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 14 points on your own turn to win.")}</p>
+          <p>{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
+          <p>{translateText("After rolling, move at most one open-ended ship per turn, never one built this turn. Ships between your buildings cannot move. The pirate blocks building and moving ships on its hex, but does not break existing routes or block harbors.")}</p>
+          <p>{translateText("On a seven or Knight, move either the robber to another land hex or the pirate to another sea hex or off the board. The pirate steals from a player with an adjacent ship. Gold fields grant one resource of choice per settlement, or two per city. Choose from the bank in turn order, starting with the active player.")}</p>
+        </section>}
         <section aria-labelledby="help-how-to-play">
           <h3 id="help-how-to-play" className="mb-4 font-serif text-2xl text-ink">{translateText("How to play")}</h3>
           <ol className="list-decimal space-y-3 pl-5">
@@ -28,7 +36,8 @@ export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => vo
             </li>
             <li>
               <strong className="text-ink">{translateText("Trade, build, and pass.")}</strong>{" "}
-              {translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach 10 points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board") })}
+              {variant === "seafarers" ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach 14 points on your own turn to win.")
+                : translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach 10 points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board") })}
             </li>
           </ol>
         </section>
@@ -37,6 +46,11 @@ export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => vo
           <h3 id="help-builds" className="mb-4 font-serif text-2xl text-ink">{translateText("Builds and costs")}</h3>
           <p className="mb-4">{translateText("Pay these resources to the bank after rolling. You need a legal location and an available piece to build.")}</p>
           <ul aria-label={translateText("Available builds and purchases")} className="grid gap-3 sm:grid-cols-2">
+            {variant === "seafarers" && <li className="rounded-xl border border-line bg-white/30 p-4">
+              <div className="mb-3 flex items-center gap-3 text-forest"><PieceIcon piece="ship" /><h4 className="font-semibold text-ink">{translateText("Ship")}</h4></div>
+              <Cost resources={COSTS.ship} />
+              <p className="mt-3 text-xs leading-6">{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
+            </li>}
             {([
               { piece: "road", name: "Road", description: "Connect an empty edge to your own road, settlement, or city. You cannot extend through an opponent's building. Roads earn no points by themselves. Limit: 15 roads." },
               { piece: "settlement", name: "Settlement", description: "Build on an empty intersection beside your road, at least two edges from every settlement or city. Worth 1 point; produces 1 resource per matching neighboring hex. Limit: 5 settlements." },
@@ -49,7 +63,9 @@ export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => vo
                   <h4 className="font-semibold text-ink">{translateText(name)}</h4>
                 </div>
                 <Cost resources={COSTS[piece]} />
-                <p className="mt-3 text-xs leading-6">{translateText(description)}</p>
+                <p className="mt-3 text-xs leading-6">{translateText(variant === "seafarers" && piece === "settlement"
+                  ? "Build on an empty land intersection beside your roads or ships, at least two edges from every building. Worth 1 point; produces 1 resource per matching land hex. Limit: 5 settlements."
+                  : description)}</p>
               </li>
             ))}
           </ul>
@@ -98,11 +114,11 @@ export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => vo
           </p>
           <p>
             <strong className="text-ink">{translateText("Points and victory.")}</strong>{" "}
-            {translateText("Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
+            {translateText(variant === "seafarers" ? "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 14 points on your own turn to win." : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
           </p>
           <p>
             <strong className="text-ink">{translateText("Longest Road and Largest Army.")}</strong>{" "}
-            {translateText("Longest Road needs at least five roads in one continuous trail, not your total network. Count each road once; loops can count, branches do not all add together, and an opponent's building interrupts the trail. Largest Army needs at least three played Knights. For either award, the highest qualifying player holds it. A tie stays with the current holder if they are among the leaders; otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.")}
+            {translateText(variant === "seafarers" ? "Longest Route counts roads and ships, joined only at your buildings. Largest Army still needs at least three played Knights. Awards are worth 2 points each; ties stay with the qualifying holder." : "Longest Road needs at least five roads in one continuous trail, not your total network. Count each road once; loops can count, branches do not all add together, and an opponent's building interrupts the trail. Largest Army needs at least three played Knights. For either award, the highest qualifying player holds it. A tie stays with the current holder if they are among the leaders; otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.")}
           </p>
           <div className="rounded-xl bg-moss p-4">
             {multiplayer ? (
@@ -113,7 +129,7 @@ export function HelpDialog({ onClose, multiplayer = false }: { onClose: () => vo
             ) : (
               <>
                 <strong className="text-ink">{translateText("One device, a whole table.")}</strong>{" "}
-                {translateText("Play solo against local AI with your hand always visible, or pass the device before revealing each human's hand. Computer hands cannot be opened. AI handles its own turns and trade responses, including prices for requests; it uses bank and port trades but does not initiate player trades. This is a friendly local game, not a secure multiplayer room. Games live only in this tab: refreshing or closing it ends the game.")}
+                {translateText("Play solo against local AI with your hand always visible, or pass the device before revealing each human's hand. Computer hands cannot be opened. AI handles its own turns and trade responses, including prices for requests. It can request build resources once per turn, wait up to 15 seconds for prices, and complete useful trades with humans or computers, alongside bank and port trades. This is a friendly local game, not a secure multiplayer room. Games live only in this tab: refreshing or closing it ends the game.")}
               </>
             )}
           </div>

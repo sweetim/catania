@@ -1,8 +1,8 @@
-import type { Board, GameAction, GamePhase, GameState, MonopolyEvent, Player, TheftEvent } from "../game/types";
+import type { Board, GameAction, GamePhase, GameState, GameVariant, MonopolyEvent, Player, TheftEvent } from "../game/types";
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
 
-export type BuildMode = "road" | "settlement" | "city" | null;
+export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | null;
 
 export type RoomPlayer = Pick<Player, "id" | "name" | "color" | "control"> & {
   connected: boolean;
@@ -25,11 +25,13 @@ export type ScoreBreakdown = {
   longestRoad: number;
   largestArmy: number;
   hidden: number;
+  islands?: number;
 };
 
 export type PublicGame = Pick<GameState,
   "board" | "bank" | "activePlayerId" | "turnNumber" | "dice" |
-  "robberTileId" | "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
+  "robberTileId" | "pirateTileId" | "variant" | "shipMoved" | "shipsBuiltThisTurn" |
+  "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {
   players: PublicPlayer[];
   phase: Exclude<GamePhase, { type: "robber" }> | {
@@ -41,6 +43,7 @@ export type PublicGame = Pick<GameState,
 };
 
 export type RoomSnapshot = {
+  variant: GameVariant;
   version: number;
   players: RoomPlayer[];
   pendingPlayers?: { connectionId: string; name: string }[];
@@ -67,6 +70,7 @@ export type SessionView = {
 };
 
 export type MultiplayerSession = {
+  setVariant: (variant: GameVariant) => void;
   startGame: () => void;
   endGame: () => void;
   shuffleBoard: () => void;
