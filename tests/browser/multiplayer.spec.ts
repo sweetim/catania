@@ -963,7 +963,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
     const highestScore = Math.max(...game.players.map(player => player.score));
     for (const [index, player] of game.players.entries()) {
       const seat = roster.getByRole("listitem").filter({ has: host.getByText(player.name, { exact: true }) });
-      await expect(seat.locator(".player-number")).toHaveText(String(index + 1));
+      await expect(seat.locator(".player-number")).toHaveText(player.control === "human" ? player.name.trim()[0]!.toUpperCase() : String(index + 1));
       await expect(seat.locator(".player-score > .font-serif")).toHaveText(String(player.score));
       await expect(seat.getByRole("img", { name: `${player.resourceCount} resource cards`, exact: true })).toBeVisible();
       await expect(seat.getByRole("img", { name: `${player.developmentCount} development cards`, exact: true })).toBeVisible();
@@ -1201,7 +1201,7 @@ test("private player header matches the single-device hand and total score", asy
   await expect(header.locator(".player-seat")).toHaveCount(0);
   const summary = phone.getByRole("region", { name: "Your player summary", exact: true });
   const seat = summary.locator(".player-seat");
-  await expect(seat.locator(".player-number")).toHaveText(String(game.players.findIndex(other => other.id === player.id) + 1));
+  await expect(seat.locator(".player-number")).toHaveText(player.name.trim()[0]!.toUpperCase());
   const playerColor = await phone.evaluate(color => { const style = document.createElement("span").style; style.backgroundColor = color; return style.backgroundColor; }, player.color);
   await expect(seat.locator(".player-number")).toHaveCSS("background-color", playerColor);
   await expect(seat.locator(".player-name")).toHaveText(player.name);

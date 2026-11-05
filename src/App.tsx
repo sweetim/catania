@@ -742,10 +742,10 @@ export function App() {
                     className="flex items-center gap-2 rounded-lg border border-line bg-paper/70 px-3"
                   >
                     <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                      className="player-number flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
                       style={{ background: PLAYER_COLORS[index] }}
                     >
-                      {index + 1}
+                      {Array.from(name.trim())[0]?.toUpperCase() ?? index + 1}
                     </span>
                     <span className="sr-only">{translateText("Player {number} name", { number: index + 1 })}</span>
                     <input
@@ -1008,7 +1008,7 @@ export function App() {
             ))}
           </nav>
           <div className="table-feedback">
-            <div className="lg:hidden">
+            <div className="roll-summary-feedback lg:hidden">
               <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
             </div>
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
@@ -1364,7 +1364,7 @@ export function App() {
                   </span>
                   {!game.winnerId && gameMenu}
                 </div>
-                <div className="hidden lg:block">
+                <div className="roll-summary-hand hidden lg:block">
                   <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
                 </div>
                 <TurnInstructions

@@ -6,7 +6,7 @@ import type { GameVariant } from "../game/types";
 
 export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, detailed = false, stacked = detailed, privateScore, variant = "original" }: {
   variant?: GameVariant;
-  player: { name: string; color: string; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
+  player: { name: string; color: string; control: "human" | "computer"; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
   number: number;
   active: boolean;
   leading: boolean;
@@ -24,7 +24,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
 
   return <div style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
     <div className={stacked ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
-      <span className="player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: player.color }}>{number}</span>
+      <span className="player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: player.color }}>{player.control === "human" ? Array.from(player.name.trim())[0]?.toUpperCase() ?? number : number}</span>
       <p className="player-name min-w-0 flex-1 truncate text-sm font-semibold" title={player.name}>{player.name}</p>
       <div role="group" aria-label={translateText("{player}'s card counts", { player: player.name })} className={`player-card-counts ${detailed ? "player-card-counts-detailed" : ""} ${stacked ? "col-span-2 col-start-2 row-start-2" : ""}`}>
         <span role="img" aria-label={translateText("{count} resource cards", { count: player.resourceCount })} title={translateText("{count} resource cards", { count: player.resourceCount })} className="player-card-stat text-forest">

@@ -901,6 +901,7 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await expect(page.getByRole("textbox")).toHaveCount(4);
   const names = ["Nora", "Jules", "Taylor", "Casey"];
   for (const [index, name] of names.entries()) await page.getByRole("textbox", { name: `Player ${index + 1} name`, exact: true }).fill(` ${name} `);
+  for (const [index, name] of names.entries()) await expect(page.locator(".player-number").nth(index)).toHaveText(name[0]!.toUpperCase());
   await page.getByRole("button", { name: "3 players", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Player 4 name" })).toHaveCount(0);
   await page.getByRole("button", { name: "4 players", exact: true }).click();
@@ -1968,6 +1969,38 @@ test("tablets keep every public player card above the island without scrolling",
     await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
     await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
     await expect(page.getByRole("button", { name: "Let's settle in", exact: true })).toBeVisible();
+  }
+});
+
+test("unfolded foldables show the island, hand, and seats side by side without view tabs", async ({ page, isMobile }, testInfo) => {
+  test.skip(isMobile, "Foldable widths run from the desktop project");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await seedGameRandomness(page);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
+  const board = page.getByRole("region", { name: "Game board", exact: true });
+  const hand = page.getByRole("region", { name: "Your cards", exact: true });
+  const turnControls = page.getByRole("region", { name: "Turn controls", exact: true });
+  const bank = page.getByRole("region", { name: "Resource bank", exact: true });
+  for (const viewport of [{ width: 673, height: 841 }, { width: 841, height: 673 }]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByRole("navigation", { name: "Game views" })).toBeHidden();
+    await expect(page.locator(".table-seats")).toBeVisible();
+    await expect(board).toBeInViewport({ ratio: 1 });
+    await expect(hand).toBeInViewport({ ratio: 1 });
+    await expect(turnControls).toBeInViewport({ ratio: 1 });
+    await expect(bank).toBeInViewport({ ratio: 1 });
+    const boardBounds = (await board.boundingBox())!;
+    const handBounds = (await hand.boundingBox())!;
+    const bankBounds = (await bank.boundingBox())!;
+    expect(handBounds.x).toBeGreaterThanOrEqual(boardBounds.x + boardBounds.width);
+    expect(handBounds.x).toBeCloseTo(bankBounds.x, 1);
+    // The dice summary sits beside the turn controls instead of above the island.
+    await expect(page.locator(".roll-summary-feedback")).toBeHidden();
+    await expect(page.locator(".roll-summary-hand .roll-summary")).toBeVisible();
+    await noHorizontalOverflow(page);
+    await screenshot(page, testInfo, `unfolded-foldable-${viewport.width}-${viewport.height}`, false);
   }
 });
 
