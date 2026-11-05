@@ -8,8 +8,9 @@ The shared screen hosts the game without occupying a player seat.
 
 ## Host And Join
 
-1. Open the deployed website on the shared screen and choose **Play across devices**,
-   then **Host board**. This browser runs the rules and holds the full game in memory.
+1. Open the deployed website on the shared screen and choose **Play across devices**.
+   This screen immediately becomes the shared board and connects through PeerJS Cloud;
+   it runs the rules and holds the full game in memory.
 2. Connect all devices to the same local network; a wired Ethernet host and Wi-Fi
    phones can work together. Each human player scans the displayed
    QR code with their phone's camera, opens the link, and enters a distinct name.

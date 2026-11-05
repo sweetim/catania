@@ -15,8 +15,8 @@ inside the setup card while its start button stays visible in the card footer.
 
 The **On this device** card contains the local player settings and **Let's settle
 in**, beneath the theme selector.
-Under **Separate multiplayer setup**, **Play across devices** opens setup for a shared
-board and phones. It does not carry over these names, player counts, or the island
+Under **Separate multiplayer setup**, **Play across devices** immediately hosts a shared
+board for phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
 1. Choose **Original** (the default) or **Seafarers** under **Game version**,

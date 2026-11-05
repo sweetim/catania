@@ -5,7 +5,6 @@ import { Board } from "../components/Board";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
-import { GameVariantSelector } from "../components/GameVariantSelector";
 import { FreeRouteChoice, GoldSelection } from "../components/SeafarersControls";
 import { BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
@@ -19,7 +18,7 @@ import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
-import type { GameAction, Resources } from "../game/types";
+import type { GameAction, GameVariant, Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -397,7 +396,9 @@ export function MultiplayerApp() {
   }
 
   useEffect(() => {
-    if (invitation && name.trim()) connect();
+    if (invitation) {
+      if (name.trim()) connect();
+    } else session.current = hostSession(setView);
     return () => { session.current?.close(); session.current = null; };
   }, []);
 
@@ -454,18 +455,14 @@ export function MultiplayerApp() {
       </header>}
       {privateGame && <span className="sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span>}
       <main className={privateGame ? "private-game-main" : sharedGame ? "shared-game-main" : hostLobby ? "multiplayer-lobby-main" : `mx-auto max-w-[1600px] px-4 pb-10 sm:px-8 ${game ? "pt-4" : "pt-10 sm:pt-16"}`}>
-        {!view && <section className="mx-auto max-w-xl">
+        {!view && invitation && <section className="mx-auto max-w-xl">
           <p className="eyebrow">{translateText("Gather around")}</p>
-          <h1 className="mt-3 font-serif text-5xl tracking-tight">{translateText(invitation ? "Your seat awaits." : "An island to share.")}</h1>
-          <p className="mb-8 mt-5 text-sm leading-7 text-muted">{translateText(invitation ? "Keep your cards close. Connect your phone to the shared board, then wait for the host to admit you." : "One screen for the board, one phone per human player. Fill a three- or four-player table with friends on the same local network or computer opponents, without a game server.")}</p>
-          {invitation ? <form className="panel space-y-4 p-6" onSubmit={event => { event.preventDefault(); connect(); }}>
+          <h1 className="mt-3 font-serif text-5xl tracking-tight">{translateText("Your seat awaits.")}</h1>
+          <p className="mb-8 mt-5 text-sm leading-7 text-muted">{translateText("Keep your cards close. Connect your phone to the shared board, then wait for the host to admit you.")}</p>
+          <form className="panel space-y-4 p-6" onSubmit={event => { event.preventDefault(); connect(); }}>
             <label className="block text-sm font-semibold">{translateText("Your name")}<input className="field mt-2" maxLength={20} autoComplete="nickname" value={name} onChange={event => setName(event.target.value)} required /></label>
             <button className="button-primary w-full" disabled={!name.trim()}>{translateText("Connect to game")}</button>
-          </form> : <div className="panel space-y-5 p-6">
-            <h2 className="font-serif text-2xl">{translateText("Make this the shared board.")}</h2>
-            <p className="text-sm leading-6 text-muted">{translateText("Players scan the QR code using their phone cameras. This screen shows only public information and stays open for the whole game.")}</p>
-            <button className="button-primary w-full" onClick={() => { setLocalError(""); session.current = hostSession(setView); }}>{translateText("Host board")}</button>
-          </div>}
+          </form>
           <p className="mt-5 text-xs leading-6 text-muted">{translateText("PeerJS Cloud provides signaling, and STUN helps discover reachable addresses. Gameplay runs in the board browser over direct, encrypted connections, without a relay fallback. Ethernet and Wi-Fi can work together; guest Wi-Fi isolation can prevent connections.")}</p>
         </section>}
 
@@ -483,8 +480,18 @@ export function MultiplayerApp() {
           {host && snapshot?.previewBoard && <section aria-label={translateText("Island preview")} className="multiplayer-lobby-island panel min-w-0 p-4 sm:p-6">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
-                <div className="w-32"><GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} /></div>
-                <button className="button-secondary px-3 text-xs" aria-label={translateText("Shuffle island preview")} disabled={disabled} onClick={() => session.current?.shuffleBoard()}>{translateText("Shuffle")}</button>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="flex rounded-xl bg-moss p-1" role="group" aria-label={translateText("Game version")}>
+                    {(["original", "seafarers"] as GameVariant[]).map(variant => (
+                      <button key={variant} aria-pressed={snapshot.variant === variant} disabled={disabled}
+                        onClick={() => session.current?.setVariant(variant)}
+                        className={`min-h-9 rounded-lg px-3 text-xs font-semibold ${snapshot.variant === variant ? "bg-white shadow-sm" : "text-muted"}`}>
+                        {translateText(variant === "original" ? "Original" : "Seafarers")}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="button-secondary px-3 text-xs" aria-label={translateText("Shuffle island preview")} disabled={disabled} onClick={() => session.current?.shuffleBoard()}>{translateText("Shuffle")}</button>
+                </div>
               </div>
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
                 <Board board={snapshot.previewBoard} players={[]} robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id} pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id} fillBoardWithWater={boardSettings.fillBoardWithWater} interactive={false} compact fit onChangeTheme={() => setDialog("theme")} />

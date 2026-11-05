@@ -267,7 +267,6 @@ async function privateDialogFixture(multiplayer: MultiplayerHarness) {
 
 async function hostGame(host: Page) {
   await host.goto("/?multiplayer=1");
-  await host.getByRole("button", { name: "Host board", exact: true }).click();
   const invitation = host.getByLabel("Game invitation", { exact: true });
   await expect(invitation).toHaveValue(/#host=.+&secret=.+/);
   await expect(invitation).toHaveAttribute("readonly", "");
@@ -1017,7 +1016,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
 test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
-  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  await host.getByRole("button", { name: "Seafarers", exact: true }).click();
   await expect(host.locator(".terrain-hex")).toHaveCount(42);
   const phone = await multiplayer.newPage("Alex", true);
   await requestSeat(phone, invitation, "Alex");

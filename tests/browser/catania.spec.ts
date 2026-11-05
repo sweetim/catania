@@ -545,6 +545,7 @@ for (const viewport of [
 }
 
 test("cross-device play opens its own setup without using local player settings", async ({ page }) => {
+  await page.routeWebSocket(/\/peerjs\?/, () => {});
   await page.goto("/");
   await page.getByRole("button", { name: "4 players", exact: true }).click();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
@@ -556,8 +557,7 @@ test("cross-device play opens its own setup without using local player settings"
   await multiplayer.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/\?multiplayer=1$/);
-  await expect(page.getByRole("heading", { name: "Make this the shared board.", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Host board", exact: true })).toBeEnabled();
+  await expect(page.getByRole("heading", { name: "Scan. Join. Settle in.", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Set up your table", exact: true })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });

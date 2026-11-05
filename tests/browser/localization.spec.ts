@@ -71,10 +71,12 @@ test.describe("Japanese browser locale", () => {
     expect(await page.evaluate(() => localStorage.getItem("catania.language"))).toBe("en");
     await page.reload();
     await expectLanguage(page, "en");
+    await page.routeWebSocket(/\/peerjs\?/, () => {});
     await page.getByRole("link", { name: "Play across devices" }).click();
+    await expect(page.getByRole("heading", { name: "Scan. Join. Settle in.", exact: true })).toBeVisible();
     await expectLanguage(page, "en");
-    await page.getByRole("button", { name: "Menu", exact: true }).click();
-    await expect(page.getByRole("group", { name: "Main menu", exact: true }).getByRole("button")).toHaveText(["Help", "Single-device play"]);
+    await page.getByRole("button", { name: "Game", exact: true }).click();
+    await expect(page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button")).toHaveText(["Help", "Settings", "Leave room"]);
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
     await expectLanguage(page, "ja");
     await expect(page.locator("h1")).toContainText(/[\u3040-\u30ff\u3400-\u9fff]/);
