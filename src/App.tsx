@@ -28,6 +28,11 @@ import { BOARD_THEMES, BoardThemeContext, getThemeName, type BoardThemeId } from
 import { defaultComputerName, resourceName, type Language, type TranslationParameters } from "./i18n";
 import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
+import { ProfileGate } from "./components/ProfileGate";
+import {
+  activeProfile, createProfile, profileStats, readProfileState, recordGameResult,
+  writeProfileState, type PlayerProfile, type ProfileState,
+} from "./profile";
 import { formatGameMessage, gameErrorMessage, type GameMessage } from "./game/messages";
 import {
   Arrow,
@@ -39,7 +44,7 @@ import {
   ResourceCard,
   ResourceInventory,
 } from "./components/GameUi";
-import { createBoard } from "./game/board";
+import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "./game/board";
 import { chooseComputerAction, getComputerActionDelay, getController } from "./game/computer";
 import {
   applyAction,
@@ -109,8 +114,20 @@ export function App() {
   });
   const boardTheme = BOARD_THEMES[boardThemeId];
   const [variant, setVariant] = useState<GameVariant>("original");
-  const [preview, setPreview] = useState(() => createBoard());
-  const [names, setNames] = useState(["Alex", "Sam", "Jordan", "Robin"]);
+  const [preview, setPreview] = useState(() => {
+    const seed = generateMapSeed();
+    return { seed, board: createBoard(seededRandom(seed)) };
+  });
+  const [mapCode, setMapCode] = useState("");
+  const [gameMapSeed, setGameMapSeed] = useState<string | null>(null);
+  const [gameInstanceId, setGameInstanceId] = useState<string | null>(null);
+  const [profileState, setProfileState] = useState<ProfileState>(() => readProfileState());
+  const [profileGateOpen, setProfileGateOpen] = useState(false);
+  const [names, setNames] = useState(() => {
+    // The selected profile's name prefills the first human seat; the rest keep their placeholders.
+    const profile = activeProfile(readProfileState());
+    return profile ? [profile.name, "Sam", "Jordan", "Robin"] : ["Alex", "Sam", "Jordan", "Robin"];
+  });
   const [playerCount, setPlayerCount] = useState(3);
   const [humanCount, setHumanCount] = useState(1);
   const [homeView, setHomeView] = useState<"setup" | "island">("setup");
@@ -262,7 +279,30 @@ export function App() {
     };
   }, [Boolean(game), Boolean(game?.winnerId)]);
 
-  function startGame(selectedBoard?: GameState["board"]) {
+  useEffect(() => {
+    // The field follows the current map code; typing a different code replays that island.
+    setMapCode(preview.seed);
+  }, [preview.seed]);
+
+  useEffect(() => {
+    // Solo play credits the selected profile exactly once per finished game.
+    if (!game?.winnerId || !gameInstanceId || humanCount !== 1) return;
+    const current = activeProfile(profileState);
+    if (!current) return;
+    const human = game.players.find(player => player.control === "human")!;
+    const updated = recordGameResult(current, {
+      gameId: gameInstanceId,
+      won: game.winnerId === human.id,
+      points: getScore(game, human.id).total,
+    });
+    if (updated === current) return;
+    const next = { profiles: profileState.profiles.map(profile => profile === current ? updated : profile), activeId: profileState.activeId };
+    writeProfileState(next);
+    setProfileState(next);
+    // Re-running after the update is a no-op: the same game never counts twice.
+  }, [Boolean(game?.winnerId), gameInstanceId, humanCount, activeProfile(profileState)?.id]);
+
+  function startGame(selectedBoard?: GameState["board"], selectedSeed?: string) {
     try {
       const profiles = names.slice(0, playerCount).map(
         (name, index): Pick<Player, "name" | "color" | "control"> => ({
@@ -281,7 +321,12 @@ export function App() {
         setError("Use a different name for each player so private handoffs are clear.");
         return;
       }
-      const next = createGame(profiles, undefined, selectedBoard, variant);
+      // Every game's island comes from a map code so it can be replayed later.
+      const mapSeed = selectedSeed ?? generateMapSeed();
+      const board = selectedBoard ?? createBoard(seededRandom(mapSeed), variant);
+      const next = createGame(profiles, undefined, board, variant);
+      setGameMapSeed(mapSeed);
+      setGameInstanceId(crypto.randomUUID());
       setRollPresentation(null);
       setResourceReceipt(null);
       setGame(next);
@@ -542,8 +587,46 @@ export function App() {
   const gameMenu = <GameMenu icon={Boolean(viewer)} actions={[
     { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
     { label: translateText("Settings"), onSelect: () => setDialog("settings") },
+    { label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) },
     ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
   ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />;
+
+  const playerProfile = activeProfile(profileState);
+  if (!playerProfile || profileGateOpen) {
+    const selectProfile = (profile: PlayerProfile) => {
+      const next = { profiles: profileState.profiles, activeId: profile.id };
+      writeProfileState(next);
+      setProfileState(next);
+      setNames(current => [profile.name, ...current.slice(1)]);
+      setProfileGateOpen(false);
+    };
+    const addProfile = (profile: PlayerProfile) => {
+      const next = { profiles: [...profileState.profiles, profile], activeId: profile.id };
+      writeProfileState(next);
+      setProfileState(next);
+      setNames(current => [profile.name, ...current.slice(1)]);
+      setProfileGateOpen(false);
+    };
+    const renameProfile = (profile: PlayerProfile, name: string) => {
+      const next = { profiles: profileState.profiles.map(candidate => candidate.id === profile.id ? { ...candidate, name } : candidate), activeId: profileState.activeId };
+      writeProfileState(next);
+      setProfileState(next);
+      if (profile.id === profileState.activeId) setNames(current => [name, ...current.slice(1)]);
+    };
+    return (
+      <BoardThemeContext value={boardTheme}>
+        <div data-theme={boardThemeId} className="min-h-dvh">
+          <ProfileGate
+            profiles={profileState.profiles}
+            onSelect={selectProfile}
+            onCreate={addProfile}
+            onRename={renameProfile}
+            onDismiss={playerProfile ? () => setProfileGateOpen(false) : undefined}
+          />
+        </div>
+      </BoardThemeContext>
+    );
+  }
 
   return (
     <BoardThemeContext value={boardTheme}>
@@ -559,6 +642,7 @@ export function App() {
               groupLabel={translateText("Main menu")}
               actions={[
                 { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
+                { label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) },
               ]}
             />
           )}
@@ -643,7 +727,8 @@ export function App() {
                 </label>
                 <GameVariantSelector value={variant} onChange={nextVariant => {
                   setVariant(nextVariant);
-                  setPreview(createBoard(undefined, nextVariant));
+                  const seed = generateMapSeed();
+                  setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant) });
                 }} />
               </div>
               {variant === "seafarers" && <p className="text-xs leading-5 text-muted">
@@ -718,7 +803,7 @@ export function App() {
               {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{errorText}</p>}
               <button
                 className="button-primary w-full justify-between"
-                onClick={() => startGame(preview)}
+                onClick={() => startGame(preview.board, preview.seed)}
               >
                 {translateText("Let's settle in")} <Arrow />
               </button>
@@ -740,22 +825,48 @@ export function App() {
                 <p className="eyebrow">{translateText("A place to begin")}</p>
                 <h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2>
               </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <form className="flex items-center gap-2" onSubmit={event => {
+                event.preventDefault();
+                const normalized = normalizeMapSeed(mapCode);
+                if (!normalized) {
+                  setError("Enter a valid 8-character map code.");
+                  return;
+                }
+                setPreview({ seed: normalized, board: createBoard(seededRandom(normalized), variant) });
+              }}>
+                <input
+                  className="field min-h-9 w-28 px-2 font-mono text-xs uppercase"
+                  aria-label={translateText("Map code")}
+                  title={translateText("Map code")}
+                  placeholder="XXXXXXXX"
+                  maxLength={8}
+                  autoComplete="off"
+                  value={mapCode}
+                  onChange={event => setMapCode(event.target.value)}
+                />
+                <button className="button-secondary !px-3 !text-xs">{translateText("Replay map")}</button>
+              </form>
               <button
                 className="button-secondary !px-3 !text-xs"
-                onClick={() => setPreview(createBoard(undefined, variant))}
+                onClick={() => {
+                  const seed = generateMapSeed();
+                  setPreview({ seed, board: createBoard(seededRandom(seed), variant) });
+                }}
                 aria-label={translateText("Shuffle island preview")}
               >
                 <span aria-hidden="true">&#8635;</span> {translateText("Shuffle")}
               </button>
             </div>
+          </div>
             <div className="min-h-0 flex-1">
               <Board
-                board={preview}
+                board={preview.board}
                 players={[]}
-                pirateTileId={preview.tiles.find(tile => tile.terrain === "sea")?.id}
+                pirateTileId={preview.board.tiles.find(tile => tile.terrain === "sea")?.id}
                 fillBoardWithWater={fillBoardWithWater}
                 robberTileId={
-                  preview.tiles.find((tile) => tile.terrain === "desert")?.id
+                  preview.board.tiles.find((tile) => tile.terrain === "desert")?.id
                 }
                 interactive={false}
                 compact
@@ -1302,6 +1413,12 @@ export function App() {
                 ...(game.variant === "seafarers" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), points: winnerScore.islands ?? 0 }] : []),
                 { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
+              profileNote={humanCount === 1 && playerProfile && winner.control === "human"
+                ? translateText("Player history: {games} games / {wins} wins / {points} total points", profileStats(playerProfile))
+                : undefined}
+              mapNote={gameMapSeed
+                ? translateText("Map code: {code}. Enter it before starting to replay this island.", { code: gameMapSeed })
+                : undefined}
             >
               <button className="button-primary" onClick={() => startGame()}>
                 {translateText("Play a rematch")} <Arrow />

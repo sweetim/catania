@@ -98,6 +98,8 @@ export const gameMessages = {
   "Random source must return a number from 0 (inclusive) to 1 (exclusive).": "乱数生成元は0以上1未満の数値を返す必要があります。",
   "Unable to arrange nonadjacent red number tokens.": "赤い数字トークンを隣接しないように配置できませんでした。",
   "The board can only be shuffled in the lobby.": "盤面をシャッフルできるのはロビー内だけです。",
+  "Enter a valid 8-character map code.": "8文字の有効なマップコードを入力してください。",
+  "Profile stats are shared only after the game finishes.": "プロフィールの成績はゲーム終了後にだけ共有されます。",
   "Computers can only be added in the lobby.": "コンピューターを追加できるのはロビー内だけです。",
   "The room already has four players.": "ルームにはすでに4人のプレイヤーがいます。",
   "Players can only be removed in the lobby.": "プレイヤーを削除できるのはロビー内だけです。",

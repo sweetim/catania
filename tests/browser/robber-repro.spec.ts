@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 // Repro: an AI rolls a 7. Who gets to choose the robber movement?
 // The human must NOT see "Move robber to ..." buttons while a computer is

@@ -2,9 +2,11 @@ import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import type { GameAction } from "../game/types";
+import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
 
 export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string };
+export type ProfileStatsMessage = { type: "profile-stats"; stats: ProfileStats };
 export type Command = { requestId: string; version: number } & (
   | { type: "action"; action: GameAction }
   | { type: "select-build"; piece: BuildMode }
@@ -13,6 +15,7 @@ export type CommandResult = { type: "result"; requestId: string; error: GameMess
 export type ServerMessage =
   | { type: "snapshot"; snapshot: RoomSnapshot }
   | { type: "admitted"; credential: string }
+  | { type: "request-profile" }
   | CommandResult
   | { type: "error"; error: GameMessage; terminal: boolean };
 
@@ -34,6 +37,10 @@ export function validName(value: unknown): value is string {
 }
 function resource(value: unknown): boolean {
   return RESOURCES.includes(value as never);
+}
+function profileStats(value: unknown): value is ProfileStats {
+  return record(value) && fields(value, ["games", "wins", "totalPoints"]) &&
+    ["games", "wins", "totalPoints"].every(key => integer(value[key], 1_000_000));
 }
 function resources(value: unknown): boolean {
   return record(value) && fields(value, RESOURCES) && RESOURCES.every(resource => integer(value[resource], 19));
@@ -91,10 +98,13 @@ export function parseAction(value: unknown): GameAction {
   return value as GameAction;
 }
 
-export function parseClientMessage(value: unknown): JoinMessage | Command {
+export function parseClientMessage(value: unknown): JoinMessage | Command | ProfileStatsMessage {
   const message = messageRecord(value, 8192);
   if (message.type === "join" && fields(message, ["type", "secret", "name"], ["credential"]) && token(message.secret) && validName(message.name) &&
     (!Object.hasOwn(message, "credential") || token(message.credential))) return message as JoinMessage;
+  if (message.type === "profile-stats" && fields(message, ["type", "stats"]) && profileStats(message.stats)) {
+    return message as ProfileStatsMessage;
+  }
   if (token(message.requestId) && integer(message.version)) {
     if (message.type === "action" && fields(message, ["type", "requestId", "version", "action"])) {
       return { type: "action", requestId: message.requestId, version: message.version, action: parseAction(message.action) };
@@ -165,9 +175,9 @@ function board(value: unknown): boolean {
     array(value.ports, 9, port => record(port) && fields(port, ["edgeId", "resource"]) && identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
 function publicGame(value: unknown): boolean {
-  if (!record(value) || !fields(value, ["variant", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
+  if (!record(value) || !fields(value, ["variant", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
   const trade = value.trade;
-  return (value.variant === "original" || value.variant === "seafarers") &&
+  return (value.variant === "original" || value.variant === "seafarers") && token(value.gameId) &&
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
@@ -216,6 +226,7 @@ export function parseServerMessage(value: unknown): ServerMessage {
   const message = messageRecord(value, 131072);
   if (message.type === "snapshot" && fields(message, ["type", "snapshot"]) && snapshot(message.snapshot)) return message as ServerMessage;
   if (message.type === "admitted" && fields(message, ["type", "credential"]) && token(message.credential)) return message as ServerMessage;
+  if (message.type === "request-profile" && fields(message, ["type"])) return { type: "request-profile" };
   if (message.type === "result" && fields(message, ["type", "requestId", "error"]) && token(message.requestId) &&
     (message.error === null || isGameMessage(message.error))) return message as ServerMessage;
   if (message.type === "error" && fields(message, ["type", "error", "terminal"]) && isGameMessage(message.error) && typeof message.terminal === "boolean") return message as ServerMessage;

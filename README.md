@@ -10,6 +10,10 @@ assets are local.
 
 - Solo AI opponents or human pass-and-play on one device.
 - Shared-board multiplayer with QR invitations, private phone hands, and optional computer opponents.
+- Named per-device player profiles (created, selected, or renamed when entering):
+  lifetime games, wins, and points, prefilled seat names, and the winner's
+  history shown on the shared board when a game ends.
+- Every island has a map code; enter it to replay the exact same island later.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Choose **Original** (default) or **Seafarers** before starting, locally or in the host lobby.
   Seafarers includes **Heading for New Shores**, ships and movement, the pirate,

@@ -1,4 +1,5 @@
-import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, test as base } from "./fixtures";
 import { createBoard } from "../../src/game/board";
 import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
 import { chooseComputerAction } from "../../src/game/computer";
@@ -383,6 +384,11 @@ for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
       });
     }, storage);
     await page.goto("/");
+    // Blocked or erroring storage cannot restore a profile: create one for this visit.
+    if (storage !== "unknown") {
+      await page.getByLabel("Profile name", { exact: true }).fill("Pat");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     await expectBoardTheme(page, "illustrated");
     await openHomeThemes(page);
     const choices = page.getByRole("group", { name: "Board theme", exact: true });

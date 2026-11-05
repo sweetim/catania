@@ -1,9 +1,11 @@
 import { describe, expect, mock, spyOn, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { chooseComputerAction, getComputerActionDelay } from "../../src/game/computer";
+import { createBoard, seededRandom } from "../../src/game/board";
 import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
 import { formatGameMessage } from "../../src/game/messages";
 import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
+import { ACTIVE_PROFILE_STORAGE_KEY, PROFILES_STORAGE_KEY } from "../../src/profile";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
 import type { MultiplayerSession, SessionView } from "../../src/multiplayer/types";
@@ -630,7 +632,7 @@ describe("public and private multiplayer projections", () => {
     const host = room.snapshot();
     const guest = room.snapshot("connection-1");
     expect(Object.keys(host.game!).sort()).toEqual([
-      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
+      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "gameId", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
     ].sort());
     expect(host.game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
     expect(host.game!.canCancelKnight).toBe(true);
@@ -741,6 +743,223 @@ describe("victory results and lobby return", () => {
     room.start();
     expect(room.game).not.toBeNull();
     expect(() => room.endGame()).toThrow("Finish the game");
+  });
+});
+
+describe("map codes", () => {
+  test("every generated map has a host-only code and the preview rebuilds exactly from it", () => {
+    const { room } = lobby();
+    const initial = room.snapshot();
+    expect(initial.mapSeed).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/);
+    expect(initial.previewBoard).toEqual(createBoard(seededRandom(initial.mapSeed!)));
+    expect(room.snapshot("connection-1")).not.toHaveProperty("mapSeed");
+    expect(room.snapshot("connection-1")).not.toHaveProperty("profiles");
+
+    room.shuffleBoard();
+    const shuffled = room.snapshot();
+    expect(shuffled.mapSeed).not.toBe(initial.mapSeed);
+    expect(shuffled.previewBoard).toEqual(createBoard(seededRandom(shuffled.mapSeed!), "original"));
+
+    const version = room.version;
+    room.useMapSeed(" abcd2345 ");
+    expect(room.snapshot().mapSeed).toBe("ABCD2345");
+    expect(room.snapshot().previewBoard).toEqual(createBoard(seededRandom("ABCD2345"), "original"));
+    expect(room.version).toBe(version + 1);
+    room.useMapSeed("abcd2345");
+    expect(room.version).toBe(version + 1);
+    expect(() => room.useMapSeed("not-a-code")).toThrow("map code");
+
+    room.start();
+    expect(room.snapshot().game!.board).toEqual(createBoard(seededRandom("ABCD2345"), "original"));
+    expect(() => room.useMapSeed("wxyz789k")).toThrow("lobby");
+  });
+
+  test("variant switches draw a fresh code and stay replayable, including across games", () => {
+    const { room } = lobby(1);
+    room.addComputer();
+    room.addComputer();
+    const original = room.snapshot().mapSeed!;
+    room.setVariant("seafarers");
+    const switched = room.snapshot();
+    expect(switched.mapSeed).not.toBe(original);
+    expect(switched.previewBoard).toEqual(createBoard(seededRandom(switched.mapSeed!), "seafarers"));
+    room.useMapSeed(switched.mapSeed!);
+    const version = room.version;
+    room.setVariant("seafarers");
+    expect(room.version).toBe(version);
+    room.start();
+    expect(room.snapshot().game!.board).toEqual(createBoard(seededRandom(switched.mapSeed!), "seafarers"));
+  });
+});
+
+describe("player profile stats", () => {
+  test("profile protocol messages validate strictly in both directions", () => {
+    const stats = { games: 1, wins: 0, totalPoints: 7 };
+    expect(parseClientMessage({ type: "profile-stats", stats })).toEqual({ type: "profile-stats", stats });
+    for (const invalid of [
+      { type: "profile-stats" },
+      { type: "profile-stats", stats: {} },
+      { type: "profile-stats", stats: { ...stats, games: -1 } },
+      { type: "profile-stats", stats: { ...stats, wins: 1.5 } },
+      { type: "profile-stats", stats: { ...stats, extra: 1 } },
+      { type: "profile-stats", stats: { games: "1", wins: 0, totalPoints: 0 } },
+      { type: "profile-stats", stats, requestId: "request" },
+    ]) {
+      expect(() => parseClientMessage(invalid)).toThrow();
+    }
+    expect(parseServerMessage({ type: "request-profile" })).toEqual({ type: "request-profile" });
+    for (const invalid of [{ type: "request-profile", extra: true }, { type: "request-profile", requestId: "request" }]) {
+      expect(() => parseServerMessage(invalid)).toThrow();
+    }
+  });
+
+  test("each game carries a token-safe id that changes between games and is guest-validated", () => {
+    const { room } = started();
+    const snapshot = room.snapshot("connection-1");
+    expect(snapshot.game!.gameId).toMatch(/^[a-zA-Z0-9_-]{1,80}$/);
+    expect(() => parseServerMessage({ type: "snapshot", snapshot })).not.toThrow();
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, game: { ...snapshot.game!, gameId: "not a token" } } })).toThrow();
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, game: { ...snapshot.game!, gameId: undefined } } })).toThrow();
+
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = room.game!.activePlayerId;
+    room.endGame();
+    room.start();
+    expect(room.snapshot("connection-1").game!.gameId).not.toBe(snapshot.game!.gameId);
+  });
+
+  test("the host asks connected humans without stats after the finish and stores replies on their seats", () => {
+    const { room, credentials } = started();
+    expect(room.profileRequestConnectionIds()).toEqual([]);
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = "player-1";
+    expect(room.profileRequestConnectionIds().toSorted()).toEqual(["connection-1", "connection-2", "connection-3"]);
+    room.disconnect("connection-2");
+    expect(room.profileRequestConnectionIds().toSorted()).toEqual(["connection-1", "connection-3"]);
+
+    expect(() => room.submitProfile("connection-1", { games: 4, wins: 2, totalPoints: 33 })).not.toThrow();
+    expect(room.profileRequestConnectionIds()).toEqual(["connection-3"]);
+    expect(() => room.submitProfile("outsider", { games: 1, wins: 0, totalPoints: 0 })).toThrow("not bound");
+
+    const host = room.snapshot();
+    expect(host.profiles).toEqual({ "player-1": { games: 4, wins: 2, totalPoints: 33 } });
+    expect(room.snapshot("connection-1")).not.toHaveProperty("profiles");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: room.snapshot("connection-1") })).not.toThrow();
+
+    const version = room.version;
+    room.submitProfile("connection-1", { games: 4, wins: 2, totalPoints: 33 });
+    expect(room.version).toBe(version);
+    room.submitProfile("connection-1", { games: 5, wins: 2, totalPoints: 40 });
+    expect(room.version).toBe(version + 1);
+    expect(room.snapshot().profiles!["player-1"]).toEqual({ games: 5, wins: 2, totalPoints: 40 });
+
+    // A rematch clears the stored stats: the next finish requests them again.
+    room.join("connection-2", { type: "join", secret, name: "Grace", credential: credentials[1]! });
+    room.endGame();
+    room.start();
+    expect(room.snapshot().profiles).toEqual({});
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = "player-1";
+    expect(room.profileRequestConnectionIds().toSorted()).toEqual(["connection-1", "connection-2", "connection-3"]);
+  });
+
+  test("stats arrive only after the game finishes", () => {
+    const { room } = started();
+    room.game!.phase = { type: "actions" };
+    expect(() => room.submitProfile("connection-1", { games: 1, wins: 1, totalPoints: 10 })).toThrow("finish");
+    expect(room.snapshot().profiles).toEqual({});
+  });
+
+  test("guests record each finished game once into the local profile and reply with their totals", async () => {
+    const OriginalPeer = (await import("peerjs")).default;
+    const connection = Object.assign(new EventEmitter(), { open: true, send: mock(() => {}), close: mock(() => {}) });
+    const peers: EventEmitter[] = [];
+    class TestPeer extends EventEmitter {
+      open = true;
+      destroyed = false;
+      disconnected = false;
+      constructor() { super(); peers.push(this); }
+      connect() { return connection; }
+      destroy() { this.destroyed = true; }
+    }
+    type Timer = ReturnType<typeof setTimeout>;
+    const timers = new Map<Timer, { callback: () => void; delay: number }>();
+    let timerNumber = 0;
+    const schedule = spyOn(globalThis, "setTimeout").mockImplementation(((callback: () => void, delay: number) => {
+      const timer = ++timerNumber as unknown as Timer;
+      timers.set(timer, { callback, delay });
+      return timer;
+    }) as typeof setTimeout);
+    const cancel = spyOn(globalThis, "clearTimeout").mockImplementation(timer => { timers.delete(timer as Timer); });
+    const values = new Map<string, string>([
+      [PROFILES_STORAGE_KEY, JSON.stringify([
+        { id: "profile-1", name: "Ada", games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null },
+      ])],
+      [ACTIVE_PROFILE_STORAGE_KEY, "profile-1"],
+    ]);
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: { getItem: () => null, setItem: () => {} } });
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    });
+    let guest: MultiplayerSession | undefined;
+    mock.module("peerjs", () => ({ default: TestPeer }));
+    try {
+      const { joinSession } = await import("../../src/multiplayer/session");
+      function finishedSnapshot(won: boolean): Parameters<typeof connection.emit>[1] {
+        const room = new HostRoom(secret);
+        for (const index of [0, 1, 2]) {
+          room.join(`connection-${index + 1}`, { type: "join", secret, name: names[index]! });
+          room.admit(`connection-${index + 1}`);
+        }
+        room.start();
+        for (const index of won ? [0, 1, 2, 3, 4] : [0]) {
+          room.game!.board.vertices[index]!.building = { playerId: "player-1", kind: "city" };
+        }
+        room.game!.phase = { type: "finished" };
+        room.game!.winnerId = won ? "player-1" : "player-2";
+        return room.snapshot("connection-1");
+      }
+
+      guest = joinSession({ hostId: "host-id", secret }, "Ada", () => {});
+      peers.at(-1)!.emit("open");
+      connection.emit("open");
+      expect(connection.send).toHaveBeenCalledTimes(1);
+
+      connection.emit("data", { type: "snapshot", snapshot: finishedSnapshot(false) });
+      connection.emit("data", { type: "request-profile" });
+      const reply = (connection.send as ReturnType<typeof mock>).mock.calls.at(-1)![0] as { type: string; stats: unknown };
+      expect(reply).toEqual({ type: "profile-stats", stats: { games: 1, wins: 0, totalPoints: 2 } });
+      const stored = JSON.parse(values.get(PROFILES_STORAGE_KEY)!)[0] as Record<string, unknown>;
+      expect(stored).toEqual({
+        id: "profile-1", name: "Ada", games: 1, wins: 0, totalPoints: 2,
+        lastRecordedGameId: expect.any(String),
+      });
+
+      // The host retries the request; the same finished game still counts exactly once.
+      connection.emit("data", { type: "request-profile" });
+      expect((connection.send as ReturnType<typeof mock>).mock.calls.at(-1)![0]).toEqual({
+        type: "profile-stats", stats: { games: 1, wins: 0, totalPoints: 2 },
+      });
+
+      // A new game accumulates: this time the phone's player wins with ten points.
+      connection.emit("data", { type: "snapshot", snapshot: finishedSnapshot(true) });
+      connection.emit("data", { type: "request-profile" });
+      expect((connection.send as ReturnType<typeof mock>).mock.calls.at(-1)![0]).toEqual({
+        type: "profile-stats", stats: { games: 2, wins: 1, totalPoints: 12 },
+      });
+      guest.close();
+      expect(timers.size).toBe(0);
+    } finally {
+      guest?.close();
+      schedule.mockRestore();
+      cancel.mockRestore();
+      mock.module("peerjs", () => ({ default: OriginalPeer }));
+    }
   });
 });
 
@@ -1097,7 +1316,7 @@ describe("untrusted multiplayer protocol", () => {
     expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, playerId: "player-2" } })).toThrow();
     expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, privatePlayer: { ...snapshot.privatePlayer, resources: { wood: 1 } } } })).toThrow();
     expect(() => parseServerMessage({ type: "error", error: "x".repeat(131072), terminal: false })).toThrow("too large");
-    const projection = publicGame(room.game!, snapshot.players);
+    const projection = publicGame(room.game!, snapshot.players, "projection-game");
     expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, game: projection } })).not.toThrow();
   });
 });

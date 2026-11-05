@@ -1,6 +1,7 @@
 import type { Board, GameAction, GamePhase, GameState, GameVariant, MonopolyEvent, Player, TheftEvent } from "../game/types";
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
+import type { ProfileStats } from "../profile";
 
 export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | null;
 
@@ -34,6 +35,7 @@ export type PublicGame = Pick<GameState,
   "robberTileId" | "pirateTileId" | "variant" | "shipMoved" | "shipsBuiltThisTurn" |
   "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {
+  gameId: string;
   players: PublicPlayer[];
   phase: Exclude<GamePhase, { type: "robber" }> | {
     type: "robber";
@@ -49,6 +51,8 @@ export type RoomSnapshot = {
   players: RoomPlayer[];
   pendingPlayers?: { connectionId: string; name: string }[];
   previewBoard?: Board;
+  mapSeed?: string;
+  profiles?: Record<string, ProfileStats>;
   game: PublicGame | null;
   playerId: string | null;
   privatePlayer: Player | null;
@@ -75,6 +79,7 @@ export type MultiplayerSession = {
   startGame: () => void;
   endGame: () => void;
   shuffleBoard: () => void;
+  useMapSeed: (seed: string) => void;
   admit: (connectionId: string) => void;
   reject: (connectionId: string) => void;
   addComputer: (language?: Language) => void;

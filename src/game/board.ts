@@ -30,6 +30,42 @@ export function shuffle<Value>(values: Value[], random: () => number): Value[] {
   return result;
 }
 
+const MAP_SEED_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const MAP_SEED_PATTERN = new RegExp(`^[${MAP_SEED_ALPHABET}]{8}$`);
+
+/** Generates a random 8-character map code; entering the code later rebuilds the exact island. */
+export function generateMapSeed(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return [...bytes].map(byte => MAP_SEED_ALPHABET[byte % MAP_SEED_ALPHABET.length]!).join("");
+}
+
+/** Normalizes user-entered map codes (trim and uppercase); null when the code is not a valid seed. */
+export function normalizeMapSeed(value: string): string | null {
+  const seed = value.trim().toUpperCase();
+  return MAP_SEED_PATTERN.test(seed) ? seed : null;
+}
+
+function hashSeed(seed: string): number {
+  let hash = 1779033703 ^ seed.length;
+  for (let index = 0; index < seed.length; index++) {
+    hash = Math.imul(hash ^ seed.charCodeAt(index), 3432918353);
+    hash = (hash << 13) | (hash >>> 19);
+  }
+  return hash >>> 0;
+}
+
+/** Deterministic random source for a map code: the same code and variant rebuild the same island on every device. */
+export function seededRandom(seed: string): () => number {
+  let state = hashSeed(seed);
+  return () => {
+    state = (state + 0x6D2B79F5) | 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original"): Board {
   const terrain = shuffle<Terrain>([
     "wood", "wood", "wood", "wood", "brick", "brick", "brick",

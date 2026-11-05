@@ -4,7 +4,7 @@ import type { GameAction } from "../game/types";
 import { getComputerActionDelay } from "../game/computer";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import { parseClientMessage, parseServerMessage } from "./protocol";
+import { profileStats, recordGameResultForActive } from "../profile";import { parseClientMessage, parseServerMessage } from "./protocol";
 import type { Command, ServerMessage } from "./protocol";
 import { HostRoom } from "./state";
 import type { BuildMode, Invitation, MultiplayerSession, SessionView } from "./types";
@@ -130,6 +130,13 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
     for (const [connectionId, entry] of connections) {
       if (entry.joined) send(entry.connection, { type: "snapshot", snapshot: room.snapshot(connectionId) }, () => remove(connectionId));
     }
+    // Ask phones without reported stats to share their local player profile once the game ends.
+    if (room.game?.phase.type === "finished") {
+      for (const connectionId of room.profileRequestConnectionIds()) {
+        const entry = connections.get(connectionId);
+        if (entry?.joined) send(entry.connection, { type: "request-profile" }, () => remove(connectionId));
+      }
+    }
   };
   function remove(connectionId: string) {
     const entry = connections.get(connectionId);
@@ -184,6 +191,10 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
             if (joined.revokedConnectionId) deny(joined.revokedConnectionId, { key: "This seat reconnected on another connection. This old connection is no longer authorized." });
             if (joined.credential) send(connection, { type: "admitted", credential: joined.credential }, () => remove(connectionId));
             publish();
+          } else if (message.type === "profile-stats") {
+            if (!entry.joined) throw new GameError("Join this room before sending commands.");
+            room.submitProfile(connectionId, message.stats);
+            publish();
           } else {
             if (!entry.joined) throw new GameError("Join this room before sending commands.");
             const result = room.command(connectionId, message);
@@ -208,6 +219,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   return {
     setVariant: variant => perform(() => room.setVariant(variant)),
     shuffleBoard: () => perform(() => room.shuffleBoard()),
+    useMapSeed: seed => perform(() => room.useMapSeed(seed)),
     startGame: () => perform(() => {
       const waiting = room.snapshot().pendingPlayers ?? [];
       room.start();
@@ -321,6 +333,21 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
           catch { storageError = { key: "Session storage is blocked. Refreshing this page will lose your seat credential." }; }
           publish();
           break;
+        case "request-profile": {
+          // Record this finished game into the selected profile, then share the totals with the shared board.
+          const snapshot = view.snapshot;
+          const game = snapshot?.game ?? null;
+          const finished = game?.phase.type === "finished" ? game : null;
+          const own = snapshot?.playerId && finished ? finished.players.find(player => player.id === snapshot.playerId) : undefined;
+          if (!finished || !own) break;
+          const profile = recordGameResultForActive({
+            gameId: finished.gameId,
+            won: finished.winnerId === own.id,
+            points: own.score,
+          });
+          if (profile) send(current, { type: "profile-stats", stats: profileStats(profile) }, failed);
+          break;
+        }
         case "snapshot":
           if (view.snapshot && message.snapshot.version < view.snapshot.version) return;
           if (!requestId) { clearTimeout(timeout); timeout = undefined; }
@@ -377,7 +404,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    setVariant: hostOnly, startGame: hostOnly, shuffleBoard: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
+    setVariant: hostOnly, startGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

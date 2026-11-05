@@ -32,7 +32,33 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, or 13 in Seafarers, on your own turn. Inspect the revealed score breakdown
-   and start a fresh rematch or return to the table.
+   and start a fresh rematch or return to the table. The victory panel also shows the
+   game's **map code**.
+
+## Player Profiles
+
+On first visit the home screen asks **Who's playing?**: create a profile, or
+continue as an existing one stored on this device. Each profile keeps lifetime
+games, wins, and total points, and its name prefills the first human seat's
+name in **Set up your table** (replacing the default placeholder). Use
+**Menu > Switch profile** to change or **Rename** a profile at any time; the
+first seat follows the active profile's name.
+
+Solo play against computers (one human) credits the finished game to the active
+profile — a win or loss with your final points — and the victory panel shows
+that profile's history. Pass-and-play with two or more humans records nothing,
+since one device cannot attribute the game to a single player. Profiles live in
+this browser only, under `catania.profiles`.
+
+## Map Codes
+
+Every island is generated from an 8-character **map code** (letters and digits
+without the ambiguous I, L, O, 0, and 1). The current code is shown beside
+**Shuffle** on the home screen. Enter a noted code and choose **Replay map** to
+rebuild that exact island, including terrain, number tokens, ports, and the
+robber's start; the game version must match the original map. The victory panel
+and multiplayer host lobby also display the current code so it can be noted for
+later replays. Codes are not secrets: knowing a code only reproduces the island.
 
 The game includes the standard terrain and tokens, nine ports, finite resource
 bank and development deck, piece limits, robber and discards, all development

@@ -89,6 +89,8 @@ export function VictoryDialog({
   pointsUnit,
   summary,
   breakdown,
+  profileNote,
+  mapNote,
   children,
 }: {
   eyebrow: string;
@@ -99,6 +101,8 @@ export function VictoryDialog({
   pointsUnit: string;
   summary: string;
   breakdown: readonly VictoryBreakdownRow[];
+  profileNote?: string;
+  mapNote?: string;
   children: ReactNode;
 }) {
   return (
@@ -141,6 +145,12 @@ export function VictoryDialog({
             </dl>
           )}
           <p className="mt-4 text-sm leading-6 text-muted">{summary}</p>
+          {(profileNote || mapNote) && (
+            <div className="mt-2 space-y-1 text-xs leading-5 text-muted">
+              {profileNote && <p>{profileNote}</p>}
+              {mapNote && <p>{mapNote}</p>}
+            </div>
+          )}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{children}</div>
         </div>
       </div>

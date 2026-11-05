@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard } from "../../src/game/board";
+import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "../../src/game/board";
 
 function randomFromSeed(seed: number): () => number {
   return () => {
@@ -84,5 +84,42 @@ describe("standard board", () => {
 
   test.each([NaN, Infinity, -0.1, 1])("rejects invalid random samples: %s", value => {
     expect(() => createBoard(() => value)).toThrow("Random source");
+  });
+});
+
+describe("map codes", () => {
+  test("generate 8-character codes from the unambiguous alphabet, distinct per map", () => {
+    for (let index = 0; index < 32; index++) {
+      expect(generateMapSeed()).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/);
+    }
+    expect(new Set([generateMapSeed(), generateMapSeed(), generateMapSeed(), generateMapSeed()]).size).toBe(4);
+  });
+
+  test.each([
+    [" abcd2345 ", "ABCD2345"],
+    ["abcd2345", "ABCD2345"],
+    ["AbCd2345", "ABCD2345"],
+  ])("normalize accepted map code %j to %j", (value, expected) => {
+    expect(normalizeMapSeed(value)).toBe(expected);
+  });
+
+  test.each(["", " ", "abcd234", "abcd23456", "abc12345", "abcd234i", "abcd234l", "abcd234o", "abcd2340", "abcd2341", "abcd 2345", "abcd-2345"])("reject invalid map code %j", value => {
+    expect(normalizeMapSeed(value)).toBeNull();
+  });
+
+  test("the same code rebuilds the identical island on every device, in both variants", () => {
+    for (const variant of ["original", "seafarers"] as const) {
+      const first = createBoard(seededRandom("ABCD2345"), variant);
+      const second = createBoard(seededRandom("ABCD2345"), variant);
+      expect(first).toEqual(second);
+      expect(createBoard(seededRandom("WXYZ789P"), variant)).not.toEqual(first);
+    }
+    for (let index = 0; index < 100; index++) {
+      const value = seededRandom("ABCD2345")();
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThan(1);
+    }
+    expect(seededRandom("ABCD2345")()).toBe(seededRandom("ABCD2345")());
+    expect(seededRandom("ABCD2345")()).not.toBe(seededRandom("WXYZ789P")());
   });
 });

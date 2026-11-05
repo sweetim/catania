@@ -1,4 +1,5 @@
-import { expect, test as base, type BrowserContext, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { type BrowserContext, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, seedProfile, test as base } from "./fixtures";
 import { pack, unpack } from "peerjs-js-binarypack";
 import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
@@ -112,6 +113,7 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
           record("sent", this, data);
         } as RTCDataChannel["send"];
       });
+      await seedProfile(context);
       const page = await context.newPage();
       page.on("console", message => consoleMessages.push(`${name} ${message.type()}: ${message.text()}`));
       page.on("pageerror", error => errors.push(`${name} pageerror: ${error.message}`));

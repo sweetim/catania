@@ -109,6 +109,8 @@ export const multiplayerUiTranslations = {
   "Your island awaits.": "あなたの島が待っています。",
   "Shuffle island preview": "島のプレビューをシャッフル",
   "Shuffle": "シャッフル",
+  "Map code": "マップコード",
+  "Replay map": "このマップを再現",
   "Shuffle until you find your island. Starting the game keeps this exact map.": "気に入った島が見つかるまでシャッフルできます。ゲームはこの地図のまま始まります。",
   "Room invitation": "ルームへの招待",
   "Welcome to the table": "ようこそ、この卓へ",
@@ -177,4 +179,7 @@ export const multiplayerUiTranslations = {
   "View the island": "島を確認する",
   "The room keeps its players and invitation. Start the next game from the lobby.": "ルームのプレイヤーと招待はそのまま残ります。ロビーから次のゲームを始められます。",
   "The host can return everyone to the lobby for a rematch.": "ホストが全員をロビーに戻すと、再戦を始められます。",
+  "Player history: {games} games / {wins} wins / {points} total points": "プレイヤー履歴：{games}戦 / {wins}勝 / 合計{points}点",
+  "Map code: {code}. Enter it before starting to replay this island.": "マップコード：{code}。同じ島で再戦するときは、開始前に入力してください。",
+  "Switch profile": "プロフィールを切り替える",
 };

@@ -1,5 +1,5 @@
 import { match } from "ts-pattern";
-import { createBoard } from "../game/board";
+import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "../game/board";
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
@@ -9,6 +9,7 @@ import type { GameAction, GameState, GameVariant } from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
+import type { ProfileStats } from "../profile";
 import { parseAction, validName } from "./protocol";
 import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
@@ -20,7 +21,7 @@ function requireRoom(condition: unknown, message: GameMessage["key"]): asserts c
   if (!condition) throw new GameError(message);
 }
 
-export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
+export function publicGame(game: GameState, players: RoomPlayer[], gameId: string): PublicGame {
   const phase = match(game.phase)
     .with({ type: "setup-settlement" }, () => ({ type: "setup-settlement" } as const))
     .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId } as const))
@@ -34,7 +35,7 @@ export function publicGame(game: GameState, players: RoomPlayer[]): PublicGame {
     .with({ type: "finished" }, () => ({ type: "finished" } as const))
     .exhaustive();
   return structuredClone({
-    variant: game.variant, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
+    variant: game.variant, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
     board: game.board, bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
@@ -64,6 +65,7 @@ type Seat = {
   credential: string | null;
   connectionId: string | null;
   requests: Map<string, CommandResult>;
+  profile: ProfileStats | null;
 };
 
 export class HostRoom {
@@ -71,9 +73,11 @@ export class HostRoom {
   version = 0;
   game: GameState | null = null;
   buildMode: BuildMode = null;
+  private mapSeed = generateMapSeed();
+  private gameId: string | null = null;
   private readonly seats: Seat[] = [];
   private readonly waiting = new Map<string, string>();
-  private previewBoard = createBoard();
+  private previewBoard = createBoard(seededRandom(this.mapSeed));
 
   constructor(private readonly secret: string) {}
 
@@ -81,14 +85,27 @@ export class HostRoom {
     requireRoom(!this.game, "The game version can only be changed in the lobby.");
     requireRoom(variant === "original" || variant === "seafarers", "Choose Original or Seafarers.");
     if (variant === this.variant) return;
-    this.previewBoard = createBoard(undefined, variant);
+    this.mapSeed = generateMapSeed();
+    this.previewBoard = createBoard(seededRandom(this.mapSeed), variant);
     this.variant = variant;
     this.version++;
   }
 
   shuffleBoard(): void {
     requireRoom(!this.game, "The board can only be shuffled in the lobby.");
-    this.previewBoard = createBoard(undefined, this.variant);
+    this.mapSeed = generateMapSeed();
+    this.previewBoard = createBoard(seededRandom(this.mapSeed), this.variant);
+    this.version++;
+  }
+
+  /** Rebuilds the preview from a map code so a noted island can be replayed; lobby only. */
+  useMapSeed(seed: string): void {
+    requireRoom(!this.game, "The board can only be shuffled in the lobby.");
+    const normalized = normalizeMapSeed(seed);
+    requireRoom(normalized, "Enter a valid 8-character map code.");
+    if (normalized === this.mapSeed) return;
+    this.mapSeed = normalized;
+    this.previewBoard = createBoard(seededRandom(normalized), this.variant);
     this.version++;
   }
 
@@ -97,6 +114,7 @@ export class HostRoom {
     const seat: Seat = {
       player: { id: `player-${index + 1}`, name, color: PLAYER_COLORS[index]!, control },
       credential: control === "human" ? crypto.randomUUID() : null, connectionId, requests: new Map(),
+      profile: null,
     };
     this.seats.push(seat);
     this.version++;
@@ -185,6 +203,9 @@ export class HostRoom {
     requireRoom(this.seats.length >= 3 && this.seats.length <= 4, "Add three or four players before starting.");
     requireRoom(this.seats.every(seat => seat.player.control === "computer" || seat.connectionId), "All admitted human players must be connected before starting.");
     this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard);
+    // Each game gets a stable identity for player-profile recording, and per-game profile stats start fresh.
+    this.gameId = crypto.randomUUID();
+    for (const seat of this.seats) seat.profile = null;
     // The engine numbers input profiles; preserve lobby identity when removed players leave gaps.
     const playerIds = new Map(this.seats.map((seat, index) => [`player-${index + 1}`, seat.player.id]));
     for (const player of this.game.players) player.id = playerIds.get(player.id)!;
@@ -198,8 +219,27 @@ export class HostRoom {
     requireRoom(this.game, "The game has not started.");
     requireRoom(this.game.phase.type === "finished", "Finish the game before returning to the lobby.");
     this.game = null;
+    this.gameId = null;
     this.buildMode = null;
     this.version++;
+  }
+
+  /** Stores self-reported profile stats from a phone after that phone's game finished. */
+  submitProfile(connectionId: string, stats: ProfileStats): void {
+    const seat = this.seats.find(seat => seat.connectionId === connectionId);
+    requireRoom(seat, "This connection is not bound to an admitted player.");
+    requireRoom(this.game?.phase.type === "finished", "Profile stats are shared only after the game finishes.");
+    if (seat.profile?.games === stats.games && seat.profile.wins === stats.wins && seat.profile.totalPoints === stats.totalPoints) return;
+    seat.profile = { games: stats.games, wins: stats.wins, totalPoints: stats.totalPoints };
+    this.version++;
+  }
+
+  /** Connections of connected human seats in a finished game that have not reported profile stats yet. */
+  profileRequestConnectionIds(): string[] {
+    if (this.game?.phase.type !== "finished") return [];
+    return this.seats
+      .filter(seat => seat.player.control === "human" && seat.connectionId !== null && seat.profile === null)
+      .map(seat => seat.connectionId!);
   }
 
   selectBuild(piece: BuildMode, connectionId?: string, expectedVersion = this.version): void {
@@ -321,9 +361,11 @@ export class HostRoom {
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
       version: this.version, players, variant: this.variant,
+      ...(host ? { mapSeed: this.mapSeed } : {}),
+      ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
       ...(host && !this.game ? { previewBoard: this.previewBoard } : {}),
-      game: game ? publicGame(game, players) : null,
+      game: game ? publicGame(game, players, this.gameId!) : null,
       playerId: seat?.player.id ?? null, privatePlayer,
       privateThefts: game && privatePlayer ? game.thefts.filter(theft => theft.thiefId === privatePlayer.id || theft.victimId === privatePlayer.id) : [],
       privateMonopolies: game && privatePlayer ? game.monopolies.filter(monopoly => (monopoly.losses[privatePlayer.id] ?? 0) > 0) : [],

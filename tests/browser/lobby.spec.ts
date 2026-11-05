@@ -1,4 +1,5 @@
-import { expect, test as base, type BrowserContext, type Page } from "@playwright/test";
+import { type BrowserContext, type Page } from "@playwright/test";
+import { expect, test as base } from "./fixtures";
 
 type WireMessage = { direction: "sent" | "received"; message: Record<string, unknown> };
 type BrowserProbe = { channels: RTCDataChannel[]; messages: WireMessage[] };

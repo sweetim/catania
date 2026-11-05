@@ -139,12 +139,21 @@ and discovery override are not part of the deployment.
    viewport. Use arrow keys in the theme radios and check that Close and Escape
      restore focus to **Theme** without losing a selected location, zoom, or pan.
 8. Start with a Japanese browser locale, then switch **English / 日本語** through
-    **Game > Language** during play or **Menu > Language** on the home,
-    multiplayer setup, and results screens. Check help,
+   **Game > Language** during play or **Menu > Language** on the home,
+   multiplayer setup, and results screens. Check help,
    resource labels, and placement instructions; confirm a manual
    choice survives reloads. In multiplayer, use different languages on the host
    and a phone and compare their activity messages. Visually inspect Japanese text
    on a system with Japanese fonts; no remote font download is required by the app.
+9. Note the map code beside **Shuffle**, start a game, and check the victory
+   panel repeats that code. Return home, enter the code, choose **Replay map**,
+   and confirm the identical island is rebuilt. Enter an invalid code and check
+   the field explains the 8-character format.
+10. In a fresh browser profile, check the **Who's playing?** screen: create a
+   profile, verify its name prefills the first human seat, finish a solo game,
+   and confirm the victory panel shows one recorded game. Use
+   **Menu > Switch profile** to rename the profile and pick or create another;
+   the first seat follows the active name and history stays per-profile.
 
 ## Physical-Device Multiplayer
 
@@ -170,6 +179,11 @@ Ethernet and Android Chrome on Wi-Fi:
    manual retries clear the previous error. Repeat with phone and desktop roles
    reversed, and check background/resume behavior. Do not treat STUN as proof that
    guest isolation or firewall restrictions can be bypassed.
+7. Finish a full game to the victory panel. Confirm the winner's player-history
+   line appears on the shared board after the phones reply, note the map code,
+   and check that replaying the code in a new room rebuilds the same island.
+   Play a second game with the same phone and confirm its totals accumulate
+   exactly once per game, including after a mid-victory reload.
 
 Browser automation does not establish physical Android/iOS compatibility or public
 PeerJS Cloud availability. See the [multiplayer guide](multiplayer.md) for deployment,

@@ -1,0 +1,18 @@
+export const profileTranslations = {
+  "Who's playing?": "誰が遊びますか？",
+  "Your player profile": "あなたのプレイヤープロフィール",
+  "Game history is stored on this device only and shared with the shared board after each game.": "成績はこの端末にだけ保存され、ゲームごとに共有ボードへ送信されます。",
+  "Continue as {name}": "{name}として続ける",
+  "{games} games / {wins} wins / {points} total points": "{games}戦 / {wins}勝 / 合計{points}点",
+  "Create a profile": "プロフィールを作成",
+  "Profile name": "プロフィール名",
+  "Create and continue": "作成して始める",
+  "Use 1 to 20 characters, without control characters.": "制御文字を使わず、1〜20文字で入力してください。",
+  "That name is already in use. Choose another name.": "その名前はすでに使われています。別の名前を入力してください。",
+  "Keep current profile": "現在のプロフィールに戻る",
+  "Switch profile": "プロフィールを切り替える",
+  "Rename": "名前を変更",
+  "Rename {name}": "{name}の名前を変更",
+  "Save name": "名前を保存",
+  "Cancel": "キャンセル",
+} as const;

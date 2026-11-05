@@ -12,6 +12,8 @@ import { OpenTrade } from "../components/OpenTrade";
 import { PlayerSeat } from "../components/PlayerSeat";
 import { DevelopmentHand } from "../components/DevelopmentHand";
 import { VictoryDialog, type VictoryBreakdownRow } from "../components/VictoryDialog";
+import { ProfileGate } from "../components/ProfileGate";
+import { activeProfile, createProfile, readProfileState, writeProfileState, type PlayerProfile, type ProfileState } from "../profile";
 import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstructions";
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
@@ -349,8 +351,12 @@ export function MultiplayerApp() {
     return hostId && secret ? { hostId, secret } : null;
   });
   const [name, setName] = useState(() => {
-    try { return invitation ? sessionStorage.getItem(`catania.multiplayer.name.${invitation.hostId}`) ?? "" : ""; }
-    catch { return ""; }
+    try {
+      const stored = invitation ? sessionStorage.getItem(`catania.multiplayer.name.${invitation.hostId}`) : null;
+      if (stored) return stored;
+    } catch { /* fall back to the selected profile's name */ }
+    const profile = activeProfile(readProfileState());
+    return invitation && profile ? profile.name : "";
   });
   const [view, setView] = useState<SessionView | null>(null);
   const session = useRef<MultiplayerSession | null>(null);
@@ -364,6 +370,13 @@ export function MultiplayerApp() {
   const [copied, setCopied] = useState(false);
   const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
+  const [mapCode, setMapCode] = useState("");
+  const [profileState, setProfileState] = useState<ProfileState>(() => readProfileState());
+  const [profileGateOpen, setProfileGateOpen] = useState(false);
+  const [storedRoomName] = useState<string | null>(() => {
+    try { return invitation ? sessionStorage.getItem(`catania.multiplayer.name.${invitation.hostId}`) : null; }
+    catch { return null; }
+  });
   const copyFeedbackTimer = useRef<number | undefined>(undefined);
   const snapshot = view?.snapshot;
   const game = snapshot?.game;
@@ -385,6 +398,11 @@ export function MultiplayerApp() {
     if (!game?.winnerId) setVictoryDismissed(false);
   }, [Boolean(game), Boolean(game?.winnerId)]);
 
+  useEffect(() => {
+    // The field follows the host's current map code; typing a different code replays that island.
+    if (snapshot?.mapSeed) setMapCode(snapshot.mapSeed);
+  }, [snapshot?.mapSeed]);
+
   function connect() {
     if (!invitation || !name.trim()) return;
     session.current?.close();
@@ -397,7 +415,8 @@ export function MultiplayerApp() {
 
   useEffect(() => {
     if (invitation) {
-      if (name.trim()) connect();
+      // Auto-connect only resumes a seat this browser already joined; fresh visits pick a profile and press Connect.
+      if (storedRoomName) connect();
     } else session.current = hostSession(setView);
     return () => { session.current?.close(); session.current = null; };
   }, []);
@@ -426,6 +445,40 @@ export function MultiplayerApp() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [host, Boolean(snapshot), view?.status]);
 
+  const playerProfile = activeProfile(profileState);
+  // Phones pick a player profile before joining; the shared board hosts no seat and never gates.
+  if (invitation && !view && (!playerProfile || profileGateOpen)) {
+    const selectProfile = (profile: PlayerProfile) => {
+      const next = { profiles: profileState.profiles, activeId: profile.id };
+      writeProfileState(next);
+      setProfileState(next);
+      setProfileGateOpen(false);
+    };
+    const addProfile = (profile: PlayerProfile) => {
+      const next = { profiles: [...profileState.profiles, profile], activeId: profile.id };
+      writeProfileState(next);
+      setProfileState(next);
+      setProfileGateOpen(false);
+    };
+    const renameProfile = (profile: PlayerProfile, playerName: string) => {
+      const next = { profiles: profileState.profiles.map(candidate => candidate.id === profile.id ? { ...candidate, name: playerName } : candidate), activeId: profileState.activeId };
+      writeProfileState(next);
+      setProfileState(next);
+      if (profile.id === profileState.activeId && name === profile.name) setName(playerName);
+    };
+    return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
+      <div data-theme={boardThemeId} className="min-h-dvh">
+        <ProfileGate
+          profiles={profileState.profiles}
+          onSelect={selectProfile}
+          onCreate={addProfile}
+          onRename={renameProfile}
+          onDismiss={playerProfile ? () => setProfileGateOpen(false) : undefined}
+        />
+      </div>
+    </BoardThemeContext>;
+  }
+
   const currentSelection = selected?.version === snapshot?.version ? selected : null;
   const movingShipId = movingShip?.version === snapshot?.version && snapshot?.buildMode === "move-ship" ? movingShip?.edgeId : null;
   const selectedAction: GameAction | null = !currentSelection || !game ? null : match(currentSelection.kind)
@@ -449,6 +502,7 @@ export function MultiplayerApp() {
           groupLabel={translateText("Main menu")}
           actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
+            ...(invitation ? [{ label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) }] : []),
           ]}
           exitAction={{ label: translateText("Single-device play"), onSelect: () => { window.location.href = "/"; } }}
         />}
@@ -490,6 +544,23 @@ export function MultiplayerApp() {
                       </button>
                     ))}
                   </div>
+                  <form className="flex items-center gap-2" onSubmit={event => {
+                    event.preventDefault();
+                    if (mapCode.trim()) session.current?.useMapSeed(mapCode);
+                  }}>
+                    <input
+                      className="field min-h-9 w-28 px-2 font-mono text-xs uppercase"
+                      aria-label={translateText("Map code")}
+                      title={translateText("Map code")}
+                      placeholder="XXXXXXXX"
+                      maxLength={8}
+                      autoComplete="off"
+                      value={mapCode}
+                      disabled={disabled}
+                      onChange={event => setMapCode(event.target.value)}
+                    />
+                    <button className="button-secondary px-3 text-xs" disabled={disabled || !mapCode.trim()}>{translateText("Replay map")}</button>
+                  </form>
                   <button className="button-secondary px-3 text-xs" aria-label={translateText("Shuffle island preview")} disabled={disabled} onClick={() => session.current?.shuffleBoard()}>{translateText("Shuffle")}</button>
                 </div>
               </div>
@@ -615,6 +686,12 @@ export function MultiplayerApp() {
               pointsUnit={translateText("points")}
               summary={translateText("The room keeps its players and invitation. Start the next game from the lobby.")}
               breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText)}
+              profileNote={snapshot.profiles?.[victoryWinner.id]
+                ? translateText("Player history: {games} games / {wins} wins / {points} total points", snapshot.profiles[victoryWinner.id])
+                : undefined}
+              mapNote={snapshot.mapSeed
+                ? translateText("Map code: {code}. Enter it before starting to replay this island.", { code: snapshot.mapSeed })
+                : undefined}
             >
               <button className="button-primary" disabled={disabled} onClick={() => session.current?.endGame()}>
                 {translateText("Return to lobby")}

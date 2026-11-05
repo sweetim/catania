@@ -33,9 +33,12 @@ The shared screen hosts the game without occupying a player seat.
    the choice to all phones without changing the roster. Seafarers uses Heading
    for New Shores with the same rules and layout described in the
    [gameplay guide](gameplay.md#seafarers-heading-for-new-shores).
-   Choose **Shuffle** to generate another island before starting. Player changes and
-   theme selection preserve the map; **Start game** uses the exact preview, including
-   its terrain, number tokens, ports, and initial robber location. Phones cannot shuffle.
+    Choose **Shuffle** to generate another island before starting. Every generated
+    map has a **map code** shown beside **Shuffle**: enter a noted code and choose
+    **Replay map** to rebuild that exact island (with the same game version as the
+    original). The code stays host-only; phones never receive it. Player changes and
+    theme selection preserve the map; **Start game** uses the exact preview, including
+    its terrain, number tokens, ports, and initial robber location. Phones cannot shuffle.
    The **Theme** button sits in the map's zoom bar, just as in single-device play,
    and opens the theme gallery in a dialog. Selecting a theme updates the map immediately.
    On desktop, the map fills the left column, with the invitation above the player
@@ -145,6 +148,37 @@ Public log entries remain generic and the shared
 board receives no private theft details. Theft events and notice dismissals survive
 reconnecting in the same page; reloading the page resets local notice dismissals.
 
+## Player Profiles And Map Codes
+
+Each phone keeps named player profiles in its own browser storage under
+`catania.profiles`, with the selected one remembered separately. On opening an
+invitation with no profile selected, the phone asks **Who's playing?**: create
+a profile, continue as an existing one, or **Rename** one. The selected
+profile's name prefills the join form (still editable, for example when
+another seat already uses that name). The shared board never asks for a
+profile: it hosts no seat and records no stats.
+
+When a game ends, the phone records one finished game into the selected
+profile: games played, wins, and total victory points. The same game is never
+counted twice, even after reloading or reconnecting. The shared board then
+asks each connected human phone to share its totals, and the victory panel on
+the shared screen shows the winner's history, such as *Player history: 12
+games / 5 wins / 148 total points*. Nothing is shared while a game is running,
+computer seats have no profile, and the line simply stays hidden when the
+winner is a computer or a phone has not replied (for example, it is offline).
+A disconnect followed by **Reconnect** after the win still delivers the stats.
+
+Profile totals are self-reported by each phone and trusted like the rest of the
+host model: they never include cards, resources, or any live game information,
+and they are shown only for the finished game's winner. Clearing the phone's
+browser storage clears its profiles; the shared board keeps nothing beyond the
+current room.
+
+Every island also has a **map code** (see the [gameplay guide](gameplay.md#map-codes)).
+The lobby shows the code beside **Shuffle**, and the shared board's victory
+panel repeats the finished game's code so the island can be replayed in a later
+room by entering the code before starting.
+
 ## Reconnect A Phone
 
 A disconnected phone can use **Reconnect** or reload the invitation in the same
@@ -169,7 +203,9 @@ actions, versions, and rules; dice and other random outcomes are resolved there,
 not on player phones. The shared board is a trusted input device: physical access
 lets someone place pieces for the active human player. Computers' hands are not
 sent to phones or displayed on the board. Phones cannot place pieces or
-impersonate another player.
+impersonate another player. Player-profile totals are shared only after a game
+finishes, only with the host, and contain no live game information; map codes are
+public island identifiers, not secrets.
 
 ## Network Requirements
 
