@@ -32,7 +32,7 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, or 13 in Seafarers, on your own turn. Inspect the revealed score breakdown
-   and start a fresh rematch or return to the table. The victory panel also shows the
+   and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
    game's **map code**.
 
 ## Player Profiles
@@ -63,9 +63,10 @@ since one device cannot attribute the game to a single player. Profiles live in
 this browser only, under `catania.profiles`.
 
 Expand **Game history** on a profile card to see completed solo and
-multiplayer-phone games, newest first. Each entry keeps the game ID, map code,
-Original/Seafarers version, completion date, win/loss, final points, and turn
-count. Unfinished games do not count. Existing lifetime totals are retained,
+multiplayer-phone games, newest first. Each entry shows the win/loss result,
+Original/Seafarers version, turn count, final victory points, and completion
+date; the stored game ID and map code remain on the device for replay.
+Unfinished games do not count. Existing lifetime totals are retained,
 but individual games played before this feature cannot be reconstructed.
 
 Choose **Replay map** on an entry to load that island and its matching game

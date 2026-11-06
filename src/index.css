@@ -490,7 +490,6 @@
 
 /* Unfolded foldables and small tablets: two panes like desktop, with a narrower hand column. */
 @media (min-width: 600px) and (max-width: 1023px) and (min-height: 601px) {
-  .game-shell:has(> .game-table) > header { display: none; }
   .game-table { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 42%); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 12px; }
   .table-seats { display: grid; grid-column: 1 / -1; }
   .table-navigation { display: none; }

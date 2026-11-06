@@ -127,10 +127,11 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                             <path d="m9 6 6 6-6 6" />
                           </svg>
                         </div>
-                        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line/70 pt-3">
+                        <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line/70 pt-3">
                           {([
                             ["Games", profile.games],
                             ["Wins", profile.wins],
+                            ["Win rate", `${profile.games > 0 ? Math.round((profile.wins / profile.games) * 100) : 0}%`],
                             ["Total points", profile.totalPoints],
                           ] as const).map(([label, value]) => (
                             <span key={label}>
@@ -149,33 +150,55 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                     {profile.history.length === 0 ? (
                       <p className="py-3 text-xs leading-5 text-muted">{translateText("Completed games will appear here.")}</p>
                     ) : (
-                      <ol className="space-y-3 pb-2" aria-label={translateText("Game history for {name}", { name: profile.name })}>
+                      <ol className="space-y-2 pb-2" aria-label={translateText("Game history for {name}", { name: profile.name })}>
                         {profile.history.map(game => (
-                          <li key={game.gameId} className="rounded-xl border border-line bg-paper/60 p-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <strong className="text-sm">{translateText(game.won ? "Won" : "Lost")}</strong>
-                              <time className="text-xs text-muted" dateTime={game.completedAt}>
-                                {new Date(game.completedAt).toLocaleDateString(language === "ja" ? "ja-JP" : "en-US", { dateStyle: "long" })}
+                          <li key={game.gameId} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-paper/60 px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  role="img"
+                                  aria-label={translateText(game.won ? "Won" : "Lost")}
+                                  title={translateText(game.won ? "Won" : "Lost")}
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${game.won ? "bg-forest/50 text-ink" : "bg-clay/15 text-clay"}`}
+                                >
+                                  <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    {game.won ? <path d="m5 13 4 4L19 7" /> : <path d="M6 6l12 12M18 6 6 18" />}
+                                  </svg>
+                                </span>
+                                <span className="truncate text-sm font-medium">{translateText(game.variant === "seafarers" ? "Seafarers" : "Original")}</span>
+                              </div>
+                              <time className="mt-1 block text-xs text-muted" dateTime={game.completedAt}>
+                                {new Date(game.completedAt).toLocaleDateString(language === "ja" ? "ja-JP" : "en-US", { dateStyle: "medium" })}
                               </time>
                             </div>
-                            <p className="mt-2 text-xs text-muted">
-                              {translateText(game.variant === "seafarers" ? "Seafarers" : "Original")}
-                              {" / "}{translateText("{points} points", { points: game.points })}
-                              {" / "}{translateText("{turns} turns", { turns: game.turnCount })}
-                            </p>
-                            <dl className="mt-3 space-y-2 text-xs">
-                              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                                <dt className="text-muted">{translateText("Map code")}</dt>
-                                <dd><code>{game.mapCode}</code></dd>
-                              </div>
-                              <div>
-                                <dt className="text-muted">{translateText("Game ID")}</dt>
-                                <dd className="mt-1 break-all font-mono">{game.gameId}</dd>
-                              </div>
-                            </dl>
-                            <button className="button-secondary mt-4 w-full text-xs" onClick={() => onReplay(profile, game)}>
-                              {translateText("Replay map")}
-                            </button>
+                            <div className="flex shrink-0 items-center gap-3">
+                              <span
+                                role="img"
+                                aria-label={translateText("{turns} turns", { turns: game.turnCount })}
+                                title={translateText("{turns} turns", { turns: game.turnCount })}
+                                className="mr-3 flex items-center gap-1.5"
+                              >
+                                <svg aria-hidden="true" className="h-3.5 w-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8" />
+                                  <path d="M21 3v5h-5" />
+                                </svg>
+                                <span className="font-serif text-2xl leading-none tabular-nums">{game.turnCount}</span>
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <span className="text-[9px] text-muted">{translateText("VP")}</span>
+                                <span className="font-serif text-2xl leading-none tabular-nums">{game.points}</span>
+                              </span>
+                              <button
+                                className="flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-moss hover:text-ink"
+                                aria-label={translateText("Replay map")}
+                                title={translateText("Replay map")}
+                                onClick={() => onReplay(profile, game)}
+                              >
+                                <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M8 5.5v13l10-6.5Z" />
+                                </svg>
+                              </button>
+                            </div>
                           </li>
                         ))}
                       </ol>

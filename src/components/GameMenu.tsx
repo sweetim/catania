@@ -48,13 +48,18 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
   }, [icon, open]);
 
   useEffect(() => {
-    const dismissMenu = (event: PointerEvent) => {
+    const dismissMenu = (event: PointerEvent | FocusEvent) => {
       if (menu.current && event.target instanceof Node && !menu.current.contains(event.target)) {
         menu.current.open = false;
       }
     };
     document.addEventListener("pointerdown", dismissMenu);
-    return () => document.removeEventListener("pointerdown", dismissMenu);
+    // Safari can blur a menu control before delivering a tapped item's click.
+    document.addEventListener("focusin", dismissMenu);
+    return () => {
+      document.removeEventListener("pointerdown", dismissMenu);
+      document.removeEventListener("focusin", dismissMenu);
+    };
   }, []);
 
   function selectAction(action: GameMenuAction) {
@@ -70,11 +75,6 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
     ref={menu}
     className="game-menu relative shrink-0"
     onToggle={(event) => setOpen(event.currentTarget.open)}
-    onBlur={(event) => {
-      // Ignore focus lost to the native select popup so language choice stays usable.
-      const focusTarget = event.relatedTarget instanceof Node ? event.relatedTarget : document.activeElement;
-      if (!event.currentTarget.contains(focusTarget)) event.currentTarget.open = false;
-    }}
     onKeyDown={(event) => {
       if (event.key === "Escape" && event.currentTarget.open) {
         event.preventDefault();

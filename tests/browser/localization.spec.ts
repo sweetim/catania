@@ -186,6 +186,45 @@ test("home language selection and help live inside the Menu dropdown", async ({ 
   await expect(page.getByRole("button", { name: "メニュー", exact: true })).toBeFocused();
 });
 
+for (const inGame of [false, true]) {
+  test(`${inGame ? "in-game" : "home"} menu actions survive taps without a focus destination`, async ({ page, isMobile }) => {
+    await page.goto("/");
+    if (inGame) await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    const menuButton = page.getByRole("button", { name: inGame ? "Game" : "Menu", exact: true });
+    const menu = page.getByRole("group", { name: inGame ? "Game menu" : "Main menu", exact: true });
+    const helpButton = menu.getByRole("button", { name: "Help", exact: true });
+
+    await menuButton.focus();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeVisible();
+    await helpButton.evaluate(button => {
+      // Safari can blur the trigger without focusing the tapped button.
+      button.addEventListener("pointerdown", () => {
+        const focusedElement = document.activeElement;
+        if (focusedElement instanceof HTMLElement) focusedElement.blur();
+      }, { once: true });
+    });
+    if (isMobile) await helpButton.tap();
+    else await helpButton.click();
+    await expect(page.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press("Escape");
+    await expect(menuButton).toBeFocused();
+
+    await page.keyboard.press("Enter");
+    const languageSelector = menu.getByRole("combobox", { name: "Language", exact: true });
+    await languageSelector.focus();
+    await languageSelector.evaluate(select => select.blur());
+    await expect(menu).toBeVisible();
+    await languageSelector.selectOption("en");
+    await expectLanguage(page, "en");
+    await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    const outsideButton = page.getByRole("button", { name: inGame ? "Zoom in" : "Let's settle in", exact: true });
+    await outsideButton.focus();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
+  });
+}
+
 test("in-game language selection lives inside the Game menu", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Let's settle in" }).click();

@@ -48,7 +48,21 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       (tile.terrain === "gold" ? 1.8 : tile.terrain === "ore" || tile.terrain === "grain" ? 1.2 : 1) *
       (balance && isResource(tile.terrain) ? 1 / (1 + production[tile.terrain] / 6) : 1) *
       (balance ? 1 / (1 + (numberProduction.get(tile.number) ?? 0) / 18) : 1);
-  }, 0);
+  }, 0) + (balance ? portValue(vertexId) : 0);
+  function portValue(vertexId: string): number {
+    const local = emptyResources();
+    for (const tileId of vertices.get(vertexId)!.tileIds) {
+      const tile = tiles.get(tileId)!;
+      if (isResource(tile.terrain) && tile.number !== null) local[tile.terrain] += 6 - Math.abs(tile.number - 7);
+    }
+    return state.board.ports.reduce((bonus, port) => {
+      const edge = edges.get(port.edgeId);
+      if (!edge || !edge.vertexIds.includes(vertexId)) return bonus;
+      if (port.resource === "any") return bonus + 0.8;
+      const supply = production[port.resource] + local[port.resource];
+      return bonus + 2 * Math.min(1, supply / 4);
+    }, 0);
+  }
   const islandBonus = (vertexId: string): number => state.variant === "seafarers"
     ? new Set(vertices.get(vertexId)!.tileIds.map(id => tiles.get(id)!.islandId).filter(island =>
       island && island !== "main" && !state.board.vertices.some(vertex =>
@@ -165,17 +179,27 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       action: { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId }, cost: COSTS[road.kind],
       value: road.points > 0 && winsWith(road.points) ? 10000 : 8 + road.value + road.points * 4,
     });
-    if (state.developmentDeck.length > 0) targets.push({ action: { type: "buy-development" }, cost: COSTS.development, value: 5 });
+    if (state.developmentDeck.length > 0) targets.push({
+      action: { type: "buy-development" }, cost: COSTS.development,
+      value: 3 + 3 * state.developmentDeck.length / 25,
+    });
     return targets.toSorted((first, second) => priority(second) - priority(first));
   }
 
   function robberMove(): { action: GameAction; value: number } {
-    const value = (tile: GameState["board"]["tiles"][number]): number => tile.vertexIds.reduce((total, vertexId) => {
-      const building = vertices.get(vertexId)!.building;
-      if (!building) return total;
-      return total + (building.playerId === playerId ? -4 : 1 + publicScores.get(building.playerId)! / 3) *
-        (building.kind === "city" ? 2 : 1) * (tile.number === null ? 0 : 6 - Math.abs(tile.number - 7));
-    }, 0);
+    const value = (tile: GameState["board"]["tiles"][number]): number => {
+      const owners = new Set<string>();
+      const blocking = tile.vertexIds.reduce((total, vertexId) => {
+        const building = vertices.get(vertexId)!.building;
+        if (!building) return total;
+        if (building.playerId !== playerId) owners.add(building.playerId);
+        return total + (building.playerId === playerId ? -4 : 1 + publicScores.get(building.playerId)! / 3) *
+          (building.kind === "city" ? 2 : 1) * (tile.number === null ? 0 : 6 - Math.abs(tile.number - 7));
+      }, 0);
+      const stealable = tile.number === null ? 0 : [...owners].reduce((total, owner) =>
+        total + 0.3 * resourceTotal(state.players.find(other => other.id === owner)!.resources), 0);
+      return blocking + stealable;
+    };
     const tile = state.board.tiles.filter(tile => tile.terrain !== "sea" && tile.id !== state.robberTileId)
       .toSorted((first, second) => value(second) - value(first))[0]!;
     const unblock = tiles.get(state.robberTileId)!.vertexIds.reduce((total, vertexId) => {
@@ -199,6 +223,9 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const before = Math.max(0, ...targets.map(target => priority(target)));
     const after = { ...player.resources };
     if (trade.give === null) {
+      if (publicScores.get(trade.offeredBy)! >= victoryTarget(state.variant) - 1) {
+        return { type: "respond-trade", accept: false };
+      }
       if (RESOURCES.some(resource => player.resources[resource] < trade.receive[resource])) {
         return { type: "respond-trade", accept: false };
       }
@@ -224,11 +251,12 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     }
     for (const resource of RESOURCES) after[resource] += trade.give[resource] - trade.receive[resource];
     const improvement = Math.max(0, ...targets.map(target => priority(target, after))) - before;
+    const contender = publicScores.get(trade.offeredBy)! >= victoryTarget(state.variant) - 1;
     return {
       type: "respond-trade",
-      accept: RESOURCES.every(resource => player.resources[resource] >= trade.receive[resource]) &&
+      accept: !contender && RESOURCES.every(resource => player.resources[resource] >= trade.receive[resource]) &&
         resourceTotal(trade.give) >= resourceTotal(trade.receive) &&
-        (improvement > 0 || (improvement === 0 && resourceTotal(trade.give) > resourceTotal(trade.receive))),
+        (improvement > 0.1 || (improvement === 0 && resourceTotal(trade.give) > resourceTotal(trade.receive))),
     };
   }
 
@@ -286,7 +314,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         const trade = state.trade;
         for (const [otherId, price] of Object.entries(trade.responses)) {
           if (!price || resourceTotal(price) > resourceTotal(trade.receive) ||
-            RESOURCES.some(resource => price[resource] > player.resources[resource])) continue;
+            RESOURCES.some(resource => price[resource] > player.resources[resource]) ||
+            publicScores.get(otherId)! >= victoryTarget(state.variant) - 1) continue;
           const after = { ...player.resources };
           for (const resource of RESOURCES) after[resource] += trade.receive[resource] - price[resource];
           if (deficit(after, cost) < deficit(player.resources, cost)) {

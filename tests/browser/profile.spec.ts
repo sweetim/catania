@@ -81,7 +81,7 @@ async function expectNoOverflow(page: Page) {
     .toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
-test("profile history survives reload and shows completed game identifiers and stats", async ({ page }, testInfo) => {
+test("profile history survives reload and shows completed game results and stats", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   const entries = page.getByRole("list", { name: "Game history for Alex", exact: true });
@@ -89,12 +89,16 @@ test("profile history survives reload and shows completed game identifiers and s
   await page.locator("summary").filter({ hasText: "Game history" }).click();
   await expect(entries.getByRole("listitem")).toHaveCount(2);
   const newest = entries.getByRole("listitem").first();
-  await expect(newest).toContainText("Lost");
-  await expect(newest).toContainText("Seafarers / 7 points / 34 turns");
-  await expect(newest).toContainText("8765432A");
-  await expect(newest).toContainText("game-seafarers");
+  await expect(newest.getByRole("img", { name: "Lost", exact: true })).toBeVisible();
+  await expect(newest).toContainText("Seafarers");
+  await expect(newest.getByRole("img", { name: "34 turns", exact: true })).toBeVisible();
+  await expect(newest).toContainText("VP");
+  await expect(newest).toContainText("7");
   await expect(newest.locator("time")).toHaveAttribute("datetime", history[0]!.completedAt);
-  await expect(entries.getByRole("listitem").last()).toContainText("Original / 10 points / 28 turns");
+  const oldest = entries.getByRole("listitem").last();
+  await expect(oldest.getByRole("img", { name: "Won", exact: true })).toBeVisible();
+  await expect(oldest).toContainText("Original");
+  await expect(oldest).toContainText("10");
   await page.setViewportSize({ width: 320, height: 568 });
   await expectNoOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("profile-game-history-narrow.png"), fullPage: true });
@@ -107,7 +111,7 @@ test("profile history survives reload and shows completed game identifiers and s
 for (const entry of history) {
   test(`profile history replays the exact ${entry.variant} map without starting a game`, async ({ page, isMobile }) => {
     const entries = await openHistory(page);
-    await entries.getByRole("listitem").filter({ hasText: entry.gameId }).getByRole("button", { name: "Replay map", exact: true }).click();
+    await entries.getByRole("listitem").nth(history.indexOf(entry)).getByRole("button", { name: "Replay map", exact: true }).click();
     const preview = page.getByRole("region", { name: "Island preview", exact: true });
     await expect(preview.getByRole("textbox", { name: "Map code", exact: true })).toHaveValue(entry.mapCode);
     await expectMap(preview, entry);
@@ -249,11 +253,12 @@ test("profile game history localizes in Japanese", async ({ page }, testInfo) =>
   await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
   await page.getByRole("button", { name: "プロフィール", exact: true }).click();
   await page.locator("summary").filter({ hasText: "ゲーム履歴" }).click();
-  const entries = page.getByRole("list", { name: "Alexのゲーム履歴", exact: true });
-  await expect(entries.getByRole("listitem").first()).toContainText("航海者 / 7点 / 34ターン");
-  await expect(entries.getByRole("listitem").first()).toContainText("敗北");
-  await expect(entries.getByRole("listitem").last()).toContainText("勝利");
-  await expect(entries.getByRole("button", { name: "このマップを再現", exact: true })).toHaveCount(2);
+    const entries = page.getByRole("list", { name: "Alexのゲーム履歴", exact: true });
+    await expect(entries.getByRole("listitem").first()).toContainText("航海者");
+    await expect(entries.getByRole("listitem").first().getByRole("img", { name: "敗北", exact: true })).toBeVisible();
+    await expect(entries.getByRole("listitem").first()).toContainText("34");
+    await expect(entries.getByRole("listitem").last().getByRole("img", { name: "勝利", exact: true })).toBeVisible();
+    await expect(entries.getByRole("button", { name: "このマップを再現", exact: true })).toHaveCount(2);
   await page.getByRole("button", { name: "Alexを削除", exact: true }).click();
   const confirmation = page.getByRole("dialog", { name: "プロフィールを削除しますか？", exact: true });
   await expect(confirmation).toContainText("この操作は取り消せません。");

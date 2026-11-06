@@ -142,7 +142,7 @@ export function App() {
   const [homeView, setHomeView] = useState<"setup" | "island">(savedMap ? "island" : "setup");
   const [game, setGame] = useState<GameState | null>(null);
   const initialGame = useRef<{ state: GameState; mapSeed: string } | null>(null);
-  const [resultsOpen, setResultsOpen] = useState(false);
+  const [victoryDismissed, setVictoryDismissed] = useState(false);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
   const [privateNoticeTarget, setPrivateNoticeTarget] = useState<HTMLDivElement | null>(null);
@@ -366,7 +366,7 @@ export function App() {
     setChosenResources(emptyResources());
     setDevelopmentCardId(null);
     setTradeMode("bank");
-    setResultsOpen(false);
+    setVictoryDismissed(false);
     setMobileView("board");
     setHomeView("setup");
     setError("");
@@ -411,7 +411,7 @@ export function App() {
       setResourceReceipt(null);
       setDialog(null);
       setConfirmation(null);
-      setResultsOpen(false);
+      setVictoryDismissed(false);
       // Keep the game table mounted so the victory pops up over the board.
       setMobileView("board");
       return;
@@ -492,7 +492,7 @@ export function App() {
     : null;
   const winnerScore = game && winner ? getScore(game, winner.id) : null;
   // Without a revealed viewer there is no hand to keep mounted, so the win goes straight to results.
-  const showVictoryScreen = Boolean(game?.winnerId && (resultsOpen || !viewer));
+  const showVictoryScreen = Boolean(game?.winnerId && !viewer);
   const isActive = Boolean(viewer && viewer.id === activePlayer?.id);
   const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
   const canCancelKnight = isActive && !rollBusy && game?.phase.type === "robber" && Boolean(game.phase.pendingKnight);
@@ -588,7 +588,12 @@ export function App() {
     setRollPresentation(null);
     setResourceReceipt(null);
     setViewerId(null);
-    setResultsOpen(false);
+    setVictoryDismissed(false);
+  }
+
+  function restartGame() {
+    const initial = initialGame.current!;
+    initializeGame(structuredClone(initial.state), initial.mapSeed);
   }
 
   function playerCards() {
@@ -670,24 +675,28 @@ export function App() {
   return (
     <BoardThemeContext value={boardTheme}>
     <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId || !showVictoryScreen ? "game-shell" : "min-h-dvh"}>
-      <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
-        <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          {game && !game.winnerId ? (
-            !viewer && gameMenu
-          ) : (
-            <GameMenu
-              triggerLabel={translateText("Menu")}
-              groupLabel={translateText("Main menu")}
-              profileName={playerProfile?.name}
-              actions={[
-                { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
-                { label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) },
-              ]}
-            />
-          )}
-        </div>
-      </header>
+      {(!game || game.winnerId || !viewer) && (
+        <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
+          <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            {game && !game.winnerId ? (
+              !viewer && gameMenu
+            ) : (
+              <GameMenu
+                triggerLabel={translateText("Menu")}
+                groupLabel={translateText("Main menu")}
+                profileName={playerProfile?.name}
+                actions={[
+                  { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
+                  { label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) },
+                  ...(game?.winnerId ? [{ label: translateText("Restart"), onSelect: restartGame }] : []),
+                ]}
+                exitAction={game?.winnerId ? { label: translateText("Back to home"), onSelect: returnToTable } : undefined}
+              />
+            )}
+          </div>
+        </header>
+      )}
 
       {!game ? (
         <main className="home-main" data-view={homeView}>
@@ -952,10 +961,10 @@ export function App() {
               className="button-secondary"
               onClick={returnToTable}
             >
-              {translateText("Back to the table")}
+              {translateText("Back to home")}
             </button>
-            <button className="button-primary" onClick={() => startGame()}>
-              {translateText("Play a rematch")} <Arrow />
+            <button className="button-primary" onClick={restartGame}>
+              {translateText("Restart")} <Arrow />
             </button>
           </div>
         </main>
@@ -1422,7 +1431,7 @@ export function App() {
               </div>
             </aside>
           </div>
-          {winner && winnerScore && (
+          {winner && winnerScore && !victoryDismissed && (
             <VictoryDialog
               eyebrow={translateText("The island has a new legend")}
               headline={translateText("{name} takes the island.", { name: winner.name })}
@@ -1446,14 +1455,14 @@ export function App() {
                 ? translateText("Map code: {code}. Enter it before starting to replay this island.", { code: gameMapSeed })
                 : undefined}
             >
-              <button className="button-primary" onClick={() => startGame()}>
-                {translateText("Play a rematch")} <Arrow />
-              </button>
-              <button className="button-secondary" onClick={() => setResultsOpen(true)}>
-                {translateText("See full results")}
-              </button>
               <button className="button-secondary" onClick={returnToTable}>
-                {translateText("Back to the table")}
+                {translateText("Back to home")}
+              </button>
+              <button className="button-secondary" onClick={() => setVictoryDismissed(true)}>
+                {translateText("View the island")}
+              </button>
+              <button className="button-primary" onClick={restartGame}>
+                {translateText("Restart")} <Arrow />
               </button>
             </VictoryDialog>
           )}
@@ -1542,8 +1551,7 @@ export function App() {
               className="button-primary"
               onClick={() => {
                 if (dialog === "reset") {
-                  const initial = initialGame.current!;
-                  initializeGame(structuredClone(initial.state), initial.mapSeed);
+                  restartGame();
                   return;
                 }
                 setGame(null);

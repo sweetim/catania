@@ -952,7 +952,7 @@ test("profile avatar and cards follow renaming, creation and switching", async (
   const current = page.getByRole("button", { name: "Continue as Alex", exact: true });
   const currentCard = profiles.getByRole("listitem").filter({ has: current });
   await expect(currentCard).toContainText("Current profile");
-  await expect(currentCard.locator(".grid > span")).toHaveText(["0Games", "0Wins", "0Total points"]);
+  await expect(currentCard.locator(".grid > span")).toHaveText(["0Games", "0Wins", "0%Win rate", "0Total points"]);
   await expect(page.getByRole("button", { name: "Keep current profile", exact: true })).toHaveCount(0);
   const nameBounds = (await currentCard.locator("strong").boundingBox())!;
   const renameBounds = (await currentCard.getByRole("button", { name: "Rename Alex", exact: true }).boundingBox())!;
@@ -1044,7 +1044,7 @@ test("fresh profile creation has neutral guidance and persists on reload", async
     await page.getByRole("button", { name: "Menu", exact: true }).click();
     await page.getByRole("button", { name: "Profile", exact: true }).click();
     await expect(page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Continue as Élodie", exact: true }) }).locator(".grid > span"))
-      .toHaveText(["12Games", "3Wins", "87Total points"]);
+      .toHaveText(["12Games", "3Wins", "25%Win rate", "87Total points"]);
   } finally {
     await context.close();
   }
@@ -1441,7 +1441,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     const menu = page.getByRole("group", { name: "Game menu", exact: true });
     await gameButton.scrollIntoViewIfNeeded();
     await expect(page.locator(".turn-header").getByRole("button", { name: "Game", exact: true })).toBeVisible();
-    await expect(page.getByRole("banner").getByRole("button", { name: "Game", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("banner")).toHaveCount(0);
     await expect(gameButton).toBeInViewport({ ratio: 1 });
     await expect(gameButton).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: "End game", exact: true })).toBeHidden();
@@ -2327,14 +2327,9 @@ test("unfolded foldables show the island, hand, and seats side by side without t
   await gameMenu.click();
   await expect(page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Help", exact: true })).toBeVisible();
   await gameMenu.press("Escape");
-  for (const viewport of [{ width: 600, height: 601 }, { width: 1023, height: 601 }]) {
+  for (const viewport of [{ width: 600, height: 601 }, { width: 1023, height: 601 }, { width: 599, height: 841 }, { width: 841, height: 600 }, { width: 1024, height: 841 }]) {
     await page.setViewportSize(viewport);
     await expect(header).toBeHidden();
-    await expect(gameMenu).toBeVisible();
-  }
-  for (const viewport of [{ width: 599, height: 841 }, { width: 841, height: 600 }, { width: 1024, height: 841 }]) {
-    await page.setViewportSize(viewport);
-    await expect(header).toBeVisible();
     await expect(gameMenu).toBeVisible();
   }
 });
@@ -3417,7 +3412,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   expect(browserErrors).toEqual([]);
 });
 
-test("a won game pops the winner up over the board with the point breakdown and rematch choices", async ({ page, isMobile }, testInfo) => {
+test("a won game pops the winner up over the board with the point breakdown and restart choices", async ({ page, isMobile }, testInfo) => {
   test.slow();
   const browserErrors: string[] = [];
   page.on("pageerror", error => browserErrors.push(error.message));
@@ -3590,19 +3585,23 @@ test("a won game pops the winner up over the board with the point breakdown and 
   await expect(victory).not.toContainText("0 ×");
   // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
   await expect(victory.locator(".confetti-piece")).toHaveCount(28);
-  await expect(victory.getByRole("button", { name: "Play a rematch", exact: true })).toBeVisible();
-  await expect(victory.getByRole("button", { name: "See full results", exact: true })).toBeVisible();
-  await expect(victory.getByRole("button", { name: "Back to the table", exact: true })).toBeVisible();
+  await expect(victory.getByRole("button", { name: "Back to home", exact: true })).toBeVisible();
+  await expect(victory.getByRole("button", { name: "View the island", exact: true })).toBeVisible();
+  await expect(victory.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
   // The winning island stays mounted behind the popup.
   await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
   await noPageOverflow(page);
   await screenshot(page, testInfo, "victory-popup", false);
 
-  await victory.getByRole("button", { name: "See full results", exact: true }).click();
-  await expect(page.getByRole("heading", { name: `${buyerName} takes the island.`, exact: true })).toBeVisible();
-  await expect(page.getByText(`${buyerName} / Winner`, { exact: true })).toBeVisible();
+  // Dismissal keeps the finished island browsable, with the same exits in the menu.
+  await victory.getByRole("button", { name: "View the island", exact: true }).click();
+  await expect(victory).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const finishedMenu = page.getByRole("group", { name: "Main menu", exact: true });
+  await expect(finishedMenu.getByRole("button", { name: "Back to home", exact: true })).toBeVisible();
+  await finishedMenu.getByRole("button", { name: "Restart", exact: true }).click();
 
-  await page.getByRole("button", { name: "Play a rematch", exact: true }).click();
   await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
   await expect(victory).toHaveCount(0);
   await revealHand(page);
