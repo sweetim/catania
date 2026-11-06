@@ -14,6 +14,7 @@ import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
+import { getPlayerLabel } from "./GameUi";
 import { ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
@@ -36,13 +37,14 @@ export function Board({
   confirmation,
   onSelect,
   onChangeTheme,
+  headerControls,
   routeChoice,
   interactive = true,
   compact = false,
   fit = false,
 }: {
   board: BoardState;
-  players: Pick<Player, "id" | "name" | "color">[];
+  players: Pick<Player, "id" | "name" | "color" | "control">[];
   robberTileId?: string;
   pirateTileId?: string | null;
   routeMode?: "road" | "ship" | "move-ship" | null;
@@ -63,6 +65,7 @@ export function Board({
   };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   onChangeTheme?: () => void;
+  headerControls?: ReactNode;
   routeChoice?: ReactNode;
   interactive?: boolean;
   compact?: boolean;
@@ -253,7 +256,7 @@ export function Board({
 
   function terrainResourceName(terrain: Terrain) {
     return isResource(terrain) ? resourceName(language, terrain).toLowerCase()
-      : translateText(terrain === "sea" ? "Sea" : terrain === "gold" ? "Gold fields" : "Desert").toLowerCase();
+      : translateText(terrain === "sea" ? "Sea" : terrain === "gold" ? "Gold" : "Desert").toLowerCase();
   }
 
   function targetProperties(
@@ -309,6 +312,7 @@ export function Board({
         }
       }}
     >
+      {headerControls && <div className="board-header-controls">{headerControls}</div>}
       {!compact && (
         <div
           className="pointer-events-none absolute left-5 top-4 z-10 hidden sm:block"
@@ -1282,9 +1286,9 @@ export function Board({
                       fontSize="9"
                       fontWeight="800"
                     >
-                      {players.findIndex(
+                      {getPlayerLabel(player, players.findIndex(
                         (candidate) => candidate.id === player.id,
-                      ) + 1}
+                      ) + 1)}
                     </text>
                     {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
                   </g>

@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useEffectEvent, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { Board } from "./components/Board";
+import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
@@ -30,7 +31,7 @@ import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
 import { ProfileGate } from "./components/ProfileGate";
 import {
-  activeProfile, createProfile, profileStats, readProfileState, recordGameResult,
+  activeProfile, createProfile, profileStats, readProfileState, recordGameResult, removeProfile,
   writeProfileState, type PlayerProfile, type ProfileState,
 } from "./profile";
 import { formatGameMessage, gameErrorMessage, type GameMessage } from "./game/messages";
@@ -113,14 +114,22 @@ export function App() {
     }
   });
   const boardTheme = BOARD_THEMES[boardThemeId];
-  const [variant, setVariant] = useState<GameVariant>("original");
+  const [savedMap] = useState<{ seed: string; variant: GameVariant } | null>(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    const seed = normalizeMapSeed(parameters.get("map") ?? "");
+    const variant = parameters.get("variant") ?? "original";
+    return seed && (variant === "original" || variant === "seafarers") ? { seed, variant } : null;
+  });
+  const [variant, setVariant] = useState<GameVariant>(savedMap?.variant ?? "original");
   const [preview, setPreview] = useState(() => {
-    const seed = generateMapSeed();
-    return { seed, board: createBoard(seededRandom(seed)) };
+    const seed = savedMap?.seed ?? generateMapSeed();
+    return { seed, board: createBoard(seededRandom(seed), savedMap?.variant ?? "original") };
   });
   const [mapCode, setMapCode] = useState("");
+  const [mapCodeInvalid, setMapCodeInvalid] = useState(false);
   const [gameMapSeed, setGameMapSeed] = useState<string | null>(null);
   const [gameInstanceId, setGameInstanceId] = useState<string | null>(null);
+  const [gameProfileId, setGameProfileId] = useState<string | null>(null);
   const [profileState, setProfileState] = useState<ProfileState>(() => readProfileState());
   const [profileGateOpen, setProfileGateOpen] = useState(false);
   const [names, setNames] = useState(() => {
@@ -130,8 +139,9 @@ export function App() {
   });
   const [playerCount, setPlayerCount] = useState(3);
   const [humanCount, setHumanCount] = useState(1);
-  const [homeView, setHomeView] = useState<"setup" | "island">("setup");
+  const [homeView, setHomeView] = useState<"setup" | "island">(savedMap ? "island" : "setup");
   const [game, setGame] = useState<GameState | null>(null);
+  const initialGame = useRef<{ state: GameState; mapSeed: string } | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
   const [resourceReceipt, setResourceReceipt] = useState<ResourceReceipt | null>(null);
@@ -145,8 +155,9 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | null
+    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | "reset" | null
   >(null);
+  const gamePaused = dialog === "restart" || dialog === "reset";
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
     "hand",
   );
@@ -168,7 +179,9 @@ export function App() {
     parameters?: TranslationParameters;
     exchange?: { give: Resources; receive: Resources };
   } | null>(null);
-  const [error, setError] = useState<GameMessage | keyof typeof appTranslations | "">("");
+  const [error, setError] = useState<GameMessage | keyof typeof appTranslations | "">(
+    new URLSearchParams(window.location.search).has("map") && !savedMap ? "This saved map link is invalid." : "",
+  );
   const errorText = typeof error === "string"
     ? error ? translateText(error) : ""
     : formatGameMessage(language, error);
@@ -208,7 +221,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!game || !computerPlayer || rollBusy || dialog === "restart") return;
+    if (!game || !computerPlayer || rollBusy || gamePaused) return;
     const delay = getComputerActionDelay(game);
     if (delay === null) return;
     const timeout = window.setTimeout(
@@ -216,7 +229,7 @@ export function App() {
       delay,
     );
     return () => window.clearTimeout(timeout);
-  }, [game, computerPlayer?.id, rollBusy, dialog === "restart"]);
+  }, [game, computerPlayer?.id, rollBusy, gamePaused]);
 
   useEffect(() => {
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -247,7 +260,7 @@ export function App() {
   });
 
   useEffect(() => {
-    if (!rollPresentation || rollPresentation.stage === "complete" || dialog === "restart") return;
+    if (!rollPresentation || rollPresentation.stage === "complete" || gamePaused) return;
     // Timers also finish when CSS motion is disabled; animationend is not required.
     const duration = reducedMotion ? 0 : match(rollPresentation.stage)
       .with("rolling", () => 500)
@@ -256,7 +269,7 @@ export function App() {
       .exhaustive();
     const timeout = window.setTimeout(() => advanceRollPresentation(rollPresentation), duration);
     return () => window.clearTimeout(timeout);
-  }, [rollPresentation, reducedMotion, dialog === "restart"]);
+  }, [rollPresentation, reducedMotion, gamePaused]);
 
   useEffect(() => {
     if (!resourceReceipt) return;
@@ -282,25 +295,29 @@ export function App() {
   useEffect(() => {
     // The field follows the current map code; typing a different code replays that island.
     setMapCode(preview.seed);
+    setMapCodeInvalid(false);
   }, [preview.seed]);
 
   useEffect(() => {
-    // Solo play credits the selected profile exactly once per finished game.
-    if (!game?.winnerId || !gameInstanceId || humanCount !== 1) return;
-    const current = activeProfile(profileState);
+    // Attribute the result to the profile that started the game, not a later selection.
+    if (!game?.winnerId || !gameInstanceId || !gameMapSeed || humanCount !== 1) return;
+    const current = profileState.profiles.find(profile => profile.id === gameProfileId);
     if (!current) return;
     const human = game.players.find(player => player.control === "human")!;
     const updated = recordGameResult(current, {
       gameId: gameInstanceId,
+      mapCode: gameMapSeed,
+      variant: game.variant,
       won: game.winnerId === human.id,
       points: getScore(game, human.id).total,
+      turnCount: game.turnNumber,
     });
     if (updated === current) return;
     const next = { profiles: profileState.profiles.map(profile => profile === current ? updated : profile), activeId: profileState.activeId };
-    writeProfileState(next);
+    if (!writeProfileState(next)) setError({ key: "Your game history could not be saved on this device." });
     setProfileState(next);
     // Re-running after the update is a no-op: the same game never counts twice.
-  }, [Boolean(game?.winnerId), gameInstanceId, humanCount, activeProfile(profileState)?.id]);
+  }, [Boolean(game?.winnerId), gameInstanceId, gameMapSeed, humanCount, gameProfileId]);
 
   function startGame(selectedBoard?: GameState["board"], selectedSeed?: string) {
     try {
@@ -325,38 +342,37 @@ export function App() {
       const mapSeed = selectedSeed ?? generateMapSeed();
       const board = selectedBoard ?? createBoard(seededRandom(mapSeed), variant);
       const next = createGame(profiles, undefined, board, variant);
-      setGameMapSeed(mapSeed);
-      setGameInstanceId(crypto.randomUUID());
-      setRollPresentation(null);
-      setResourceReceipt(null);
-      setGame(next);
-      const firstHuman = next.players.find(
-        (player) => player.control === "human",
-      )!;
-      const firstController = next.players.find(
-        (player) => player.id === getController(next),
-      )!;
-      setViewerId(humanCount === 1 ? firstHuman.id : null);
-      setHandoffTarget(
-        humanCount > 1 && firstController.control === "human"
-          ? firstController.id
-          : null,
-      );
-      setDialog(null);
-      setConfirmation(null);
-      setChosenResources(emptyResources());
-      setDevelopmentCardId(null);
-      setResultsOpen(false);
-      setMobileView("board");
-      setHomeView("setup");
-      setError("");
-      setSelected(null);
-      setBuildMode(null);
-      setMovingShipId(null);
+      initializeGame(next, mapSeed);
     } catch (failure) {
       setHomeView("setup");
       setError(gameErrorMessage(failure, "The game could not be started."));
     }
+  }
+
+  function initializeGame(next: GameState, mapSeed: string) {
+    initialGame.current = { state: next, mapSeed };
+    setGameMapSeed(mapSeed);
+    setGameInstanceId(crypto.randomUUID());
+    setGameProfileId(profileState.activeId);
+    setRollPresentation(null);
+    setResourceReceipt(null);
+    setGame(next);
+    const firstHuman = next.players.find(player => player.control === "human")!;
+    const firstController = next.players.find(player => player.id === getController(next))!;
+    setViewerId(humanCount === 1 ? firstHuman.id : null);
+    setHandoffTarget(humanCount > 1 && firstController.control === "human" ? firstController.id : null);
+    setDialog(null);
+    setConfirmation(null);
+    setChosenResources(emptyResources());
+    setDevelopmentCardId(null);
+    setTradeMode("bank");
+    setResultsOpen(false);
+    setMobileView("board");
+    setHomeView("setup");
+    setError("");
+    setSelected(null);
+    setBuildMode(null);
+    setMovingShipId(null);
   }
 
   function passTo(playerId: string) {
@@ -568,14 +584,14 @@ export function App() {
     setResultsOpen(false);
   }
 
-  function playerCards(detailed = false) {
+  function playerCards() {
     if (!game) return null;
     const scores = game.players.map(player => getScore(game, player.id));
     const highestPublicScore = Math.max(...scores.map(score => score.public));
     const showPublicScoreLeaders = scores.some(score => score.public < highestPublicScore);
     return game.players.map((player, index) => {
       const score = scores[index]!;
-      return <PlayerSeat key={player.id} variant={game.variant} number={index + 1} detailed={detailed}
+      return <PlayerSeat key={player.id} variant={game.variant} number={index + 1}
         player={{ ...player, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length, longestRoad: getLongestRoadLength(game, player.id), score: game.winnerId ? score.total : score.public }}
         active={game.activePlayerId === player.id} leading={showPublicScoreLeaders && score.public === highestPublicScore}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
@@ -587,12 +603,12 @@ export function App() {
   const gameMenu = <GameMenu icon={Boolean(viewer)} actions={[
     { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
     { label: translateText("Settings"), onSelect: () => setDialog("settings") },
-    { label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) },
     ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
+    { label: translateText("Reset game"), onSelect: () => setDialog("reset") },
   ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />;
 
   const playerProfile = activeProfile(profileState);
-  if (!playerProfile || profileGateOpen) {
+  if ((!game || game.winnerId) && (!playerProfile || profileGateOpen)) {
     const selectProfile = (profile: PlayerProfile) => {
       const next = { profiles: profileState.profiles, activeId: profile.id };
       writeProfileState(next);
@@ -618,10 +634,26 @@ export function App() {
         <div data-theme={boardThemeId} className="min-h-dvh">
           <ProfileGate
             profiles={profileState.profiles}
+            activeProfileId={playerProfile?.id}
             onSelect={selectProfile}
             onCreate={addProfile}
             onRename={renameProfile}
-            onDismiss={playerProfile ? () => setProfileGateOpen(false) : undefined}
+            onDelete={profile => {
+              const next = removeProfile(profileState, profile.id);
+              if (!writeProfileState(next)) return false;
+              setProfileState(next);
+              return true;
+            }}
+            onReplay={(profile, previousGame) => {
+              selectProfile(profile);
+              returnToTable();
+              setHandoffTarget(null);
+              setDialog(null);
+              setVariant(previousGame.variant);
+              setPreview({ seed: previousGame.mapCode, board: createBoard(seededRandom(previousGame.mapCode), previousGame.variant) });
+              setHomeView("island");
+              setError("");
+            }}
           />
         </div>
       </BoardThemeContext>
@@ -640,9 +672,10 @@ export function App() {
             <GameMenu
               triggerLabel={translateText("Menu")}
               groupLabel={translateText("Main menu")}
+              profileName={playerProfile?.name}
               actions={[
                 { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
-                { label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) },
+                { label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) },
               ]}
             />
           )}
@@ -820,45 +853,10 @@ export function App() {
             className="home-island"
             aria-label={translateText("Island preview")}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3">
-              <div>
-                <p className="eyebrow">{translateText("A place to begin")}</p>
-                <h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2>
-              </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <form className="flex items-center gap-2" onSubmit={event => {
-                event.preventDefault();
-                const normalized = normalizeMapSeed(mapCode);
-                if (!normalized) {
-                  setError("Enter a valid 8-character map code.");
-                  return;
-                }
-                setPreview({ seed: normalized, board: createBoard(seededRandom(normalized), variant) });
-              }}>
-                <input
-                  className="field min-h-9 w-28 px-2 font-mono text-xs uppercase"
-                  aria-label={translateText("Map code")}
-                  title={translateText("Map code")}
-                  placeholder="XXXXXXXX"
-                  maxLength={8}
-                  autoComplete="off"
-                  value={mapCode}
-                  onChange={event => setMapCode(event.target.value)}
-                />
-                <button className="button-secondary !px-3 !text-xs">{translateText("Replay map")}</button>
-              </form>
-              <button
-                className="button-secondary !px-3 !text-xs"
-                onClick={() => {
-                  const seed = generateMapSeed();
-                  setPreview({ seed, board: createBoard(seededRandom(seed), variant) });
-                }}
-                aria-label={translateText("Shuffle island preview")}
-              >
-                <span aria-hidden="true">&#8635;</span> {translateText("Shuffle")}
-              </button>
+            <div className="shrink-0">
+              <p className="eyebrow">{translateText("A place to begin")}</p>
+              <h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2>
             </div>
-          </div>
             <div className="min-h-0 flex-1">
               <Board
                 board={preview.board}
@@ -872,6 +870,27 @@ export function App() {
                 compact
                 fit
                 onChangeTheme={() => setDialog("theme")}
+                headerControls={<MapSeedControls
+                  value={mapCode}
+                  error={mapCodeInvalid ? translateText("Enter a valid 8-character map code.") : undefined}
+                  onChange={value => {
+                    setMapCode(value);
+                    setMapCodeInvalid(false);
+                  }}
+                  onLoad={code => {
+                    const normalized = normalizeMapSeed(code);
+                    if (!normalized) {
+                      setMapCodeInvalid(true);
+                      return;
+                    }
+                    setMapCodeInvalid(false);
+                    setPreview({ seed: normalized, board: createBoard(seededRandom(normalized), variant) });
+                  }}
+                  onShuffle={() => {
+                    const seed = generateMapSeed();
+                    setPreview({ seed, board: createBoard(seededRandom(seed), variant) });
+                  }}
+                />}
               />
             </div>
             <div className="flex shrink-0 flex-wrap justify-between gap-2 text-[10px] text-muted">
@@ -1081,7 +1100,7 @@ export function App() {
               aria-label={translateText("Players and awards")}
               className={`table-players space-y-3 lg:hidden ${mobileView !== "players" ? "hidden" : ""}`}
             >
-              {playerCards(true)}
+              {playerCards()}
             </section>
             <aside
               className="table-hand min-w-0 flex"
@@ -1472,7 +1491,7 @@ export function App() {
 
       {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "help" && <HelpDialog variant={game?.variant ?? variant} onClose={() => setDialog(null)} />}
-      {game && !game.winnerId && <PrivateNotices thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
+      {game && !game.winnerId && <PrivateNotices key={gameInstanceId} thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
         <Dialog title={translateText("Pass the device")} onClose={() => setDialog(null)}>
           <p className="mb-5 text-sm leading-6 text-muted">
@@ -1498,10 +1517,12 @@ export function App() {
           </div>
         </Dialog>
       )}
-      {dialog === "restart" && (
-        <Dialog title={translateText("Leave this island?")} onClose={() => setDialog(null)}>
+      {(dialog === "restart" || dialog === "reset") && (
+        <Dialog title={translateText(dialog === "reset" ? "Reset this game?" : "Leave this island?")} onClose={() => setDialog(null)}>
           <p className="text-sm leading-7 text-muted">
-            {translateText("This ends the current game for everyone. Hands, settlements, and progress are not saved.")}
+            {translateText(dialog === "reset"
+              ? "Restart from the first settlement on the same island with the same players. All current progress will be lost."
+              : "This ends the current game for everyone. Hands, settlements, and progress are not saved.")}
           </p>
           <div className="mt-6 flex justify-end gap-3">
             <button
@@ -1513,6 +1534,11 @@ export function App() {
             <button
               className="button-primary"
               onClick={() => {
+                if (dialog === "reset") {
+                  const initial = initialGame.current!;
+                  initializeGame(structuredClone(initial.state), initial.mapSeed);
+                  return;
+                }
                 setGame(null);
                 setRollPresentation(null);
                 setResourceReceipt(null);
@@ -1522,7 +1548,7 @@ export function App() {
                 setError("");
               }}
             >
-              {translateText("End game")}
+              {translateText(dialog === "reset" ? "Reset game" : "End game")}
             </button>
           </div>
         </Dialog>

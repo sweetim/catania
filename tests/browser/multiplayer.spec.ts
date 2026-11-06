@@ -264,7 +264,7 @@ async function privateDialogFixture(multiplayer: MultiplayerHarness) {
     await expect.poll(async () => (await latestSnapshot(phone)).version).toBe(snapshot.version);
     await expect(phone.getByTestId("game-phase")).toHaveAttribute("data-phase", snapshot.game!.phase.type);
   }
-  return { phone, snapshot, present };
+  return { host, phone, snapshot, present };
 }
 
 async function hostGame(host: Page) {
@@ -320,7 +320,7 @@ async function expectPhase(pages: Page[], phase: string, activePlayer: string) {
   }
 }
 
-async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Leave room") {
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Leave room") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -330,6 +330,50 @@ async function selectMenuLanguage(page: Page, currentLanguage: "en" | "ja", next
   await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
   await page.keyboard.press("Escape");
 }
+
+test("invited phone avatar follows profile switching before joining", async ({ page }, testInfo) => {
+  await page.goto("/?multiplayer=1#host=profile-ui-host&secret=profile-ui-secret");
+  const menuButton = page.getByRole("button", { name: "Menu", exact: true });
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("A");
+  await page.getByRole("textbox", { name: "Your name", exact: true }).fill("Guest");
+  await menuButton.click();
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await expect(page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Continue as Alex", exact: true }) })).toContainText("Current profile");
+  const creation = page.getByRole("form", { name: "Create a profile", exact: true });
+  await creation.getByLabel("Profile name", { exact: true }).fill("Sam");
+  await creation.getByRole("button", { name: "Create and continue", exact: true }).click();
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("S");
+  await expect(page.getByRole("textbox", { name: "Your name", exact: true })).toHaveValue("Guest");
+  await menuButton.click();
+  await noHorizontalOverflow(page);
+  await screenshot(page, testInfo, "invited-phone-profile-avatar");
+});
+
+test("completed multiplayer games save replayable profile history only once", async ({ multiplayer }) => {
+  const { host, phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  snapshot.mapSeed = "ABCDEFGH";
+  snapshot.game!.phase = { type: "finished" };
+  snapshot.game!.winnerId = snapshot.playerId;
+  const player = snapshot.game!.players.find(player => player.id === snapshot.playerId)!;
+  player.score = 10;
+  await present();
+  for (let request = 0; request < 2; request++) {
+    const frame = await pack({ type: "request-profile" });
+    await host.evaluate(bytes => {
+      const channel = (window as unknown as ObservedWindow).multiplayerProbe.channels.find(channel => channel.readyState === "open")!;
+      channel.send(Uint8Array.from(bytes).buffer);
+    }, Array.from(new Uint8Array(frame)));
+    await expect.poll(() => phone.evaluate(() => JSON.parse(localStorage.getItem("catania.profiles")!)[0])).toMatchObject({
+      games: 1, wins: 1, totalPoints: 10,
+      history: [{
+        gameId: snapshot.game!.gameId,
+        mapCode: "ABCDEFGH",
+        variant: snapshot.game!.variant,
+        won: true, points: 10, turnCount: 5, completedAt: expect.any(String),
+      }],
+    });
+  }
+});
 
 test("Japanese phones localize a shared English game without changing its state or names", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("English host");
@@ -353,6 +397,11 @@ test("Japanese phones localize a shared English game without changing its state 
   await host.getByRole("button", { name: "Start game", exact: true }).click();
   await expect(japanesePhone.getByTestId("game-phase")).toBeVisible();
   await expect(englishPhone.getByTestId("game-phase")).toBeVisible();
+  for (const screen of [host, englishPhone]) {
+    await screen.getByRole("button", { name: "Game", exact: true }).click();
+    await expect(screen.getByRole("button", { name: "Profile", exact: true, includeHidden: true })).toHaveCount(0);
+    await screen.keyboard.press("Escape");
+  }
   const before = await latestSnapshot(japanesePhone);
   await expect(japanesePhone.getByRole("heading", { name: "太郎の手札", exact: true })).toBeVisible();
   await expect(englishPhone.getByRole("heading", { name: "Sam's hand", exact: true })).toBeVisible();
@@ -360,6 +409,7 @@ test("Japanese phones localize a shared English game without changing its state 
   await expect(englishPhone.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible();
 
   await japanesePhone.getByRole("button", { name: "ゲーム", exact: true }).click();
+  await expect(japanesePhone.getByRole("button", { name: "プロフィール", exact: true, includeHidden: true })).toHaveCount(0);
   await japanesePhone.getByRole("button", { name: "ヘルプ", exact: true }).click();
   await expect(japanesePhone.getByRole("dialog")).toContainText("盤面は共有、手札はそれぞれのスマートフォンで。");
   await japanesePhone.keyboard.press("Escape");
@@ -388,6 +438,64 @@ test("Japanese phones localize a shared English game without changing its state 
   await screenshot(japanesePhone, testInfo, "japanese-private-phone");
 });
 
+for (const variant of ["original", "seafarers"] as const) {
+  test(`host Reset game restores ${variant} setup on every phone without changing seats`, async ({ multiplayer }, testInfo) => {
+    const host = await multiplayer.newPage("Host");
+    const invitation = await hostGame(host);
+    await host.getByRole("button", { name: variant === "original" ? "Original" : "Seafarers", exact: true }).click();
+    const phones: Page[] = [];
+    for (const name of ["Ada", "Grace", "Linus"]) {
+      const phone = await multiplayer.newPage(name, true);
+      phones.push(phone);
+      await requestSeat(phone, invitation, name);
+      await host.getByRole("button", { name: `Admit ${name}`, exact: true }).click();
+    }
+    await host.getByRole("button", { name: "Start game", exact: true }).click();
+    await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+    for (const phone of phones) await expect(phone.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+    const initial = await latestSnapshot(phones[0]!);
+    const activeName = initial.game!.players.find(player => player.id === initial.game!.activePlayerId)!.name;
+    const credentials = await Promise.all(phones.map(phone => phone.evaluate(() => Object.entries(sessionStorage))));
+    for (const phone of phones) {
+      await phone.getByRole("button", { name: "Game", exact: true }).click();
+      await expect(phone.getByRole("button", { name: "Reset game", exact: true })).toHaveCount(0);
+      await phone.keyboard.press("Escape");
+    }
+    await host.getByRole("button", { name: /^Place settlement at/ }).first().click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expectPhase([host, ...phones], "setup-road", activeName);
+    const progressed = await latestSnapshot(phones[0]!);
+    await host.getByRole("button", { name: /^Build road at/ }).first().click();
+    await chooseGameOption(host, "Reset game");
+    const confirmation = host.getByRole("dialog", { name: "Reset this game?", exact: true });
+    await expect(confirmation).toBeInViewport({ ratio: 1 });
+    await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
+    await expect(host.getByRole("button", { name: "Confirm placement", exact: true })).toBeVisible();
+    expect((await latestSnapshot(phones[0]!)).version).toBe(progressed.version);
+    await chooseGameOption(host, "Reset game");
+    await screenshot(host, testInfo, `host-reset-${variant}-confirmation`);
+    await confirmation.getByRole("button", { name: "Reset game", exact: true }).click();
+    await expectPhase([host, ...phones], "setup-settlement", activeName);
+    await expect(host.getByRole("button", { name: "Confirm placement", exact: true })).toHaveCount(0);
+    await expect(host.getByRole("img", { name: /'s (settlement|road|ship) at / })).toHaveCount(0);
+    for (const [index, phone] of phones.entries()) {
+      const reset = await latestSnapshot(phone);
+      expect(reset.game).toEqual({ ...initial.game, gameId: reset.game!.gameId });
+      expect(reset.game!.gameId).not.toBe(initial.game!.gameId);
+      expect(reset.version).toBe(progressed.version + 1);
+      expect(reset.playerId).toBe(initial.players[index]!.id);
+      expect(reset.privatePlayer!.resources).toEqual(emptyResources());
+      expect(reset.players).toEqual(initial.players);
+      expect(await phone.evaluate(() => Object.entries(sessionStorage))).toEqual(credentials[index]);
+      await expect(phone.getByRole("region", { name: "Dice tray", exact: true })).toBeVisible();
+      await noHorizontalOverflow(phone);
+    }
+    await host.getByRole("button", { name: /^Place settlement at/ }).first().click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expectPhase([host, ...phones], "setup-road", activeName);
+  });
+}
+
 test("room Game menu shares navigation and preserves host and player leave behavior", async ({ multiplayer, isMobile }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
@@ -407,7 +515,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
 
   for (const [name, page, options] of [
-    ["host", host, ["Help", "Settings", "Leave room"]],
+    ["host", host, ["Help", "Settings", "Reset game", "Leave room"]],
     ["phone", phone, ["Help", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
@@ -687,6 +795,19 @@ test("host renames computer players and colored avatars replace dots before name
   await screenshot(host, testInfo, "lobby-avatars-compact");
 });
 
+test("lobby leaves a 16px gap below navigation and omits redundant copy", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  await hostGame(host);
+  await expect(host.getByText("One island. Your own hand.", { exact: true })).toHaveCount(0);
+  await expect(host.getByText("Shuffle until you find your island. Starting the game keeps this exact map.", { exact: true })).toHaveCount(0);
+  await expect(host.getByText("Play with three or four human or computer players. Turn order is randomized when the game starts.", { exact: true })).toHaveCount(0);
+  const header = await host.getByRole("banner").boundingBox();
+  const island = await host.getByRole("region", { name: "Island preview", exact: true }).boundingBox();
+  expect(island!.y - header!.y - header!.height).toBeCloseTo(16, 0);
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "lobby-navigation-gap");
+});
+
 test("desktop lobby fits the map left and invitation above players right without scrolling", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await host.setViewportSize({ width: 1440, height: 1000 });
@@ -713,6 +834,7 @@ test("desktop lobby fits the map left and invitation above players right without
       const islandBounds = await host.getByRole("region", { name: "Island preview", exact: true }).boundingBox();
       const invitationBounds = await host.getByRole("region", { name: "Room invitation", exact: true }).boundingBox();
       const playersBounds = await host.locator(".multiplayer-lobby-players").boundingBox();
+      expect(islandBounds!.y - header!.y - header!.height).toBeCloseTo(16, 0);
       expect(islandBounds!.x + islandBounds!.width).toBeLessThanOrEqual(invitationBounds!.x);
       expect(islandBounds!.y).toBeCloseTo(invitationBounds!.y, 0);
       expect(playersBounds!.x).toBeCloseTo(invitationBounds!.x, 0);
@@ -834,6 +956,69 @@ test("invitation copies inline with temporary confirmation and a selectable fail
   await expect(confirmation).toHaveText("");
 });
 
+test("host map seed toolbar automatically loads complete codes across languages and widths", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  await hostGame(host);
+  for (const language of ["en", "ja"] as const) {
+    if (language === "ja") await selectMenuLanguage(host, "en", "ja");
+    const labels = language === "ja"
+      ? { preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", shuffle: "島の配置をシャッフル" }
+      : { preview: "Island preview", code: "Map code", replay: "Replay map", shuffle: "Shuffle island preview" };
+    const preview = host.getByRole("region", { name: labels.preview, exact: true });
+    const toolbar = preview.locator(".board-surface > .board-header-controls").getByRole("form", { name: labels.code, exact: true });
+    const input = toolbar.getByRole("textbox", { name: labels.code, exact: true });
+    const shuffle = toolbar.getByRole("button", { name: labels.shuffle, exact: true });
+    await expect(toolbar.getByRole("button", { name: labels.replay, exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button")).toHaveCount(1);
+    await expect(input).toHaveAttribute("maxlength", "8");
+    const islandLayout = () => preview.locator('svg g[role="img"]').evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+    for (const width of [1440, 390, 320]) {
+      await host.setViewportSize({ width, height: 900 });
+      await expect(toolbar).toBeVisible();
+      await expect(toolbar.locator("label > span")).toBeVisible();
+      expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await input.fill("testmap2");
+      await expect(input).toHaveValue(/^TESTMAP2$/i);
+      const selectedIsland = await islandLayout();
+      await input.fill("225DV7H");
+      expect(await islandLayout()).toEqual(selectedIsland);
+      await expect(host.getByRole("alert")).toHaveCount(0);
+      await input.press("4");
+      await expect.poll(islandLayout).not.toEqual(selectedIsland);
+      await input.fill("testmap2");
+      await expect(input).toHaveValue(/^TESTMAP2$/i);
+      await expect.poll(islandLayout).toEqual(selectedIsland);
+      await input.press("Enter");
+      expect(await islandLayout()).toEqual(selectedIsland);
+      await shuffle.click();
+      await expect(input).not.toHaveValue("TESTMAP2");
+      await expect.poll(islandLayout).not.toEqual(selectedIsland);
+      expect(await input.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await input.fill("");
+      await expect(host.getByRole("alert")).toHaveCount(0);
+      await expect(shuffle).toBeEnabled();
+      await input.fill("TESTMAP2");
+      await expect(input).toHaveValue("TESTMAP2");
+      await expect.poll(islandLayout).toEqual(selectedIsland);
+      await noHorizontalOverflow(host);
+      await screenshot(host, testInfo, `host-map-seed-${language}-${width}`);
+    }
+    const selectedIsland = await islandLayout();
+    await input.fill("TESTMAP");
+    await input.press("Enter");
+    await expect(host.getByRole("alert")).toHaveText(language === "ja"
+      ? "8文字の有効なマップコードを入力してください。"
+      : "Enter a valid 8-character map code.");
+    expect(await islandLayout()).toEqual(selectedIsland);
+    await input.fill("INVALID?");
+    await expect(host.getByRole("alert")).toHaveCount(1);
+    expect(await islandLayout()).toEqual(selectedIsland);
+    await input.fill("225DV7H4");
+    await expect(host.getByRole("alert")).toHaveCount(0);
+    await expect.poll(islandLayout).not.toEqual(selectedIsland);
+  }
+});
+
 for (const shuffleCount of [0, 2]) {
   test(`host starts with the lobby map after ${shuffleCount} shuffles`, async ({ multiplayer }, testInfo) => {
     const host = await multiplayer.newPage("Host");
@@ -945,6 +1130,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
   const snapshot = await latestSnapshot(phone);
   const game = snapshot.game!;
   const board = host.getByRole("region", { name: "Shared game board", exact: true });
+  await expect(board.locator(".board-viewport")).toHaveCSS("scrollbar-width", "none");
   const roster = host.getByRole("list", { name: "Players", exact: true });
   const viewports = isMobile ? [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 320, height: 568 }, { width: 768, height: 1024 }, { width: 820, height: 1180 }, { width: 1024, height: 768 }]
     : [{ width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 1024, height: 768 }, { width: 768, height: 1024 }, { width: 820, height: 1180 }];
@@ -1013,6 +1199,8 @@ test("shared tabletop shows only single-device player seats and map at desktop a
   await expect(board.getByRole("group", { name: "Placement confirmation", exact: true }).locator(".placement-confirmation-player")).toHaveText("AlexandertheExplorer");
   await board.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expectPhase([host, phone], "setup-road", "AlexandertheExplorer");
+  await expect(board.getByRole("img", { name: /AlexandertheExplorer's settlement at / }).locator("text")).toHaveText("A");
+  await expect(roster.getByRole("listitem").filter({ has: host.getByText("AlexandertheExplorer", { exact: true }) }).locator(".player-number")).toHaveText("A");
 });
 
 test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", async ({ multiplayer }, testInfo) => {
@@ -2090,8 +2278,11 @@ test("private phones keep the turn and dice panel in view while the hand scrolls
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
     await phone.setViewportSize(viewport);
     await expect(rollButton).toBeVisible();
+    await expect(hand).toHaveCSS("scrollbar-width", "none");
+    await expect(phone.locator(".private-dashboard")).toHaveCSS("scrollbar-width", "none");
     expect(await hand.evaluate(element => element.scrollHeight)).toBeGreaterThan(await hand.evaluate(element => element.clientHeight));
     await hand.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    expect(await hand.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
     await expect(turnControls).toBeInViewport({ ratio: 1 });
     await expect(rollButton).toBeInViewport({ ratio: 1 });
     await hand.evaluate(element => { element.scrollTop = 0; });

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import { match } from "ts-pattern";
-import type { DevelopmentKind, Resource, Resources } from "../game/types";
+import type { DevelopmentKind, Player, Resource, Resources } from "../game/types";
 import { resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -14,6 +14,10 @@ export const RESOURCE_NAMES: Record<Resource, string> = {
   grain: "Grain",
   ore: "Ore",
 };
+
+export function getPlayerLabel(player: Pick<Player, "name" | "control">, number: number): string | number {
+  return player.control === "human" ? Array.from(player.name.trim())[0]?.toUpperCase() ?? number : number;
+}
 
 export function ResourceIcon({
   resource,

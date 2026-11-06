@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LanguageSelector, useTranslation } from "../localization";
 import { boardTranslations } from "../translations/board";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 type GameMenuAction = {
   label: string;
@@ -8,12 +9,13 @@ type GameMenuAction = {
   disabled?: boolean;
 };
 
-export function GameMenu({ actions, exitAction, icon = false, triggerLabel, groupLabel }: {
+export function GameMenu({ actions, exitAction, icon = false, triggerLabel, groupLabel, profileName }: {
   actions: GameMenuAction[];
   exitAction?: GameMenuAction;
   icon?: boolean;
   triggerLabel?: string;
   groupLabel?: string;
+  profileName?: string;
 }) {
   const translateText = useTranslation(boardTranslations);
   const triggerName = triggerLabel ?? translateText("Game");
@@ -82,7 +84,7 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
       }
     }}
   >
-    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon ? triggerName : undefined} title={icon ? triggerName : undefined} onClick={(event) => {
+    <summary role="button" aria-expanded={open} aria-controls="game-menu" aria-label={icon || profileName ? triggerName : undefined} title={profileName ?? (icon ? triggerName : undefined)} onClick={(event) => {
       if (!icon || !menu.current || !menuContent.current) return;
       event.preventDefault();
       menu.current.open = !menu.current.open;
@@ -95,12 +97,14 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
       setOpen(menu.current.open);
     }} className={icon
       ? "flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+      : profileName
+      ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
       : "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"}>
       {icon
         ? <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" />
         </svg>
-        : <>{triggerName}
+        : <>{profileName ? <ProfileAvatar name={profileName} className="h-9 w-9 text-sm" /> : triggerName}
           <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="m3 4.5 3 3 3-3" />
           </svg></>}

@@ -65,6 +65,12 @@ Profiles carry a human/computer control type through randomized turn order. A
 pure computer chooser returns one engine action at a time, including off-turn
 discards, resource requests, and trade responses. Computers request missing
 build resources at most once per turn and complete affordable, useful exchanges.
+The shared chooser ranks build goals by production value, resource deficits,
+maritime affordability, and estimated waiting time. The same goal guides
+trading, discards, and gold; trade responses also consider useful alternative
+goals. Route lookahead checks immediate Longest Route claims, and development
+cards are selected for useful effects rather than hand order. Leader targeting
+uses the engine's public-only score calculation without accessing hidden cards.
 The engine records the request deadline using an injectable clock, and the chooser
 accepts an injectable current time. Local and host schedulers share the same
 action-delay calculation: ordinary moves are paced, while unanswered requests
@@ -87,6 +93,9 @@ Board themes are an application preference outside `GameState`, persisted under
 back to Illustrated Island. Changing a theme updates the board and shared resource
 artwork without regenerating the island or remounting its zoom/pan controls.
 Resource identifiers, names, player colors, and game rules do not change.
+Seafarers gold fields are labeled "GOLD" ("金" in Japanese) and use amber palettes
+with a highlighted gold bar above the number, coin stacks, and small glints across all six themes,
+distinct from mountain silhouettes.
 
 The English/Japanese language preference is also outside `GameState`. On first
 visit, the first supported `navigator.languages` entry selects the language,

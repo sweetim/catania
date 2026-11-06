@@ -3,6 +3,8 @@ import type { Language, TranslationParameters } from "../i18n";
 import type { DevelopmentKind, Resource } from "./types";
 
 export const gameMessages = {
+  "Your game history could not be saved on this device.": "この端末にゲーム履歴を保存できませんでした。",
+  "The host did not provide a map code for this game.": "ホストからこのゲームのマップコードを受信できませんでした。",
   "Choose Original or Seafarers.": "オリジナルまたは航海者を選択してください。",
   "The board must match the selected game version.": "選択したゲームの種類に合う盤面を使用してください。",
   "The game version can only be changed in the lobby.": "ゲームの種類はロビーでのみ変更できます。",

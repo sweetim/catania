@@ -75,6 +75,7 @@ export class HostRoom {
   buildMode: BuildMode = null;
   private mapSeed = generateMapSeed();
   private gameId: string | null = null;
+  private initialGame: GameState | null = null;
   private readonly seats: Seat[] = [];
   private readonly waiting = new Map<string, string>();
   private previewBoard = createBoard(seededRandom(this.mapSeed));
@@ -211,7 +212,17 @@ export class HostRoom {
     for (const player of this.game.players) player.id = playerIds.get(player.id)!;
     this.game.activePlayerId = playerIds.get(this.game.activePlayerId)!;
     this.game.setupOrder = this.game.setupOrder.map(playerId => playerIds.get(playerId)!);
+    this.initialGame = structuredClone(this.game);
     this.waiting.clear();
+    this.version++;
+  }
+
+  resetGame(): void {
+    requireRoom(this.game && this.initialGame, "The game has not started.");
+    this.game = structuredClone(this.initialGame);
+    this.gameId = crypto.randomUUID();
+    this.buildMode = null;
+    for (const seat of this.seats) seat.profile = null;
     this.version++;
   }
 
@@ -220,6 +231,7 @@ export class HostRoom {
     requireRoom(this.game.phase.type === "finished", "Finish the game before returning to the lobby.");
     this.game = null;
     this.gameId = null;
+    this.initialGame = null;
     this.buildMode = null;
     this.version++;
   }
@@ -361,7 +373,7 @@ export class HostRoom {
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
       version: this.version, players, variant: this.variant,
-      ...(host ? { mapSeed: this.mapSeed } : {}),
+      ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
       ...(host && !this.game ? { previewBoard: this.previewBoard } : {}),

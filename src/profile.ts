@@ -1,5 +1,18 @@
+import { normalizeMapSeed } from "./game/board";
+import { GameError } from "./game/messages";
+import type { GameVariant } from "./game/types";
+
 export type ProfileStats = { games: number; wins: number; totalPoints: number };
-export type PlayerProfile = ProfileStats & { id: string; name: string; lastRecordedGameId: string | null };
+export type ProfileGameResult = {
+  gameId: string;
+  mapCode: string;
+  variant: GameVariant;
+  won: boolean;
+  points: number;
+  turnCount: number;
+};
+export type ProfileGame = ProfileGameResult & { completedAt: string };
+export type PlayerProfile = ProfileStats & { id: string; name: string; lastRecordedGameId: string | null; history: ProfileGame[] };
 
 export const PROFILES_STORAGE_KEY = "catania.profiles";
 export const ACTIVE_PROFILE_STORAGE_KEY = "catania.profile.active";
@@ -18,6 +31,25 @@ function browserStorage(): ProfileStorage | null {
 
 function count(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function historyFrom(value: unknown): ProfileGame | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.gameId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(candidate.gameId) ||
+    typeof candidate.mapCode !== "string" || !normalizeMapSeed(candidate.mapCode) ||
+    (candidate.variant !== "original" && candidate.variant !== "seafarers") ||
+    typeof candidate.won !== "boolean" || !count(candidate.points) || !count(candidate.turnCount) ||
+    typeof candidate.completedAt !== "string" || !Number.isFinite(Date.parse(candidate.completedAt))) return null;
+  return {
+    gameId: candidate.gameId,
+    mapCode: normalizeMapSeed(candidate.mapCode)!,
+    variant: candidate.variant,
+    won: candidate.won,
+    points: candidate.points,
+    turnCount: candidate.turnCount,
+    completedAt: candidate.completedAt,
+  };
 }
 
 export function validProfileName(value: unknown): value is string {
@@ -39,6 +71,9 @@ function profileFrom(value: unknown): PlayerProfile | null {
     wins: candidate.wins,
     totalPoints: candidate.totalPoints,
     lastRecordedGameId: candidate.lastRecordedGameId ?? null,
+    history: Array.isArray(candidate.history)
+      ? candidate.history.map(historyFrom).filter((entry): entry is ProfileGame => entry !== null)
+      : [],
   };
 }
 
@@ -73,6 +108,7 @@ export function readProfileState(storage: ProfileStorage | null = browserStorage
 }
 
 export function writeProfileState(state: ProfileState, storage: ProfileStorage | null = browserStorage()): boolean {
+  if (!storage) return false;
   try {
     storage?.setItem(PROFILES_STORAGE_KEY, JSON.stringify(state.profiles));
     if (state.activeId === null) storage?.removeItem(ACTIVE_PROFILE_STORAGE_KEY);
@@ -85,22 +121,30 @@ export function writeProfileState(state: ProfileState, storage: ProfileStorage |
 }
 
 export function createProfile(name: string): PlayerProfile {
-  return { id: crypto.randomUUID(), name: name.trim().normalize("NFC"), games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null };
+  return { id: crypto.randomUUID(), name: name.trim().normalize("NFC"), games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null, history: [] };
 }
 
 export function activeProfile(state: ProfileState): PlayerProfile | null {
   return state.profiles.find(profile => profile.id === state.activeId) ?? null;
 }
 
+export function removeProfile(state: ProfileState, profileId: string): ProfileState {
+  return {
+    profiles: state.profiles.filter(profile => profile.id !== profileId),
+    activeId: state.activeId === profileId ? null : state.activeId,
+  };
+}
+
 /** Records one finished game. Re-recording the same game (reconnect or reload) never counts twice. */
-export function recordGameResult(profile: PlayerProfile, result: { gameId: string; won: boolean; points: number }): PlayerProfile {
-  if (profile.lastRecordedGameId === result.gameId) return profile;
+export function recordGameResult(profile: PlayerProfile, result: ProfileGameResult): PlayerProfile {
+  if (profile.lastRecordedGameId === result.gameId || profile.history.some(entry => entry.gameId === result.gameId)) return profile;
   return {
     ...profile,
     games: profile.games + 1,
     wins: profile.wins + (result.won ? 1 : 0),
     totalPoints: profile.totalPoints + result.points,
     lastRecordedGameId: result.gameId,
+    history: [{ ...result, completedAt: new Date().toISOString() }, ...profile.history],
   };
 }
 
@@ -110,7 +154,7 @@ export function profileStats(profile: PlayerProfile): ProfileStats {
 
 /** Records into the selected profile and persists the list; null when no profile is active. */
 export function recordGameResultForActive(
-  result: { gameId: string; won: boolean; points: number },
+  result: ProfileGameResult,
   storage: ProfileStorage | null = browserStorage(),
 ): PlayerProfile | null {
   const state = readProfileState(storage);
@@ -118,7 +162,9 @@ export function recordGameResultForActive(
   if (!current) return null;
   const updated = recordGameResult(current, result);
   if (updated !== current) {
-    writeProfileState({ profiles: state.profiles.map(profile => profile === current ? updated : profile), activeId: state.activeId }, storage);
+    if (!writeProfileState({ profiles: state.profiles.map(profile => profile === current ? updated : profile), activeId: state.activeId }, storage)) {
+      throw new GameError("Your game history could not be saved on this device.");
+    }
   }
   return updated;
 }

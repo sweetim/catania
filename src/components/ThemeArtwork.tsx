@@ -67,11 +67,32 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
 
 export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: BoardTheme }) {
   const ink = theme.terrain[terrain].ink;
-  if (terrain === "sea" || terrain === "gold") {
+  if (terrain === "gold") {
+    return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cy="25" rx="35" ry="7" fill={ink} fillOpacity=".14" stroke="none" />
+      <g className="gold-ingots">
+        <g>
+          <path d="m-19-28 29-8 13 9-30 8Z" fill="#fff0a6" />
+          <path d="m-19-28 12 9v7l-12-9Z" fill="#c68b25" />
+          <path d="m-7-19 30-8v7l-30 8Z" fill="#edb53d" />
+          <path d="m-12-28 21-5" stroke="#fff9da" strokeWidth="2.5" />
+        </g>
+      </g>
+      <g className="gold-coins">
+        {[-32, 32].map(position => <g key={position} transform={`translate(${position} 0)`}>
+          <path d="M-9-2v15a9 4 0 0 0 18 0V-2" fill="#e9ae32" />
+          <path d="M-9 3a9 4 0 0 0 18 0m-18 5a9 4 0 0 0 18 0m-18 5a9 4 0 0 0 18 0" />
+          <ellipse cy="-2" rx="9" ry="4" fill="#fff0a6" />
+          <ellipse cy="-2" rx="5" ry="2" strokeWidth="1" />
+          <path d="M-6 2v10" stroke="#fff0a6" strokeWidth="2" />
+        </g>)}
+      </g>
+      <path className="gold-sparkles" d="m-34-29 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm66 8 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5Z" fill="#fff9da" strokeWidth="1" />
+    </g>;
+  }
+  if (terrain === "sea") {
     return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round">
-      {terrain === "sea"
-        ? <path d="M-36-14q9-8 18 0t18 0t18 0t18 0M-36 4q9-8 18 0t18 0t18 0t18 0M-26 22q9-8 18 0t18 0t18 0" />
-        : <><path d="m-40 20 17-44 20 19 18-31 27 56Z" fill={ink} fillOpacity=".2" /><path d="m-25-24 8 20m32-32 9 25" /><circle cx="-24" cy="-12" r="6" fill="#ffe59a" /><circle cx="23" cy="-14" r="7" fill="#ffe59a" /></>}
+      <path d="M-36-14q9-8 18 0t18 0t18 0t18 0M-36 4q9-8 18 0t18 0t18 0t18 0M-26 22q9-8 18 0t18 0t18 0" />
     </g>;
   }
   return (

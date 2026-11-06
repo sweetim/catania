@@ -23,6 +23,11 @@ Rule tests use injected randomness and cover legal and illegal actions, computer
 decisions, and complete AI games. Computer trading coverage includes once-per-turn
 requests, useful and affordable prices, computer-to-computer exchanges, hidden-hand
 privacy, exact 15-second deadlines, and resuming maritime trades after withdrawal.
+Strategic regressions check complementary setup production, productive city
+upgrades, production-aware waiting versus immediate purchases, goal-aligned
+bank trades/discards/gold, alternative trade goals, selective development cards,
+winning builds and route awards, and public-leader targeting without hidden-card
+access. Seeded complete games verify legal, finite actions and resource conservation.
 Both `bun test` and `bun run test` run the tests
 in `tests/game/`. The test root in `bunfig.toml` keeps Bun from loading Playwright
 browser tests; run those separately with `bun run test:browser`.
@@ -48,6 +53,17 @@ through [`playwright.config.ts`](../playwright.config.ts).
 Tests exercise the interface in desktop and mobile Chromium viewports and write
 diagnostic screenshots to `test-results/`, including each theme's preview, actual
 game board, and resource cards, plus the theme dialog.
+Deterministic single-device fixtures enter an explicit map code and press Enter,
+and build the mirrored engine board with `seededRandom` using that same code.
+Turn order and development-card randomness are seeded separately from the map.
+Scenario-specific maps and dice sequences preserve real resource production,
+finite-bank trades, settlement stock, computer requests, and scripted victories;
+tests do not inject game state into the single-device app.
+Blocked-storage tests create a temporary player profile on each visit, including
+after reload, because profiles cannot persist while storage is unavailable.
+Responsive home checks keep the map-code field, replay action, and shuffle action
+fully visible alongside the island; lobby checks reject horizontal overflow and
+verify that wrapped map controls do not block game setup.
 Harbor regressions check that both pier strokes meet the coastline on Original
 and Seafarers boards without moving the offshore badges.
 Multiplayer coverage includes required/optional lobby seats, computer add/remove
@@ -56,11 +72,17 @@ renaming and left-side player avatars, exact lobby-map preservation after zero o
 multiple shuffles, one phone with two automatic computer opponents, private-hand
 projections, and reconnect readiness. Host-session tests cover computer timer cleanup,
 stale callbacks, off-turn discards/trades, and shared-board authority restrictions.
+Reset regressions cover Original and Seafarers on desktop and mobile, confirmation
+and cancellation, exact initial islands and turn order, cleared hands and pending
+placements, resetting during a roll, host-only authority, synchronized phones,
+preserved seat credentials, and stale computer/command timers.
 The one-phone setup test declines computer trade requests while waiting for the
 human's first turn, so random trades do not consume its readiness timeout.
 Desktop/mobile browser regressions cover human prices on computer requests,
 automatic withdrawal at the deadline, private phone request presentation, and
 keeping computer hands hidden throughout an exchange.
+Single-device request fixtures decline earlier computer requests before the
+human's first roll and use scripted dice that trigger the intended build request.
 Connection tests cover STUN-only configuration for hosts, players, and recreated
 peers; unanswered negotiations, direct ICE failures/timeouts, and missing initial
 snapshots; private-data-free diagnostics; and clearing old errors on retries.
@@ -80,9 +102,24 @@ reconnect acknowledgements, resource-loss false positives, and reduced motion.
 Shared-board layout checks cover the single-device player seats and map, viewport
 containment, horizontally scrolling phone seats, and confirmed placements at desktop
 and 320-pixel widths. Responsive checks cover all seats fitting on tablets, narrow
-two-level player cards, persistent mobile turn controls across tabs, and collapsible
-build controls. Shared-board checks also verify that bank/build/turn panels, tabs,
+two-level player cards, identical compact player-list/table-seat markup, counts
+fitting one row without overflow at 320-pixel phone and short-landscape widths,
+persistent mobile turn controls across tabs, and collapsible build controls.
+Shared-board checks also verify that bank/build/turn panels, tabs,
 and private hands or actions do not appear on the shared screen.
+Unfolded-layout checks hide the single-device page header while keeping the
+in-game menu accessible, cover the breakpoint boundaries, and verify that home,
+folded-phone, short-landscape, and desktop layouts retain their header.
+Tablet seats, shared-board tablet seats, and unfolded-layout checks run in both
+desktop and touch-enabled mobile projects.
+Scrollbar regressions verify hidden tracks in solo panels, menus, dialogs, shared
+boards, and private multiplayer hands, preserved scrolling, and unchanged home
+scrollbars.
+Disabled build-row checks cover folded/unfolded resizing at 125% and 156.25%
+display scales, keep labels out of opacity layers, and verify that wrapped text
+stays inside its row without overlapping resource costs.
+They use human-only players so computer setup timers cannot switch away from
+the hand during layout assertions.
 Score regressions check a single VP number including hidden points only for the
 revealed player or private phone, without changing public leader highlights.
 Single-device turn controls match the private phone's inline Game menu, and
@@ -146,14 +183,36 @@ and discovery override are not part of the deployment.
    and a phone and compare their activity messages. Visually inspect Japanese text
    on a system with Japanese fonts; no remote font download is required by the app.
 9. Note the map code beside **Shuffle**, start a game, and check the victory
-   panel repeats that code. Return home, enter the code, choose **Replay map**,
-   and confirm the identical island is rebuilt. Enter an invalid code and check
-   the field explains the 8-character format.
+   panel repeats that code. Return home and enter or paste the code; confirm the
+   identical island loads automatically at 8 characters, without a replay button.
+   Partial codes must not change the map; Enter still submits the field.
+   Enter an invalid code and check the field explains the 8-character format.
 10. In a fresh browser profile, check the **Who's playing?** screen: create a
    profile, verify its name prefills the first human seat, finish a solo game,
    and confirm the victory panel shows one recorded game. Use
-   **Menu > Switch profile** to rename the profile and pick or create another;
+   **Menu > Profile** to rename the profile and pick or create another;
    the first seat follows the active name and history stays per-profile.
+   Check that the avatar initial updates after renaming or switching, the current
+   profile is marked, and games/wins/total points have separate labels. On desktop
+   and a 320-pixel-wide phone, rename controls must fit without horizontal scrolling.
+   The empty creation form should show neutral guidance, not an error, until edited
+   or blurred. Repeat in Japanese and on an invited phone before joining.
+   The pencil must sit beside the name, and no **Keep current profile** button
+   should appear; selecting the current card returns to the previous screen.
+   The trash icon must open a confirmation, with Cancel/Escape returning focus
+   without deleting anything. Confirm deletion of an inactive, active, and last
+   profile, then reload to verify persistence. Deleting the active profile must
+   require selecting or creating one; a storage failure must leave the dialog
+   open with an error. Verify Profile is absent from solo, pass-and-play, shared
+   board, and private-phone menus during unfinished games.
+11. Finish solo and multiplayer-phone games and expand **Game history** in the
+    profile. Verify game ID, map code, version, date, outcome, final points, and
+    turn count survive reloads; duplicate result requests must not add entries.
+    Replay both Original and Seafarers entries and compare every terrain tile,
+    production number, and port against the saved island. The game must wait in
+    setup until started. History replay must not be accessible from an unfinished
+    game, and ending one must not create a history entry. Old profiles retain
+    totals with empty history.
 
 ## Physical-Device Multiplayer
 

@@ -226,6 +226,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
       for (const pending of waiting) deny(pending.connectionId, { key: "The game started before you were admitted." });
     }),
     endGame: () => perform(() => room.endGame()),
+    resetGame: () => perform(() => room.resetGame()),
     admit: connectionId => perform(() => {
       const entry = connections.get(connectionId);
       if (!entry?.joined || !entry.connection.open) throw new GameError("That exact join request is no longer connected.");
@@ -340,16 +341,30 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
           const finished = game?.phase.type === "finished" ? game : null;
           const own = snapshot?.playerId && finished ? finished.players.find(player => player.id === snapshot.playerId) : undefined;
           if (!finished || !own) break;
-          const profile = recordGameResultForActive({
-            gameId: finished.gameId,
-            won: finished.winnerId === own.id,
-            points: own.score,
-          });
-          if (profile) send(current, { type: "profile-stats", stats: profileStats(profile) }, failed);
+          if (!snapshot?.mapSeed) {
+            view = { ...view, error: { key: "The host did not provide a map code for this game." } };
+            publish();
+            break;
+          }
+          try {
+            const profile = recordGameResultForActive({
+              gameId: finished.gameId,
+              mapCode: snapshot.mapSeed,
+              variant: finished.variant,
+              won: finished.winnerId === own.id,
+              points: own.score,
+              turnCount: finished.turnNumber,
+            });
+            if (profile) send(current, { type: "profile-stats", stats: profileStats(profile) }, failed);
+          } catch (error) {
+            view = { ...view, error: gameErrorMessage(error, "Your game history could not be saved on this device.") };
+            publish();
+          }
           break;
         }
         case "snapshot":
           if (view.snapshot && message.snapshot.version < view.snapshot.version) return;
+          if (message.snapshot.game?.gameId !== view.snapshot?.game?.gameId) clearPending();
           if (!requestId) { clearTimeout(timeout); timeout = undefined; }
           view = { ...view, status: "connected", snapshot: message.snapshot, error: null };
           publish();
@@ -404,7 +419,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    setVariant: hostOnly, startGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
+    setVariant: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

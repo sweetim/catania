@@ -746,6 +746,78 @@ describe("victory results and lobby return", () => {
   });
 });
 
+describe("reset game", () => {
+  test.each(["original", "seafarers"] as const)("restores the exact %s starting state and keeps seats and credentials", variant => {
+    const { room, credentials } = lobby();
+    room.addComputer();
+    room.removePlayer("player-2");
+    room.setVariant(variant);
+    room.start();
+    const initial = structuredClone(room.game!);
+    const gameId = room.snapshot().game!.gameId;
+    const mapSeed = room.snapshot().mapSeed;
+    const playerId = initial.activePlayerId;
+    const player = room.game!.players.find(player => player.id === playerId)!;
+    give(room.game!, playerId, { wood: 3, grain: 2 });
+    player.developmentCards.push({ id: "reset-card", kind: "knight", purchasedTurn: 1 });
+    player.knightsPlayed = 3;
+    room.game!.board.vertices[0]!.building = { playerId, kind: "city" };
+    room.game!.board.edges[0]!.playerId = playerId;
+    room.game!.board.edges[0]!.kind = variant === "seafarers" ? "ship" : "road";
+    room.game!.developmentDeck.pop();
+    room.game!.phase = { type: "actions" };
+    room.game!.turnNumber = 5;
+    room.game!.dice = [3, 4];
+    room.game!.robberTileId = room.game!.board.tiles.find(tile => tile.id !== initial.robberTileId && tile.terrain !== "sea")!.id;
+    room.game!.pirateTileId = null;
+    room.game!.shipMoved = true;
+    room.game!.shipsBuiltThisTurn = [room.game!.board.edges[0]!.id];
+    room.game!.awards = { longestRoad: playerId, largestArmy: playerId };
+    room.game!.trade = { offeredBy: playerId, give: resources({ wood: 1 }), receive: resources({ ore: 1 }), responses: {} };
+    room.game!.thefts = [{ id: 1, thiefId: playerId, victimId: "player-3", resource: "grain" }];
+    room.game!.monopolies = [{ id: 1, playerId, resource: "wood", losses: { "player-3": 1 } }];
+    room.game!.developmentPlayed = true;
+    room.buildMode = "road";
+    room.disconnect("connection-3");
+    const seats = room.snapshot().players;
+    const version = room.version;
+
+    room.resetGame();
+
+    expect(room.game).toEqual(initial);
+    expect(room.game).not.toBe(initial);
+    expect(room.version).toBe(version + 1);
+    expect(room.buildMode).toBeNull();
+    expect(room.snapshot().mapSeed).toBe(mapSeed);
+    expect(room.snapshot().game!.gameId).not.toBe(gameId);
+    expect(room.snapshot().players).toEqual(seats);
+    for (const connectionId of ["connection-1", "connection-3"]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: room.snapshot(connectionId) })).not.toThrow();
+    }
+    expect(send(room, "connection-1", { type: "roll" }, version).error?.key).toContain("game changed");
+    expect(() => room.performComputer(version)).toThrow("game changed");
+    expect(room.game).toEqual(initial);
+    room.join("reconnected", { type: "join", secret, name: "Linus", credential: credentials[2]! });
+    expect(room.snapshot("reconnected").playerId).toBe("player-3");
+    expect(room.snapshot("reconnected").privatePlayer!.resources).toEqual(emptyResources());
+    room.resetGame();
+    expect(room.game).toEqual(initial);
+  });
+
+  test("requires a started game and clears finished-game profile reports", () => {
+    const { room } = lobby();
+    expect(() => room.resetGame()).toThrow("not started");
+    room.start();
+    const initial = structuredClone(room.game);
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = room.game!.activePlayerId;
+    room.submitProfile("connection-1", { games: 1, wins: 1, totalPoints: 10 });
+    room.resetGame();
+    expect(room.game).toEqual(initial);
+    expect(room.snapshot().profiles).toEqual({});
+  });
+});
+
 describe("map codes", () => {
   test("every generated map has a host-only code and the preview rebuilds exactly from it", () => {
     const { room } = lobby();
@@ -870,6 +942,18 @@ describe("player profile stats", () => {
     expect(room.snapshot().profiles).toEqual({});
   });
 
+  test("finished phone snapshots include a valid replay map code without sharing profile history", () => {
+    const { room } = started();
+    expect(room.snapshot("connection-1")).not.toHaveProperty("mapSeed");
+    room.game!.phase = { type: "finished" };
+    room.game!.winnerId = "player-1";
+    const snapshot = room.snapshot("connection-1");
+    expect(snapshot.mapSeed).toBe(room.snapshot().mapSeed);
+    expect(snapshot).not.toHaveProperty("profiles");
+    expect(parseServerMessage({ type: "snapshot", snapshot })).toEqual({ type: "snapshot", snapshot });
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, mapSeed: "invalid" } })).toThrow();
+  });
+
   test("guests record each finished game once into the local profile and reply with their totals", async () => {
     const OriginalPeer = (await import("peerjs")).default;
     const connection = Object.assign(new EventEmitter(), { open: true, send: mock(() => {}), close: mock(() => {}) });
@@ -938,6 +1022,11 @@ describe("player profile stats", () => {
       expect(stored).toEqual({
         id: "profile-1", name: "Ada", games: 1, wins: 0, totalPoints: 2,
         lastRecordedGameId: expect.any(String),
+        history: [{
+          gameId: stored.lastRecordedGameId,
+          mapCode: expect.stringMatching(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/),
+          variant: "original", won: false, points: 2, turnCount: expect.any(Number), completedAt: expect.any(String),
+        }],
       });
 
       // The host retries the request; the same finished game still counts exactly once.
@@ -1384,10 +1473,22 @@ test("host session schedules one computer action, discards stale work, cleans ti
     first[1].callback();
     expect(views).toHaveLength(published);
     const next = [...timers.values()].find(timer => timer.delay === 450)!;
+    const beforeReset = views.at(-1)!.snapshot!;
+    host.resetGame();
+    const reset = views.at(-1)!.snapshot!;
+    expect(reset.version).toBe(beforeReset.version + 1);
+    expect(reset.game!.gameId).not.toBe(beforeReset.game!.gameId);
+    expect(reset.game!.phase.type).toBe("setup-settlement");
+    expect(reset.game!.board).toEqual(startingBoard);
+    expect([...timers.values()].filter(timer => timer.delay === 450)).toHaveLength(1);
+    const resetUpdates = views.length;
+    next.callback();
+    expect(views).toHaveLength(resetUpdates);
+    const resetTimer = [...timers.values()].find(timer => timer.delay === 450)!;
     host.close();
     const closed = views.length;
     expect(timers.size).toBe(0);
-    next.callback();
+    resetTimer.callback();
     host.addComputer();
     host.removePlayer("player-1");
     host.renameComputer("player-1", "New name");
@@ -1399,11 +1500,19 @@ test("host session schedules one computer action, discards stale work, cleans ti
     peers.at(-1)!.emit("open");
     connection.emit("open");
     expect(connection.send).toHaveBeenCalledTimes(1);
-    for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard()]) {
+    for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard(), () => guest!.resetGame()]) {
       operation();
       expect(views.at(-1)!.error?.key).toContain("Only the shared host");
       expect(connection.send).toHaveBeenCalledTimes(1);
     }
+    const { room } = started();
+    connection.emit("data", { type: "snapshot", snapshot: room.snapshot("connection-1") });
+    guest.perform({ type: "roll" });
+    expect(views.at(-1)!.pending).toBe(true);
+    room.resetGame();
+    connection.emit("data", { type: "snapshot", snapshot: room.snapshot("connection-1") });
+    expect(views.at(-1)).toMatchObject({ status: "connected", pending: false, error: null });
+    expect(views.at(-1)!.snapshot!.game!.gameId).toBe(room.snapshot().game!.gameId);
     guest.close();
     expect(timers.size).toBe(0);
   } finally {

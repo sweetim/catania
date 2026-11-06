@@ -39,12 +39,41 @@ async function selectHomeLanguage(page: Page, currentLanguage: "en" | "ja", next
 test.describe("Japanese browser locale", () => {
   test.use({ locale: "ja-JP" });
 
+  test("profile cards and avatar localize and support Japanese names", async ({ page }, testInfo) => {
+    await page.goto("/");
+    const menuButton = page.getByRole("button", { name: "メニュー", exact: true });
+    await expect(menuButton.locator(".profile-avatar")).toHaveText("A");
+    await menuButton.click();
+    await page.getByRole("button", { name: "プロフィール", exact: true }).click();
+    const profile = page.getByRole("button", { name: "Alexとして続ける", exact: true });
+    const profileCard = page.getByRole("listitem").filter({ has: profile });
+    await expect(profileCard).toContainText("現在のプロフィール");
+    await expect(profileCard.locator(".grid > span")).toHaveText(["0対戦数", "0勝利数", "0合計点"]);
+    await expect(page.getByRole("button", { name: "現在のプロフィールに戻る", exact: true })).toHaveCount(0);
+    await expect(page.getByText("ゲームで使う名前を入力してください。", { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath("japanese-profile.png"), fullPage: true });
+    await page.getByRole("button", { name: "Alexの名前を変更", exact: true }).click();
+    const renameForm = page.getByRole("list").locator("form");
+    await renameForm.getByLabel("プロフィール名", { exact: true }).fill("太郎");
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expectNoHorizontalOverflow(page);
+    await renameForm.getByRole("button", { name: "名前を保存", exact: true }).click();
+    await page.getByRole("button", { name: "太郎として続ける", exact: true }).click();
+    await expect(menuButton.locator(".profile-avatar")).toHaveText("太");
+    await expect(page.getByRole("textbox", { name: "プレイヤー1の名前", exact: true })).toHaveValue("太郎");
+
+  });
+
   test("Seafarers selection and rules localize without changing the selected version", async ({ page }) => {
     await page.goto("/");
     const versions = page.getByRole("combobox", { name: "ゲームの種類", exact: true });
     await expect(versions).toHaveValue("original");
     await versions.selectOption("seafarers");
     await expect(page.locator(".terrain-hex")).toHaveCount(42);
+    const goldFields = page.getByRole("img", { name: /^金、金、出目/, includeHidden: true });
+    await expect(goldFields).toHaveCount(2);
+    await expect(goldFields.locator(":scope > text")).toHaveText(["金", "金"]);
     await page.getByRole("button", { name: "メニュー", exact: true }).click();
     await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
     const help = page.getByRole("dialog", { name: "ヘルプ", exact: true });
@@ -54,6 +83,7 @@ test.describe("Japanese browser locale", () => {
     await selectHomeLanguage(page, "ja", "en");
     await expect(page.getByRole("combobox", { name: "Game version", exact: true })).toHaveValue("seafarers");
     await expect(page.locator(".terrain-hex")).toHaveCount(42);
+    await expect(page.getByRole("img", { name: /^Gold, gold, roll/, includeHidden: true }).locator(":scope > text")).toHaveText(["GOLD", "GOLD"]);
     await expectNoHorizontalOverflow(page);
   });
 
@@ -97,6 +127,8 @@ test.describe("Japanese browser locale", () => {
       Object.defineProperty(window, "localStorage", { get() { throw new DOMException("Blocked", "SecurityError"); } });
     });
     await page.reload();
+    await page.getByLabel("プロフィール名", { exact: true }).fill("Alex");
+    await page.getByRole("button", { name: "作成して始める", exact: true }).click();
     await expectLanguage(page, "ja");
     await selectHomeLanguage(page, "ja", "en");
     await expectLanguage(page, "en");
@@ -130,11 +162,12 @@ test("home language selection and help live inside the Menu dropdown", async ({ 
   const languageSelector = page.getByRole("combobox", { name: "Language", exact: true });
 
   await expect(menuButton).toBeVisible();
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("A");
   await expect(languageSelector).toHaveCount(0);
   await menuButton.focus();
   await page.keyboard.press("Enter");
   await expect(menuButton).toHaveAttribute("aria-expanded", "true");
-  await expect(menu.getByRole("button")).toHaveText(["Help"]);
+  await expect(menu.getByRole("button")).toHaveText(["Help", "Profile"]);
   await expect(languageSelector).toBeVisible();
   await expect(languageSelector).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: testInfo.outputPath("home-menu-language-open.png"), fullPage: true });
@@ -173,11 +206,20 @@ test("in-game language selection lives inside the Game menu", async ({ page, isM
   await page.keyboard.press("Tab");
   await expect(menu.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(menu.getByRole("button", { name: "Reset game", exact: true })).toBeFocused();
+  await expect(menu.getByRole("button", { name: "Profile", exact: true, includeHidden: true })).toHaveCount(0);
+  await page.keyboard.press("Tab");
   await expect(languageSelector).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath("game-menu-language-open.png"), fullPage: true });
   await languageSelector.selectOption("ja");
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.getByRole("group", { name: "ゲームメニュー", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "ゲームをリセット", exact: true }).click();
+  const reset = page.getByRole("dialog", { name: "ゲームをリセットしますか？", exact: true });
+  await expect(reset).toContainText("現在の進行状況はすべて失われます。");
+  await reset.getByRole("button", { name: "ゲームを続ける", exact: true }).click();
+  await expect(page.getByRole("button", { name: "ゲーム", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "ゲーム", exact: true }).click();
   await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(menu).toBeVisible();

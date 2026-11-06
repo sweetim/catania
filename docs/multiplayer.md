@@ -34,15 +34,17 @@ The shared screen hosts the game without occupying a player seat.
    for New Shores with the same rules and layout described in the
    [gameplay guide](gameplay.md#seafarers-heading-for-new-shores).
     Choose **Shuffle** to generate another island before starting. Every generated
-    map has a **map code** shown beside **Shuffle**: enter a noted code and choose
-    **Replay map** to rebuild that exact island (with the same game version as the
-    original). The code stays host-only; phones never receive it. Player changes and
+    map has a **map code** shown beside **Shuffle**: entering or pasting all 8
+    characters automatically rebuilds that exact island; Enter also submits the
+    field. Use the same game version as the original. The code stays host-only;
+    phones never receive it. Player changes and
     theme selection preserve the map; **Start game** uses the exact preview, including
     its terrain, number tokens, ports, and initial robber location. Phones cannot shuffle.
    The **Theme** button sits in the map's zoom bar, just as in single-device play,
    and opens the theme gallery in a dialog. Selecting a theme updates the map immediately.
    On desktop, the map fills the left column, with the invitation above the player
    controls on the right. The panels fit the viewport without page scrolling.
+   A 16-pixel gap separates the navigation from the lobby panels at every screen size.
    Mobile stacks the map, invitation, and players and allows scrolling. The connected-status
    line is omitted from the host lobby; connection failures and recovery controls
    remain visible.
@@ -74,6 +76,12 @@ Theme, zoom, and placement confirmation stay on the map. The header uses the sam
 shared-board/private-phone guidance. **Settings** on the shared
 screen controls blocked settlement markers and whether water fills the map;
 these preferences are saved in this browser and shared with single-device play.
+During play, the host can choose **Reset game** and confirm to restore the
+original setup, island, players, and turn order on every connected screen.
+All pieces, hands, rolls, trades, and pending actions are cleared. The room,
+invitation, seat credentials, and device preferences stay intact; disconnected
+players can rejoin their existing seats in the reset game. Player phones cannot
+reset the game. Cancelling leaves the current game unchanged.
 **Leave room** opens the existing confirmation: leaving as host ends the room for
 everyone, while leaving as a player keeps their seat reserved while the host stays
 open. Escape, clicking outside, or tabbing away dismisses the menu; closing its
@@ -158,9 +166,19 @@ profile's name prefills the join form (still editable, for example when
 another seat already uses that name). The shared board never asks for a
 profile: it hosts no seat and records no stats.
 
+Before joining, **Menu > Profile** also provides a trash icon beside each name.
+Confirming deletion removes its local stats and history; deleting the selected
+profile requires choosing or creating one. Profile management is not available
+from connected-room or in-game menus, so the profile stays fixed during play.
+
 When a game ends, the phone records one finished game into the selected
 profile: games played, wins, and total victory points. The same game is never
-counted twice, even after reloading or reconnecting. The shared board then
+counted twice, even after reloading or reconnecting. The phone also saves the
+game ID, map code, version, completion date, outcome, final points, and turn
+count in its local profile history. The host includes the map code in finished
+game snapshots; full profile histories are never sent back to the host. Open
+**Menu > Profile > Game history** before joining or from single-device play
+to replay an island in single-device setup. The shared board then
 asks each connected human phone to share its totals, and the victory panel on
 the shared screen shows the winner's history, such as *Player history: 12
 games / 5 wins / 148 total points*. Nothing is shared while a game is running,

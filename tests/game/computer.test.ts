@@ -46,6 +46,207 @@ function chooseAndApply(state: GameState, playerId = state.activePlayerId): { ac
   return { action: action!, state: result };
 }
 
+function strategicGame(): GameState {
+  const state = settledGame();
+  state.phase = { type: "actions" };
+  state.computerTradeRequested = true;
+  state.robberTileId = "wool";
+  for (const player of state.players) setResources(state, player.id, resources());
+  const playerId = state.activePlayerId;
+  state.board = {
+    vertices: [
+      { id: "home", x: 0, y: 0, tileIds: ["ore", "grain"], edgeIds: ["first"], building: { playerId, kind: "settlement" } },
+      { id: "junction", x: 0, y: 0, tileIds: [], edgeIds: ["first", "second"], building: null },
+      { id: "site", x: 0, y: 0, tileIds: ["wool"], edgeIds: ["second"], building: null },
+    ],
+    edges: [
+      { id: "first", vertexIds: ["home", "junction"], playerId },
+      { id: "second", vertexIds: ["junction", "site"], playerId },
+    ],
+    tiles: [
+      { id: "ore", x: 0, y: 0, terrain: "ore", number: 8, vertexIds: ["home"] },
+      { id: "grain", x: 0, y: 0, terrain: "grain", number: 6, vertexIds: ["home"] },
+      { id: "wool", x: 0, y: 0, terrain: "wool", number: 2, vertexIds: ["site"] },
+    ],
+    ports: [],
+  };
+  return state;
+}
+
+describe("computer strategic planning", () => {
+  test("second setup placement fills production gaps instead of concentrating on an abundant resource", () => {
+    const state = strategicGame();
+    state.phase = { type: "setup-settlement" };
+    state.board.edges = [];
+    state.board.vertices = [
+      { id: "home", x: 0, y: 0, tileIds: ["wood-1", "wood-2"], edgeIds: [], building: { playerId: state.activePlayerId, kind: "settlement" } },
+      { id: "redundant", x: 0, y: 0, tileIds: ["wood-1", "wood-2", "wood-3"], edgeIds: [], building: null },
+      { id: "balanced", x: 0, y: 0, tileIds: ["grain", "ore"], edgeIds: [], building: null },
+    ];
+    state.board.tiles = [
+      ...[6, 8, 6].map((number, index) => ({
+        id: `wood-${index + 1}`, x: 0, y: 0, terrain: "wood" as const, number,
+        vertexIds: index < 2 ? ["home", "redundant"] : ["redundant"],
+      })),
+      { id: "grain", x: 0, y: 0, terrain: "grain", number: 9, vertexIds: ["balanced"] },
+      { id: "ore", x: 0, y: 0, terrain: "ore", number: 10, vertexIds: ["balanced"] },
+    ];
+    expect(chooseAndApply(state).action).toEqual({ type: "place-settlement", vertexId: "balanced" });
+  });
+
+  test("upgrades strong production before buying a weak reachable settlement", () => {
+    const state = strategicGame();
+    setResources(state, state.activePlayerId, resources({ wood: 1, brick: 1, wool: 1, grain: 3, ore: 3 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "place-city", vertexId: "home" });
+  });
+
+  test("does not spend a nearly complete city's resources on a cheap development card", () => {
+    const state = strategicGame();
+    setResources(state, state.activePlayerId, resources({ wool: 1, grain: 2, ore: 2 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "end-turn" });
+  });
+
+  test("does not wait on a city shortage it cannot produce when a useful purchase is ready", () => {
+    const state = strategicGame();
+    state.board.tiles.find(tile => tile.id === "ore")!.terrain = "grain";
+    setResources(state, state.activePlayerId, resources({ wool: 1, grain: 2, ore: 2 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "buy-development" });
+  });
+
+  test("trades toward a valuable city instead of the first reachable settlement", () => {
+    let state = strategicGame();
+    setResources(state, state.activePlayerId, resources({ wood: 4, grain: 2, ore: 2 }));
+    const traded = chooseAndApply(state);
+    expect(traded.action).toEqual({ type: "bank-trade", give: "wood", receive: "ore" });
+    state = traded.state;
+    expect(chooseAndApply(state).action).toEqual({ type: "place-city", vertexId: "home" });
+  });
+
+  test("discard and gold choices preserve and finish the selected city plan", () => {
+    const state = strategicGame();
+    setResources(state, state.activePlayerId, resources({ wood: 8, grain: 2, ore: 2 }));
+    state.phase = { type: "discard", required: { [state.activePlayerId]: 6 } };
+    expect(chooseAndApply(state).action).toEqual({ type: "discard", resources: resources({ wood: 6 }) });
+    setResources(state, state.activePlayerId, resources({ grain: 2, ore: 2 }));
+    state.phase = { type: "gold", required: { [state.activePlayerId]: 1 } };
+    expect(chooseAndApply(state).action).toEqual({ type: "choose-gold", resources: resources({ ore: 1 }) });
+  });
+
+  test("saves resource cards before rolling and when they cannot finish a useful build", () => {
+    const state = strategicGame();
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    player.developmentCards = [{ id: "plenty", kind: "year-of-plenty", purchasedTurn: 0 }];
+    state.phase = { type: "roll" };
+    expect(chooseAndApply(state).action).toEqual({ type: "roll" });
+    state.phase = { type: "actions" };
+    expect(chooseAndApply(state).action).toEqual({ type: "end-turn" });
+    setResources(state, player.id, resources({ grain: 2, ore: 2 }));
+    expect(chooseAndApply(state).action).toEqual({
+      type: "play-development", cardId: "plenty", resources: resources({ wood: 1, ore: 1 }),
+    });
+  });
+
+  test("saves Monopoly when opponents have no cards", () => {
+    const state = strategicGame();
+    state.players.find(player => player.id === state.activePlayerId)!.developmentCards =
+      [{ id: "monopoly", kind: "monopoly", purchasedTurn: 0 }];
+    expect(chooseAndApply(state).action).toEqual({ type: "end-turn" });
+  });
+
+  test("saves Road Building when every legal extension is a settlement dead end", () => {
+    const state = strategicGame();
+    state.board.vertices.find(vertex => vertex.id === "site")!.building =
+      { playerId: state.players.find(player => player.id !== state.activePlayerId)!.id, kind: "settlement" };
+    state.board.edges.find(edge => edge.id === "second")!.playerId = null;
+    state.players.find(player => player.id === state.activePlayerId)!.developmentCards =
+      [{ id: "roads", kind: "road-building", purchasedTurn: 0 }];
+    expect(chooseAndApply(state).action).toEqual({ type: "end-turn" });
+  });
+
+  test("plays a Knight before rolling to unblock its own production", () => {
+    const state = strategicGame();
+    state.phase = { type: "roll" };
+    state.robberTileId = "ore";
+    state.players.find(player => player.id === state.activePlayerId)!.developmentCards =
+      [{ id: "knight", kind: "knight", purchasedTurn: 0 }];
+    expect(chooseAndApply(state).action).toEqual({ type: "play-development", cardId: "knight" });
+  });
+
+  test("takes a winning build before spending a development card", () => {
+    const state = strategicGame();
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    player.developmentCards = [
+      ...Array.from({ length: 8 }, (_, index) => ({ id: `point-${index}`, kind: "victory-point" as const, purchasedTurn: 0 })),
+      { id: "knight", kind: "knight", purchasedTurn: 0 },
+    ];
+    state.robberTileId = "ore";
+    setResources(state, player.id, resources({ grain: 2, ore: 3 }));
+    const result = chooseAndApply(state);
+    expect(result.action).toEqual({ type: "place-city", vertexId: "home" });
+    expect(result.state.winnerId).toBe(player.id);
+  });
+
+  test("can claim Largest Army before rolling even without blocked production", () => {
+    const state = strategicGame();
+    state.phase = { type: "roll" };
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    player.knightsPlayed = 2;
+    player.developmentCards = [{ id: "knight", kind: "knight", purchasedTurn: 0 }];
+    const result = chooseAndApply(state);
+    expect(result.action).toEqual({ type: "play-development", cardId: "knight" });
+    expect(result.state.awards.largestArmy).toBe(player.id);
+  });
+
+  test("claims a winning Longest Road even when it opens no settlement sites", () => {
+    const state = strategicGame();
+    const playerId = state.activePlayerId;
+    state.board.vertices = Array.from({ length: 6 }, (_, index) => ({
+      id: `vertex-${index}`, x: 0, y: 0, tileIds: ["wool"],
+      edgeIds: [index > 0 ? `edge-${index - 1}` : null, index < 5 ? `edge-${index}` : null]
+        .filter((id): id is string => id !== null),
+      building: index % 2 === 0 ? { playerId, kind: "settlement" as const } : null,
+    }));
+    state.board.edges = Array.from({ length: 5 }, (_, index) => ({
+      id: `edge-${index}`, vertexIds: [`vertex-${index}`, `vertex-${index + 1}`],
+      playerId: index < 4 ? playerId : null,
+    }));
+    state.board.tiles = [{ id: "wool", x: 0, y: 0, terrain: "wool", number: 2, vertexIds: state.board.vertices.map(vertex => vertex.id) }];
+    state.players.find(player => player.id === playerId)!.developmentCards =
+      Array.from({ length: 5 }, (_, index) => ({ id: `point-${index}`, kind: "victory-point", purchasedTurn: 0 }));
+    setResources(state, playerId, resources({ wood: 1, brick: 1 }));
+    const result = chooseAndApply(state);
+    expect(result.action).toEqual({ type: "place-road", edgeId: "edge-4" });
+    expect(result.state.awards.longestRoad).toBe(playerId);
+    expect(result.state.winnerId).toBe(playerId);
+  });
+
+  test("attacks the public leader and steals from that leader rather than the largest hand", () => {
+    const state = strategicGame();
+    const [leader, other] = state.players.filter(player => player.id !== state.activePlayerId);
+    state.board.vertices.push(
+      { id: "leader", x: 0, y: 0, tileIds: ["leader-tile"], edgeIds: [], building: { playerId: leader!.id, kind: "settlement" } },
+      { id: "other", x: 0, y: 0, tileIds: ["other-tile"], edgeIds: [], building: { playerId: other!.id, kind: "settlement" } },
+    );
+    state.board.tiles.push(
+      { id: "other-tile", x: 0, y: 0, terrain: "wood", number: 6, vertexIds: ["other"] },
+      { id: "leader-tile", x: 0, y: 0, terrain: "wood", number: 6, vertexIds: ["leader"] },
+    );
+    state.awards.largestArmy = leader!.id;
+    state.awards.longestRoad = leader!.id;
+    setResources(state, leader!.id, resources({ ore: 1 }));
+    setResources(state, other!.id, resources({ wood: 6 }));
+    for (const opponent of [leader!, other!]) {
+      Object.defineProperty(opponent, "developmentCards", { get() { throw new Error("Opponent cards are private"); } });
+    }
+    state.phase = { type: "robber", returnPhase: "actions" };
+    expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "move-robber", tileId: "leader-tile" });
+    state.phase = { type: "steal", returnPhase: "actions", victimIds: [other!.id, leader!.id] };
+    expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "steal", playerId: leader!.id });
+    setResources(state, leader!.id, resources());
+    expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "steal", playerId: other!.id });
+  });
+});
+
 describe("computer identity and authority", () => {
   test("control is required and travels with each profile through the seat shuffle", () => {
     const mixed = profiles.map((profile, index) => ({ ...profile, control: index === 0 ? "human" as const : "computer" as const }));
@@ -197,12 +398,27 @@ describe("computer setup and mandatory phases", () => {
 describe("computer development cards and limited supplies", () => {
   for (const phase of ["roll", "actions"] as const) {
     test.each(["knight", "road-building", "year-of-plenty", "monopoly"] satisfies DevelopmentKind[])(
-      `plays mature %s legally during ${phase} and resolves its mandatory effect`, kind => {
+      `uses or saves mature %s appropriately during ${phase}`, kind => {
         let state = settledGame();
         state.phase = { type: phase };
         const player = state.players.find(player => player.id === state.activePlayerId)!;
+        if (kind === "knight") {
+          state.robberTileId = state.board.vertices.find(vertex => vertex.building?.playerId === player.id)!.tileIds[0]!;
+        }
+        if (kind === "year-of-plenty") setResources(state, player.id, resources({ grain: 2, ore: 2 }));
+        if (kind === "monopoly") {
+          for (const other of state.players.filter(other => other.id !== player.id)) {
+            setResources(state, other.id, resources({ wood: 3, brick: 3, wool: 3, grain: 3, ore: 3 }));
+          }
+        }
         player.developmentCards = [{ id: "chosen-card", kind, purchasedTurn: state.turnNumber - 1 }];
         const played = chooseAndApply(state);
+        if (phase === "roll" && kind !== "knight") {
+          expect(played.action).toEqual({ type: "roll" });
+          expect(played.state.developmentPlayed).toBe(false);
+          expect(played.state.players.find(other => other.id === player.id)!.developmentCards).toHaveLength(1);
+          return;
+        }
         expect(played.action.type).toBe("play-development");
         state = played.state;
         let steps = 0;
@@ -231,12 +447,13 @@ describe("computer development cards and limited supplies", () => {
   });
 
   test.each([0, 1, 2])("Year of Plenty respects a bank with %s cards remaining", count => {
-    const state = settledGame();
-    state.bank = resources({ ore: count });
+    const state = strategicGame();
     const player = state.players.find(player => player.id === state.activePlayerId)!;
+    setResources(state, player.id, resources({ grain: 2, ore: 2 }));
+    state.bank = resources({ ore: count });
     player.developmentCards = [{ id: "plenty", kind: "year-of-plenty", purchasedTurn: 0 }];
     const result = chooseAndApply(state);
-    expect(result.action).toEqual(count === 0 ? { type: "roll" } : {
+    expect(result.action).toEqual(count === 0 ? { type: "end-turn" } : {
       type: "play-development", cardId: "plenty", resources: resources({ ore: count }),
     });
   });
@@ -382,9 +599,10 @@ describe("computer trades and public information", () => {
     { name: "too large for useful payment", receive: resources({ wood: 2 }), inventory: resources({ wood: 2, grain: 2, ore: 2 }) },
     { name: "no net build improvement", receive: resources({ grain: 1 }), inventory: resources({ grain: 2, ore: 2 }) },
     { name: "only overlapping deficits", receive: resources({ ore: 1 }), inventory: resources({ grain: 2, ore: 2 }) },
-  ])("declines a request with $name and does not respond again", ({ receive, inventory }) => {
+  ])("declines a request with $name when no alternative card purchase is available", ({ receive, inventory }) => {
     let state = settledGame();
     state.phase = { type: "actions" };
+    state.developmentDeck = [];
     const computer = state.players.find(player => player.id !== state.activePlayerId)!;
     setResources(state, computer.id, inventory);
     state = applyAction(state, state.activePlayerId, { type: "request-trade", receive });
@@ -392,6 +610,20 @@ describe("computer trades and public information", () => {
     expect(result.action).toEqual({ type: "respond-trade", accept: false });
     expect(result.state.trade!.responses[computer.id]).toBe(false);
     expect(chooseComputerAction(result.state, computer.id)).toBeNull();
+  });
+
+  test.each(["grain", "ore"] as const)("can quote toward a development purchase instead of trading %s for another city deficit", receive => {
+    let state = settledGame();
+    state.phase = { type: "actions" };
+    const computer = state.players.find(player => player.id !== state.activePlayerId)!;
+    setResources(state, computer.id, resources({ grain: 2, ore: 2 }));
+    setResources(state, state.activePlayerId, resources({ wool: 1 }));
+    state = applyAction(state, state.activePlayerId, { type: "request-trade", receive: resources({ [receive]: 1 }) });
+    const result = chooseAndApply(state, computer.id);
+    expect(result.action).toEqual({ type: "propose-trade", price: resources({ wool: 1 }) });
+    state = applyAction(result.state, state.activePlayerId, { type: "complete-trade", playerId: computer.id });
+    state.activePlayerId = computer.id;
+    expect(chooseAndApply(state).action).toEqual({ type: "buy-development" });
   });
 
   test("quotes without reading opponents' inventories even when the requester cannot afford the price", () => {
@@ -457,7 +689,7 @@ describe("computer-initiated player trades", () => {
 
   test.each([
     { inventory: resources({ wood: 1, grain: 2, ore: 2 }), receive: resources({ ore: 1 }) },
-    { inventory: resources({ wood: 5 }), receive: resources({ grain: 2, ore: 3 }) },
+    { inventory: resources({ wood: 5 }), receive: resources({ brick: 1 }) },
   ])("requests the selected build's missing cards when surplus can fund equal-count prices", ({ inventory, receive }) => {
     const state = requestingGame(inventory);
     const before = structuredClone(state);

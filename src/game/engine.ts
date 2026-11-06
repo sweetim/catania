@@ -212,13 +212,12 @@ export function getLongestRoadLength(state: GameState, playerId: string): number
   return Math.max(0, ...Array.from(adjacent.keys(), vertexId => walk(vertexId)));
 }
 
-export function getScore(state: GameState, playerId: string): {
-  public: number; total: number; settlements: number; cities: number; hidden: number; longestRoad: number; largestArmy: number; islands?: number;
+export function getPublicScore(state: GameState, playerId: string): {
+  public: number; settlements: number; cities: number; longestRoad: number; largestArmy: number; islands?: number;
 } {
-  const player = playerFor(state, playerId);
+  playerFor(state, playerId);
   const settlements = pieceCount(state, playerId, "settlement");
   const cities = pieceCount(state, playerId, "city") * 2;
-  const hidden = player.developmentCards.filter(card => card.kind === "victory-point").length;
   const longestRoad = state.awards.longestRoad === playerId ? 2 : 0;
   const largestArmy = state.awards.largestArmy === playerId ? 2 : 0;
   const islands = state.variant === "seafarers" ? new Set(state.board.tiles.filter(tile =>
@@ -226,8 +225,14 @@ export function getScore(state: GameState, playerId: string): {
       state.board.vertices.find(vertex => vertex.id === id)!.building?.playerId === playerId),
   ).map(tile => tile.islandId)).size * 2 : 0;
   const publicPoints = settlements + cities + longestRoad + largestArmy + islands;
-  return { public: publicPoints, total: publicPoints + hidden, settlements, cities, hidden, longestRoad, largestArmy,
+  return { public: publicPoints, settlements, cities, longestRoad, largestArmy,
     ...(state.variant === "seafarers" ? { islands } : {}) };
+}
+
+export function getScore(state: GameState, playerId: string): ReturnType<typeof getPublicScore> & { total: number; hidden: number } {
+  const score = getPublicScore(state, playerId);
+  const hidden = playerFor(state, playerId).developmentCards.filter(card => card.kind === "victory-point").length;
+  return { ...score, total: score.public + hidden, hidden };
 }
 
 function updateAwards(state: GameState): void {

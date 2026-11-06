@@ -1,6 +1,6 @@
 import { type Locator, type Page, type TestInfo } from "@playwright/test";
 import { expect, test as base } from "./fixtures";
-import { createBoard } from "../../src/game/board";
+import { createBoard, seededRandom } from "../../src/game/board";
 import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
 import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
@@ -180,7 +180,7 @@ async function openHomeThemes(page: Page) {
   return page.getByRole("dialog", { name: "Choose your theme", exact: true });
 }
 
-async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Pass device" | "End game") {
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Pass device" | "Reset game" | "End game") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -257,12 +257,7 @@ async function expectPublicCardCounts(page: Page, state: GameState) {
     await counts.scrollIntoViewIfNeeded();
     await expect(counts.getByRole("img", { name: `${resourceTotal(player.resources)} resource cards`, exact: true })).toBeVisible();
     await expect(counts.getByRole("img", { name: `${player.developmentCards.length} development cards`, exact: true })).toBeVisible();
-    if (await counts.evaluate(element => Boolean(element.closest(".table-seats")))) {
-      expect(await counts.innerText()).not.toMatch(/resource cards|development/i);
-    } else {
-      await expect(counts.getByText("resources", { exact: true })).toBeVisible();
-      await expect(counts.getByText("development", { exact: true })).toBeVisible();
-    }
+    expect(await counts.innerText()).not.toMatch(/resources|development/i);
     const seat = page.locator(".player-seat").filter({ has: counts });
     await expect(seat.getByRole("list", { name: "Cards in hand", includeHidden: true })).toHaveCount(0);
     await expect(seat.getByText(/^(Wood|Brick|Wool|Grain|Ore)$/)).toHaveCount(0);
@@ -408,6 +403,10 @@ for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "Change theme", exact: true })).toBeFocused();
     await page.reload();
+    if (storage !== "unknown") {
+      await page.getByLabel("Profile name", { exact: true }).fill("Pat");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     await expectBoardTheme(page, "illustrated");
     await openHomeThemes(page);
     await expect(choices.getByRole("radio", { name: "Illustrated Island", exact: true })).toBeChecked();
@@ -514,7 +513,12 @@ for (const viewport of [
     await expect(island).toBeInViewport({ ratio: 1 });
     await expect(island.locator(".board-map")).toBeInViewport({ ratio: 1 });
     expect((await island.locator(".board-viewport").boundingBox())!.height).toBeGreaterThan(100);
+    await expect(island.getByRole("textbox", { name: "Map code", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(island.getByRole("button", { name: "Replay map", exact: true })).toHaveCount(0);
     await expect(island.getByRole("button", { name: "Shuffle island preview", exact: true })).toBeInViewport({ ratio: 1 });
+    const seedToolbar = island.locator(".board-surface > .board-header-controls").getByRole("form", { name: "Map code", exact: true });
+    await expect(seedToolbar).toBeInViewport({ ratio: 1 });
+    expect(await seedToolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     const geometry = await themeBoardGeometry(island);
     await island.getByRole("button", { name: "Shuffle island preview", exact: true }).click();
     await expect.poll(() => themeBoardGeometry(island)).not.toEqual(geometry);
@@ -547,6 +551,79 @@ for (const viewport of [
     await start.click();
     await privateHandIsAbsent(page);
     await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
+  });
+}
+
+for (const language of ["en", "ja"] as const) {
+  test(`map seed toolbar automatically loads complete codes without overflow in ${language}`, async ({ page }, testInfo) => {
+    await page.addInitScript(language => localStorage.setItem("catania.language", language), language);
+    await page.goto("/");
+    const labels = language === "ja"
+      ? { island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", shuffle: "島の配置をシャッフル" }
+      : { island: "Island", preview: "Island preview", code: "Map code", replay: "Replay map", shuffle: "Shuffle island preview" };
+    const island = page.getByRole("region", { name: labels.preview, exact: true });
+    const toolbar = island.locator(".board-surface > .board-header-controls").getByRole("form", { name: labels.code, exact: true });
+    const input = toolbar.getByRole("textbox", { name: labels.code, exact: true });
+    const shuffle = toolbar.getByRole("button", { name: labels.shuffle, exact: true });
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(viewport);
+      const islandView = page.getByRole("button", { name: labels.island, exact: true });
+      if (await islandView.isVisible()) await islandView.click();
+      await expect(toolbar).toBeInViewport({ ratio: 1 });
+      await expect(toolbar.getByRole("button", { name: labels.replay, exact: true })).toHaveCount(0);
+      await expect(toolbar.getByRole("button")).toHaveCount(1);
+      await expect(input).toHaveAttribute("maxlength", "8");
+      await expect(toolbar.locator("label > span")).toBeVisible();
+      expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      const fieldBounds = (await toolbar.locator("label").boundingBox())!;
+      await expect(shuffle).toBeInViewport({ ratio: 1 });
+      const bounds = (await shuffle.boundingBox())!;
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.y + bounds.height / 2).toBeCloseTo(fieldBounds.y + fieldBounds.height / 2, 0);
+      expect(await input.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await input.fill("testmap2");
+      await expect(input).toHaveValue("TESTMAP2");
+      const selectedIsland = await themeBoardGeometry(island);
+      await input.fill("225DV7H");
+      expect(await themeBoardGeometry(island)).toEqual(selectedIsland);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await input.press("4");
+      await expect.poll(() => themeBoardGeometry(island)).not.toEqual(selectedIsland);
+      await input.fill("testmap2");
+      await expect(input).toHaveValue("TESTMAP2");
+      await expect.poll(() => themeBoardGeometry(island)).toEqual(selectedIsland);
+      await input.press("Enter");
+      expect(await themeBoardGeometry(island)).toEqual(selectedIsland);
+      await input.press("Tab");
+      await expect(shuffle).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(input).not.toHaveValue("TESTMAP2");
+      await expect(input).toHaveValue(/^[A-HJKMNP-Z2-9]{8}$/);
+      await expect.poll(() => themeBoardGeometry(island)).not.toEqual(selectedIsland);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await noPageOverflow(page);
+      await screenshot(page, testInfo, `map-seed-${language}-${viewport.width}`, false);
+    }
+    const selectedIsland = await themeBoardGeometry(island);
+    await input.fill("TESTMAP");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    expect(await themeBoardGeometry(island)).toEqual(selectedIsland);
+    await input.press("Enter");
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByRole("alert")).toBeInViewport({ ratio: 1 });
+    await input.fill("INVALID?");
+    await expect(page.getByRole("alert")).toHaveText(language === "ja"
+      ? "8文字の有効なマップコードを入力してください。"
+      : "Enter a valid 8-character map code.");
+    await expect(page.getByRole("alert")).toBeInViewport({ ratio: 1 });
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(await themeBoardGeometry(island)).toEqual(selectedIsland);
+    await input.fill("TESTMAP2");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(input).toHaveAttribute("aria-invalid", "false");
+    await input.press("Enter");
+    await expect(input).toHaveValue("TESTMAP2");
   });
 }
 
@@ -860,6 +937,119 @@ for (const shuffleCount of [0, 2]) {
   });
 }
 
+test("profile avatar and cards follow renaming, creation and switching", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const menuButton = page.getByRole("button", { name: "Menu", exact: true });
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("A");
+  await expect(menuButton).toHaveAttribute("title", "Alex");
+  await expect(menuButton).toHaveText("A");
+  const triggerBounds = (await menuButton.boundingBox())!;
+  expect(triggerBounds.width).toBeGreaterThanOrEqual(44);
+  expect(triggerBounds.height).toBeGreaterThanOrEqual(44);
+  await menuButton.click();
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  const profiles = page.getByRole("list", { name: "Your player profile", exact: true });
+  const current = page.getByRole("button", { name: "Continue as Alex", exact: true });
+  const currentCard = profiles.getByRole("listitem").filter({ has: current });
+  await expect(currentCard).toContainText("Current profile");
+  await expect(currentCard.locator(".grid > span")).toHaveText(["0Games", "0Wins", "0Total points"]);
+  await expect(page.getByRole("button", { name: "Keep current profile", exact: true })).toHaveCount(0);
+  const nameBounds = (await currentCard.locator("strong").boundingBox())!;
+  const renameBounds = (await currentCard.getByRole("button", { name: "Rename Alex", exact: true }).boundingBox())!;
+  expect(renameBounds.x - nameBounds.x - nameBounds.width).toBeLessThanOrEqual(8);
+  expect(Math.abs(renameBounds.y + renameBounds.height / 2 - nameBounds.y - nameBounds.height / 2)).toBeLessThan(2);
+  await expect(page.getByRole("form", { name: "Create a profile", exact: true }).getByLabel("Profile name")).toHaveAttribute("aria-invalid", "false");
+  await noHorizontalOverflow(page);
+  await screenshot(page, testInfo, "profile-cards");
+
+  await page.getByRole("button", { name: "Rename Alex", exact: true }).click();
+  const renameForm = profiles.locator("form");
+  const renameInput = renameForm.getByLabel("Profile name", { exact: true });
+  await expect(renameInput).toBeFocused();
+  await renameInput.fill(" ");
+  await expect(renameForm.getByRole("alert")).toHaveText("Use 1 to 20 characters, without control characters.");
+  await expect(renameForm.getByRole("button", { name: "Save name", exact: true })).toBeDisabled();
+  await renameForm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(current).toBeVisible();
+  await page.getByRole("button", { name: "Rename Alex", exact: true }).click();
+  await renameInput.fill("Harbor Master Taylor");
+  await page.setViewportSize({ width: 320, height: 568 });
+  await noHorizontalOverflow(page);
+  for (const control of await renameForm.locator("input, button").all()) {
+    const bounds = (await control.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
+  await screenshot(page, testInfo, "profile-rename-narrow");
+  await renameForm.getByRole("button", { name: "Save name", exact: true }).click();
+  await profiles.getByRole("button", { name: "Continue as Harbor Master Taylor", exact: true }).click();
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("H");
+  await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Harbor Master Taylor");
+
+  await menuButton.click();
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  const creation = page.getByRole("form", { name: "Create a profile", exact: true });
+  await creation.getByLabel("Profile name", { exact: true }).fill("harbor master taylor");
+  await expect(creation).toContainText("That name is already in use. Choose another name.");
+  await expect(creation.getByRole("button", { name: "Create and continue", exact: true })).toBeDisabled();
+  await creation.getByLabel("Profile name", { exact: true }).fill("Sam");
+  await creation.getByRole("button", { name: "Create and continue", exact: true }).click();
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("S");
+  await menuButton.click();
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await expect(profiles.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Continue as Sam", exact: true }) })).toContainText("Current profile");
+  await expect(profiles.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Continue as Harbor Master Taylor", exact: true }) })).not.toContainText("Current profile");
+  await screenshot(page, testInfo, "profile-switch-narrow");
+  await profiles.getByRole("button", { name: "Continue as Harbor Master Taylor", exact: true }).click();
+  await expect(menuButton.locator(".profile-avatar")).toHaveText("H");
+  const saved = await page.evaluate(() => ({
+    profiles: JSON.parse(localStorage.getItem("catania.profiles")!),
+    activeId: localStorage.getItem("catania.profile.active"),
+  }));
+  expect(saved.activeId).toBe("profile-1");
+  expect(saved.profiles.map((profile: { name: string }) => profile.name)).toEqual(["Harbor Master Taylor", "Sam"]);
+});
+
+test("fresh profile creation has neutral guidance and persists on reload", async ({ browser, baseURL, viewport, isMobile, hasTouch }, testInfo) => {
+  const context = await browser.newContext({ baseURL, viewport, isMobile, hasTouch, locale: "en-US" });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Your player profile", exact: true })).toBeVisible();
+    await expect(page.getByRole("list")).toHaveCount(0);
+    const input = page.getByLabel("Profile name", { exact: true });
+    await expect(input).toHaveAttribute("aria-invalid", "false");
+    await expect(page.locator("#profile-name-help")).toHaveText("Choose a name to use at the table.");
+    await expect(page.getByRole("button", { name: "Create and continue", exact: true })).toBeDisabled();
+    await noHorizontalOverflow(page);
+    await screenshot(page, testInfo, "profile-first-visit");
+    await input.focus();
+    await input.blur();
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    await input.fill("Élodie");
+    await expect(input).toHaveAttribute("aria-invalid", "false");
+    await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Menu", exact: true }).locator(".profile-avatar")).toHaveText("É");
+    await page.evaluate(() => {
+      const profiles: { games: number; wins: number; totalPoints: number }[] = JSON.parse(localStorage.getItem("catania.profiles")!);
+      profiles[0]!.games = 12;
+      profiles[0]!.wins = 3;
+      profiles[0]!.totalPoints = 87;
+      localStorage.setItem("catania.profiles", JSON.stringify(profiles));
+    });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Menu", exact: true }).locator(".profile-avatar")).toHaveText("É");
+    await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Élodie");
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+    await page.getByRole("button", { name: "Profile", exact: true }).click();
+    await expect(page.getByRole("listitem").filter({ has: page.getByRole("button", { name: "Continue as Élodie", exact: true }) }).locator(".grid > span"))
+      .toHaveText(["12Games", "3Wins", "87Total points"]);
+  } finally {
+    await context.close();
+  }
+});
+
 test("table names, player counts, keyboard Help and private start", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "A little island. Endless possibility." })).toBeVisible();
@@ -868,9 +1058,9 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await expect(logoPaths.nth(1)).toHaveCSS("fill", "rgb(37, 59, 54)");
   await expect(logoPaths.nth(2)).toHaveCSS("fill", "rgb(176, 205, 193)");
   await expect(page.getByRole("combobox", { name: "Human players", exact: true })).toHaveValue("1");
-  await expect(page.getByRole("textbox")).toHaveCount(1);
+  await expect(page.getByRole("textbox", { name: /^Player \d+ name$/ })).toHaveCount(1);
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await expect(page.getByRole("textbox")).toHaveCount(3);
+  await expect(page.getByRole("textbox", { name: /^Player \d+ name$/ })).toHaveCount(3);
   await expect(page.getByRole("button", { name: "3 players", exact: true })).toHaveAttribute("aria-pressed", "true");
   await noPageOverflow(page);
   await screenshot(page, testInfo, "home", false);
@@ -898,7 +1088,7 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await expect(page.getByRole("region", { name: "Set up your table" })).toBeVisible();
   await page.getByRole("button", { name: "4 players", exact: true }).click();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
-  await expect(page.getByRole("textbox")).toHaveCount(4);
+  await expect(page.getByRole("textbox", { name: /^Player \d+ name$/ })).toHaveCount(4);
   const names = ["Nora", "Jules", "Taylor", "Casey"];
   for (const [index, name] of names.entries()) await page.getByRole("textbox", { name: `Player ${index + 1} name`, exact: true }).fill(` ${name} `);
   for (const [index, name] of names.entries()) await expect(page.locator(".player-number").nth(index)).toHaveText(name[0]!.toUpperCase());
@@ -1168,6 +1358,72 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await privateHandIsAbsent(page);
 });
 
+for (const variant of ["original", "seafarers"] as const) {
+  test(`Reset game restores the ${variant} island and original private setup`, async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    const firstPlayer = await revealHand(page);
+    await showView(page, "board");
+    const board = page.getByRole("region", { name: "Game board", exact: true });
+    const initialGeometry = await themeBoardGeometry(board);
+    const profiles = await page.evaluate(() => localStorage.getItem("catania.profiles"));
+    await page.getByRole("button", { name: /^Place settlement at/ }).first().click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await page.getByRole("button", { name: /^Build road at/ }).first().click();
+    await chooseGameOption(page, "Reset game");
+    const confirmation = page.getByRole("dialog", { name: "Reset this game?", exact: true });
+    await expect(confirmation).toContainText("All current progress will be lost.");
+    await expect(confirmation).toBeInViewport({ ratio: 1 });
+    await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Game", exact: true })).toBeFocused();
+    await expect(board.getByRole("img", { name: /'s settlement at / })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Confirm placement", exact: true })).toBeVisible();
+    await chooseGameOption(page, "Reset game");
+    await screenshot(page, testInfo, `reset-${variant}-confirmation`, false);
+    await confirmation.getByRole("button", { name: "Reset game", exact: true }).click();
+    await expect(confirmation).toHaveCount(0);
+    await privateHandIsAbsent(page);
+    expect(await revealHand(page)).toBe(firstPlayer);
+    await showView(page, "board");
+    expect(await themeBoardGeometry(board)).toEqual(initialGeometry);
+    await expect(board.getByRole("img", { name: /'s (settlement|road|ship) at / })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Confirm placement", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Place settlement at/ }).first()).toBeVisible();
+    await expectResourceBank(page, { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 });
+    await showView(page, "hand");
+    await expect(page.getByRole("region", { name: "Private resources", exact: true }).locator(".resource-count")).toHaveText(["0", "0", "0", "0", "0"]);
+    await expect(page.getByRole("region", { name: "Dice tray", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("catania.profiles"))).toBe(profiles);
+    await chooseGameOption(page, "Reset game");
+    await page.keyboard.press("Escape");
+    await expect(confirmation).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Game", exact: true })).toBeFocused();
+    await noPageOverflow(page);
+  });
+}
+
+test("Reset game during a roll discards the old roll timer and restores empty hands", async ({ page }) => {
+  const state = await prepareRollGame(page);
+  await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Roll result", exact: true })).toHaveAttribute("data-stage", "rolling");
+  await chooseGameOption(page, "Reset game");
+  await page.clock.fastForward(5_000);
+  await expect(page.getByRole("region", { name: "Roll result", exact: true })).toHaveAttribute("data-stage", "rolling");
+  await page.getByRole("dialog", { name: "Reset this game?", exact: true }).getByRole("button", { name: "Reset game", exact: true }).click();
+  await page.clock.fastForward(5_000);
+  expect(await revealHand(page)).toBe(state.players[0]!.name);
+  await expect(page.getByRole("region", { name: "Dice tray", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Roll result", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /'s (settlement|road) at /, includeHidden: true })).toHaveCount(0);
+  await expectResourceBank(page, { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 });
+  await showView(page, "hand");
+  await expect(page.getByRole("region", { name: "Private resources", exact: true }).locator(".resource-count")).toHaveText(["0", "0", "0", "0", "0"]);
+});
+
 test("Game menu keeps secondary actions accessible without a toolbar", async ({ page, isMobile }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -1193,8 +1449,8 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await page.keyboard.press("Enter");
     await expect(menu).toBeInViewport({ ratio: 1 });
     await expect(gameButton).toHaveAttribute("aria-expanded", "true");
-    await expect(menu.getByRole("button")).toHaveText(["Help", "Settings", "Pass device", "End game"]);
-    for (const name of ["Help", "Settings", "Pass device", "End game"]) {
+    await expect(menu.getByRole("button")).toHaveText(["Help", "Settings", "Pass device", "Reset game", "End game"]);
+    for (const name of ["Help", "Settings", "Pass device", "Reset game", "End game"]) {
       const option = menu.getByRole("button", { name, exact: true });
       await expect(option).toBeInViewport({ ratio: 1 });
       expect((await option.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -1214,7 +1470,7 @@ test("Game menu keeps secondary actions accessible without a toolbar", async ({ 
     await expect(menu).toBeHidden();
     await gameButton.focus();
     await page.keyboard.press("Enter");
-    for (let step = 0; step < 6; step++) await page.keyboard.press("Tab");
+    for (let step = 0; step < 8; step++) await page.keyboard.press("Tab");
     await expect(menu).toBeHidden();
     await chooseGameOption(page, "Help");
     await expect(page.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
@@ -1248,7 +1504,7 @@ test("player score highlights and active-turn seat pulses follow public VP leade
   await page.goto("/");
   await page.getByRole("button", { name: "4 players", exact: true }).click();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
-  const names = await page.getByRole("textbox").evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value));
+  const names = await page.getByRole("textbox", { name: /^Player \d+ name$/ }).evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value));
   const points = new Map(names.map(name => [name, 0]));
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   const seats = isMobile ? page.getByRole("region", { name: "Players and awards", exact: true }) : page.locator(".table-seats");
@@ -1290,6 +1546,8 @@ test("player score highlights and active-turn seat pulses follow public VP leade
     await page.getByRole("button", { name: /^Place settlement at/ }).first().click();
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     points.set(currentPlayer, points.get(currentPlayer)! + 1);
+    const settlements = page.getByRole("img", { name: `${currentPlayer}'s settlement at `, includeHidden: true }).locator("text");
+    await expect(settlements).toHaveText(Array(points.get(currentPlayer)!).fill(currentPlayer[0]!.toUpperCase()));
     const highest = Math.max(...points.values());
     const allTied = new Set(points.values()).size === 1;
     await showView(page, "players");
@@ -1461,6 +1719,10 @@ for (const storageAvailable of [true, false]) {
       });
     }
     await page.goto("/");
+    if (!storageAvailable) {
+      await page.getByLabel("Profile name", { exact: true }).fill("Alex");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
     await revealHand(page);
@@ -1474,6 +1736,10 @@ for (const storageAvailable of [true, false]) {
     await chooseGameOption(page, "End game");
     await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
     await page.reload();
+    if (!storageAvailable) {
+      await page.getByLabel("Profile name", { exact: true }).fill("Alex");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
     await chooseGameOption(page, "Settings");
@@ -1583,6 +1849,10 @@ for (const storage of ["unknown", "blocked", "write-errors"] as const) {
       };
     }, storage);
     await page.goto("/");
+    if (storage === "blocked") {
+      await page.getByLabel("Profile name", { exact: true }).fill("Alex");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     const map = page.locator(".board-viewport");
     await expect(map).toHaveCSS("background-image", "none");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -1598,6 +1868,10 @@ for (const storage of ["unknown", "blocked", "write-errors"] as const) {
     await showView(page, "board");
     await expect(map).toHaveCSS("background-image", /radial-gradient/);
     await page.reload();
+    if (storage === "blocked") {
+      await page.getByLabel("Profile name", { exact: true }).fill("Alex");
+      await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+    }
     await expect(map).toHaveCSS("background-image", "none");
     await expect(map.locator('path[fill$="-sea)"]')).toHaveCount(1);
   });
@@ -1843,7 +2117,7 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
 
 test("turn controls stay visible and stable on every phone and tablet game view", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  // Tablets exercise the same tabbed layout through a resized desktop viewport.
+  // Tablets exercise the side-by-side layout through a resized desktop viewport.
   if (!isMobile) await page.setViewportSize({ width: 768, height: 1024 });
   await prepareRollGame(page);
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
@@ -1863,7 +2137,7 @@ test("turn controls stay visible and stable on every phone and tablet game view"
       const frame = (await controls.boundingBox())!;
       if (stableFrame) expect(frame).toEqual(stableFrame);
       stableFrame = frame;
-      if (view === "hand") {
+      if (view === "hand" || !await page.getByRole("navigation", { name: "Game views" }).isVisible()) {
         await expect(privateResources).toBeVisible();
       } else {
         await expect(privateResources).toBeHidden();
@@ -1906,9 +2180,53 @@ test("build section collapses on phones and starts expanded on larger screens", 
   if (!defaultExpanded) await expect(buildRoad).toBeHidden();
 });
 
-test("tablets keep every public player card above the island without scrolling", async ({ page, isMobile }, testInfo) => {
-  test.skip(isMobile, "Tablet widths run from the desktop project");
+test("player list reuses compact table seats across phone and landscape widths", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  const tableMarkup = await page.locator(".table-seats .player-seat").evaluateAll(elements => elements.map(element => element.outerHTML));
+  const list = page.getByRole("region", { name: "Players and awards", exact: true });
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 850, height: 480 }]) {
+    await page.setViewportSize(viewport);
+    await showView(page, "players");
+    await expect(list).toBeVisible();
+    const seats = list.locator(".player-seat");
+    await expect(seats).toHaveCount(3);
+    expect(await seats.evaluateAll(elements => elements.map(element => element.outerHTML))).toEqual(tableMarkup);
+    for (const seat of await seats.all()) {
+      await seat.scrollIntoViewIfNeeded();
+      await expect(seat).toBeInViewport({ ratio: 1 });
+      await expect(seat.locator(":scope > div")).toHaveCount(1);
+      const counts = seat.locator(".player-card-counts");
+      await expect(counts.getByRole("img")).toHaveCount(4);
+      expect(await counts.innerText()).not.toMatch(/resources|development/i);
+      const bounds = await seat.evaluate(element => ({
+        seat: element.getBoundingClientRect(),
+        name: element.querySelector(".player-name")!.getBoundingClientRect(),
+        score: element.querySelector(".player-score")!.getBoundingClientRect(),
+        counts: [...element.querySelectorAll(".player-card-stat")].map(stat => stat.getBoundingClientRect()),
+        overflowing: element.scrollWidth > element.clientWidth,
+      }));
+      expect(bounds.seat.height, "Player items stay compact").toBeLessThanOrEqual(80);
+      expect(bounds.overflowing).toBe(false);
+      expect(bounds.name.right).toBeLessThanOrEqual(bounds.score.left);
+      expect(new Set(bounds.counts.map(stat => Math.round(stat.y))).size, "Counts share one row").toBe(1);
+      for (const stat of bounds.counts) {
+        expect(stat.left).toBeGreaterThanOrEqual(bounds.seat.left);
+        expect(stat.right).toBeLessThanOrEqual(bounds.seat.right);
+      }
+    }
+    await noPageOverflow(page);
+    await screenshot(page, testInfo, `compact-player-list-${viewport.width}`, false);
+  }
+});
+
+test("tablets keep every public player card above the island without scrolling", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 768, height: 1024 });
   for (const playerCount of [3, 4] as const) {
     await page.goto("/");
     if (playerCount === 4) await page.getByRole("button", { name: "4 players", exact: true }).click();
@@ -1972,10 +2290,12 @@ test("tablets keep every public player card above the island without scrolling",
   }
 });
 
-test("unfolded foldables show the island, hand, and seats side by side without view tabs", async ({ page, isMobile }, testInfo) => {
-  test.skip(isMobile, "Foldable widths run from the desktop project");
+test("unfolded foldables show the island, hand, and seats side by side without the page header or view tabs", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 720, height: 960 });
   await page.goto("/");
+  const header = page.getByRole("banner");
+  await expect(header).toBeVisible();
   await seedGameRandomness(page);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
@@ -1983,8 +2303,9 @@ test("unfolded foldables show the island, hand, and seats side by side without v
   const hand = page.getByRole("region", { name: "Your cards", exact: true });
   const turnControls = page.getByRole("region", { name: "Turn controls", exact: true });
   const bank = page.getByRole("region", { name: "Resource bank", exact: true });
-  for (const viewport of [{ width: 673, height: 841 }, { width: 841, height: 673 }]) {
+  for (const viewport of [{ width: 673, height: 841 }, { width: 841, height: 673 }, { width: 720, height: 960 }]) {
     await page.setViewportSize(viewport);
+    await expect(header).toBeHidden();
     await expect(page.getByRole("navigation", { name: "Game views" })).toBeHidden();
     await expect(page.locator(".table-seats")).toBeVisible();
     await expect(board).toBeInViewport({ ratio: 1 });
@@ -2002,11 +2323,78 @@ test("unfolded foldables show the island, hand, and seats side by side without v
     await noHorizontalOverflow(page);
     await screenshot(page, testInfo, `unfolded-foldable-${viewport.width}-${viewport.height}`, false);
   }
+  const gameMenu = turnControls.getByRole("button", { name: "Game", exact: true });
+  await gameMenu.click();
+  await expect(page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Help", exact: true })).toBeVisible();
+  await gameMenu.press("Escape");
+  for (const viewport of [{ width: 600, height: 601 }, { width: 1023, height: 601 }]) {
+    await page.setViewportSize(viewport);
+    await expect(header).toBeHidden();
+    await expect(gameMenu).toBeVisible();
+  }
+  for (const viewport of [{ width: 599, height: 841 }, { width: 841, height: 600 }, { width: 1024, height: 841 }]) {
+    await page.setViewportSize(viewport);
+    await expect(header).toBeVisible();
+    await expect(gameMenu).toBeVisible();
+  }
 });
 
-test("shared-board seats keep one row on tablets", async ({ page, isMobile }, testInfo) => {
-  test.skip(isMobile, "Tablet widths run from the desktop project");
+for (const displayScale of [1.25, 1.5625]) {
+  test.describe(`build labels at ${displayScale} display scale`, () => {
+    test.use({ deviceScaleFactor: displayScale });
+
+    test("disabled build labels stay readable when resizing between folded and unfolded layouts", async ({ page }, testInfo) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("/");
+      await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+      await seedGameRandomness(page);
+      await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+      await revealHand(page);
+      const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
+      for (const viewport of [{ width: 720, height: 960 }, { width: 390, height: 844 }, { width: 673, height: 841 }]) {
+        await page.setViewportSize(viewport);
+        await showView(page, "hand");
+        const toggle = building.getByRole("button", { name: "Build a little bigger", exact: true });
+        if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+        const rows = building.locator(".build-options > button");
+        await expect(rows).toHaveCount(4);
+        for (const row of await rows.all()) {
+          await expect(row).toBeDisabled();
+          await expect(row).toHaveCSS("opacity", "1");
+          const content = row.locator(":scope > span:first-child");
+          await expect(content).toHaveCSS("opacity", "1");
+          const label = content.locator(":scope > span:last-child");
+          await expect(label).toHaveCSS("opacity", "1");
+          await expect(label).toHaveCSS("color", "rgb(109, 118, 108)");
+          await expect(content.locator(":scope > :first-child")).toHaveCSS("opacity", "0.65");
+          await expect(row.locator(".build-cost")).toHaveCSS("opacity", "0.65");
+          const bounds = await row.evaluate(element => {
+            const label = element.firstElementChild!.lastElementChild!;
+            const range = document.createRange();
+            range.selectNodeContents(label);
+            const rowBounds = element.getBoundingClientRect();
+            const cost = element.querySelector(".build-cost")!.getBoundingClientRect();
+            return [...range.getClientRects()].map(line => ({
+              top: line.top, bottom: line.bottom, right: line.right,
+              rowTop: rowBounds.top, rowBottom: rowBounds.bottom, costLeft: cost.left,
+            }));
+          });
+          for (const line of bounds) {
+            expect(line.top).toBeGreaterThanOrEqual(line.rowTop);
+            expect(line.bottom).toBeLessThanOrEqual(line.rowBottom);
+            expect(line.right).toBeLessThanOrEqual(line.costLeft);
+          }
+        }
+        await noHorizontalOverflow(page);
+        await screenshot(page, testInfo, `disabled-build-labels-${viewport.width}-${displayScale}`, false);
+      }
+    });
+  });
+}
+
+test("shared-board seats keep one row on tablets", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto("/");
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
@@ -2044,6 +2432,45 @@ test("shared-board seats keep one row on tablets", async ({ page, isMobile }, te
   }
 });
 
+test("game hides vertical scrollbar tracks while panels and dialogs remain scrollable", async ({ page, isMobile }, testInfo) => {
+  await page.setViewportSize(isMobile ? { width: 390, height: 667 } : { width: 1280, height: 720 });
+  await page.goto("/");
+  const homeSettings = page.locator(".home-setup-content");
+  await expect(homeSettings).toHaveCSS("scrollbar-width", "thin");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "hand");
+  await revealBuildSection(page);
+  for (const panel of await page.locator(".table-hand, .hand-content, .turn-title, .turn-description, .table-players, .roll-summary-content, .board-viewport").all()) {
+    await expect(panel).toHaveCSS("scrollbar-width", "none");
+  }
+  const hand = page.locator(".hand-content");
+  expect(await hand.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await hand.hover();
+  await page.mouse.wheel(0, 200);
+  await expect.poll(() => hand.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "game-hidden-scrollbars", false);
+
+  await page.getByRole("button", { name: "Game", exact: true }).click();
+  const menu = page.getByRole("group", { name: "Game menu", exact: true });
+  await expect(menu).toHaveCSS("scrollbar-width", "none");
+  await menu.getByRole("button", { name: "Help", exact: true }).click();
+  const guide = page.getByRole("dialog", { name: "Help", exact: true });
+  await expect(guide).toHaveCSS("scrollbar-width", "none");
+  expect(await guide.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await guide.locator("h2").hover();
+  await page.mouse.wheel(0, 200);
+  await expect.poll(() => guide.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await screenshot(page, testInfo, "game-dialog-hidden-scrollbars", false);
+  await page.keyboard.press("Escape");
+
+  await chooseGameOption(page, "End game");
+  await page.getByRole("dialog", { name: "Leave this island?", exact: true }).getByRole("button", { name: "End game", exact: true }).click();
+  await expect(homeSettings).toHaveCSS("scrollbar-width", "thin");
+});
+
 test("game session blocks pull-to-refresh at the page root, home does not", async ({ page }) => {
   await page.goto("/");
   const body = page.locator("body");
@@ -2068,6 +2495,8 @@ test("Seafarers selection changes the preview independently of themes and can re
   await versions.selectOption("seafarers");
   await expect(page.locator(".terrain-hex")).toHaveCount(42);
   await expect(page.getByText("Heading for New Shores", { exact: true })).toBeVisible();
+  const island = page.getByRole("region", { name: "Island preview", exact: true, includeHidden: true });
+  const geometry = await themeBoardGeometry(island);
   for (const theme of BOARD_THEMES) {
     const dialog = await openHomeThemes(page);
     await dialog.getByRole("radio", { name: theme.name, exact: true }).check();
@@ -2076,8 +2505,28 @@ test("Seafarers selection changes the preview independently of themes and can re
     await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "seafarers");
     await expect(page.locator(".board-surface")).toHaveAttribute("data-theme", theme.id);
     await expect(page.locator(".terrain-hex")).toHaveCount(42);
-    await expect(page.getByRole("img", { name: /^Gold fields, gold fields, roll/ })).toHaveCount(2);
+    const goldFields = page.getByRole("img", { name: /^Gold, gold, roll/ });
+    await expect(goldFields).toHaveCount(2);
+    for (const goldField of await goldFields.all()) {
+      await expect(goldField.locator(":scope > polygon").nth(1)).toHaveAttribute("fill", ALL_THEMES[theme.id].terrain.gold.fill);
+      const artwork = goldField.locator(".gold-field-artwork");
+      await expect(artwork).toHaveAttribute("aria-hidden", "true");
+      await expect(artwork).toHaveAttribute("pointer-events", "none");
+      await expect(artwork.locator(".gold-ingots > g")).toHaveCount(1);
+      await expect(artwork.locator(".gold-coins > g")).toHaveCount(2);
+      await expect(artwork.locator(".gold-sparkles")).toBeVisible();
+      await expect(goldField.locator(".number-token")).toBeVisible();
+      await expect(goldField.locator(":scope > text")).toHaveText("GOLD");
+      await expect(goldField.locator(":scope > text")).toHaveAttribute("fill", ALL_THEMES[theme.id].terrain.gold.ink);
+      expect(await goldField.evaluate(element => {
+        const goldBar = element.querySelector(".gold-ingots")!.getBoundingClientRect();
+        const label = element.querySelector(":scope > text")!.getBoundingClientRect();
+        return goldBar.bottom < label.top;
+      }), "The gold bar stays above the terrain label").toBe(true);
+    }
+    expect(await themeBoardGeometry(island)).toEqual(geometry);
     await noHorizontalOverflow(page);
+    await screenshot(page, testInfo, `gold-fields-${theme.id}`, false);
   }
   await screenshot(page, testInfo, "seafarers-preview", false);
   await showHomeView(page, "Setup");
@@ -2089,14 +2538,15 @@ test("Seafarers selection changes the preview independently of themes and can re
 test("Seafarers starts on its exact preview and confirms a free coastal ship with variant-specific help", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await seedRandomness(page, 17);
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  await seedRandomness(page, 17);
   let seed = 17;
   const random = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 0x100000000;
   };
-  const preview = createBoard(random, "seafarers");
+  const preview = createBoard(seededRandom(mapCode), "seafarers");
   let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
     name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
   })), random, preview);
@@ -2148,18 +2598,20 @@ async function seedRandomness(page: Page, initialSeed: number, initialValues: nu
   }, { initialSeed, initialValues });
 }
 
-async function seedGameRandomness(page: Page, playerCount = 3) {
-  let seed = 1;
+async function seedGameRandomness(page: Page, playerCount = 3, initialSeed = 1, mapCode = initialSeed === 1 ? "225DV7H4" : "22222229") {
+  let seed = initialSeed;
   const nextRandomValue = () => seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-  // Keep the existing fixtures, but generate their board in the preview first.
   const playerOrderValues = Array.from({ length: playerCount - 1 }, nextRandomValue);
-  const previewSeed = seed;
   createBoard(() => nextRandomValue() / 0x100000000);
-  await seedRandomness(page, previewSeed);
   await showHomeView(page, "Island");
-  await page.getByRole("button", { name: "Shuffle island preview", exact: true }).click();
+  await page.getByRole("textbox", { name: "Map code", exact: true }).fill(mapCode);
+  await page.getByRole("textbox", { name: "Map code", exact: true }).press("Enter");
   await showHomeView(page, "Setup");
   await seedRandomness(page, seed, playerOrderValues);
+  return {
+    board: createBoard(seededRandom(mapCode)),
+    random: () => (playerOrderValues.length ? playerOrderValues.shift()! : nextRandomValue()) / 0x100000000,
+  };
 }
 
 async function placeStartingPieces(page: Page) {
@@ -2172,17 +2624,13 @@ async function placeStartingPieces(page: Page) {
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
 }
 
-async function prepareRollGame(page: Page, startingPieces?: readonly (readonly [number, number])[]) {
+async function prepareRollGame(page: Page, startingPieces?: readonly (readonly [number, number])[], mapCode?: string) {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await seedGameRandomness(page);
-  let seed = 1;
+  const fixture = await seedGameRandomness(page, 3, 1, mapCode);
   let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
     name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
-  })), () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 0x100000000;
-  });
+  })), fixture.random, fixture.board);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   for (let placement = 0; placement < 6; placement++) {
     if (placement !== 3) await revealHand(page);
@@ -2210,28 +2658,13 @@ async function prepareRollGame(page: Page, startingPieces?: readonly (readonly [
   return state;
 }
 
-// Like prepareRollGame, but with a chosen initial seed so the preview board, player order
-// and development deck match a deterministic script computed against the engine in Node.
 async function prepareSeededRollGame(page: Page, initialSeed: number, startingPieces: readonly (readonly [number, number])[]) {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  let seed = initialSeed;
-  const nextRandomValue = () => seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-  const playerOrderValues = Array.from({ length: 2 }, nextRandomValue);
-  const previewSeed = seed;
-  createBoard(() => nextRandomValue() / 0x100000000);
-  await seedRandomness(page, previewSeed);
-  await showHomeView(page, "Island");
-  await page.getByRole("button", { name: "Shuffle island preview", exact: true }).click();
-  await showHomeView(page, "Setup");
-  await seedRandomness(page, initialSeed, playerOrderValues);
-  let mirrorSeed = initialSeed;
+  const fixture = await seedGameRandomness(page, 3, initialSeed);
   let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
     name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
-  })), () => {
-    mirrorSeed = (Math.imul(mirrorSeed, 1664525) + 1013904223) >>> 0;
-    return mirrorSeed / 0x100000000;
-  });
+  })), fixture.random, fixture.board);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   for (let placement = 0; placement < 6; placement++) {
     if (placement !== 3) await revealHand(page);
@@ -2241,9 +2674,10 @@ async function prepareSeededRollGame(page: Page, initialSeed: number, startingPi
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
     const collection = page.getByRole("region", { name: "Resource collection" });
-    if (placement >= 3) {
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    if (placement >= 3 && resourceTotal(player.resources) > 0) {
       await expect(collection).toBeInViewport({ ratio: 1 });
-      await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click().catch(() => {});
+      await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
     } else {
       await expect(collection).toHaveCount(0);
     }
@@ -2405,7 +2839,7 @@ test("settlement build shows a description only for exhausted pieces and recover
   await page.emulateMedia({ reducedMotion: "reduce" });
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
   // Give Sam room to expand and produce the required cards through real rolls, without injecting state.
-  let state = await prepareRollGame(page, [[20, 41], [0, 0], [2, 1], [4, 3], [7, 7], [15, 33]]);
+  let state = await prepareRollGame(page, [[20, 41], [0, 0], [2, 1], [4, 3], [7, 7], [15, 33]], "222222AF");
   await revealBuildSection(page);
   const playerId = state.activePlayerId;
   const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
@@ -2439,7 +2873,7 @@ test("settlement build shows a description only for exhausted pieces and recover
     await showView(page, "hand");
   }
 
-  const rollTotals = [9, 10, 9, 9, 3, 11, 9, 9, 11, 9, 4, 11, 3];
+  const rollTotals = [3, 3, 3, 2, 3, 2, 2, 3, 3, 5, 5, 5, 2];
   for (const [index, total] of rollTotals.entries()) {
     const dice: [number, number] = [Math.max(1, total - 6), Math.min(6, total - 1)];
     await showView(page, "hand");
@@ -2487,6 +2921,8 @@ test("settlement build shows a description only for exhausted pieces and recover
   await build("city", 15);
   await expect(page.getByRole("img", { name: /Sam's settlement at /, includeHidden: true })).toHaveCount(4);
   await expect(page.getByRole("img", { name: /Sam's city at /, includeHidden: true })).toHaveCount(1);
+  await expect(page.getByRole("img", { name: /Sam's city at /, includeHidden: true }).locator("text")).toHaveText("S");
+  await expect(page.getByRole("img", { name: /Sam's settlement at /, includeHidden: true }).locator("text")).toHaveText(["S", "S", "S", "S"]);
   await expect(settlement).toBeEnabled();
   await expect(settlement).not.toHaveAttribute("aria-describedby");
   await expect(explanation).toHaveCount(0);
@@ -2820,7 +3256,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   const longestRoad = buyerSeat.getByRole("img", { name: "Longest Road (+2 victory points)", exact: true });
   const awards = buyerSeat.getByRole("group", { name: "Victory point awards", exact: true });
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
-  const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
+  const rolls: [number, number][] = [[1, 2], [2, 6], [5, 5]];
   await showView(page, "players");
   // Each player has two disconnected starting roads, so their longest road is only one.
   for (const player of state.players) {
@@ -2849,7 +3285,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
         await page.getByRole("dialog", { name: "A card up your sleeve", exact: true }).getByRole("button", { name: "Confirm Knight", exact: true }).click();
         state = applyAction(state, buyerId, { type: "play-development", cardId: card.id });
         // Avoid theft and leave the resource-producing tiles used by this test unblocked.
-        const destination = state.board.tiles.find(tile => tile.id !== state.robberTileId && ![3, 8, 11].includes(tile.number ?? 0) &&
+        const destination = state.board.tiles.find(tile => tile.id !== state.robberTileId && ![3, 8, 10].includes(tile.number ?? 0) &&
           tile.vertexIds.every(vertexId => !state.board.vertices.find(vertex => vertex.id === vertexId)!.building))!;
         await showView(page, "board");
         const targetIndex = state.board.tiles.filter(tile => tile.id !== state.robberTileId).indexOf(destination);
@@ -2937,7 +3373,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
   await expect(buyerSeat.locator(".player-card-counts").getByRole("img", { name: /Largest Army|Longest Road/ })).toHaveCount(0);
   await expect(buyerSeat.locator(".player-score").getByRole("group", { name: "Victory point awards", exact: true })).toBeVisible();
   expect(await buyerSeat.innerText()).not.toMatch(/Longest Road|Largest Army|\+2/);
-  if (isMobile) await expect(buyerSeat.locator(".player-awards")).toHaveText("5 connected roads");
+  await expect(buyerSeat.locator(":scope > div")).toHaveCount(1);
   if (await dismissCollection.isVisible()) await dismissCollection.click();
   const viewports = isMobile
     ? [{ width: 390, height: 844 }, { width: 320, height: 568 }]
@@ -2988,7 +3424,7 @@ test("a won game pops the winner up over the board with the point breakdown and 
   if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
 
   // The board, player order and script below come from a deterministic simulation against
-  // the engine: with initial seed 206 the first roller wins in forty turns.
+  // the engine: map 22222229 and initial seed 206 let the first roller win in 55 turns.
   let state = await prepareSeededRollGame(page, 206, [[40, 50], [0, 0], [2, 1], [4, 3], [7, 7], [42, 54]]);
   await revealBuildSection(page);
   const buyerId = state.activePlayerId;
@@ -3189,7 +3625,7 @@ test("owned development cards group by type with counts, descriptions and older-
     monopoly: "Name a resource. Every other player gives you all of that resource from their hand.",
   };
   // These rolls fund one purchase each round. The first eight cards cover every kind and duplicates.
-  const rolls: [number, number][] = [[1, 2], [2, 6], [5, 6]];
+  const rolls: [number, number][] = [[1, 2], [2, 6], [5, 5]];
   for (let turn = 0; turn < 25; turn++) {
     const dice = rolls[turn % rolls.length]!;
     await chooseDice(page, dice);
@@ -3703,7 +4139,7 @@ test("roll rewards show resource cards, quantities and empty results across scre
   const scenarios: { dice: [number, number]; rewards: [Resource, number][] }[] = [
     { dice: [2, 6], rewards: [["wood", 1], ["ore", 1]] },
     { dice: [2, 3], rewards: [["wood", 2]] },
-    { dice: [1, 1], rewards: [] },
+    { dice: [1, 3], rewards: [] },
   ];
   for (const [index, scenario] of scenarios.entries()) {
     await chooseDice(page, scenario.dice);
@@ -4318,15 +4754,11 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   page.on("requestfailed", request => browserErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await seedGameRandomness(page);
-  let seed = 1;
-  const random = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 0x100000000;
-  };
+  const fixture = await seedGameRandomness(page, 3, 1, "222222AP");
+  const random = fixture.random;
   let state = createGame(["Alex", "Computer 1", "Computer 2"].map((name, index) => ({
     name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: index === 0 ? "human" as const : "computer" as const,
-  })), random);
+  })), random, fixture.board);
   const requesterId = state.players.find(player => player.control === "human")!.id;
   // Mirror real computer setup and turns, including a theft, without injecting game state into the browser.
   for (let step = 0; step < 40 && !(state.activePlayerId === requesterId && state.phase.type === "roll"); step++) {
@@ -4341,6 +4773,10 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   expect(state.phase.type).toBe("roll");
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   for (let placement = 0; placement < 2; placement++) await placeStartingPieces(page);
+  for (const [index, player] of state.players.entries()) {
+    const settlements = page.getByRole("img", { name: `${player.name}'s settlement at `, includeHidden: true }).locator("text");
+    await expect(settlements).toHaveText(Array(2).fill(player.control === "human" ? "A" : String(index + 1)));
+  }
   await showView(page, "hand");
   await revealBuildSection(page);
   await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
@@ -4359,7 +4795,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   let diceIndex = 0;
   state = applyAction(state, requesterId, { type: "roll" }, () => ([1, 3][diceIndex++]! - 0.5) / 6);
   const requester = state.players.find(player => player.id === requesterId)!;
-  expect(requester.resources).toEqual({ ...emptyResources(), wood: 1 });
+  expect(requester.resources).toEqual({ ...emptyResources(), wood: 1, wool: 1, grain: 1 });
   const bankBefore = { ...state.bank };
   await expectResourceBank(page, bankBefore);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
@@ -4461,7 +4897,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await page.goto("/");
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
   await noHorizontalOverflow(page);
-  await seedGameRandomness(page);
+  await seedGameRandomness(page, 3, 1, "TESTMAP2");
   await screenshot(page, testInfo, "solo-table");
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   await showView(page, "hand");
@@ -4564,29 +5000,33 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await screenshot(page, testInfo, "solo-next-turn");
 });
 
-async function prepareComputerRequest(page: Page, humanDice: [number, number], computerDice: [number, number]) {
+async function prepareComputerRequest(page: Page, humanDice: [number, number], computerDice: [number, number], mapCode: string) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await seedGameRandomness(page);
+  await seedGameRandomness(page, 3, 1, mapCode);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   for (let placement = 0; placement < 2; placement++) await placeStartingPieces(page);
   await showView(page, "hand");
   const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
-  await expect(roll).toBeEnabled({ timeout: 20_000 });
+  const request = page.getByRole("region", { name: "Open trade", exact: true });
+  await expect.poll(async () => {
+    const decline = request.getByRole("button", { name: "Decline", exact: true });
+    if (await decline.isVisible()) await decline.click();
+    return roll.isEnabled();
+  }, { timeout: 20_000 }).toBe(true);
   await chooseDice(page, humanDice);
   await roll.click();
   await chooseDice(page, computerDice);
   await page.clock.install({ time: new Date("2026-11-04T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-11-04T00:00:01Z"));
   await page.getByRole("button", { name: "End turn", exact: true }).click();
-  const request = page.getByRole("region", { name: "Open trade", exact: true });
   for (let step = 0; step < 12 && !(await request.isVisible()); step++) await page.clock.runFor(450);
   await expect(request.getByRole("heading", { name: "Trade request", exact: true })).toBeVisible();
   return request;
 }
 
 test("computer resource requests accept useful human prices without revealing computer hands", async ({ page }, testInfo) => {
-  const request = await prepareComputerRequest(page, [1, 2], [1, 5]);
+  const request = await prepareComputerRequest(page, [1, 2], [1, 5], "222222DV");
   await expect(request.getByText("From Computer 2", { exact: true })).toBeVisible();
   await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toBeVisible();
   const give = { ...emptyResources(), wood: 1, grain: 1 };
@@ -4616,7 +5056,7 @@ test("computer resource requests accept useful human prices without revealing co
 });
 
 test("unanswered computer resource requests stay open for 15 seconds then resume the turn", async ({ page }) => {
-  const request = await prepareComputerRequest(page, [1, 1], [1, 3]);
+  const request = await prepareComputerRequest(page, [1, 1], [1, 1], "2222223J");
   await expect(request.getByText("From Computer 1", { exact: true })).toBeVisible();
   await expect(request.getByRole("button", { name: "Propose price", exact: true })).toBeDisabled();
   await page.clock.runFor(450);

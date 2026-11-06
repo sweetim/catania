@@ -41,24 +41,52 @@ On first visit the home screen asks **Who's playing?**: create a profile, or
 continue as an existing one stored on this device. Each profile keeps lifetime
 games, wins, and total points, and its name prefills the first human seat's
 name in **Set up your table** (replacing the default placeholder). Use
-**Menu > Switch profile** to change or **Rename** a profile at any time; the
-first seat follows the active profile's name.
+**Menu > Profile** on the home or results screen to change or **Rename** a
+profile; the first seat follows the active profile's name. Profiles cannot be
+changed, edited, or deleted during an unfinished game, and in-game menus contain
+no **Profile** action.
+
+On the home and results screens, **Menu** is the circular avatar showing the
+active profile's initial; invited phones also show it before joining. Profile
+cards show games, wins, and total points separately and mark the current profile.
+Use the pencil beside the name to rename a profile, the trash icon to delete it,
+or the separate **Create a profile** form to add one. Deletion requires
+confirmation and permanently removes that profile's local stats and game history.
+Deleting the active profile clears its selection: choose another profile or
+create one before continuing. Select a profile card, including the current one,
+to return to the previous screen.
 
 Solo play against computers (one human) credits the finished game to the active
-profile — a win or loss with your final points — and the victory panel shows
-that profile's history. Pass-and-play with two or more humans records nothing,
+profile that started the game — a win or loss with your final points — and the
+victory panel shows that profile's totals. Pass-and-play with two or more humans records nothing,
 since one device cannot attribute the game to a single player. Profiles live in
 this browser only, under `catania.profiles`.
+
+Expand **Game history** on a profile card to see completed solo and
+multiplayer-phone games, newest first. Each entry keeps the game ID, map code,
+Original/Seafarers version, completion date, win/loss, final points, and turn
+count. Unfinished games do not count. Existing lifetime totals are retained,
+but individual games played before this feature cannot be reconstructed.
+
+Choose **Replay map** on an entry to load that island and its matching game
+version into single-device setup, then choose your players and start when ready.
+End or finish the current game before accessing profiles and replaying history.
+Replay recreates the initial island, not saved moves, dice rolls, or the previous game state.
+The history stays on the device; only lifetime totals are shared with a host.
 
 ## Map Codes
 
 Every island is generated from an 8-character **map code** (letters and digits
-without the ambiguous I, L, O, 0, and 1). The current code is shown beside
-**Shuffle** on the home screen. Enter a noted code and choose **Replay map** to
-rebuild that exact island, including terrain, number tokens, ports, and the
+without the ambiguous I, L, O, 0, and 1). The current code is shown in the
+**Map code** toolbar at the top of the island preview, both at home and in the
+multiplayer host lobby. A code loads automatically when all 8 characters are
+entered or pasted; Enter also submits the field. This rebuilds that exact island,
+including terrain, number tokens, ports, and the
 robber's start; the game version must match the original map. The victory panel
 and multiplayer host lobby also display the current code so it can be noted for
 later replays. Codes are not secrets: knowing a code only reproduces the island.
+Incomplete codes leave the map unchanged until submitted. Invalid codes are
+flagged beside the home map-code field.
 
 The game includes the standard terrain and tokens, nine ports, finite resource
 bank and development deck, piece limits, robber and discards, all development
@@ -125,6 +153,10 @@ The board fills the full height beside all three panels. On phones,
 the turn-status card and controls stay visible below **Hand**, **Board**, and
 **Players**, while the dice summary and bank remain above the selected view.
 Short landscape phones place the selected view and turn controls side by side.
+On unfolded foldables and small tablets (600-1023 pixels wide and at least 601
+pixels tall), the board and hand appear side by side without view tabs or the
+top logo header. The turn controls keep the **Game** menu accessible; the page
+header remains available during private handoff.
 Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains
@@ -132,11 +164,18 @@ enlarge placement targets, then scroll or drag inside it. The board footer conta
 Short screens can scroll within the hand or player panel without moving the board.
 On very short desktop windows, the entire sidebar scrolls internally so the status
 card, turn controls, and hand tasks remain reachable.
+Vertical scrollbar tracks are hidden throughout solo and multiplayer gameplay,
+including menus and dialogs. Wheel, touch, and keyboard scrolling remain available;
+home and lobby scrollbars are unchanged.
 
 The turn header's **Game** icon menu sits beside the player name and turn-number
 badge, matching private multiplayer screens. It contains **Language**, **Help**, and **Settings**, plus
 **Pass device** when multiple humans have a hand revealed. **End game** sits below
-a divider and still requires confirmation. The turn header shows **Setup** or the
+a divider and still requires confirmation. **Reset game** also requires
+confirmation and restores the original setup on the same island, with the same
+players and turn order. It clears all pieces, hands, rolls, trades, and pending
+actions without changing profiles, artwork, language, or board settings.
+Cancelling keeps the current game intact. The turn header shows **Setup** or the
 current turn number. During a private handoff, the menu stays in the page header.
 Keyboard users can select highlighted positions with Enter or Space.
 Confirm/Cancel appears beside the selected piece or hex, stays inside the map,
@@ -221,8 +260,9 @@ colors without detailed player cards; all private summaries disappear during han
 
 ## Players And Awards
 
-Player seats show public card totals as icon-and-number badges, with full labels
-in player details and accessible descriptions, never another player's resource
+The Players list uses the same compact player items as the table seats, without
+extra text labels or a repeated road-count footer. Seats show public card totals
+as icon-and-number badges, with full tooltips and accessible descriptions, never another player's resource
 breakdown. The score reads **VP** followed by one number: your revealed seat includes
 public and hidden points, while other seats show only public points. There is no
 separate total label. On tablets and desktops, all seats fit above the map without horizontal
@@ -235,14 +275,15 @@ Longest Road. In Seafarers games a matching gold island icon marks earned island
 bonus points, with its exact total in the tooltip. These reward icons sit together
 immediately to the right of VP,
 separate from the Knight and road counts. Each tooltip and accessible label includes
-the award's victory points without adding a text badge. Player details retain
-the connected-road count.
+the award's victory points without adding a text badge.
 
 Knights still in hand do not count: play at least three to qualify, and surpass
 the current holder to take the award. A warm gold cell highlight marks the highest
 public VP score without a crown icon, shared by tied leaders unless everyone is tied.
 Names are vertically centered beside their avatars, without a repeated turn-status
-line or dot. The active cell pulses its whole area in the active player's own
+line or dot. Settlements and cities show the same label as their owner's avatar:
+an uppercase name initial for human players, and a seat number for computers.
+Road and ship labels remain seat numbers. The active cell pulses its whole area in the active player's own
 color, layered above any leader highlight but beneath the cell's contents;
 reduced motion settles the pulse into a static tint of the same color. It moves
 to the next player's cell when the turn changes without moving the layout. The
@@ -332,7 +373,19 @@ per turn, accept affordable prices that improve their build plan, and wait up to
 15 seconds for unanswered players. If no suitable price arrives, they withdraw
 the request and continue playing. In pass-and-play, use **Pass device** to reveal
 a human hand and respond. Computers never inspect opponents' hands to set prices.
-They use a basic strategy, not an advanced difficulty system.
+Their strategy balances resource production and dice coverage during setup, then
+compares settlement, city, route, and development purchases by value, affordability,
+and estimated production wait. Trades, discards, and gold choices support that
+plan instead of a fixed build order. They can claim Longest Route even when it
+opens no settlement site, and prioritize immediately winning builds.
+
+Computers save resource and route development cards until after rolling. They
+use Year of Plenty to finish a build, save Road Building when no useful expansion
+or route award is available, and estimate Monopoly returns from public production
+and hand sizes. Knights can unblock production or claim Largest Army before a
+roll. Robber and theft choices favor public leaders while avoiding empty theft
+victims and damage to their own production. These are local heuristics, not an
+external AI service or an adjustable difficulty system.
 
 ## Privacy And Limits
 

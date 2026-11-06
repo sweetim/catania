@@ -77,6 +77,7 @@ export type SessionView = {
 export type MultiplayerSession = {
   setVariant: (variant: GameVariant) => void;
   startGame: () => void;
+  resetGame: () => void;
   endGame: () => void;
   shuffleBoard: () => void;
   useMapSeed: (seed: string) => void;

@@ -2,7 +2,7 @@ import type { TranslationCatalog } from "../i18n";
 
 export const boardTranslations = {
   "Sea": "海",
-  "Gold fields": "金鉱",
+  "Gold": "金",
   "Move pirate to sea": "海賊を海に移動",
   "Move pirate off board": "海賊を盤外へ移動",
   "Pirate; adjacent ships cannot be built or moved": "海賊：隣接する船の建造・移動はできません",
@@ -60,7 +60,7 @@ export const boardTranslations = {
 
 export const themeTranslations: TranslationCatalog = {
   "Sea": "海",
-  "Gold fields": "金鉱",
+  "Gold": "金",
   "Illustrated Island": "手描きの島",
   "Soft hills, inked forests, and a quiet green sea.": "やわらかな丘、インクで描いた森、静かな緑の海。",
   "Mediterranean Ceramic": "地中海の陶器",

@@ -2,6 +2,7 @@ import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import type { GameAction } from "../game/types";
+import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
 
@@ -191,10 +192,11 @@ function publicGame(value: unknown): boolean {
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
-  if (!record(value) || !fields(value, ["variant", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"])) return false;
+  if (!record(value) || !fields(value, ["variant", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed"])) return false;
   let previousTheftId = 0;
   let previousMonopolyId = 0;
-  return (value.variant === "original" || value.variant === "seafarers") &&
+  return (!Object.hasOwn(value, "mapSeed") || (typeof value.mapSeed === "string" && normalizeMapSeed(value.mapSeed) === value.mapSeed)) &&
+    (value.variant === "original" || value.variant === "seafarers") &&
     integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&
     (value.playerId === null || (identifier(value.playerId, "player") && (value.players as RecordValue[]).some(player => player.id === value.playerId && player.control === "human"))) &&
     (value.privatePlayer === null || (privatePlayer(value.privatePlayer) && (value.privatePlayer as RecordValue).id === value.playerId)) &&

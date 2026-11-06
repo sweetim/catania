@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNo
 import QRCode from "qrcode";
 import { match } from "ts-pattern";
 import { Board } from "../components/Board";
+import { MapSeedControls } from "../components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
@@ -13,7 +14,7 @@ import { PlayerSeat } from "../components/PlayerSeat";
 import { DevelopmentHand } from "../components/DevelopmentHand";
 import { VictoryDialog, type VictoryBreakdownRow } from "../components/VictoryDialog";
 import { ProfileGate } from "../components/ProfileGate";
-import { activeProfile, createProfile, readProfileState, writeProfileState, type PlayerProfile, type ProfileState } from "../profile";
+import { activeProfile, createProfile, readProfileState, removeProfile, writeProfileState, type PlayerProfile, type ProfileState } from "../profile";
 import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstructions";
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
@@ -363,7 +364,7 @@ export function MultiplayerApp() {
   const [localError, setLocalError] = useState<keyof typeof multiplayerUiTranslations | "">("");
   const [qrCode, setQrCode] = useState("");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("illustrated");
-  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | "reset" | null>(null);
   const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [movingShip, setMovingShip] = useState<{ edgeId: string; version: number } | null>(null);
@@ -452,12 +453,14 @@ export function MultiplayerApp() {
       const next = { profiles: profileState.profiles, activeId: profile.id };
       writeProfileState(next);
       setProfileState(next);
+      if (!name.trim()) setName(profile.name);
       setProfileGateOpen(false);
     };
     const addProfile = (profile: PlayerProfile) => {
       const next = { profiles: [...profileState.profiles, profile], activeId: profile.id };
       writeProfileState(next);
       setProfileState(next);
+      if (!name.trim()) setName(profile.name);
       setProfileGateOpen(false);
     };
     const renameProfile = (profile: PlayerProfile, playerName: string) => {
@@ -470,10 +473,21 @@ export function MultiplayerApp() {
       <div data-theme={boardThemeId} className="min-h-dvh">
         <ProfileGate
           profiles={profileState.profiles}
+          activeProfileId={playerProfile?.id}
           onSelect={selectProfile}
           onCreate={addProfile}
           onRename={renameProfile}
-          onDismiss={playerProfile ? () => setProfileGateOpen(false) : undefined}
+          onDelete={profile => {
+            const next = removeProfile(profileState, profile.id);
+            if (!writeProfileState(next)) return false;
+            setProfileState(next);
+            if (profile.id === profileState.activeId && name === profile.name) setName("");
+            return true;
+          }}
+          onReplay={(profile, previousGame) => {
+            selectProfile(profile);
+            window.location.href = `/?map=${encodeURIComponent(previousGame.mapCode)}&variant=${previousGame.variant}`;
+          }}
         />
       </div>
     </BoardThemeContext>;
@@ -493,16 +507,18 @@ export function MultiplayerApp() {
     <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
       {!privateGame && <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
-        {sharedGame ? <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span> : <span className="hidden text-xs text-muted sm:block">{translateText("One island. Your own hand.")}</span>}
+        {sharedGame && <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span>}
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
+          ...(host && game ? [{ label: translateText("Reset game"), disabled, onSelect: () => setDialog("reset") }] : []),
         ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
+          profileName={invitation ? playerProfile?.name : undefined}
           actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
-            ...(invitation ? [{ label: translateText("Switch profile"), onSelect: () => setProfileGateOpen(true) }] : []),
+            ...(invitation ? [{ label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) }] : []),
           ]}
           exitAction={{ label: translateText("Single-device play"), onSelect: () => { window.location.href = "/"; } }}
         />}
@@ -534,7 +550,7 @@ export function MultiplayerApp() {
           {host && snapshot?.previewBoard && <section aria-label={translateText("Island preview")} className="multiplayer-lobby-island panel min-w-0 p-4 sm:p-6">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
                   <div className="flex rounded-xl bg-moss p-1" role="group" aria-label={translateText("Game version")}>
                     {(["original", "seafarers"] as GameVariant[]).map(variant => (
                       <button key={variant} aria-pressed={snapshot.variant === variant} disabled={disabled}
@@ -544,30 +560,29 @@ export function MultiplayerApp() {
                       </button>
                     ))}
                   </div>
-                  <form className="flex items-center gap-2" onSubmit={event => {
-                    event.preventDefault();
-                    if (mapCode.trim()) session.current?.useMapSeed(mapCode);
-                  }}>
-                    <input
-                      className="field min-h-9 w-28 px-2 font-mono text-xs uppercase"
-                      aria-label={translateText("Map code")}
-                      title={translateText("Map code")}
-                      placeholder="XXXXXXXX"
-                      maxLength={8}
-                      autoComplete="off"
-                      value={mapCode}
-                      disabled={disabled}
-                      onChange={event => setMapCode(event.target.value)}
-                    />
-                    <button className="button-secondary px-3 text-xs" disabled={disabled || !mapCode.trim()}>{translateText("Replay map")}</button>
-                  </form>
-                  <button className="button-secondary px-3 text-xs" aria-label={translateText("Shuffle island preview")} disabled={disabled} onClick={() => session.current?.shuffleBoard()}>{translateText("Shuffle")}</button>
                 </div>
               </div>
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
-                <Board board={snapshot.previewBoard} players={[]} robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id} pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id} fillBoardWithWater={boardSettings.fillBoardWithWater} interactive={false} compact fit onChangeTheme={() => setDialog("theme")} />
+                <Board
+                  board={snapshot.previewBoard}
+                  players={[]}
+                  robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id}
+                  pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id}
+                  fillBoardWithWater={boardSettings.fillBoardWithWater}
+                  interactive={false}
+                  compact
+                  fit
+                  onChangeTheme={() => setDialog("theme")}
+                  headerControls={<MapSeedControls
+                    value={mapCode}
+                    onChange={setMapCode}
+                    disabled={disabled}
+                    onLoad={code => session.current?.useMapSeed(code)}
+                    onShuffle={() => session.current?.shuffleBoard()}
+                  />}
+                />
               </div>
-              <p className="mt-4 text-xs leading-5 text-muted">{snapshot.variant === "seafarers" ? <><strong>{translateText("Heading for New Shores")}</strong>{" "}{translateText("Main island setup. Discover three islands. First to 13 points wins.")}</> : translateText("Shuffle until you find your island. Starting the game keeps this exact map.")}</p>
+              {snapshot.variant === "seafarers" && <p className="mt-4 text-xs leading-5 text-muted"><strong>{translateText("Heading for New Shores")}</strong>{" "}{translateText("Main island setup. Discover three islands. First to 13 points wins.")}</p>}
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
           {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
@@ -631,7 +646,6 @@ export function MultiplayerApp() {
                 <button className="button-secondary" disabled={disabled || !snapshot || playerCount >= 4} onClick={() => session.current?.addComputer(language)}>{translateText("Add computer")}</button>
                 <button className="button-primary" aria-describedby="lobby-readiness" disabled={disabled || !snapshot || missingPlayers > 0 || disconnectedPlayers.length > 0} onClick={() => session.current?.startGame()}>{translateText("Start game")}</button>
               </div>
-              <p className="lobby-start-note my-5 text-xs leading-6 text-muted">{translateText("Play with three or four human or computer players. Turn order is randomized when the game starts.")}</p>
             </>}
           </section>
           </div>
@@ -703,7 +717,7 @@ export function MultiplayerApp() {
           )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={view?.status} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
+          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
           ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
@@ -728,10 +742,22 @@ export function MultiplayerApp() {
           )}
         </div>}
       </main>
-      {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
+      {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices key={game.gameId} thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
       {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
       {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} multiplayer onClose={() => setDialog(null)} />}
       {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
+      {dialog === "reset" && host && game && <Dialog title={translateText("Reset this game?")} onClose={() => setDialog(null)}>
+        <p className="mb-5 text-sm leading-6">{translateText("Restart from the first settlement on the same island with the same players. All current progress will be lost.")}</p>
+        <div className="flex gap-3">
+          <button className="button-secondary" onClick={() => setDialog(null)}>{translateText("Keep playing")}</button>
+          <button className="button-primary" disabled={disabled} onClick={() => {
+            session.current?.resetGame();
+            setSelected(null);
+            setMovingShip(null);
+            setDialog(null);
+          }}>{translateText("Reset game")}</button>
+        </div>
+      </Dialog>}
       {dialog === "leave" && <Dialog title={translateText(host ? "Close this room?" : "Leave this room?")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText(host ? "The board holds the game in memory. Closing it ends the game for everyone; there is no automatic host transfer or saved game." : "Your seat stays reserved while the host remains open. Open the invitation in this tab to reconnect.")}</p>
         <div className="flex gap-3"><button className="button-secondary" onClick={() => setDialog(null)}>{translateText("Keep playing")}</button><button className="button-primary" onClick={() => { session.current?.close(); session.current = null; window.location.href = "/"; }}>{translateText("Leave room")}</button></div>
