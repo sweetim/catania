@@ -533,6 +533,13 @@ export function App() {
     game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement").length >= 5
       ? translateText("All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.")
       : null;
+  const cityUnavailable = game && viewer
+    ? game.board.vertices.filter(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "city").length >= 4
+      ? translateText("All 4 cities are on the board.")
+      : canAfford(COSTS.city) && !game.board.vertices.some(vertex => vertex.building?.playerId === viewer.id && vertex.building.kind === "settlement")
+        ? translateText("You have no settlements to upgrade. Build a settlement first.")
+        : null
+    : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-settlement" || buildMode === "settlement"
@@ -1231,7 +1238,7 @@ export function App() {
                         : piece === "ship" ? legalShipEdges(game, viewer.id) : piece === "city"
                           ? legalCityVertices(game, viewer.id)
                           : legalSettlementVertices(game, viewer.id);
-                    const explanation = piece === "settlement" ? settlementUnavailable : null;
+                    const explanation = piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
                     const unavailable = explanation ?? (!normalActions
                       ? translateText("Available after rolling on your turn.")
                       : !canAfford(COSTS[piece])
@@ -1252,7 +1259,7 @@ export function App() {
                             !locations.length
                           }
                           aria-pressed={buildMode === piece}
-                          aria-describedby={explanation ? "settlement-build-explanation" : undefined}
+                          aria-describedby={explanation ? `${piece}-build-explanation` : undefined}
                           onClick={() => {
                             setBuildMode(buildMode === piece ? null : piece);
                             setSelected(null);
@@ -1261,7 +1268,7 @@ export function App() {
                           }}
                         />
                         {explanation && (
-                          <p id="settlement-build-explanation" className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">
+                          <p id={`${piece}-build-explanation`} className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">
                             {explanation}
                           </p>
                         )}
@@ -1429,7 +1436,7 @@ export function App() {
                 { kind: "cities", label: translateText("Cities"), note: winnerScore.cities ? translateText("{count} × {points} VP", { count: winnerScore.cities / 2, points: 2 }) : undefined, points: winnerScore.cities },
                 { kind: "longest-road", label: translateText(game.variant === "seafarers" ? "Longest Route" : "Longest Road"), points: winnerScore.longestRoad },
                 { kind: "largest-army", label: translateText("Largest Army"), points: winnerScore.largestArmy },
-                ...(game.variant === "seafarers" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), points: winnerScore.islands ?? 0 }] : []),
+                ...(game.variant === "seafarers" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
                 { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
               profileNote={humanCount === 1 && playerProfile && winner.control === "human"

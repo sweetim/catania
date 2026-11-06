@@ -45,6 +45,8 @@ export const multiplayerUiTranslations = {
   "Upgrade to city": "都市にアップグレード",
   "Build {piece}": "{piece}を建設",
   "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.": "5個すべての開拓地が盤上にあります。1つを都市に発展させると、開拓地の駒を再び使えます。",
+  "All 4 cities are on the board.": "4つすべての都市が盤上にあります。",
+  "You have no settlements to upgrade. Build a settlement first.": "都市に発展させる開拓地がありません。まず開拓地を建設してください。",
   "Available after rolling on your turn.": "自分の手番でサイコロを振った後に使えます。",
   "You need more resources.": "資源が足りません。",
   "No legal position or no pieces remaining.": "建設できる場所がないか、駒が残っていません。",

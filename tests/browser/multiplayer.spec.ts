@@ -1397,9 +1397,10 @@ test("private player header matches the single-device hand and total score", asy
   await expect(seat).toHaveClass(/player-seat-leading/);
   await expect(seat.locator(".player-score > span")).toHaveText(["VP", "8"]);
   await expect(seat).not.toContainText("total");
-  for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)", "Island bonus (+2 victory points)"]) {
+  for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)", "Island bonus: 1 island (+2 victory points)"]) {
     await expect(seat.getByRole("img", { name: label, exact: true })).toBeVisible();
   }
+  await expect(seat.getByRole("img", { name: "Island bonus: 1 island (+2 victory points)", exact: true }).locator("strong")).toHaveText("1");
 
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 667 }, { width: 844, height: 390 }, { width: 1440, height: 900 }]) {
     await phone.setViewportSize(viewport);
@@ -1492,7 +1493,7 @@ test("private build rows match the sidebar without stretching when development c
   await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
 });
 
-test("private build buttons explain resources, legal spots and exhausted settlement stock", async ({ multiplayer }, testInfo) => {
+test("private build buttons explain resources, legal spots, settlement stock and city limits", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -1502,16 +1503,33 @@ test("private build buttons explain resources, legal spots and exhausted settlem
   const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
   const city = building.getByRole("button", { name: "Upgrade to city", exact: true });
   const explanation = building.locator("#settlement-build-explanation");
+  const cityExplanation = building.locator("#city-build-explanation");
   const stockReason = "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.";
+  const cityCapReason = "All 4 cities are on the board.";
+  const noSettlementReason = "You have no settlements to upgrade. Build a settlement first.";
 
-  // The empty board offers no legal spot; missing brick explains road and settlement.
+  // The empty board offers no legal spot; missing resources explain every row,
+  // and the city explanation stays hidden while the upgrade is unaffordable.
+  player.resources = { wood: 5, brick: 0, wool: 5, grain: 1, ore: 2 };
+  await present();
   await expect(road).toBeDisabled();
   await expect(road).toHaveAttribute("title", "You need more resources.");
   await expect(settlement).toBeDisabled();
   await expect(settlement).toHaveAttribute("title", "You need more resources.");
   await expect(city).toBeDisabled();
-  await expect(city).toHaveAttribute("title", "No legal position or no pieces remaining.");
+  await expect(city).toHaveAttribute("title", "You need more resources.");
+  await expect(city).not.toHaveAttribute("aria-describedby");
+  await expect(cityExplanation).toHaveCount(0);
   await expect(explanation).toHaveCount(0);
+
+  // With enough resources but no settlement on the board, the city row explains why.
+  player.resources = { wood: 5, brick: 0, wool: 5, grain: 5, ore: 5 };
+  await present();
+  await expect(city).toBeDisabled();
+  await expect(city).toHaveAttribute("title", noSettlementReason);
+  await expect(city).toHaveAttribute("aria-describedby", "city-build-explanation");
+  await expect(city).toHaveAccessibleDescription(noSettlementReason);
+  await expect(cityExplanation).toHaveText(noSettlementReason);
 
   // Five settlements exhaust the stock even with resources and roads to spare.
   const neighborIds = (vertexId: string) => game.board.edges.filter(edge => edge.vertexIds.includes(vertexId))
@@ -1546,6 +1564,28 @@ test("private build buttons explain resources, legal spots and exhausted settlem
   await expect(city).toBeEnabled();
   await expect(road).toBeEnabled();
   await screenshot(phone, testInfo, "private-settlement-stock-recovered");
+
+  // Four cities reach the upgrade cap even with resources and a settlement to spare.
+  for (const home of homes.slice(1, 4)) home.building = { playerId: player.id, kind: "city" };
+  await present();
+  await expect(city).toBeDisabled();
+  await expect(city).toHaveAttribute("title", cityCapReason);
+  await expect(city).toHaveAttribute("aria-describedby", "city-build-explanation");
+  await expect(city).toHaveAccessibleDescription(cityCapReason);
+  await expect(cityExplanation).toHaveText(cityCapReason);
+  await city.scrollIntoViewIfNeeded();
+  await noHorizontalOverflow(phone);
+  await screenshot(phone, testInfo, "private-city-cap-exhausted");
+
+  // Without settlements on the board there is nothing left to upgrade.
+  for (const home of homes.slice(2)) home.building = null;
+  await present();
+  await expect(city).toBeDisabled();
+  await expect(city).toHaveAttribute("title", noSettlementReason);
+  await expect(city).toHaveAttribute("aria-describedby", "city-build-explanation");
+  await expect(city).toHaveAccessibleDescription(noSettlementReason);
+  await expect(cityExplanation).toHaveText(noSettlementReason);
+  await screenshot(phone, testInfo, "private-city-no-settlements");
 });
 
 test("host and three private phones play over real PeerJS channels and recover a refreshed seat", async ({ multiplayer }, testInfo) => {
@@ -2195,6 +2235,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory.locator("dl > div svg")).toHaveCount(6);
   const islandRow = victory.locator("dl > div").filter({ hasText: "Island bonuses" });
   await expect(islandRow.locator("dd")).toHaveText("2");
+  await expect(islandRow.locator("dt")).toContainText("1 × 2 VP");
   await expect(islandRow.locator(".victory-chip")).toHaveClass(/text-\[#b58a2d\]/);
   await expect(victory).toContainText("2 × 1 VP");
   await expect(victory).toContainText("2 × 2 VP");

@@ -9,6 +9,8 @@ export const appTranslations = {
   "Follow the dice, the matching number tokens, and the cards arriving in your hand.": "サイコロの目、対応する数字のチップ、手札に届くカードを確認しましょう。",
   "{name} is playing. You can inspect your hand and the island while you wait.": "{name}の手番です。待っている間も手札や島を確認できます。",
   "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.": "5個すべての開拓地が盤上にあります。1つを都市に発展させると、開拓地の駒を再び使えます。",
+  "All 4 cities are on the board.": "4つすべての都市が盤上にあります。",
+  "You have no settlements to upgrade. Build a settlement first.": "都市に発展させる開拓地がありません。まず開拓地を建設してください。",
   "A little friendly competition": "みんなで楽しむ、ちょっとした勝負",
   "Help": "ヘルプ",
   "Menu": "メニュー",

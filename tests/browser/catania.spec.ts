@@ -2844,8 +2844,13 @@ test("settlement build shows a description only for exhausted pieces and recover
   const playerId = state.activePlayerId;
   const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
   const settlement = building.getByRole("button", { name: /^Build settlement\b/ });
+  const city = building.getByRole("button", { name: /^Upgrade to city\b/ });
   const explanation = building.locator("#settlement-build-explanation");
   const stockReason = "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.";
+
+  // Owning settlements to upgrade keeps the city control free of a stock explanation.
+  await expect(city).not.toHaveAttribute("aria-describedby");
+  await expect(building.locator("#city-build-explanation")).toHaveCount(0);
 
   async function expectUnavailable(reason: string) {
     const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });

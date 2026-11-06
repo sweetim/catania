@@ -128,9 +128,10 @@ Game version cannot change during play and is not saved across reloads.
   The robber blocks gold production as it does ordinary terrain.
 - Your first settlement on each small island earns two extra points, independently
   for every player. Further settlements on that island do not repeat the bonus,
-  and upgrading to a city preserves it. A gold island badge next to each player's
-  VP indicates earned island points, and island points appear in the final
-  breakdown. Win at 13 points on your own turn.
+  and upgrading to a city preserves it. A gold island badge with its settled-island
+  count next to each player's VP indicates earned island points, and the final
+  breakdown lists them with a settled-island count and per-island value. Win at 13
+  points on your own turn.
 
 Computer opponents can settle the islands, build ships, resolve pirate/theft and
 gold choices, and complete games under the same rules as humans.
@@ -272,7 +273,8 @@ count as a shield icon and number, followed by a road icon and their longest con
 including zero, on desktop and phones. These use matching icon sizes and gaps.
 A gold crossed-swords icon marks Largest Army, and a matching gold road icon marks
 Longest Road. In Seafarers games a matching gold island icon marks earned island
-bonus points, with its exact total in the tooltip. These reward icons sit together
+bonus points, with the settled-island count stacked beneath it and the exact total
+in the tooltip. These reward icons sit together
 immediately to the right of VP,
 separate from the Knight and road counts. Each tooltip and accessible label includes
 the award's victory points without adding a text badge.
@@ -303,9 +305,12 @@ development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.
 A visible explanation beneath **Build settlement** appears only when all five of
 your settlement pieces are on the board, prompting a city upgrade to free a piece.
-This explanation is also associated with the button for screen readers and
-disappears when a settlement piece is freed. Other restrictions still disable the
-button and retain standard tooltips, but do not add descriptions beneath it.
+A matching explanation beneath **Upgrade to city** appears when you already have
+four cities on the board, or when you can afford a city but have no settlement to
+upgrade. Each explanation is also associated with its button for screen readers;
+the settlement one disappears when a settlement piece is freed and the city ones
+when the limit no longer applies. Other restrictions still disable the
+buttons and retain standard tooltips, but do not add descriptions beneath them.
 
 Owned development cards appear below as a vertical stack, one row per card type
 with a quantity badge, a distinct icon, and a description below its title. The

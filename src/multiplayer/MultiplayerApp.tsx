@@ -105,7 +105,7 @@ function victoryBreakdownRows(
     { kind: "cities", label: translateText("Cities"), note: breakdown.cities ? translateText("{count} × {points} VP", { count: breakdown.cities / 2, points: 2 }) : undefined, points: breakdown.cities },
     { kind: "longest-road", label: translateText(breakdown.islands !== undefined ? "Longest Route" : "Longest Road"), points: breakdown.longestRoad },
     { kind: "largest-army", label: translateText("Largest Army"), points: breakdown.largestArmy },
-    ...(breakdown.islands !== undefined ? [{ kind: "islands" as const, label: translateText("Island bonuses"), points: breakdown.islands }] : []),
+    ...(breakdown.islands !== undefined ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: breakdown.islands ? translateText("{count} × {points} VP", { count: breakdown.islands / 2, points: 2 }) : undefined, points: breakdown.islands }] : []),
     { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: breakdown.hidden ? translateText("{count} × {points} VP", { count: breakdown.hidden, points: 1 }) : undefined, points: breakdown.hidden },
   ];
 }
@@ -151,6 +151,11 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   const settlementUnavailable = game.board.vertices.filter(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "settlement").length >= 5
     ? translateText("All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.")
     : null;
+  const cityUnavailable = game.board.vertices.filter(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "city").length >= 4
+    ? translateText("All 4 cities are on the board.")
+    : canPay(COSTS.city) && !game.board.vertices.some(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "settlement")
+      ? translateText("You have no settlements to upgrade. Build a settlement first.")
+      : null;
   const trade = game.trade;
   const tradeIdentity = trade ? JSON.stringify([trade.offeredBy, trade.give, trade.receive]) : null;
   const staleMessage = translateText("The game changed. Close and reopen this dialog to review the latest state.");
@@ -244,7 +249,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
               : piece === "ship" ? legalShipEdges(game, player.id) : piece === "city"
                 ? legalCityVertices(game, player.id)
                 : legalSettlementVertices(game, player.id);
-            const explanation = piece === "settlement" ? settlementUnavailable : null;
+            const explanation = piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
             const unavailable = explanation ?? (!normalActions
               ? translateText("Available after rolling on your turn.")
               : !canPay(COSTS[piece])
@@ -255,11 +260,11 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
             return <Fragment key={piece}>
               <BuildButton piece={piece} color={player.color} resources={COSTS[piece]}
                 aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })}
-                aria-pressed={snapshot.buildMode === piece} aria-describedby={explanation ? "settlement-build-explanation" : undefined}
+                aria-pressed={snapshot.buildMode === piece} aria-describedby={explanation ? `${piece}-build-explanation` : undefined}
                 title={unavailable}
                 disabled={disabled || !normalActions || !canPay(COSTS[piece]) || !locations.length}
                 onClick={() => selectBuild(snapshot.buildMode === piece ? null : piece)} />
-              {explanation && <p id="settlement-build-explanation" className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
+              {explanation && <p id={`${piece}-build-explanation`} className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
             </Fragment>;
           })}
           {game.variant === "seafarers" && <button className="button-secondary w-full"
