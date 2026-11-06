@@ -1400,7 +1400,8 @@ test("private player header matches the single-device hand and total score", asy
   for (const label of ["95 resource cards", "2 development cards", "12 knights played", "15 connected roads", "Largest Army (+2 victory points)", "Longest Road (+2 victory points)", "Island bonus: 1 island (+2 victory points)"]) {
     await expect(seat.getByRole("img", { name: label, exact: true })).toBeVisible();
   }
-  await expect(seat.getByRole("img", { name: "Island bonus: 1 island (+2 victory points)", exact: true }).locator("strong")).toHaveText("1");
+  const islandAward = seat.getByRole("img", { name: "Island bonus: 1 island (+2 victory points)", exact: true });
+  await expect(islandAward.locator("strong")).toHaveText("1");
 
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 667 }, { width: 844, height: 390 }, { width: 1440, height: 900 }]) {
     await phone.setViewportSize(viewport);
@@ -1411,6 +1412,11 @@ test("private player header matches the single-device hand and total score", asy
     expect(await summary.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect((await seat.locator(".player-name").boundingBox())!.width).toBeGreaterThan(30);
     for (const statistic of await seat.getByRole("img").all()) await expect(statistic).toBeInViewport({ ratio: 1 });
+    const islandIconBounds = (await islandAward.locator("svg").boundingBox())!;
+    const islandCountBounds = (await islandAward.locator("strong").boundingBox())!;
+    expect(islandCountBounds.x - islandIconBounds.x - islandIconBounds.width).toBeCloseTo(1, 0);
+    expect(islandCountBounds.y).toBeGreaterThan(islandIconBounds.y + islandIconBounds.height / 2);
+    expect(islandCountBounds.y + islandCountBounds.height - islandIconBounds.y - islandIconBounds.height).toBeCloseTo(2, 0);
     const summaryBounds = (await summary.boundingBox())!;
     const handBounds = (await phone.locator(".private-hand").boundingBox())!;
     expect(handBounds.width).toBe(summaryBounds.width);
