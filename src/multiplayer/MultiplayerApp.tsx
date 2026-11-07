@@ -21,7 +21,8 @@ import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
-import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
+import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget } from "../game/engine";
+import { pirateStartTileId, seededRandom } from "../game/board";
 import { isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
@@ -566,7 +567,7 @@ export function MultiplayerApp() {
                   board={snapshot.previewBoard}
                   players={[]}
                   robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id}
-                  pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id}
+                  pirateTileId={pirateStartTileId(snapshot.previewBoard, seededRandom(snapshot.mapSeed ?? ""))}
                   fillBoardWithWater={boardSettings.fillBoardWithWater}
                   interactive={false}
                   compact
@@ -666,6 +667,7 @@ export function MultiplayerApp() {
           <section aria-label={translateText("Shared game board")} className="table-board flex min-w-0 flex-1">
             <div className="board-tablemat">
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
+                victoryTarget={victoryTarget(game.variant)}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
                 routeChoice={isSeafarers(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />

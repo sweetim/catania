@@ -284,3 +284,9 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   return { tiles, vertices, edges, ports, ...(isSeafarers(variant) ? { variant } : {}),
     ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}) };
 }
+
+/** Picks the pirate ship's starting sea tile, so it varies with every shuffle. */
+export function pirateStartTileId(board: Board, random: () => number = secureRandom): string | null {
+  const seaTiles = board.tiles.filter(tile => tile.terrain === "sea");
+  return seaTiles.length === 0 ? null : seaTiles[randomInteger(seaTiles.length, random)]!.id;
+}

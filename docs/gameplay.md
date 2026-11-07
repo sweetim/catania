@@ -196,7 +196,9 @@ header remains available during private handoff.
 Bank resource quantities sit below their icons inside each card, without overlapping badges.
 On phones, switch between **Hand**, **Board**, and **Players**. Zoom the board to
 enlarge placement targets, then scroll or drag inside it. The board footer contains
-**Theme** alongside the zoom controls, without instruction or legend text.
+**Theme** alongside the zoom controls, without instruction or legend text. The
+victory point target, such as **10 VP to win**, sits centered in the same bar;
+it shortens to the bare number pair on the narrowest phones.
 Short screens can scroll within the hand or player panel without moving the board.
 On very short desktop windows, the entire sidebar scrolls internally so the status
 card, turn controls, and hand tasks remain reachable.

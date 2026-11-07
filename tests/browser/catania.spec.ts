@@ -64,6 +64,7 @@ async function boardFrame(page: Page) {
   const theme = board.locator(".board-controls").getByRole("button", { name: "Change theme", exact: true });
   await expect(theme).toHaveText("Theme");
   await expect(theme).toBeInViewport({ ratio: 1 });
+  await expect(board.locator(".board-controls")).toContainText(/\b\d+ VP( to win)?\b/);
   await noPageOverflow(page);
   const frame = await board.locator(".board-surface, .board-viewport, .board-map").evaluateAll(elements => elements.map(element => {
     const { x, y, width, height } = element.getBoundingClientRect();
@@ -2619,45 +2620,63 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
-  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  // Seeded island 225DV7H3 with seed 17: Jordan (first roller) settles vertex-35 with a setup
+  // ship on edge-61, collects wood and wool from vertex-16, then explores tile-31 (brick 4)
+  // with a ship on edge-146 after rolling 1 + 1.
+  const placements: { player: string; vertexId: string; kind: "road" | "ship"; edgeId: string }[] = [
+    { player: "Jordan", vertexId: "vertex-35", kind: "ship", edgeId: "edge-61" },
+    { player: "Sam", vertexId: "vertex-0", kind: "road", edgeId: "edge-0" },
+    { player: "Alex", vertexId: "vertex-2", kind: "road", edgeId: "edge-1" },
+    { player: "Alex", vertexId: "vertex-4", kind: "road", edgeId: "edge-3" },
+    { player: "Sam", vertexId: "vertex-7", kind: "road", edgeId: "edge-7" },
+    { player: "Jordan", vertexId: "vertex-16", kind: "road", edgeId: "edge-17" },
+  ];
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  await mapCode.fill("225DV7H3");
+  await mapCode.press("Enter");
+  await showHomeView(page, "Setup");
   await seedRandomness(page, 17);
-  let seed = 17;
-  const random = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 0x100000000;
-  };
-  const board = createBoard(seededRandom(mapCode), "fog-islands");
-  const state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
-    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
-  })), random, board);
-  let placement: { vertexId: string; edgeId: string } | undefined;
-  for (const vertexId of legalSettlementVertices(state, state.activePlayerId)) {
-    const afterSettlement = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
-    for (const edgeId of legalRoadEdges(afterSettlement, afterSettlement.activePlayerId)) {
-      const afterRoad = applyAction(afterSettlement, afterSettlement.activePlayerId, { type: "place-road", edgeId });
-      if (afterRoad.phase.type === "gold") continue;
-      const revealed = afterRoad.board.tiles.filter(tile => tile.terrain !== "fog" &&
-        board.tiles.find(original => original.id === tile.id)!.terrain === "fog");
-      if (revealed.length !== 1) continue;
-      placement = { vertexId, edgeId };
-      break;
-    }
-    if (placement) break;
-  }
-  expect(placement, "The first player can settle where a setup road explores exactly one fog hex").toBeDefined();
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
-  await revealHand(page);
-  await showView(page, "board");
+  let deviceOwner = "";
+  for (const [index, placement] of placements.entries()) {
+    if (deviceOwner !== placement.player) {
+      await revealHand(page);
+      deviceOwner = placement.player;
+    }
+    await showView(page, "board");
+    await page.getByRole("button", { name: `Place settlement at ${placement.vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    if (index >= 3 && (await collection.count())) {
+      await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    }
+    if (placement.kind === "ship") {
+      await page.getByRole("button", { name: "Choose ships", exact: true }).click();
+    }
+    await page.getByRole("button", { name: `Build ${placement.kind} at ${placement.edgeId}`, exact: true }).click();
+    if (placement.kind === "ship") {
+      await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
+    }
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  }
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+  await showView(page, "board");
   await expect(fogLabels).toHaveCount(13);
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await page.getByRole("button", { name: `Place settlement at ${placement!.vertexId}`, exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await page.getByRole("button", { name: `Build road at ${placement!.edgeId}`, exact: true }).click();
+  await chooseDice(page, [1, 1]);
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await revealBuildSection(page);
+  const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
+  await building.getByRole("button", { name: /^Build ship\b/ }).click();
+  await showView(page, "board");
+  await page.getByRole("button", { name: "Build ship at edge-146", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   const veil = page.locator(".fog-reveal-veil");
   await expect(veil).toHaveCount(1);
   await expect(fogLabels).toHaveCount(12);
+  await expect(page.getByRole("img", { name: /^Hills, brick, roll 4/ })).toBeVisible();
   expect(await veil.evaluate(element => getComputedStyle(element).animationName)).toBe("fog-lift");
   await expect.poll(() => veil.evaluate(element => getComputedStyle(element).opacity)).toBe("0");
   await screenshot(page, testInfo, "fog-reveal", false);

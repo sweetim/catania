@@ -43,6 +43,7 @@ export function Board({
   interactive = true,
   compact = false,
   fit = false,
+  victoryTarget,
 }: {
   board: BoardState;
   players: Pick<Player, "id" | "name" | "color" | "control">[];
@@ -71,6 +72,7 @@ export function Board({
   interactive?: boolean;
   compact?: boolean;
   fit?: boolean;
+  victoryTarget?: number;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(boardTranslations);
@@ -1494,8 +1496,14 @@ export function Board({
         </div>
       )}
       <div
-        className={`board-controls flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+        className={`board-controls relative flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
+        {victoryTarget !== undefined && (
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[.08em] text-[#6a7862]">
+            <span className="tabular-nums max-[380px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
+            <span className="tabular-nums hidden max-[380px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
+          </span>
+        )}
         {routeChoice && <div className="basis-full">{routeChoice}</div>}
         {onMovePirateOffBoard && <button className="button-secondary mr-auto px-2 text-xs" onClick={onMovePirateOffBoard}>
           {translateText("Move pirate off board")}

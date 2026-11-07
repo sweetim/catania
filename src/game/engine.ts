@@ -1,5 +1,5 @@
 import { match } from "ts-pattern";
-import { createBoard, edgeTiles, isLand, isResource, randomInteger, secureRandom, shuffle } from "./board";
+import { createBoard, edgeTiles, isLand, isResource, pirateStartTileId, randomInteger, secureRandom, shuffle } from "./board";
 import { isGameVariant, isSeafarers } from "./types";
 import { GameError } from "./messages";
 import type { GameMessage } from "./messages";
@@ -75,7 +75,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     ...(variant === "four-islands" ? { startingIslandIds: Object.fromEntries(players.map(player => [player.id, []])) } : {}),
     turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
-    pirateTileId: board.tiles.find(tile => tile.terrain === "sea")?.id ?? null,
+    pirateTileId: pirateStartTileId(board, random),
     shipMoved: false, shipsBuiltThisTurn: [],
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
     log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], monopolies: [], trade: null, computerTradeRequested: false, developmentPlayed: false,

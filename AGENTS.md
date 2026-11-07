@@ -79,6 +79,9 @@ work") require constant clarification.
   behavior and run them. When browser tooling is available, verify the affected
   UI directly. Report test results and any verification that could not be
   completed.
+- Multiple agents work on this workspace concurrently. When running Playwright
+  browser tests, use your own port if the default one is in use, and scope the
+  tests to your own changes only.
 
 ## 6. Learn From User Feedback
 

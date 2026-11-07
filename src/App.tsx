@@ -45,7 +45,7 @@ import {
   ResourceCard,
   ResourceInventory,
 } from "./components/GameUi";
-import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "./game/board";
+import { createBoard, generateMapSeed, normalizeMapSeed, pirateStartTileId, seededRandom } from "./game/board";
 import { chooseComputerAction, getComputerActionDelay, getController } from "./game/computer";
 import {
   applyAction,
@@ -875,7 +875,7 @@ export function App() {
               <Board
                 board={preview.board}
                 players={[]}
-                pirateTileId={preview.board.tiles.find(tile => tile.terrain === "sea")?.id}
+                pirateTileId={pirateStartTileId(preview.board, seededRandom(preview.seed))}
                 fillBoardWithWater={fillBoardWithWater}
                 robberTileId={
                   preview.board.tiles.find((tile) => tile.terrain === "desert")?.id
@@ -976,6 +976,7 @@ export function App() {
               onChangeTheme={() => setDialog("theme")}
               compact
               fit
+              victoryTarget={victoryTarget(game.variant)}
             />
           </div>
           <section className="handoff-card panel text-center">
@@ -1069,6 +1070,7 @@ export function App() {
                   rolledNumber={rolledNumber}
                   onChangeTheme={() => setDialog("theme")}
                   fit
+                  victoryTarget={victoryTarget(game.variant)}
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
@@ -1480,7 +1482,7 @@ export function App() {
             <RollSummary seafarers={isSeafarers(game.variant)} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />
+          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit victoryTarget={victoryTarget(game.variant)} />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{errorText}</p>}
         </main>
       )}
