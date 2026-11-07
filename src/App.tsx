@@ -883,6 +883,7 @@ export function App() {
                 interactive={false}
                 compact
                 fit
+                victoryTarget={victoryTarget(variant)}
                 onChangeTheme={() => setDialog("theme")}
                 headerControls={<MapSeedControls
                   value={mapCode}

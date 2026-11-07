@@ -274,7 +274,7 @@
   box-shadow: inset 0 1px #fffaf0, 0 3px 0 #d0c5ae, 0 8px 24px #423d2810;
 }
 .board-surface-fit .board-controls { flex: none; height: 60px; padding: 6px 10px; }
-.board-theme-button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; margin-right: auto; padding: 0 8px; border: 1px solid #dcdccb; border-radius: 12px; background: #fffdf5; color: #455e4d; font-size: 11px; font-weight: 600; }
+.board-theme-button { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 8px; border: 1px solid #dcdccb; border-radius: 12px; background: #fffdf5; color: #455e4d; font-size: 11px; font-weight: 600; }
 .board-theme-button:hover { background: #e9edde; }
 .board-surface[data-theme="pixel"] .terrain-hex > text { font-family: monospace; letter-spacing: 0; }
 .resource-card[data-theme="ceramic"] { background-image: linear-gradient(135deg, #ffffff26, transparent 55%, #ffffff1a); box-shadow: inset 0 0 0 1px #ffffff66, 0 2px 3px #253b3626; }

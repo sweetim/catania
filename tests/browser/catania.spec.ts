@@ -2619,7 +2619,13 @@ test("Seafarers aligns diagonal ships and preserves vertical ships with variant-
 test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  const versionSelector = page.getByRole("combobox", { name: "Game version", exact: true });
+  await versionSelector.selectOption("fog-islands");
+  // Switching variants replaces the preview map; fog reveal veils must not play on it.
+  await versionSelector.selectOption("four-islands");
+  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
+  await versionSelector.selectOption("fog-islands");
+  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
   // Seeded island 225DV7H3 with seed 17: Jordan (first roller) settles vertex-35 with a setup
   // ship on edge-61, collects wood and wool from vertex-16, then explores tile-31 (brick 4)
   // with a ship on edge-146 after rolling 1 + 1.
@@ -2678,7 +2684,8 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await expect(fogLabels).toHaveCount(12);
   await expect(page.getByRole("img", { name: /^Hills, brick, roll 4/ })).toBeVisible();
   expect(await veil.evaluate(element => getComputedStyle(element).animationName)).toBe("fog-lift");
-  await expect.poll(() => veil.evaluate(element => getComputedStyle(element).opacity)).toBe("0");
+  // The lifted veil removes itself so later board changes cannot replay the finished animation.
+  await expect(veil).toHaveCount(0);
   await screenshot(page, testInfo, "fog-reveal", false);
 });
 

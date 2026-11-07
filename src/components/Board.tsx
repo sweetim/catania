@@ -98,19 +98,33 @@ export function Board({
     board.vertices.map((vertex) => [vertex.id, vertex]),
   );
   const playersById = new Map(players.map((player) => [player.id, player]));
-  const fogRevealState = useRef<{ terrains: Map<string, Terrain>; generations: Map<string, number> }>({
+  const fogRevealState = useRef<{ terrains: Map<string, Terrain>; generations: Map<string, number>; version: number }>({
     terrains: new Map(),
     generations: new Map(),
+    version: 0,
   });
-  const revealedFogTileIds = useMemo(() => {
+  const [completedVeils, setCompletedVeils] = useState(() => new Set<string>());
+  const fogReveals = useMemo(() => {
     const { terrains, generations } = fogRevealState.current;
-    for (const tile of board.tiles) {
-      if (terrains.get(tile.id) === "fog" && tile.terrain !== "fog") {
-        generations.set(tile.id, (generations.get(tile.id) ?? 0) + 1);
+    // A genuine reveal only turns fog tiles into their discovered terrain; any other terrain
+    // change or tile-set change means a different map (variant switch, new code, restart),
+    // which must restart tracking instead of playing reveal animations.
+    const replacedMap = board.tiles.some(tile => {
+      const previous = terrains.get(tile.id);
+      return previous !== undefined && previous !== tile.terrain && !(previous === "fog" && tile.terrain !== "fog");
+    }) || board.tiles.length !== terrains.size;
+    if (replacedMap) {
+      fogRevealState.current.generations = new Map();
+      fogRevealState.current.version++;
+    } else {
+      for (const tile of board.tiles) {
+        if (terrains.get(tile.id) === "fog" && tile.terrain !== "fog") {
+          generations.set(tile.id, (generations.get(tile.id) ?? 0) + 1);
+        }
       }
     }
     fogRevealState.current.terrains = new Map(board.tiles.map((tile) => [tile.id, tile.terrain]));
-    return generations;
+    return { generations: fogRevealState.current.generations, version: fogRevealState.current.version };
   }, [board]);
   const halfWidth = Math.max(
     355,
@@ -729,7 +743,10 @@ export function Board({
               const matchesRoll = number !== null && number === rolledNumber;
               const blocked = matchesRoll && robberTileId === tile.id;
               const raised = raisedTileIds.has(tile.id);
-              const fogRevealGeneration = revealedFogTileIds.get(tile.id);
+              const fogRevealGeneration = fogReveals.generations.get(tile.id);
+              const fogRevealVeilKey = fogRevealGeneration === undefined
+                ? null
+                : `${fogReveals.version}:${tile.id}:${fogRevealGeneration}`;
               let description = tile.terrain === "fog"
                 ? translateText("Unexplored fog; terrain and number concealed")
                 : translateText(number === null
@@ -848,11 +865,18 @@ export function Board({
                       ))}
                     </g>
                   )}
-                  {fogRevealGeneration !== undefined && (
+                  {fogRevealVeilKey !== null && !completedVeils.has(fogRevealVeilKey) && (
                     <g
-                      key={`fog-reveal-${fogRevealGeneration}`}
+                      key={`fog-reveal-${fogRevealVeilKey}`}
                       className="fog-reveal-veil"
                       aria-hidden="true"
+                      onAnimationEnd={event => {
+                        // Remove the veil once it has lifted so later DOM reordering (for example
+                        // dice-roll highlights) cannot restart the finished animation.
+                        if (event.animationName === "fog-lift") {
+                          setCompletedVeils(current => new Set(current).add(fogRevealVeilKey));
+                        }
+                      }}
                     >
                       <polygon
                         points={points}
@@ -1496,14 +1520,8 @@ export function Board({
         </div>
       )}
       <div
-        className={`board-controls relative flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
+        className={`board-controls flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
-        {victoryTarget !== undefined && (
-          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[.08em] text-[#6a7862]">
-            <span className="tabular-nums max-[380px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
-            <span className="tabular-nums hidden max-[380px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
-          </span>
-        )}
         {routeChoice && <div className="basis-full">{routeChoice}</div>}
         {onMovePirateOffBoard && <button className="button-secondary mr-auto px-2 text-xs" onClick={onMovePirateOffBoard}>
           {translateText("Move pirate off board")}
@@ -1511,7 +1529,7 @@ export function Board({
         {onChangeTheme && (
           <button
             type="button"
-            className="board-theme-button"
+            className={`board-theme-button ${victoryTarget === undefined ? "mr-auto" : ""}`}
             onClick={onChangeTheme}
             aria-label={translateText("Change theme")}
             aria-haspopup="dialog"
@@ -1523,6 +1541,17 @@ export function Board({
             </svg>
             <span className="board-theme-label">{translateText("Theme")}</span>
           </button>
+        )}
+        {victoryTarget !== undefined && (
+          <span className="@container pointer-events-none flex min-w-0 flex-1 items-center justify-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[10px] font-bold uppercase tabular-nums tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+                <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
+              </svg>
+              <span className="whitespace-nowrap @max-[120px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
+              <span className="hidden whitespace-nowrap @max-[120px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
+            </span>
+          </span>
         )}
         <div
           className="flex shrink-0 items-center gap-1"

@@ -567,11 +567,12 @@ export function MultiplayerApp() {
                   board={snapshot.previewBoard}
                   players={[]}
                   robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id}
-                  pirateTileId={pirateStartTileId(snapshot.previewBoard, seededRandom(snapshot.mapSeed ?? ""))}
+                  pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id}
                   fillBoardWithWater={boardSettings.fillBoardWithWater}
                   interactive={false}
                   compact
                   fit
+                  victoryTarget={victoryTarget(snapshot.variant)}
                   onChangeTheme={() => setDialog("theme")}
                   headerControls={<MapSeedControls
                     value={mapCode}
