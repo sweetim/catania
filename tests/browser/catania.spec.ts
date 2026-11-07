@@ -2615,6 +2615,54 @@ test("Seafarers aligns diagonal ships and preserves vertical ships with variant-
   await expect(help.getByText("Ship", { exact: true })).toHaveCount(1);
 });
 
+test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  await seedRandomness(page, 17);
+  let seed = 17;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const board = createBoard(seededRandom(mapCode), "fog-islands");
+  const state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
+  })), random, board);
+  let placement: { vertexId: string; edgeId: string } | undefined;
+  for (const vertexId of legalSettlementVertices(state, state.activePlayerId)) {
+    const afterSettlement = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    for (const edgeId of legalRoadEdges(afterSettlement, afterSettlement.activePlayerId)) {
+      const afterRoad = applyAction(afterSettlement, afterSettlement.activePlayerId, { type: "place-road", edgeId });
+      if (afterRoad.phase.type === "gold") continue;
+      const revealed = afterRoad.board.tiles.filter(tile => tile.terrain !== "fog" &&
+        board.tiles.find(original => original.id === tile.id)!.terrain === "fog");
+      if (revealed.length !== 1) continue;
+      placement = { vertexId, edgeId };
+      break;
+    }
+    if (placement) break;
+  }
+  expect(placement, "The first player can settle where a setup road explores exactly one fog hex").toBeDefined();
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+  await expect(fogLabels).toHaveCount(13);
+  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
+  await page.getByRole("button", { name: `Place settlement at ${placement!.vertexId}`, exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.getByRole("button", { name: `Build road at ${placement!.edgeId}`, exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  const veil = page.locator(".fog-reveal-veil");
+  await expect(veil).toHaveCount(1);
+  await expect(fogLabels).toHaveCount(12);
+  expect(await veil.evaluate(element => getComputedStyle(element).animationName)).toBe("fog-lift");
+  await expect.poll(() => veil.evaluate(element => getComputedStyle(element).opacity)).toBe("0");
+  await screenshot(page, testInfo, "fog-reveal", false);
+});
+
 async function seedRandomness(page: Page, initialSeed: number, initialValues: number[] = []) {
   await page.evaluate(({ initialSeed, initialValues }) => {
     let seed = initialSeed;

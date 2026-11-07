@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -95,6 +96,20 @@ export function Board({
     board.vertices.map((vertex) => [vertex.id, vertex]),
   );
   const playersById = new Map(players.map((player) => [player.id, player]));
+  const fogRevealState = useRef<{ terrains: Map<string, Terrain>; generations: Map<string, number> }>({
+    terrains: new Map(),
+    generations: new Map(),
+  });
+  const revealedFogTileIds = useMemo(() => {
+    const { terrains, generations } = fogRevealState.current;
+    for (const tile of board.tiles) {
+      if (terrains.get(tile.id) === "fog" && tile.terrain !== "fog") {
+        generations.set(tile.id, (generations.get(tile.id) ?? 0) + 1);
+      }
+    }
+    fogRevealState.current.terrains = new Map(board.tiles.map((tile) => [tile.id, tile.terrain]));
+    return generations;
+  }, [board]);
   const halfWidth = Math.max(
     355,
     ...board.vertices.map((vertex) => Math.abs(vertex.x) + 85),
@@ -712,6 +727,7 @@ export function Board({
               const matchesRoll = number !== null && number === rolledNumber;
               const blocked = matchesRoll && robberTileId === tile.id;
               const raised = raisedTileIds.has(tile.id);
+              const fogRevealGeneration = revealedFogTileIds.get(tile.id);
               let description = tile.terrain === "fog"
                 ? translateText("Unexplored fog; terrain and number concealed")
                 : translateText(number === null
@@ -828,6 +844,25 @@ export function Board({
                           fill={frequent ? "#b14e38" : "#59644f"}
                         />
                       ))}
+                    </g>
+                  )}
+                  {fogRevealGeneration !== undefined && (
+                    <g
+                      key={`fog-reveal-${fogRevealGeneration}`}
+                      className="fog-reveal-veil"
+                      aria-hidden="true"
+                    >
+                      <polygon
+                        points={points}
+                        fill={theme.terrain.fog.fill}
+                        stroke={theme.border}
+                        strokeWidth="3"
+                        strokeLinejoin="round"
+                      />
+                      <polygon points={points} fill={`url(#${illustrationId}-texture)`} />
+                      <g transform={`translate(${tile.x} ${tile.y})`}>
+                        <TerrainArtwork terrain="fog" theme={theme} />
+                      </g>
                     </g>
                   )}
                   {selectedId === tile.id && !legalTiles.has(tile.id) && (

@@ -716,9 +716,6 @@ export function App() {
                 ? <>Endless <span className="italic text-ink">possibility.</span></>
                 : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
             </h1>
-            <p className="home-description mt-3 max-w-sm text-sm leading-6 text-muted">
-              {translateText("Settle new shores, strike a good deal, and make room for a little friendly competition.")}
-            </p>
           </div>
           <nav className="home-navigation" aria-label={translateText("Home views")}>
             {(["setup", "island"] as const).map(view => (
@@ -909,15 +906,6 @@ export function App() {
                   }}
                 />}
               />
-            </div>
-            <div className="flex shrink-0 flex-wrap justify-between gap-2 text-[10px] text-muted">
-              <span>{translateText(match(variant)
-                .with("original", () => "19 hexes. A new story every time." as const)
-                .with("seafarers", () => "42 hexes. Three islands to discover." as const)
-                .with("four-islands", () => "Four islands. New shores to settle." as const)
-                .with("fog-islands", () => "Unexplored fog. New discoveries await." as const)
-                .exhaustive())}</span>
-              <span>{translateText("3-4 settlers / 60-120 minutes")}</span>
             </div>
           </section>
         </main>
@@ -1497,10 +1485,6 @@ export function App() {
         </main>
       )}
 
-      <footer className={`${game?.winnerId ? "flex" : "hidden"} mx-auto max-w-[1440px] flex-wrap justify-between gap-3 px-5 py-6 text-[9px] uppercase tracking-[.14em] text-muted sm:px-9 lg:px-12`}>
-        <span>{translateText("A tabletop state of mind.")}</span>
-        <span>{translateText("Catania / Solo & pass-and-play / Wi-Fi play coming later")}</span>
-      </footer>
 
       {dialog === "theme" && (
         <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide>
