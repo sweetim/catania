@@ -63,6 +63,9 @@ function islandShape(region: [number, number][], size: number, random: () => num
 const FOUR_ISLAND_NUMBERS = [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 9, 10, 10, 11, 11, 12, 12];
 const FOUR_ISLAND_NUMBER_TRIMS = [9, 4, 12, 5, 10, 3];
 
+/** Every axial center where the 19-hex continent fits inside the fixed 42-hex Seafarers frame. */
+const FOG_ISLAND_CENTERS: [number, number][] = [[0, 0], [1, -2], [1, -1], [1, 0], [2, -2], [2, -1], [2, 0], [3, -2]];
+
 /** Scales the non-red token pool to the island hex count, keeping the 23-hex list unchanged. */
 function fourIslandsOtherNumbers(needed: number): number[] {
   const numbers = [...FOUR_ISLAND_NUMBERS];
@@ -149,17 +152,17 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         }
       }
     } else if (variant === "fog-islands") {
-      const fogPositions = [
-        [1, -4], [2, -4], [3, -4], [4, -4], [5, -4], [4, -3], [5, -3],
-        [4, -2], [5, -2], [4, -1], [4, 0], [3, 1], [2, 2],
-      ];
-      for (const [column, row] of fogPositions) {
-        positions.push({ column: column!, row: row! });
-        terrain.push("fog");
+      positions.length = 0;
+      const [centerColumn, centerRow] = FOG_ISLAND_CENTERS[randomInteger(FOG_ISLAND_CENTERS.length, random)]!;
+      for (let column = centerColumn - 2; column <= centerColumn + 2; column++) {
+        for (let row = centerRow - 2; row <= centerRow + 2; row++) {
+          if (Math.abs(column + row - centerColumn - centerRow) <= 2) positions.push({ column, row, islandId: "main" });
+        }
       }
       const discoveryNumbers = shuffle([2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
       fogDiscoveryDeck = shuffle<FogDiscovery["terrain"]>([
-        "wood", "wood", "brick", "wool", "wool", "grain", "grain", "ore", "gold", "gold", "sea", "sea", "sea",
+        "wood", "wood", "brick", "wool", "wool", "grain", "grain", "ore", "gold", "gold",
+        ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
       ], random).map(terrain => ({ terrain, number: terrain === "sea" ? null : discoveryNumbers.pop()! }));
     } else {
       const islands = [
@@ -181,7 +184,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       for (let column = range[0]!; column <= range[1]!; column++) {
         if (positions.some(position => position.column === column && position.row === row)) continue;
         positions.push({ column, row });
-        terrain.push("sea");
+        terrain.push(variant === "fog-islands" ? "fog" : "sea");
       }
     }
   }

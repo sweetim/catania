@@ -5,7 +5,7 @@ import { getComputerActionDelay } from "../game/computer";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { profileStats, recordGameResultForActive } from "../profile";import { parseClientMessage, parseServerMessage } from "./protocol";
-import type { Command, ServerMessage } from "./protocol";
+import type { Command, ServerMessage, TradeIdentity } from "./protocol";
 import { HostRoom } from "./state";
 import type { BuildMode, Invitation, MultiplayerSession, SessionView } from "./types";
 
@@ -401,7 +401,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
     },
     connection: connection => connection.close(),
   });
-  function command(intent: { type: "action"; action: GameAction } | { type: "select-build"; piece: BuildMode }, expectedVersion?: number) {
+  function command(intent: { type: "action"; action: GameAction; trade?: TradeIdentity } | { type: "select-build"; piece: BuildMode }, expectedVersion?: number) {
     if (closed) return;
     if (!connection?.open || view.status !== "connected" || !view.snapshot?.playerId) {
       view = { ...view, error: { key: "Wait until the host admits your connected phone." } }; publish(); return;
@@ -420,7 +420,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   publish();
   return {
     setVariant: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
-    perform: (action, expectedVersion) => command({ type: "action", action }, expectedVersion),
+    perform: (action, expectedVersion, trade) => command({ type: "action", action, ...(trade ? { trade } : {}) }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {
       if (closed) return;

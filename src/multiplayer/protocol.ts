@@ -1,15 +1,17 @@
 import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import { isGameVariant, type GameAction } from "../game/types";
+import { isGameVariant, type GameAction, type Resources } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
 
 export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string };
 export type ProfileStatsMessage = { type: "profile-stats"; stats: ProfileStats };
+/** Identifies the open trade a player is responding to, so responses survive unrelated version bumps. */
+export type TradeIdentity = { offeredBy: string; give: Resources | null; receive: Resources };
 export type Command = { requestId: string; version: number } & (
-  | { type: "action"; action: GameAction }
+  | { type: "action"; action: GameAction; trade?: TradeIdentity }
   | { type: "select-build"; piece: BuildMode }
 );
 export type CommandResult = { type: "result"; requestId: string; error: GameMessage | null };
@@ -45,6 +47,11 @@ function profileStats(value: unknown): value is ProfileStats {
 }
 function resources(value: unknown): boolean {
   return record(value) && fields(value, RESOURCES) && RESOURCES.every(resource => integer(value[resource], 19));
+}
+function tradeIdentity(value: unknown): value is TradeIdentity {
+  return record(value) && fields(value, ["offeredBy", "give", "receive"]) &&
+    identifier(value.offeredBy, "player") &&
+    (value.give === null || resources(value.give)) && resources(value.receive);
 }
 function identifier(value: unknown, kind: "player" | "vertex" | "edge" | "tile" | "development"): value is string {
   return typeof value === "string" && (kind === "player" ? /^player-[1-4]$/ : new RegExp(`^${kind}-[0-9]{1,3}$`)).test(value);
@@ -107,8 +114,10 @@ export function parseClientMessage(value: unknown): JoinMessage | Command | Prof
     return message as ProfileStatsMessage;
   }
   if (token(message.requestId) && integer(message.version)) {
-    if (message.type === "action" && fields(message, ["type", "requestId", "version", "action"])) {
-      return { type: "action", requestId: message.requestId, version: message.version, action: parseAction(message.action) };
+    if (message.type === "action" && fields(message, ["type", "requestId", "version", "action"], ["trade"]) &&
+      (!Object.hasOwn(message, "trade") || tradeIdentity(message.trade))) {
+      return { type: "action", requestId: message.requestId, version: message.version, action: parseAction(message.action),
+        ...(Object.hasOwn(message, "trade") ? { trade: message.trade as TradeIdentity } : {}) };
     }
     if (message.type === "select-build" && fields(message, ["type", "requestId", "version", "piece"]) && buildMode(message.piece)) {
       return { type: "select-build", requestId: message.requestId, version: message.version, piece: message.piece };

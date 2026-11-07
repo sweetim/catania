@@ -60,8 +60,10 @@ Original retains its existing board, costs, ten-point target, and score shape.
 Heading for New Shores adds island points and a thirteen-point target.
 Four Islands and Fog Islands target twelve points, using distinct 42-hex layouts
 at either supported table size. Four Islands records each player's initial island
-identifiers to exclude them from subsequent settlement bonuses. Fog Islands stores
-unexplored tiles as `fog` with no number; a seeded host-only discovery deck reveals
+identifiers to exclude them from subsequent settlement bonuses. Fog Islands slides
+its intact 19-hex main island among eight positions in the fixed frame, storing all
+23 surrounding tiles as `fog` with no number. The pirate starts off board, and a
+seeded host-only discovery deck (eight resource tiles, two gold, and 13 sea) reveals
 terrain when a built road/ship or moved ship reaches it. Exploration gold choices
 retain a continuation phase so free route placement and turn order resume correctly.
 Public boards omit the discovery deck, and public gold phases omit continuation
@@ -162,7 +164,9 @@ Local and cross-device play render the same gameplay dialog components; their
 controllers retain separate action dispatch, handoff, and network authority.
 Phone editors and confirmations capture the snapshot version and disable submission
 if it changes, requiring the player to review the latest state before sending an
-action. Shared components receive public board/bank data plus only the current
+action. Trade declines and price proposals additionally identify the open trade they
+answer, so the host accepts them even when unrelated actions bump the version; a
+replaced or closed trade still requires reviewing the latest state. Shared components receive public board/bank data plus only the current
 player's hand, never fabricated or exposed opponent inventories.
 The host starts with three or four human or computer players and occupies no seat.
 Human players must be admitted and connected. Before starting, the host can add

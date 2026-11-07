@@ -119,6 +119,41 @@ describe("Heading for New Shores boards", () => {
   });
 });
 
+describe("Fog Islands exploration", () => {
+  test.each(["sea", "wood", "gold"] as const)("setup exploration reveals %s and resumes the next player's setup", terrain => {
+    let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "fog-islands");
+    expect(state.pirateTileId).toBeNull();
+    expect(state.board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(23);
+    // Force the discovery kind to exercise sea, resource, and gold setup continuations.
+    state.board.fogDiscoveryDeck = state.board.fogDiscoveryDeck!.map(() => ({ terrain, number: terrain === "sea" ? null : 5 }));
+    const playerId = state.activePlayerId;
+    const vertexId = legalSettlementVertices(state, playerId).find(id =>
+      state.board.tiles.some(tile => tile.terrain === "fog" && tile.vertexIds.includes(id)))!;
+    state = applyAction(state, playerId, { type: "place-settlement", vertexId });
+    const edgeId = legalShipEdges(state, playerId)[0]!;
+    const edge = state.board.edges.find(edge => edge.id === edgeId)!;
+    const discoveries = state.board.tiles.filter(tile => tile.terrain === "fog" &&
+      tile.vertexIds.some(id => edge.vertexIds.includes(id)));
+    expect(discoveries.length).toBeGreaterThan(0);
+    state = applyAction(state, playerId, { type: "place-ship", edgeId });
+    expect(state.board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(23 - discoveries.length);
+    expect(state.board.fogDiscoveryDeck).toHaveLength(23 - discoveries.length);
+    for (const tile of discoveries) {
+      expect(state.board.tiles.find(other => other.id === tile.id)).toMatchObject({ terrain, number: terrain === "sea" ? null : 5 });
+    }
+    if (terrain === "gold") {
+      expect(state.phase.type).toBe("gold");
+      expect(state.activePlayerId).toBe(playerId);
+      state = applyAction(state, playerId, { type: "choose-gold", resources: resources({ wood: discoveries.length }) });
+    }
+    expect(state.phase.type).toBe("setup-settlement");
+    expect(state.setupIndex).toBe(1);
+    expect(state.activePlayerId).toBe(state.setupOrder[1]!);
+    expect(state.players.find(player => player.id === playerId)!.resources.wood).toBe(terrain === "sea" ? 0 : discoveries.length);
+    assertConservation(state);
+  });
+});
+
 describe("ships and shipping routes", () => {
   test("coastal setup permits a free ship; sea-only edges reject roads and ship placement advances snake setup", () => {
     const { state, vertexId } = coastalGame();

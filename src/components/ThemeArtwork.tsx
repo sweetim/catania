@@ -132,7 +132,8 @@ export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: Bo
     </g>;
   }
   if (terrain === "sea") {
-    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round">
+    const illustrated = theme.id === "illustrated";
+    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={illustrated ? "#6e9c91" : ink} strokeWidth={illustrated ? "1.5" : "2"} strokeLinecap="round">
       <path d="M-36-14q9-8 18 0t18 0t18 0t18 0M-36 4q9-8 18 0t18 0t18 0t18 0M-26 22q9-8 18 0t18 0t18 0" />
     </g>;
   }

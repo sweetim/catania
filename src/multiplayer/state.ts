@@ -330,15 +330,25 @@ export class HostRoom {
     const previous = seat.requests.get(command.requestId);
     if (previous) return previous;
     try {
-      requireRoom(command.version === this.version, "The game changed. Review the latest state and try again.");
+      const action = command.type === "action" ? parseAction(command.action) : null;
+      // A trade response may race unrelated version bumps (another responder, a computer move);
+      // it is accepted whenever it targets the same open trade the player saw.
+      const tradeResponse = command.type === "action" && command.trade !== undefined &&
+        action !== null && (action.type === "respond-trade" || action.type === "propose-trade");
+      const trade = this.game?.trade ?? null;
+      const sameTrade = tradeResponse && command.trade !== undefined && trade !== null &&
+        trade.offeredBy === command.trade.offeredBy &&
+        JSON.stringify(trade.give) === JSON.stringify(command.trade.give) &&
+        JSON.stringify(trade.receive) === JSON.stringify(command.trade.receive);
+      requireRoom(!tradeResponse ? command.version === this.version : sameTrade,
+        "The game changed. Review the latest state and try again.");
       if (command.type === "select-build") this.selectBuild(command.piece, connectionId);
       else {
-        const action = parseAction(command.action);
-        requireRoom(!BOARD_ACTIONS.has(action.type), isSeafarers(this.game?.variant)
+        requireRoom(!BOARD_ACTIONS.has(action!.type), isSeafarers(this.game?.variant)
           ? "Place pieces and move the robber or pirate on the shared board, not a phone."
           : "Place pieces and move the robber on the shared board, not a phone.");
         requireRoom(this.game, "The game has not started.");
-        this.game = applyAction(this.game, seat.player.id, action);
+        this.game = applyAction(this.game, seat.player.id, action!);
         this.buildMode = null;
         this.version++;
       }

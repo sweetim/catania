@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "../../src/game/board";
+import { createBoard, generateMapSeed, normalizeMapSeed, pirateStartTileId, seededRandom } from "../../src/game/board";
 
 function randomFromSeed(seed: number): () => number {
   return () => {
@@ -168,6 +168,62 @@ describe("four islands board", () => {
   });
 });
 
+describe("fog islands board", () => {
+  test("slides the intact continent across all eight positions and hides every surrounding hex", () => {
+    const centers = new Set<string>();
+    for (let seed = 0; seed < 100; seed++) {
+      const board = createBoard(randomFromSeed(seed), "fog-islands");
+      expect(board.tiles).toHaveLength(42);
+      expect(new Set(board.tiles.map(tile => `${tile.x},${tile.y}`)).size).toBe(42);
+      const mainland = board.tiles.filter(tile => tile.islandId === "main");
+      expect(mainland).toHaveLength(19);
+      const coordinates = mainland.map(tile => {
+        const row = Math.round(tile.y / 90 - 1);
+        return { column: Math.round(tile.x / (60 * Math.sqrt(3)) - row / 2 + 1), row };
+      });
+      const centerColumn = coordinates.reduce((total, tile) => total + tile.column, 0) / 19;
+      const centerRow = coordinates.reduce((total, tile) => total + tile.row, 0) / 19;
+      centers.add(`${centerColumn},${centerRow}`);
+      for (const { column, row } of coordinates) {
+        expect(Math.max(Math.abs(column - centerColumn), Math.abs(row - centerRow),
+          Math.abs(column + row - centerColumn - centerRow))).toBeLessThanOrEqual(2);
+        expect(column).toBeGreaterThanOrEqual([1, 0, -1, -1, -2, -2, -2][row + 4]!);
+        expect(column).toBeLessThanOrEqual([5, 5, 5, 4, 4, 3, 2][row + 4]!);
+      }
+      expect(board.tiles.filter(tile => tile.islandId !== "main")).toHaveLength(23);
+      expect(board.tiles.filter(tile => tile.islandId !== "main").every(tile => tile.terrain === "fog" && tile.number === null)).toBe(true);
+      expect(mainland.every(tile => tile.terrain !== "sea" && tile.terrain !== "fog")).toBe(true);
+      expect(pirateStartTileId(board)).toBeNull();
+      expect(mainland.flatMap(tile => tile.number === null ? [] : [tile.number]).sort((first, second) => first - second))
+        .toEqual([2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]);
+      const portVertices = board.ports.flatMap(port => {
+        const edge = board.edges.find(edge => edge.id === port.edgeId)!;
+        expect(mainland.filter(tile => edge.vertexIds.every(id => tile.vertexIds.includes(id)))).toHaveLength(1);
+        return edge.vertexIds;
+      });
+      expect(board.ports).toHaveLength(9);
+      expect(new Set(portVertices).size).toBe(18);
+      const discoveries = board.fogDiscoveryDeck!;
+      expect(discoveries).toHaveLength(23);
+      expect(Object.fromEntries(["wood", "brick", "wool", "grain", "ore", "gold", "sea"].map(terrain =>
+        [terrain, discoveries.filter(discovery => discovery.terrain === terrain).length])))
+        .toEqual({ wood: 2, brick: 1, wool: 2, grain: 2, ore: 1, gold: 2, sea: 13 });
+      expect(discoveries.filter(discovery => discovery.terrain === "sea").every(discovery => discovery.number === null)).toBe(true);
+      expect(discoveries.flatMap(discovery => discovery.number === null ? [] : [discovery.number]).sort((first, second) => first - second))
+        .toEqual([2, 3, 4, 5, 6, 8, 9, 10, 11, 12]);
+    }
+    expect([...centers].sort()).toEqual(["0,0", "1,-1", "1,-2", "1,0", "2,-1", "2,-2", "2,0", "3,-2"]);
+  });
+
+  test("terminates with constant randomness and keeps all surrounding tiles concealed", () => {
+    for (const random of [() => 0, () => 0.999999]) {
+      const board = createBoard(random, "fog-islands");
+      expect(board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(23);
+      expect(board.fogDiscoveryDeck).toHaveLength(23);
+    }
+  });
+});
+
 describe("map codes", () => {
   test("generate 8-character codes from the unambiguous alphabet, distinct per map", () => {
     for (let index = 0; index < 32; index++) {
@@ -188,8 +244,8 @@ describe("map codes", () => {
     expect(normalizeMapSeed(value)).toBeNull();
   });
 
-  test("the same code rebuilds the identical island on every device, in both variants", () => {
-    for (const variant of ["original", "seafarers", "four-islands"] as const) {
+  test("the same code rebuilds the identical island on every device, in every variant", () => {
+    for (const variant of ["original", "seafarers", "four-islands", "fog-islands"] as const) {
       const first = createBoard(seededRandom("ABCD2345"), variant);
       const second = createBoard(seededRandom("ABCD2345"), variant);
       expect(first).toEqual(second);

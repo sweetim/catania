@@ -30,7 +30,7 @@ import { useLanguage, useTranslation } from "../localization";
 import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "../themes";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { hostSession, joinSession } from "./session";
-import { validName } from "./protocol";
+import { validName, type TradeIdentity } from "./protocol";
 import { MultiplayerDice } from "./MultiplayerDice";
 import type { BuildMode, Invitation, MultiplayerSession, PublicGame, RoomSnapshot, SessionView } from "./types";
 import "../index.css";
@@ -117,7 +117,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   snapshot: RoomSnapshot;
   disabled: boolean;
   error: string;
-  perform: (action: GameAction, expectedVersion: number) => void;
+  perform: (action: GameAction, expectedVersion: number, trade?: TradeIdentity) => void;
   selectBuild: (piece: BuildMode) => void;
   onPrivateNoticeTarget: (target: HTMLDivElement | null) => void;
   turnMenu?: ReactNode;
@@ -182,9 +182,9 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     }
   }, [discardCount, active && game.phase.type === "steal", tradeIdentity]);
 
-  function send(action: GameAction, expectedVersion = snapshot.version) {
+  function send(action: GameAction, expectedVersion = snapshot.version, trade?: TradeIdentity) {
     // A dialog must not submit an old choice against a newer trade or turn.
-    perform(action, expectedVersion);
+    perform(action, expectedVersion, trade);
     setEditor(null);
     setDetails(null);
     setConfirmation(null);
@@ -336,7 +336,8 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         }}
         onEdit={() => { setDetails(null); setTradeMode("players"); setEditorVersion(snapshot.version); setEditor("trade"); }}
         onWithdraw={() => send({ type: "cancel-trade" })}
-        onRespond={action => send(action, responseVersion ?? snapshot.version)} />
+        onRespond={action => send(action, responseVersion ?? snapshot.version,
+          trade ? { offeredBy: trade.offeredBy, give: trade.give, receive: trade.receive } : undefined)} />
       {(responseStale || error) && <p role="alert" className="mt-4 text-sm text-clay">{responseStale ? staleMessage : error}</p>}
     </Dialog>}
 
@@ -722,7 +723,7 @@ export function MultiplayerApp() {
           )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion) => session.current?.perform(action, expectedVersion)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
+          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), onSelect: () => setDialog("help") },
           ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}

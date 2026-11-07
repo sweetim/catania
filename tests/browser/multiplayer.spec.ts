@@ -2256,6 +2256,34 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await privateScreenFits(phone);
 });
 
+test("declining a computer trade request identifies the open trade and survives newer same-trade snapshots", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const game = snapshot.game!;
+  const requester = game.players.find(other => other.control === "computer")!;
+  const responder = game.players.find(other => other.control === "computer" && other.id !== requester.id)!;
+  game.activePlayerId = requester.id;
+  game.phase = { type: "actions" };
+  game.trade = { offeredBy: requester.id, give: null, receive: { ...emptyResources(), ore: 1 }, responses: {} };
+  await present();
+  const request = phone.getByRole("dialog", { name: "Trade request", exact: true });
+  await expect(request).toBeVisible();
+  await expect(request.getByText(`From ${requester.name}`, { exact: true })).toBeVisible();
+  // The other computer answers while this phone still shows the earlier snapshot: same trade, newer version.
+  game.trade!.responses[responder.id] = false;
+  await present();
+  await expect(request).toBeVisible();
+  const decline = request.getByRole("button", { name: "Decline", exact: true });
+  await expect(decline).toBeEnabled();
+  await decline.click();
+  // The decline travels with the viewed trade's identity so the host can accept it despite the version bump.
+  await expect.poll(() => sentActions(phone)).toEqual([expect.objectContaining({
+    version: snapshot.version,
+    action: { type: "respond-trade", accept: false },
+    trade: { offeredBy: requester.id, give: null, receive: { ...emptyResources(), ore: 1 } },
+  })]);
+  await expect(request).toHaveCount(0);
+});
+
 test("dismissed mandatory private dialogs stay reachable while builds are collapsed", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;

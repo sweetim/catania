@@ -2,6 +2,7 @@ import type { Board, GameAction, GamePhase, GameState, GameVariant, MonopolyEven
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
 import type { ProfileStats } from "../profile";
+import type { TradeIdentity } from "./protocol";
 
 export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | null;
 
@@ -90,7 +91,7 @@ export type MultiplayerSession = {
   addComputer: (language?: Language) => void;
   removePlayer: (playerId: string) => void;
   renameComputer: (playerId: string, name: string) => void;
-  perform: (action: GameAction, expectedVersion?: number) => void;
+  perform: (action: GameAction, expectedVersion?: number, trade?: TradeIdentity) => void;
   selectBuild: (piece: BuildMode, expectedVersion?: number) => void;
   reconnect: () => void;
   close: () => void;

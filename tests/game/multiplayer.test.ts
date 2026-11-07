@@ -7,6 +7,7 @@ import { formatGameMessage } from "../../src/game/messages";
 import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
 import { ACTIVE_PROFILE_STORAGE_KEY, PROFILES_STORAGE_KEY } from "../../src/profile";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
+import type { TradeIdentity } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
 import type { MultiplayerSession, SessionView } from "../../src/multiplayer/types";
 
@@ -28,8 +29,8 @@ function started(count = 3) {
 }
 function connectionFor(playerId: string): string { return playerId.replace("player-", "connection-"); }
 function activeConnection(room: HostRoom): string { return connectionFor(room.game!.activePlayerId); }
-function send(room: HostRoom, connectionId: string, action: GameAction, version = room.version, requestId: string = crypto.randomUUID()) {
-  return room.command(connectionId, { type: "action", requestId, version, action });
+function send(room: HostRoom, connectionId: string, action: GameAction, version = room.version, trade?: TradeIdentity, requestId: string = crypto.randomUUID()) {
+  return room.command(connectionId, { type: "action", requestId, version, action, ...(trade ? { trade } : {}) });
 }
 function give(game: GameState, playerId: string, amounts: Partial<Resources>) {
   const player = game.players.find(player => player.id === playerId)!;
@@ -1187,8 +1188,30 @@ describe("authoritative action permissions and ordering", () => {
     expect(send(room, connectionFor(actor), { type: "offer-trade", give: resources({ wood: 2 }), receive: resources({ brick: 2 }) }).error).toBeNull();
     const before = structuredClone(room.game);
     expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }, oldVersion).error?.key).toContain("game changed");
+    expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }, room.version,
+      { offeredBy: actor, give: resources({ wood: 1 }), receive: resources({ brick: 1 }) }).error?.key).toContain("game changed");
     expect(room.game).toEqual(before);
     expect(send(room, connectionFor(opponent), { type: "respond-trade", accept: true }).error).toBeNull();
+  });
+
+  test("trade responses survive unrelated version bumps but still target the same open trade", () => {
+    const { room } = started();
+    room.game!.phase = { type: "actions" };
+    const actor = room.game!.activePlayerId;
+    const others = room.game!.players.filter(player => player.id !== actor).map(player => player.id);
+    const [responder, rival] = others;
+    give(room.game!, responder!, { wood: 1 });
+    expect(send(room, connectionFor(actor), { type: "request-trade", receive: resources({ wood: 1 }) }).error).toBeNull();
+    const viewedVersion = room.version;
+    const identity = { offeredBy: actor, give: null as Resources | null, receive: resources({ wood: 1 }) };
+    // Another responder answers first, bumping the room version while the phone still shows the old snapshot.
+    expect(send(room, connectionFor(rival!), { type: "respond-trade", accept: false }).error).toBeNull();
+    expect(room.version).toBeGreaterThan(viewedVersion);
+    expect(send(room, connectionFor(responder!), { type: "respond-trade", accept: false }, viewedVersion).error?.key).toContain("game changed");
+    expect(send(room, connectionFor(responder!), { type: "respond-trade", accept: false }, viewedVersion, identity).error).toBeNull();
+    expect(room.game!.trade!.responses[responder!]).toBe(false);
+    // A trade identity is ignored for actions other than trade responses, so version checks still apply.
+    expect(send(room, connectionFor(actor), { type: "end-turn" }, viewedVersion, identity).error?.key).toContain("game changed");
   });
 
   test("binds actor to the connection, never action payload playerId", () => {
@@ -1394,6 +1417,19 @@ describe("untrusted multiplayer protocol", () => {
     expect(() => parseClientMessage({ ...valid, playerId: "player-1" })).toThrow();
     expect(() => parseClientMessage({ type: "join", secret, name: "Ada", metadata: { secret } })).toThrow();
     expect(() => parseClientMessage({ type: "join", secret, name: "Ada", credential: null })).toThrow();
+  });
+
+  test("action commands accept one well-formed trade identity and reject forged or malformed ones", () => {
+    const decline = { type: "action", requestId: "request", version: 0, action: { type: "respond-trade", accept: false } } as const;
+    const trade = { offeredBy: "player-1", give: null, receive: resources({ wood: 1 }) };
+    expect(parseClientMessage({ ...decline, trade })).toEqual({ ...decline, trade });
+    const offer = { offeredBy: "player-2", give: resources({ brick: 1 }), receive: resources({ wood: 1 }) };
+    expect((parseClientMessage({ ...decline, action: { type: "propose-trade", price: resources({ brick: 1 }) }, trade: offer }) as { trade?: TradeIdentity }).trade).toEqual(offer);
+    expect(() => parseClientMessage({ ...decline, trade: { ...trade, offeredBy: "player-9" } })).toThrow();
+    expect(() => parseClientMessage({ ...decline, trade: { offeredBy: "player-1" } })).toThrow();
+    expect(() => parseClientMessage({ ...decline, trade: { ...trade, receive: { wood: 1 } } })).toThrow();
+    expect(() => parseClientMessage({ ...decline, trade: { ...trade, give: "wood" } })).toThrow();
+    expect(() => parseClientMessage({ ...decline, trade: { ...trade, responses: {} } })).toThrow();
   });
 
   test("guest decoder rejects leaked private fields, malformed resources, pending names and wrong own-player identity", () => {
