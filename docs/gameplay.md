@@ -152,17 +152,18 @@ enter revealed land on the first seven or Knight. Win at 12 points on your own t
 
 ### Fog Islands
 
-A 42-hex map begins with a revealed 19-hex main island and 23 fog hexes covering
-every other tile. The intact main island slides among eight positions within the
-map frame, chosen by the map code, instead of always occupying the south-west.
-Use the same layout rules for three or four players. Place starting settlements
-only on the main island. Fog has no visible terrain or number and cannot support
+A 42-hex map begins with 19 revealed land hexes and 23 fog hexes covering every
+other tile. Each map varies the shapes, sizes, and positions of one to four starting
+islands: a single continent, a few larger islands, or several smaller islands.
+The total revealed terrain and number-token pools stay unchanged. Use the same
+layout rules for three or four players. Place starting settlements on any revealed
+starting island. Fog has no visible terrain or number and cannot support
 settlements or roads without adjoining revealed land; ships can approach it as water.
 
 When an endpoint of a newly built road or ship, or a moved ship, touches fog,
 reveal that hex for everyone. The seeded discovery deck contains eight resource
-hexes, two gold fields, and 13 sea hexes. The pirate starts off board until revealed
-sea becomes available. Starting roads and ships can also reveal adjacent fog.
+hexes, two gold fields, and 13 sea hexes. The pirate starts off board and can move
+to discovered sea on a seven or Knight. Starting roads and ships can also reveal adjacent fog.
 A resource discovery grants one matching
 bank card if available; gold grants one available resource of choice; sea grants
 nothing. These rewards are separate from dice production. Resolve gold before

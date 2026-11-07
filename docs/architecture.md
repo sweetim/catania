@@ -60,9 +60,11 @@ Original retains its existing board, costs, ten-point target, and score shape.
 Heading for New Shores adds island points and a thirteen-point target.
 Four Islands and Fog Islands target twelve points, using distinct 42-hex layouts
 at either supported table size. Four Islands records each player's initial island
-identifiers to exclude them from subsequent settlement bonuses. Fog Islands slides
-its intact 19-hex main island among eight positions in the fixed frame, storing all
-23 surrounding tiles as `fog` with no number. The pirate starts off board, and a
+identifiers to exclude them from subsequent settlement bonuses. Fog Islands grows
+19 revealed land hexes into one to four islands with varied outlines and sizes in
+separated regions, then reflects their positions within the fixed frame. Starting
+land shares the `main` identifier for setup eligibility; all 23 other tiles are
+`fog` with no number. The pirate starts off board, and a
 seeded host-only discovery deck (eight resource tiles, two gold, and 13 sea) reveals
 terrain when a built road/ship or moved ship reaches it. Exploration gold choices
 retain a continuation phase so free route placement and turn order resume correctly.

@@ -21,7 +21,8 @@ each settled island outside the player's starting islands and targets 12 points.
 Fog Islands reveals hidden terrain through route exploration, grants discovery
 resources, has no island bonuses, and targets 12 points. All use randomized
 42-hex scenario layouts shared by three- and four-player tables; Fog Islands
-starts on one revealed main island. Human and computer players use the same
+starts on 19 revealed land hexes across one to four varied islands, with every
+other tile concealed by fog. Human and computer players use the same
 validated engine; hidden discovery decks stay out of multiplayer snapshots.
 Other scenarios remain outside this delivery;
 [gameplay](gameplay.md#seafarers-heading-for-new-shores) documents the available rules.

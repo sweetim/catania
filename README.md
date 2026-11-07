@@ -98,7 +98,8 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
   host loses the game; there is no saved-game recovery.
 - Seafarers supports Heading for New Shores, Four Islands, and Fog Islands.
   Each uses the same randomized scenario layout for three- and four-player tables;
-  Fog Islands starts with one revealed main island. Other scenarios are not included.
+  Fog Islands starts with 19 revealed land hexes across one to four varied islands,
+  with all 23 remaining hexes hidden by fog. Other scenarios are not included.
 - Multiplayer targets devices on the same local network, including Ethernet and
   Wi-Fi together. It uses PeerJS Cloud signaling and Google STUN address discovery,
   requires internet access, and has no relay fallback.

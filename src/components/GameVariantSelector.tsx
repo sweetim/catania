@@ -12,7 +12,7 @@ export const GAME_VARIANT_LABELS = {
 const SCENARIO_DESCRIPTIONS = {
   seafarers: "Main island setup. Discover three islands. First to 13 points wins.",
   "four-islands": "Start on any of four islands. Earn 2 bonus points per island not occupied by your starting settlements. First to 12 points wins.",
-  "fog-islands": "Start on the main island. Explore fog with roads and ships and collect discovery resources. No island bonuses. First to 12 points wins.",
+  "fog-islands": "Start on any revealed starting island. Explore fog with roads and ships and collect discovery resources. No island bonuses. First to 12 points wins.",
 } as const;
 
 export function GameVariantSummary({ variant }: { variant: GameVariant }) {

@@ -63,8 +63,61 @@ function islandShape(region: [number, number][], size: number, random: () => num
 const FOUR_ISLAND_NUMBERS = [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 9, 10, 10, 11, 11, 12, 12];
 const FOUR_ISLAND_NUMBER_TRIMS = [9, 4, 12, 5, 10, 3];
 
-/** Every axial center where the 19-hex continent fits inside the fixed 42-hex Seafarers frame. */
-const FOG_ISLAND_CENTERS: [number, number][] = [[0, 0], [1, -2], [1, -1], [1, 0], [2, -2], [2, -1], [2, 0], [3, -2]];
+const SEAFARERS_ROW_RANGES: [number, number][] = [[1, 5], [0, 5], [-1, 5], [-1, 4], [-2, 4], [-2, 3], [-2, 2]];
+
+/** Grows 19 starting land hexes within separated regions, then reflects the layout within the frame. */
+function fogIslandLayout(random: () => number): [number, number][] {
+  const frame = SEAFARERS_ROW_RANGES.flatMap(([firstColumn, lastColumn], index) =>
+    Array.from({ length: lastColumn - firstColumn + 1 }, (_, offset): [number, number] => [firstColumn + offset, index - 4]));
+  const islandCount = 1 + randomInteger(4, random);
+  let regions: [number, number][][];
+  let sizes: number[];
+  if (islandCount === 1) {
+    regions = [frame];
+    sizes = [19];
+  } else if (islandCount === 2) {
+    regions = randomInteger(2, random) === 0
+      ? [frame.filter(([, row]) => row <= -2), frame.filter(([, row]) => row >= 0)]
+      : [frame.filter(([column]) => column <= 0), frame.filter(([column]) => column >= 2)];
+    const firstSize = 8 + randomInteger(4, random);
+    sizes = [firstSize, 19 - firstSize];
+  } else if (islandCount === 3) {
+    regions = [frame.filter(([, row]) => row <= -2),
+      frame.filter(([column, row]) => row >= 0 && column <= 0),
+      frame.filter(([column, row]) => row >= 0 && column >= 2)];
+    const leftSize = 5 + randomInteger(4, random);
+    const rightSize = 4 + randomInteger(3, random);
+    sizes = [19 - leftSize - rightSize, leftSize, rightSize];
+  } else {
+    regions = [
+      [[1, -4], [2, -4], [0, -3], [1, -3], [0, -2], [1, -2]],
+      [[4, -4], [5, -4], [4, -3], [5, -3], [4, -2], [5, -2]],
+      [[-2, 0], [-1, 0], [-2, 1], [-1, 1], [-2, 2], [-1, 2]],
+      [[2, 0], [3, 0], [2, 1], [3, 1], [1, 2], [2, 2]],
+    ];
+    sizes = [4, 4, 4, 4];
+    for (let extra = 0; extra < 3; extra++) {
+      const available = [0, 1, 2, 3].filter(index => sizes[index]! < 6);
+      const islandIndex = available[randomInteger(available.length, random)]!;
+      sizes[islandIndex] = sizes[islandIndex]! + 1;
+    }
+  }
+  const reflection = randomInteger(4, random);
+  return regions.flatMap((region, index) => {
+    const island = [region[randomInteger(region.length, random)]!];
+    while (island.length < sizes[index]!) {
+      const frontier = region.filter(position => !island.includes(position) && island.some(([column, row]) =>
+        HEX_NEIGHBOR_OFFSETS.some(([offsetColumn, offsetRow]) =>
+          position[0] === column + offsetColumn && position[1] === row + offsetRow)));
+      island.push(frontier[randomInteger(frontier.length, random)]!);
+    }
+    return island.map(([column, row]): [number, number] => {
+      if (reflection & 1) column = 2 - row - column;
+      if (reflection & 2) [column, row] = [column + row + 1, -2 - row];
+      return [column, row];
+    });
+  });
+}
 
 /** Scales the non-red token pool to the island hex count, keeping the 23-hex list unchanged. */
 function fourIslandsOtherNumbers(needed: number): number[] {
@@ -153,11 +206,8 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       }
     } else if (variant === "fog-islands") {
       positions.length = 0;
-      const [centerColumn, centerRow] = FOG_ISLAND_CENTERS[randomInteger(FOG_ISLAND_CENTERS.length, random)]!;
-      for (let column = centerColumn - 2; column <= centerColumn + 2; column++) {
-        for (let row = centerRow - 2; row <= centerRow + 2; row++) {
-          if (Math.abs(column + row - centerColumn - centerRow) <= 2) positions.push({ column, row, islandId: "main" });
-        }
+      for (const [column, row] of fogIslandLayout(random)) {
+        positions.push({ column, row, islandId: "main" });
       }
       const discoveryNumbers = shuffle([2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
       fogDiscoveryDeck = shuffle<FogDiscovery["terrain"]>([
@@ -178,8 +228,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         }
       }
     }
-    const rowRanges = [[1, 5], [0, 5], [-1, 5], [-1, 4], [-2, 4], [-2, 3], [-2, 2]];
-    for (const [index, range] of rowRanges.entries()) {
+    for (const [index, range] of SEAFARERS_ROW_RANGES.entries()) {
       const row = index - 4;
       for (let column = range[0]!; column <= range[1]!; column++) {
         if (positions.some(position => position.column === column && position.row === row)) continue;
@@ -278,7 +327,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   const portVertices = new Set<string>();
   const ports = portResources.map((resource, index) => {
     const start = (offset + Math.floor(index * boundary.length / 9)) % boundary.length;
-    const edge = variant === "four-islands"
+    const edge = variant === "four-islands" || variant === "fog-islands"
       ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
       : boundary[start]!;
     edge.vertexIds.forEach(id => portVertices.add(id));

@@ -13,7 +13,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
   const scenarioRules = variant === "four-islands"
     ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach 12 points on your own turn to win."
     : variant === "fog-islands"
-      ? "Place starting settlements only on the main island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach 12 points on your own turn to win."
+      ? "Place starting settlements on any revealed starting island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach 12 points on your own turn to win."
       : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.";
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>

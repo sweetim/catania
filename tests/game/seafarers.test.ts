@@ -120,6 +120,31 @@ describe("Heading for New Shores boards", () => {
 });
 
 describe("Fog Islands exploration", () => {
+  test.each([3, 4])("varied islands support a complete %s-player setup", playerCount => {
+    for (let seed = 0; seed < 30; seed++) {
+      const board = createBoard(randomFromSeed(seed), "fog-islands");
+      let state = createGame(profiles.slice(0, playerCount), randomFromSeed(seed), board);
+      for (let placement = 0; placement < playerCount * 2; placement++) {
+        const playerId = state.activePlayerId;
+        const vertexId = legalSettlementVertices(state, playerId)[0]!;
+        expect(vertexId).toBeDefined();
+        expect(board.tiles.some(tile => tile.islandId === "main" && tile.vertexIds.includes(vertexId))).toBe(true);
+        state = applyAction(state, playerId, { type: "place-settlement", vertexId });
+        const edgeId = legalRoadEdges(state, playerId)[0]!;
+        expect(edgeId).toBeDefined();
+        state = applyAction(state, playerId, { type: "place-road", edgeId });
+        if (state.phase.type === "gold") {
+          const amount = state.phase.required[playerId]!;
+          const resource = RESOURCES.find(resource => state.bank[resource] >= amount)!;
+          state = applyAction(state, playerId, { type: "choose-gold", resources: resources({ [resource]: amount }) });
+        }
+      }
+      expect(state.phase.type).toBe("roll");
+      expect(state.board.vertices.filter(vertex => vertex.building)).toHaveLength(playerCount * 2);
+      assertConservation(state);
+    }
+  });
+
   test.each(["sea", "wood", "gold"] as const)("setup exploration reveals %s and resumes the next player's setup", terrain => {
     let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "fog-islands");
     expect(state.pirateTileId).toBeNull();

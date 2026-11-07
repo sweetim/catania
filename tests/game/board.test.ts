@@ -169,8 +169,10 @@ describe("four islands board", () => {
 });
 
 describe("fog islands board", () => {
-  test("slides the intact continent across all eight positions and hides every surrounding hex", () => {
-    const centers = new Set<string>();
+  test("varies one to four island outlines and sizes while hiding every surrounding hex", () => {
+    const islandCounts = new Set<number>();
+    const islandSizes = new Set<number>();
+    const footprints = new Set<string>();
     for (let seed = 0; seed < 100; seed++) {
       const board = createBoard(randomFromSeed(seed), "fog-islands");
       expect(board.tiles).toHaveLength(42);
@@ -181,15 +183,35 @@ describe("fog islands board", () => {
         const row = Math.round(tile.y / 90 - 1);
         return { column: Math.round(tile.x / (60 * Math.sqrt(3)) - row / 2 + 1), row };
       });
-      const centerColumn = coordinates.reduce((total, tile) => total + tile.column, 0) / 19;
-      const centerRow = coordinates.reduce((total, tile) => total + tile.row, 0) / 19;
-      centers.add(`${centerColumn},${centerRow}`);
+      footprints.add(coordinates.map(({ column, row }) => `${column},${row}`).sort().join("|"));
       for (const { column, row } of coordinates) {
-        expect(Math.max(Math.abs(column - centerColumn), Math.abs(row - centerRow),
-          Math.abs(column + row - centerColumn - centerRow))).toBeLessThanOrEqual(2);
         expect(column).toBeGreaterThanOrEqual([1, 0, -1, -1, -2, -2, -2][row + 4]!);
         expect(column).toBeLessThanOrEqual([5, 5, 5, 4, 4, 3, 2][row + 4]!);
       }
+      const pending = new Set(mainland);
+      let islandCount = 0;
+      while (pending.size > 0) {
+        const first = [...pending][0]!;
+        const reachable = [first];
+        pending.delete(first);
+        let size = 0;
+        while (reachable.length > 0) {
+          const tile = reachable.pop()!;
+          size++;
+          for (const other of [...pending]) {
+            if (other.vertexIds.filter(id => tile.vertexIds.includes(id)).length === 2) {
+              pending.delete(other);
+              reachable.push(other);
+            }
+          }
+        }
+        islandCount++;
+        islandSizes.add(size);
+        expect(size).toBeGreaterThanOrEqual(4);
+      }
+      expect(islandCount).toBeGreaterThanOrEqual(1);
+      expect(islandCount).toBeLessThanOrEqual(4);
+      islandCounts.add(islandCount);
       expect(board.tiles.filter(tile => tile.islandId !== "main")).toHaveLength(23);
       expect(board.tiles.filter(tile => tile.islandId !== "main").every(tile => tile.terrain === "fog" && tile.number === null)).toBe(true);
       expect(mainland.every(tile => tile.terrain !== "sea" && tile.terrain !== "fog")).toBe(true);
@@ -212,7 +234,11 @@ describe("fog islands board", () => {
       expect(discoveries.flatMap(discovery => discovery.number === null ? [] : [discovery.number]).sort((first, second) => first - second))
         .toEqual([2, 3, 4, 5, 6, 8, 9, 10, 11, 12]);
     }
-    expect([...centers].sort()).toEqual(["0,0", "1,-1", "1,-2", "1,0", "2,-1", "2,-2", "2,0", "3,-2"]);
+    expect([...islandCounts].sort()).toEqual([1, 2, 3, 4]);
+    expect(islandSizes.has(19)).toBe(true);
+    expect([...islandSizes].some(size => size <= 6)).toBe(true);
+    expect([...islandSizes].some(size => size >= 8 && size <= 11)).toBe(true);
+    expect(footprints.size).toBeGreaterThan(80);
   });
 
   test("terminates with constant randomness and keeps all surrounding tiles concealed", () => {
