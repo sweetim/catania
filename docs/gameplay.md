@@ -141,8 +141,9 @@ gold choices, and complete games under the same rules as humans.
 
 ### Four Islands
 
-A 42-hex map contains four disconnected islands with 23 resource hexes and 19 sea
-hexes, using the same layout for three or four players. Starting settlements may
+A 42-hex map contains four disconnected islands on 16-24 resource hexes (each island
+rerolls between four and six hexes per map, with sea filling the rest), using the
+same layout rules for three or four players. Starting settlements may
 be placed on any island. Each player's starting islands are recorded independently:
 the first settlement on each other island earns two bonus points, even if another
 player arrived there first. Starting islands never award this bonus. City upgrades

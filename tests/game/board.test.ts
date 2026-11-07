@@ -87,6 +87,87 @@ describe("standard board", () => {
   });
 });
 
+describe("four islands board", () => {
+  test("rerolls connected islands of four to six hexes with scaled terrain, tokens, and ports", () => {
+    const numberPool = [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 9, 10, 10, 11, 11, 12, 12];
+    const numberTrims = [9, 4, 12, 5, 10, 3];
+    const sizeTuples = new Set<string>();
+    for (let seed = 0; seed < 30; seed++) {
+      const board = createBoard(randomFromSeed(seed), "four-islands");
+      expect(board.variant).toBe("four-islands");
+      expect(board.tiles).toHaveLength(42);
+      const landTiles = board.tiles.filter(tile => tile.terrain !== "sea");
+      const sizes = [1, 2, 3, 4].map(index => {
+        const islandTiles = board.tiles.filter(tile => tile.islandId === `island-${index}`);
+        const pending = new Set(islandTiles);
+        const reachable = [islandTiles[0]!];
+        pending.delete(islandTiles[0]!);
+        while (reachable.length > 0) {
+          const tile = reachable.pop()!;
+          for (const other of [...pending]) {
+            if (other.vertexIds.filter(id => tile.vertexIds.includes(id)).length === 2) {
+              pending.delete(other);
+              reachable.push(other);
+            }
+          }
+        }
+        expect(pending.size).toBe(0);
+        expect(islandTiles.length).toBeGreaterThanOrEqual(4);
+        expect(islandTiles.length).toBeLessThanOrEqual(6);
+        return islandTiles.length;
+      });
+      sizeTuples.add(sizes.join(","));
+      const landCount = sizes.reduce((total, size) => total + size, 0);
+      expect(landTiles).toHaveLength(landCount);
+      expect(board.tiles.filter(tile => tile.terrain === "sea")).toHaveLength(42 - landCount);
+      const base = Math.floor(landCount / 5);
+      const extras = landCount % 5;
+      expect(Object.fromEntries(["wood", "wool", "grain", "brick", "ore"].map(resource =>
+        [resource, landTiles.filter(tile => tile.terrain === resource).length])))
+        .toEqual(Object.fromEntries(["wood", "wool", "grain", "brick", "ore"].map((resource, index) =>
+          [resource, base + (index < extras ? 1 : 0)])));
+      const redTarget = Math.round(landCount * 6 / 23);
+      const expectedNumbers = [...numberPool];
+      for (const value of numberTrims.slice(0, numberPool.length - (landCount - redTarget))) {
+        expectedNumbers.splice(expectedNumbers.indexOf(value), 1);
+      }
+      expectedNumbers.push(...Array(Math.ceil(redTarget / 2)).fill(6), ...Array(Math.floor(redTarget / 2)).fill(8));
+      expect(board.tiles.flatMap(tile => tile.number === null ? [] : [tile.number]).sort((first, second) => first - second))
+        .toEqual(expectedNumbers.sort((first, second) => first - second));
+      const red = board.tiles.filter(tile => tile.number === 6 || tile.number === 8);
+      expect(red).toHaveLength(redTarget);
+      for (const first of red) {
+        for (const second of red) {
+          if (first !== second) expect(first.vertexIds.filter(id => second.vertexIds.includes(id)).length).toBeLessThan(2);
+        }
+      }
+      const portVertices: string[] = [];
+      for (const port of board.ports) {
+        const edge = board.edges.find(edge => edge.id === port.edgeId)!;
+        expect(board.tiles.filter(tile => tile.terrain !== "sea" && edge.vertexIds.every(id => tile.vertexIds.includes(id)))).toHaveLength(1);
+        portVertices.push(...edge.vertexIds);
+      }
+      expect(board.ports).toHaveLength(9);
+      expect(new Set(portVertices).size).toBe(18);
+    }
+    expect(sizeTuples.size).toBeGreaterThan(1);
+    const allSizes = new Set<number>();
+    for (let seed = 0; seed < 100; seed++) {
+      for (let index = 1; index <= 4; index++) {
+        allSizes.add(createBoard(randomFromSeed(seed), "four-islands").tiles.filter(tile => tile.islandId === `island-${index}`).length);
+      }
+    }
+    expect([...allSizes].sort()).toEqual([4, 5, 6]);
+  });
+
+  test("is reproducible from a map code and terminates with constant randomness", () => {
+    expect(createBoard(seededRandom("ABCD2345"), "four-islands")).toEqual(createBoard(seededRandom("ABCD2345"), "four-islands"));
+    expect(createBoard(seededRandom("ABCD2345"), "four-islands")).not.toEqual(createBoard(seededRandom("WXYZ789P"), "four-islands"));
+    expect(createBoard(() => 0, "four-islands").tiles).toHaveLength(42);
+    expect(createBoard(() => 0.999999, "four-islands").tiles).toHaveLength(42);
+  });
+});
+
 describe("map codes", () => {
   test("generate 8-character codes from the unambiguous alphabet, distinct per map", () => {
     for (let index = 0; index < 32; index++) {
@@ -108,7 +189,7 @@ describe("map codes", () => {
   });
 
   test("the same code rebuilds the identical island on every device, in both variants", () => {
-    for (const variant of ["original", "seafarers"] as const) {
+    for (const variant of ["original", "seafarers", "four-islands"] as const) {
       const first = createBoard(seededRandom("ABCD2345"), variant);
       const second = createBoard(seededRandom("ABCD2345"), variant);
       expect(first).toEqual(second);

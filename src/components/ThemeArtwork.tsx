@@ -68,31 +68,42 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
 export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: BoardTheme }) {
   const ink = theme.terrain[terrain].ink;
   if (terrain === "fog") {
+    const cloud = "M-38 12 A13 13 0 0 1 -36 -12 A15 15 0 0 1 -8 -22 A15 15 0 0 1 20 -14 A13 13 0 0 1 34 2 A10 10 0 0 1 26 12 Z";
     return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       {match(theme.id)
         .with("illustrated", () => <>
-          <path d="M-43 11q-8-17 8-22-2-18 17-18 10-19 26-6 19-7 24 11 21 0 17 21 9 16-10 19H-32Z" fill="#f4f7f5" fillOpacity=".65" stroke="none" />
-          <path d="M-35-10H8m-25 12h52M-40 16H20m-32 12H34" />
+          <path d={cloud} transform="translate(22 -13) scale(.42)" fill="#f4f7f5" fillOpacity=".55" stroke="none" />
+          <path d={cloud} fill="#f4f7f5" fillOpacity=".8" stroke={ink} strokeOpacity=".45" strokeWidth="1.5" />
+          <path d="M-24 7q11-6 22-1" strokeOpacity=".35" />
+          <path d="M-41 17h7M-32 20h4" strokeOpacity=".6" />
         </>)
         .with("ceramic", () => <>
-          <path d="M-42-14h57q15 0 15-10t-14-6M-29 0h57M-39 15h56q16 0 16 9t-14 6" strokeWidth="3" />
-          <path d="m-39 0 4-4 4 4-4 4Zm70 0 4-4 4 4-4 4ZM-18-28H4M-23 29H3" />
+          <path d={cloud} transform="translate(-24 -6) scale(.38)" strokeWidth="2" opacity=".65" />
+          <path d={cloud} strokeWidth="3" />
+          <path d="M-41 17h7M-31 20h4" />
+          <path d="m38-22 4-4 4 4-4 4Z" />
         </>)
         .with("wooden", () => <>
-          <path d="M-42-19Q-18-32 5-19t37 0M-36-5Q-14-18 8-5t29 0M-43 9Q-18-4 6 9t37 0M-33 24Q-12 11 9 24t24 0" />
-          <path d="m-30-21 6-4m3 5 6-4M22 10l6-4m2 6 6-4M-22 23l6-4" opacity=".5" />
+          <path d={cloud} />
+          <path d="M-32 6Q-16 -2 0 6T32 5M-25 -1Q-13 -7 0 -1T25 -2" opacity=".7" />
+          <path d="m-34-16 5-4m-1 9 5-4M28-13l5-4" opacity=".5" />
         </>)
         .with("pixel", () => <g fill={ink} stroke="none" shapeRendering="crispEdges">
-          <path d="M-40-24h12v-8h36v8h24v8h12v12H-44v-12h4ZM-36 4h64v8h12v8h-76ZM-24 28h48v4h-48Z" fillOpacity=".25" />
-          <path d="M-32-20H8v4h-40ZM-12-8h44v4h-44ZM-28 8h36v4h-36ZM0 20h32v4H0Z" />
+          <path d="M-44 4h88v11h-88Z" fillOpacity=".25" />
+          <path d="M-40 2h80v10h-80Z" />
+          <path d="M-30-6h60v8h-60Z" />
+          <path d="M-26-14h12v8h-12ZM-8-18h14v12h-14ZM12-12h12v6h-12Z" />
+          <path d="M-22-11h6v3h-6ZM-4-15h6v3h-6Z" fill="white" fillOpacity=".4" />
         </g>)
         .with("space", () => <>
-          <path d="M-43 15Q-30-30 2-16T43-28M-41 27Q-19-4 9 9T42-7" strokeWidth="11" strokeOpacity=".25" />
-          <path d="M-38 10Q-9-17 18-4M-17 23Q5 6 35 11m-72-40h6m-3-3v6m58 29h6m-3-3v6" />
+          <path d="M-43 8Q-6-26 43-6" strokeWidth="11" strokeOpacity=".2" />
+          <path d={cloud} fill={ink} fillOpacity=".08" />
+          <path d="M-28-31h6m-3-3v6M24-30h6m-3-3v6M8-34h5m-2.5-2.5v5" />
         </>)
         .with("underwater", () => <>
-          <path d="M-43-14Q-23-27-3-14t43 0M-36 2Q-18-11 2 2t35 0M-43 19Q-21 6 1 19t42 0" strokeWidth="7" strokeOpacity=".3" />
-          <circle cx="-27" cy="-29" r="3" /><circle cx="29" cy="-25" r="4" /><circle cx="19" cy="28" r="2" />
+          <path d={cloud} strokeWidth="7" strokeOpacity=".25" />
+          <path d={cloud} fill={ink} fillOpacity=".15" />
+          <circle cx="-18" cy="-28" r="3" /><circle cx="-4" cy="-33" r="1.5" /><circle cx="16" cy="-29" r="2.5" /><circle cx="27" cy="-2" r="1.5" />
         </>)
         .exhaustive()}
     </g>;

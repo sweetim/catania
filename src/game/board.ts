@@ -35,6 +35,43 @@ export function shuffle<Value>(values: Value[], random: () => number): Value[] {
   return result;
 }
 
+const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
+
+/** Picks a random connected subset of a six-hex island region, so shuffles vary each island's footprint. */
+function islandShape(region: [number, number][], size: number, random: () => number): [number, number][] {
+  const shapes: [number, number][][] = [];
+  for (let mask = 1; mask < 1 << region.length; mask++) {
+    const tiles = region.filter((_, index) => (mask & (1 << index)) !== 0);
+    if (tiles.length !== size) continue;
+    const pending = new Set(tiles);
+    const reachable: [number, number][] = [tiles[0]!];
+    while (reachable.length > 0) {
+      const [column, row] = reachable.pop()!;
+      for (const tile of [...pending]) {
+        if (HEX_NEIGHBOR_OFFSETS.some(([offsetColumn, offsetRow]) =>
+          tile[0] === column + offsetColumn && tile[1] === row + offsetRow)) {
+          pending.delete(tile);
+          reachable.push(tile);
+        }
+      }
+    }
+    if (pending.size === 0) shapes.push(tiles);
+  }
+  return shapes[randomInteger(shapes.length, random)]!;
+}
+
+const FOUR_ISLAND_NUMBERS = [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 9, 10, 10, 11, 11, 12, 12];
+const FOUR_ISLAND_NUMBER_TRIMS = [9, 4, 12, 5, 10, 3];
+
+/** Scales the non-red token pool to the island hex count, keeping the 23-hex list unchanged. */
+function fourIslandsOtherNumbers(needed: number): number[] {
+  const numbers = [...FOUR_ISLAND_NUMBERS];
+  for (const value of FOUR_ISLAND_NUMBER_TRIMS.slice(0, FOUR_ISLAND_NUMBERS.length - needed)) {
+    numbers.splice(numbers.indexOf(value), 1);
+  }
+  return numbers;
+}
+
 const MAP_SEED_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const MAP_SEED_PATTERN = new RegExp(`^[${MAP_SEED_ALPHABET}]{8}$`);
 
@@ -95,19 +132,19 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     if (variant === "four-islands") {
       positions.length = 0;
       terrain.length = 0;
-      const islands = [
-        [[1, -4], [2, -4], [0, -3], [1, -3], [0, -2]],
+      const regions: [number, number][][] = [
+        [[1, -4], [2, -4], [0, -3], [1, -3], [0, -2], [1, -2]],
         [[4, -4], [5, -4], [4, -3], [5, -3], [4, -2], [5, -2]],
         [[-2, 0], [-1, 0], [-2, 1], [-1, 1], [-2, 2], [-1, 2]],
         [[2, 0], [3, 0], [2, 1], [3, 1], [1, 2], [2, 2]],
       ];
-      const islandTerrain = shuffle<Terrain>([
-        ...Array<Terrain>(5).fill("wood"), ...Array<Terrain>(4).fill("brick"),
-        ...Array<Terrain>(5).fill("wool"), ...Array<Terrain>(5).fill("grain"), ...Array<Terrain>(4).fill("ore"),
-      ], random);
-      for (const [index, island] of islands.entries()) {
-        for (const [column, row] of island) {
-          positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
+      const islandSizes = regions.map(() => 4 + randomInteger(3, random));
+      const islandLandCount = islandSizes.reduce((total, size) => total + size, 0);
+      const islandTerrain = shuffle<Terrain>((["wood", "wool", "grain", "brick", "ore"] as const).flatMap((resource, index) =>
+        Array<Terrain>(Math.floor(islandLandCount / 5) + (index < islandLandCount % 5 ? 1 : 0)).fill(resource)), random);
+      for (const [index, region] of regions.entries()) {
+        for (const [column, row] of islandShape(region, islandSizes[index]!, random)) {
+          positions.push({ column, row, islandId: `island-${index + 1}` });
           terrain.push(islandTerrain.shift()!);
         }
       }
@@ -189,9 +226,11 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
 
   const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
+  const redTileTarget = variant === "seafarers" ? 6
+    : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23) : 4;
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
-    if (redTiles.length === (variant === "seafarers" || variant === "four-islands" ? 6 : 4)) return true;
+    if (redTiles.length === redTileTarget) return true;
     for (let index = start; index < producingTiles.length; index++) {
       const candidate = producingTiles[index]!;
       if (variant === "seafarers" && redTiles.filter(tile => (tile.islandId === "main") === (candidate.islandId === "main")).length >=
@@ -204,9 +243,11 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     return false;
   }
   if (!selectRedTiles(0)) throw new GameError("Unable to arrange nonadjacent red number tokens.");
-  const redNumbers = shuffle(variant === "four-islands" ? [6, 6, 6, 8, 8, 8] : [6, 6, 8, 8], random);
+  const redNumbers = shuffle(variant === "four-islands"
+    ? [...Array<number>(Math.ceil(redTileTarget / 2)).fill(6), ...Array<number>(Math.floor(redTileTarget / 2)).fill(8)]
+    : [6, 6, 8, 8], random);
   const otherNumbers = shuffle(variant === "four-islands"
-    ? [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 10, 10, 11, 11, 12, 12]
+    ? fourIslandsOtherNumbers(producingTiles.length - redTileTarget)
     : [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
   const islandRedNumbers = variant === "seafarers" ? shuffle([6, 8], random) : [];
   const islandOtherNumbers = variant === "seafarers" ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
