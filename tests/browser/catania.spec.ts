@@ -2530,7 +2530,7 @@ test("Seafarers selection changes the preview independently of themes and can re
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "original");
 });
 
-test("Seafarers starts on its exact preview and confirms a free coastal ship with variant-specific help", async ({ page }, testInfo) => {
+test("Seafarers aligns diagonal ships and preserves vertical ships with variant-specific help", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
@@ -2549,27 +2549,69 @@ test("Seafarers starts on its exact preview and confirms a free coastal ship wit
   await revealHand(page);
   await showView(page, "board");
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "seafarers");
-  const vertexId = legalSettlementVertices(state, state.activePlayerId).find(id => {
-    const placed = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId: id });
-    return legalShipEdges(placed, placed.activePlayerId).length > 0;
-  })!;
-  await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
-  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
-  const edgeId = legalShipEdges(state, state.activePlayerId)[0]!;
-  await page.getByRole("button", { name: `Build ship at ${edgeId}`, exact: true }).click();
-  await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await revealHand(page);
-  await showView(page, "board");
-  await expect(page.getByRole("img", { name: `${state.players.find(player => player.id === state.activePlayerId)!.name}'s ship at ${edgeId}`, exact: true })).toBeVisible();
+  const verticesById = new Map(state.board.vertices.map(vertex => [vertex.id, vertex]));
+  for (const orientation of ["vertical", "ascending", "descending"] as const) {
+    const matchingEdges = new Set(state.board.edges.filter(edge => {
+      const start = verticesById.get(edge.vertexIds[0])!;
+      const end = verticesById.get(edge.vertexIds[1])!;
+      const slope = (end.x - start.x) * (end.y - start.y);
+      return orientation === "vertical" ? start.x === end.x : orientation === "ascending" ? slope < 0 : slope > 0;
+    }).map(edge => edge.id));
+    const vertexId = legalSettlementVertices(state, state.activePlayerId).find(id => {
+      const placed = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId: id });
+      return legalShipEdges(placed, placed.activePlayerId).some(edgeId => matchingEdges.has(edgeId));
+    })!;
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    await page.getByRole("button", { name: "Choose ships", exact: true }).click();
+    const edgeId = legalShipEdges(state, state.activePlayerId).find(edgeId => matchingEdges.has(edgeId))!;
+    await page.getByRole("button", { name: `Build ship at ${edgeId}`, exact: true }).click();
+    await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    state = applyAction(state, player.id, { type: "place-ship", edgeId });
+    if (state.activePlayerId !== player.id) await revealHand(page);
+    await showView(page, "board");
+    const ship = page.getByRole("img", { name: `${player.name}'s ship at ${edgeId}`, exact: true });
+    await expect(ship).toBeVisible();
+    await expect(ship.locator("text")).toHaveText(String(state.players.findIndex(candidate => candidate.id === player.id) + 1));
+    const edge = state.board.edges.find(edge => edge.id === edgeId)!;
+    const start = verticesById.get(edge.vertexIds[0])!;
+    const end = verticesById.get(edge.vertexIds[1])!;
+    const geometry = await ship.evaluate((element, { start, end }) => {
+      const hull = element.querySelector("path")!;
+      const transformation = hull.getScreenCTM()!;
+      const hullStart = new DOMPoint(-19, 12).matrixTransform(transformation);
+      const hullEnd = new DOMPoint(19, 12).matrixTransform(transformation);
+      const boardTransformation = (element as SVGGraphicsElement).ownerSVGElement!.getScreenCTM()!;
+      const edgeStart = new DOMPoint(start.x, start.y).matrixTransform(boardTransformation);
+      const edgeEnd = new DOMPoint(end.x, end.y).matrixTransform(boardTransformation);
+      const hullLength = Math.hypot(hullEnd.x - hullStart.x, hullEnd.y - hullStart.y);
+      const edgeLength = Math.hypot(edgeEnd.x - edgeStart.x, edgeEnd.y - edgeStart.y);
+      const labelTransformation = element.querySelector("text")!.getScreenCTM()!;
+      return {
+        alignment: Math.abs(((hullEnd.x - hullStart.x) * (edgeEnd.x - edgeStart.x) +
+          (hullEnd.y - hullStart.y) * (edgeEnd.y - edgeStart.y)) / (hullLength * edgeLength)),
+        centerDistance: Math.hypot((hullStart.x + hullEnd.x - edgeStart.x - edgeEnd.x) / 2,
+          (hullStart.y + hullEnd.y - edgeStart.y - edgeEnd.y) / 2),
+        labelAngle: Math.atan2(labelTransformation.b, labelTransformation.a),
+      };
+    }, { start, end });
+    if (orientation === "vertical") {
+      await expect(ship).toHaveAttribute("transform", `translate(${(start.x + end.x) / 2} ${(start.y + end.y) / 2}) scale(0.65)`);
+    } else {
+      expect(geometry.alignment, `${orientation} ship hull follows its edge`).toBeCloseTo(1, 5);
+      expect(geometry.centerDistance, `${orientation} ship hull is centered on its edge`).toBeLessThan(0.01);
+    }
+    expect(geometry.labelAngle, `${orientation} ship number stays upright`).toBeCloseTo(0, 5);
+  }
   await noPageOverflow(page);
   await screenshot(page, testInfo, "seafarers-starting-ship", false);
   await chooseGameOption(page, "Help");
   const help = page.getByRole("dialog", { name: "Help", exact: true });
   await expect(help.getByRole("heading", { name: "Seafarers rules", exact: true })).toBeVisible();
-  await expect(help.getByText("Good neighbors. Clever trades. Thirteen victory points.", { exact: true })).toBeVisible();
+  await expect(help.getByText("Good neighbors. Clever trades. 13 victory points.", { exact: true })).toBeVisible();
   await expect(help.getByText("Ship", { exact: true })).toHaveCount(1);
 });
 
