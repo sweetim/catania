@@ -1,5 +1,5 @@
-import { COSTS } from "../game/engine";
-import type { GameVariant } from "../game/types";
+import { COSTS, victoryTarget } from "../game/engine";
+import { isSeafarers, type GameVariant } from "../game/types";
 import { useLanguage, useTranslation } from "../localization";
 import { helpTranslations } from "../translations/help";
 import { getDevelopmentNames, getDevelopmentDescriptions } from "./GameplayDialogs";
@@ -10,25 +10,32 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
   const translateText = useTranslation(helpTranslations);
   const developmentNames = getDevelopmentNames(language);
   const developmentDescriptions = getDevelopmentDescriptions(language, variant);
+  const scenarioRules = variant === "four-islands"
+    ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach 12 points on your own turn to win."
+    : variant === "fog-islands"
+      ? "Place starting settlements only on the main island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach 12 points on your own turn to win."
+      : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.";
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>
       <div className="space-y-8 text-sm leading-7 text-muted">
         <p className="font-serif text-xl text-ink">
-          {translateText(variant === "seafarers" ? "Good neighbors. Clever trades. Thirteen victory points." : "Good neighbors. Clever trades. Ten victory points.")}
+          {translateText("Good neighbors. Clever trades. {points} victory points.", { points: victoryTarget(variant) })}
         </p>
-        {variant === "seafarers" && <section aria-labelledby="help-seafarers" className="space-y-3">
+        {isSeafarers(variant) && <section aria-labelledby="help-seafarers" className="space-y-3">
           <h3 id="help-seafarers" className="font-serif text-2xl text-ink">{translateText("Seafarers rules")}</h3>
-          <p>{translateText("Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.")}</p>
+          <p>{translateText(scenarioRules)}</p>
           <p>{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
           <p>{translateText("After rolling, move at most one open-ended ship per turn, never one built this turn. Ships between your buildings cannot move. The pirate blocks building and moving ships on its hex, but does not break existing routes or block harbors.")}</p>
-          <p>{translateText("On a seven or Knight, move either the robber to another land hex or the pirate to another sea hex or off the board. The pirate steals from a player with an adjacent ship. Gold fields grant one resource of choice per settlement, or two per city. Choose from the bank in turn order, starting with the active player.")}</p>
+          <p>{translateText("On a seven or Knight, move the robber to another revealed land hex or the pirate to another revealed sea hex or off the board. Neither may enter fog. The pirate steals from a player with an adjacent ship. Gold fields produce one resource choice per settlement or two per city, chosen from the bank in turn order starting with the active player.")}</p>
         </section>}
         <section aria-labelledby="help-how-to-play">
           <h3 id="help-how-to-play" className="mb-4 font-serif text-2xl text-ink">{translateText("How to play")}</h3>
           <ol className="list-decimal space-y-3 pl-5">
             <li>
               <strong className="text-ink">{translateText("Settle the island.")}</strong>{" "}
-              {translateText("Choose three or four players, with computers filling any non-human seats. Turn order is randomized. Each player places a free settlement and adjoining road in order, then again in reverse. Your second settlement grants one resource from each neighboring non-desert hex.")}
+              {translateText(isSeafarers(variant)
+                ? "Place two starting settlements and an adjoining road or ship in snake order. Your second settlement grants resources from adjacent revealed resource land. Follow the scenario's starting-island restrictions."
+                : "Choose three or four players, with computers filling any non-human seats. Turn order is randomized. Each player places a free settlement and adjoining road in order, then again in reverse. Your second settlement grants one resource from each neighboring non-desert hex.")}
             </li>
             <li>
               <strong className="text-ink">{translateText("Roll and gather.")}</strong>{" "}
@@ -36,7 +43,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
             </li>
             <li>
               <strong className="text-ink">{translateText("Trade, build, and pass.")}</strong>{" "}
-              {variant === "seafarers" ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach 13 points on your own turn to win.")
+              {isSeafarers(variant) ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach {points} points on your own turn to win.", { points: victoryTarget(variant) })
                 : translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach 10 points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board") })}
             </li>
           </ol>
@@ -46,7 +53,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
           <h3 id="help-builds" className="mb-4 font-serif text-2xl text-ink">{translateText("Builds and costs")}</h3>
           <p className="mb-4">{translateText("Pay these resources to the bank after rolling. You need a legal location and an available piece to build.")}</p>
           <ul aria-label={translateText("Available builds and purchases")} className="grid gap-3 sm:grid-cols-2">
-            {variant === "seafarers" && <li className="rounded-xl border border-line bg-white/30 p-4">
+            {isSeafarers(variant) && <li className="rounded-xl border border-line bg-white/30 p-4">
               <div className="mb-3 flex items-center gap-3 text-forest"><PieceIcon piece="ship" /><h4 className="font-semibold text-ink">{translateText("Ship")}</h4></div>
               <Cost resources={COSTS.ship} />
               <p className="mt-3 text-xs leading-6">{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
@@ -63,7 +70,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
                   <h4 className="font-semibold text-ink">{translateText(name)}</h4>
                 </div>
                 <Cost resources={COSTS[piece]} />
-                <p className="mt-3 text-xs leading-6">{translateText(variant === "seafarers" && piece === "settlement"
+                <p className="mt-3 text-xs leading-6">{translateText(isSeafarers(variant) && piece === "settlement"
                   ? "Build on an empty land intersection beside your roads or ships, at least two edges from every building. Worth 1 point; produces 1 resource per matching land hex. Limit: 5 settlements."
                   : description)}</p>
               </li>
@@ -114,11 +121,11 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
           </p>
           <p>
             <strong className="text-ink">{translateText("Points and victory.")}</strong>{" "}
-            {translateText(variant === "seafarers" ? "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win." : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
+            {translateText(isSeafarers(variant) ? scenarioRules : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
           </p>
           <p>
             <strong className="text-ink">{translateText("Longest Road and Largest Army.")}</strong>{" "}
-            {translateText(variant === "seafarers" ? "Longest Route counts roads and ships, joined only at your buildings. Largest Army still needs at least three played Knights. Awards are worth 2 points each; ties stay with the qualifying holder." : "Longest Road needs at least five roads in one continuous trail, not your total network. Count each road once; loops can count, branches do not all add together, and an opponent's building interrupts the trail. Largest Army needs at least three played Knights. For either award, the highest qualifying player holds it. A tie stays with the current holder if they are among the leaders; otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.")}
+            {translateText(isSeafarers(variant) ? "Longest Route counts roads and ships, joined only at your buildings. Largest Army still needs at least three played Knights. Awards are worth 2 points each; ties stay with the qualifying holder." : "Longest Road needs at least five roads in one continuous trail, not your total network. Count each road once; loops can count, branches do not all add together, and an opponent's building interrupts the trail. Largest Army needs at least three played Knights. For either award, the highest qualifying player holds it. A tie stays with the current holder if they are among the leaders; otherwise a tie leaves it unclaimed. Surpassing the holder transfers the award and its points.")}
           </p>
           <div className="rounded-xl bg-moss p-4">
             {multiplayer ? (

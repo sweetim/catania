@@ -9,7 +9,7 @@ import {
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
 import { edgeTiles, isResource } from "../game/board";
-import type { Board as BoardState, Player, Terrain } from "../game/types";
+import { isSeafarers, type Board as BoardState, type Player, type Terrain } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
@@ -110,7 +110,7 @@ export function Board({
   const legalEdges = new Set(canSelect ? legalEdgeIds : []);
   const legalTiles = new Set(canSelect ? legalTileIds : []);
   const raisedTileIds = new Set(board.tiles.filter((tile) =>
-    (tile.number !== null && tile.number === rolledNumber) ||
+    (tile.terrain !== "fog" && tile.number !== null && tile.number === rolledNumber) ||
     (legalTiles.has(tile.id) && (selectedId === tile.id || focusedId === tile.id)),
   ).map((tile) => tile.id));
   const blockedVertices = showBlockedSettlementLocations ? blockedSettlementVertices(board) : [];
@@ -127,7 +127,7 @@ export function Board({
       end,
       x: (start.x + end.x) / 2,
       y: (start.y + end.y) / 2,
-      coastal: edgeTiles(board, edge).filter(tile => tile.terrain !== "sea").length === 1,
+      coastal: edgeTiles(board, edge).filter(tile => tile.terrain !== "sea" && tile.terrain !== "fog").length === 1,
     };
   });
   const selectedPoint = selectedId
@@ -256,7 +256,7 @@ export function Board({
 
   function terrainResourceName(terrain: Terrain) {
     return isResource(terrain) ? resourceName(language, terrain).toLowerCase()
-      : translateText(terrain === "sea" ? "Sea" : terrain === "gold" ? "Gold" : "Desert").toLowerCase();
+      : translateText(terrain === "sea" ? "Sea" : terrain === "fog" ? "Fog" : terrain === "gold" ? "Gold" : "Desert").toLowerCase();
   }
 
   function targetProperties(
@@ -705,22 +705,25 @@ export function Board({
                   return `${vertex.x},${vertex.y}`;
                 })
                 .join(" ");
+              const number = tile.terrain === "fog" ? null : tile.number;
               const probability =
-                tile.number === null ? 0 : 6 - Math.abs(7 - tile.number);
-              const frequent = tile.number === 6 || tile.number === 8;
-              const matchesRoll = tile.number !== null && tile.number === rolledNumber;
+                number === null ? 0 : 6 - Math.abs(7 - number);
+              const frequent = number === 6 || number === 8;
+              const matchesRoll = number !== null && number === rolledNumber;
               const blocked = matchesRoll && robberTileId === tile.id;
               const raised = raisedTileIds.has(tile.id);
-              let description = translateText(tile.number === null
-                ? "{terrain}, {resource}, no production"
-                : "{terrain}, {resource}, roll {number}, {probability} chances out of 36", {
-                terrain: getTerrainName(theme, tile.terrain, language),
-                resource: terrainResourceName(tile.terrain),
-                number: tile.number ?? "",
-                probability,
-              });
-              if (robberTileId === tile.id) description = translateText("{description}, blocked by the robber", { description });
-              if (producingTileIds.includes(tile.id)) description = translateText("{description}, produced resources this roll", { description });
+              let description = tile.terrain === "fog"
+                ? translateText("Unexplored fog; terrain and number concealed")
+                : translateText(number === null
+                  ? "{terrain}, {resource}, no production"
+                  : "{terrain}, {resource}, roll {number}, {probability} chances out of 36", {
+                  terrain: getTerrainName(theme, tile.terrain, language),
+                  resource: terrainResourceName(tile.terrain),
+                  number: number ?? "",
+                  probability,
+                });
+              if (tile.terrain !== "fog" && robberTileId === tile.id) description = translateText("{description}, blocked by the robber", { description });
+              if (tile.terrain !== "fog" && producingTileIds.includes(tile.id)) description = translateText("{description}, produced resources this roll", { description });
               return (
                 <g
                   key={tile.id}
@@ -730,7 +733,7 @@ export function Board({
                   role="img"
                   aria-label={description}
                 >
-                  <polygon
+                  {tile.terrain !== "fog" && <polygon
                     points={points}
                     transform={`translate(0 ${2.5 + (raised ? tileElevation : 0)})`}
                     fill="#887753"
@@ -739,7 +742,7 @@ export function Board({
                     strokeLinejoin="round"
                     opacity={raised ? "0.85" : "0.45"}
                     pointerEvents="none"
-                  />
+                  />}
                   <polygon
                     points={points}
                     fill={terrain.fill}
@@ -752,7 +755,7 @@ export function Board({
                     fill={`url(#${illustrationId}-texture)`}
                     pointerEvents="none"
                   />
-                  {theme.id === "illustrated" && tile.terrain !== "sea" && tile.terrain !== "gold" ? (
+                  {theme.id === "illustrated" && tile.terrain !== "sea" && tile.terrain !== "fog" && tile.terrain !== "gold" ? (
                     <use
                       href={`#${illustrationId}-${tile.terrain}`}
                       transform={`translate(${tile.x} ${tile.y})`}
@@ -773,7 +776,7 @@ export function Board({
                   >
                     {getTerrainName(theme, tile.terrain, language).toUpperCase()}
                   </text>
-                  {tile.number !== null && (
+                  {number !== null && (
                     <g
                       className={`number-token${matchesRoll ? " number-token-highlight" : ""}${blocked ? " number-token-blocked" : ""}`}
                       transform={`translate(${tile.x} ${tile.y + 2})`}
@@ -814,7 +817,7 @@ export function Board({
                         fontWeight="700"
                         fill={frequent ? "#b14e38" : "#394b42"}
                       >
-                        {tile.number}
+                        {number}
                       </text>
                       {Array.from({ length: probability }, (_, index) => (
                         <circle
@@ -866,10 +869,10 @@ export function Board({
               )!;
               const distance = Math.hypot(x, y);
               const edge = board.edges.find(edge => edge.id === port.edgeId)!;
-              const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea")!;
+              const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog")!;
               const coastDistance = Math.hypot(x - land.x, y - land.y);
-              const directionX = board.variant === "seafarers" ? (x - land.x) / coastDistance : x / distance;
-              const directionY = board.variant === "seafarers" ? (y - land.y) / coastDistance : y / distance;
+              const directionX = isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
+              const directionY = isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
               const portX = x + directionX * 51;
               const portY = y + directionY * 51;
               const ratio = port.resource === "any" ? "3:1" : "2:1";
@@ -1147,7 +1150,7 @@ export function Board({
                       "edge",
                       edge.id,
                       translateText(routeMode === "move-ship" ? "Move ship at {location}" :
-                        routeMode === "ship" || edgeTiles(board, edge).every(tile => tile.terrain === "sea")
+                        routeMode === "ship" || edgeTiles(board, edge).every(tile => tile.terrain === "sea" || tile.terrain === "fog")
                           ? "Build ship at {location}" : "Build road at {location}", { location: edge.id }),
                     )}
                   >
@@ -1295,14 +1298,14 @@ export function Board({
                 );
               })}
 
-            {board.tiles.filter(tile => tile.id === pirateTileId).map(tile => <g key={`pirate-${tile.id}`}
+            {board.tiles.filter(tile => tile.id === pirateTileId && tile.terrain === "sea").map(tile => <g key={`pirate-${tile.id}`}
               transform={`translate(${tile.x} ${tile.y - 6})`} role="img"
               aria-label={translateText("Pirate; adjacent ships cannot be built or moved")} pointerEvents="none">
               <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
               <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
             </g>)}
             {board.tiles
-              .filter((tile) => tile.id === robberTileId)
+              .filter((tile) => tile.id === robberTileId && tile.terrain !== "sea" && tile.terrain !== "fog")
               .map((tile) => (
                 <g
                   key={tile.id}

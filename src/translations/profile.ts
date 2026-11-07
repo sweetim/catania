@@ -15,6 +15,8 @@ export const profileTranslations = {
   "Lost": "敗北",
   "Original": "オリジナル",
   "Seafarers": "航海者",
+  "Four Islands": "四つの島",
+  "Fog Islands": "霧の島",
   "VP": "勝利点",
   "{turns} turns": "{turns}ターン",
   "Replay map": "このマップを再現",

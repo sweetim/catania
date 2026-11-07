@@ -6,6 +6,7 @@ import { MapSeedControls } from "../components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
+import { GameVariantSelector, GameVariantSummary } from "../components/GameVariantSelector";
 import { FreeRouteChoice, GoldSelection } from "../components/SeafarersControls";
 import { BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
@@ -21,7 +22,7 @@ import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
-import type { GameAction, GameVariant, Resources } from "../game/types";
+import { isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -69,9 +70,9 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
       </div>
       {statistics && <>
         <p className="mt-2 text-xs">{translateText("{points} points / {resources} resource cards / {development} development cards", { points: statistics.score, resources: statistics.resourceCount, development: statistics.developmentCount })}</p>
-        <p className="mt-1 text-[11px] text-muted">{translateText("{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}</p>
+        <p className="mt-1 text-[11px] text-muted">{translateText(isSeafarers(snapshot.variant) ? "{knights} played Knights / Longest route: {roads}" : "{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}</p>
         <p className="text-[11px] font-semibold">
-          {snapshot.game?.awards.longestRoad === player.id && translateText("Longest Road (+2) ")}
+          {snapshot.game?.awards.longestRoad === player.id && translateText(isSeafarers(snapshot.variant) ? "Longest Route (+2) " : "Longest Road (+2) ")}
           {snapshot.game?.awards.largestArmy === player.id && translateText("Largest Army (+2)")}
         </p>
       </>}
@@ -98,14 +99,15 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
 function victoryBreakdownRows(
   breakdown: PublicGame["players"][number]["scoreBreakdown"],
   translateText: (key: keyof typeof multiplayerUiTranslations, parameters?: TranslationParameters) => string,
+  variant: GameVariant,
 ): VictoryBreakdownRow[] {
   if (!breakdown) return [];
   return [
     { kind: "settlements", label: translateText("Settlements"), note: breakdown.settlements ? translateText("{count} × {points} VP", { count: breakdown.settlements, points: 1 }) : undefined, points: breakdown.settlements },
     { kind: "cities", label: translateText("Cities"), note: breakdown.cities ? translateText("{count} × {points} VP", { count: breakdown.cities / 2, points: 2 }) : undefined, points: breakdown.cities },
-    { kind: "longest-road", label: translateText(breakdown.islands !== undefined ? "Longest Route" : "Longest Road"), points: breakdown.longestRoad },
+    { kind: "longest-road", label: translateText(isSeafarers(variant) ? "Longest Route" : "Longest Road"), points: breakdown.longestRoad },
     { kind: "largest-army", label: translateText("Largest Army"), points: breakdown.largestArmy },
-    ...(breakdown.islands !== undefined ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: breakdown.islands ? translateText("{count} × {points} VP", { count: breakdown.islands / 2, points: 2 }) : undefined, points: breakdown.islands }] : []),
+    ...(variant === "seafarers" || variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: breakdown.islands ? translateText("{count} × {points} VP", { count: breakdown.islands / 2, points: 2 }) : undefined, points: breakdown.islands ?? 0 }] : []),
     { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: breakdown.hidden ? translateText("{count} × {points} VP", { count: breakdown.hidden, points: 1 }) : undefined, points: breakdown.hidden },
   ];
 }
@@ -243,7 +245,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         onSubmit={resources => send({ type: "choose-gold", resources })} />}
       <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building" defaultOpen>
         <div className="build-options flex flex-col gap-2">
-          {(["road", ...(game.variant === "seafarers" ? ["ship" as const] : []), "settlement", "city"] as const).map(piece => {
+          {(["road", ...(isSeafarers(game.variant) ? ["ship" as const] : []), "settlement", "city"] as const).map(piece => {
             const locations = piece === "road"
               ? legalRoadEdges(game, player.id)
               : piece === "ship" ? legalShipEdges(game, player.id) : piece === "city"
@@ -267,7 +269,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
               {explanation && <p id={`${piece}-build-explanation`} className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
             </Fragment>;
           })}
-          {game.variant === "seafarers" && <button className="button-secondary w-full"
+          {isSeafarers(game.variant) && <button className="button-secondary w-full"
             disabled={disabled || !normalActions || !movableShipEdges(game, player.id).some(id => legalShipDestinations(game, player.id, id).length)}
             aria-pressed={snapshot.buildMode === "move-ship"} onClick={() => selectBuild(snapshot.buildMode === "move-ship" ? null : "move-ship")}>
             {translateText("Move ship")}
@@ -286,7 +288,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      {active && game.variant === "seafarers" && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
+      {active && isSeafarers(game.variant) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
@@ -556,15 +558,7 @@ export function MultiplayerApp() {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-                  <div className="flex rounded-xl bg-moss p-1" role="group" aria-label={translateText("Game version")}>
-                    {(["original", "seafarers"] as GameVariant[]).map(variant => (
-                      <button key={variant} aria-pressed={snapshot.variant === variant} disabled={disabled}
-                        onClick={() => session.current?.setVariant(variant)}
-                        className={`min-h-9 rounded-lg px-3 text-xs font-semibold ${snapshot.variant === variant ? "bg-white shadow-sm" : "text-muted"}`}>
-                        {translateText(variant === "original" ? "Original" : "Seafarers")}
-                      </button>
-                    ))}
-                  </div>
+                  <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
                 </div>
               </div>
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
@@ -587,7 +581,7 @@ export function MultiplayerApp() {
                   />}
                 />
               </div>
-              {snapshot.variant === "seafarers" && <p className="mt-4 text-xs leading-5 text-muted"><strong>{translateText("Heading for New Shores")}</strong>{" "}{translateText("Main island setup. Discover three islands. First to 13 points wins.")}</p>}
+              {isSeafarers(snapshot.variant) && <p className="mt-4 text-xs leading-5 text-muted"><GameVariantSummary variant={snapshot.variant} /></p>}
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
           {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
@@ -624,6 +618,9 @@ export function MultiplayerApp() {
           <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
             <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
             {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
+            {!host && snapshot && <p className="my-4 text-xs leading-5 text-muted">
+              {snapshot.variant === "original" ? translateText("Original") : <GameVariantSummary variant={snapshot.variant} />}
+            </p>}
             {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
             {snapshot && <>
               <div id="lobby-readiness" role="status" className="my-4 rounded-xl bg-moss p-4">
@@ -670,10 +667,10 @@ export function MultiplayerApp() {
             <div className="board-tablemat">
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                routeChoice={game.variant === "seafarers" && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                routeChoice={isSeafarers(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
                   : undefined}
-                onMovePirateOffBoard={!disabled && activePlayer?.control === "human" && game.variant === "seafarers" && game.phase.type === "robber" && game.pirateTileId !== null
+                onMovePirateOffBoard={!disabled && activePlayer?.control === "human" && isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
                   ? () => session.current?.perform({ type: "move-pirate", tileId: null }, snapshot.version) : undefined}
                 legalVertexIds={snapshot.boardTargets.vertices} legalEdgeIds={movingShipId ? legalShipDestinations(game, game.activePlayerId, movingShipId) : snapshot.boardTargets.edges} legalTileIds={snapshot.boardTargets.tiles}
                 interactive={!disabled && activePlayer?.control !== "computer" && !game.winnerId} selectedId={currentSelection?.id ?? movingShipId}
@@ -704,7 +701,7 @@ export function MultiplayerApp() {
               totalPoints={victoryWinner.score}
               pointsUnit={translateText("points")}
               summary={translateText("The room keeps its players and invitation. Start the next game from the lobby.")}
-              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText)}
+              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText, game.variant)}
               profileNote={snapshot.profiles?.[victoryWinner.id]
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", snapshot.profiles[victoryWinner.id])
                 : undefined}
@@ -735,7 +732,7 @@ export function MultiplayerApp() {
               totalPoints={victoryWinner.score}
               pointsUnit={translateText("points")}
               summary={translateText("The host can return everyone to the lobby for a rematch.")}
-              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText)}
+              breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText, game.variant)}
             >
               <button className="button-primary" onClick={() => setDialog("leave")}>
                 {translateText("Leave room")}

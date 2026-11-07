@@ -1,6 +1,6 @@
 import { normalizeMapSeed } from "./game/board";
 import { GameError } from "./game/messages";
-import type { GameVariant } from "./game/types";
+import { isGameVariant, type GameVariant } from "./game/types";
 
 export type ProfileStats = { games: number; wins: number; totalPoints: number };
 export type ProfileGameResult = {
@@ -38,7 +38,7 @@ function historyFrom(value: unknown): ProfileGame | null {
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.gameId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(candidate.gameId) ||
     typeof candidate.mapCode !== "string" || !normalizeMapSeed(candidate.mapCode) ||
-    (candidate.variant !== "original" && candidate.variant !== "seafarers") ||
+    !isGameVariant(candidate.variant) ||
     typeof candidate.won !== "boolean" || !count(candidate.points) || !count(candidate.turnCount) ||
     typeof candidate.completedAt !== "string" || !Number.isFinite(Date.parse(candidate.completedAt))) return null;
   return {

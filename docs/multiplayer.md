@@ -28,11 +28,12 @@ The shared screen hosts the game without occupying a player seat.
    available with three or four total players and every human connected; disconnected
    humans are named in the readiness message. Turn order is randomized.
    The host's island preview shows the map that will be used.
-   The host chooses **Original** or **Seafarers** under **Game version**; Original
-   is the default. Changing the version regenerates the preview and synchronizes
-   the choice to all phones without changing the roster. Seafarers uses Heading
-   for New Shores with the same rules and layout described in the
-   [gameplay guide](gameplay.md#seafarers-heading-for-new-shores).
+   The host chooses **Original**, **Seafarers** (Heading for New Shores),
+   **Four Islands**, or **Fog Islands** under **Game version**; Original is the default.
+   Changing the version regenerates the preview and synchronizes the choice to all
+   phones without changing the roster. All scenarios use the rules described in the
+   [gameplay guide](gameplay.md#seafarers-heading-for-new-shores). Fog discoveries
+   appear on every device, but the hidden discovery deck remains with the host.
     Choose **Shuffle** to generate another island before starting. Every generated
     map has a **map code** shown beside **Shuffle**: entering or pasting all 8
     characters automatically rebuilds that exact island; Enter also submits the

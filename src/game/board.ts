@@ -1,8 +1,13 @@
 import { GameError } from "./messages";
-import type { Board, Edge, GameVariant, Resource, Terrain, Tile, Vertex } from "./types";
+import { isSeafarers } from "./types";
+import type { Board, Edge, FogDiscovery, GameVariant, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function isResource(terrain: Terrain): terrain is Resource {
-  return terrain !== "desert" && terrain !== "sea" && terrain !== "gold";
+  return terrain !== "desert" && terrain !== "sea" && terrain !== "gold" && terrain !== "fog";
+}
+
+export function isLand(terrain: Terrain): boolean {
+  return terrain !== "sea" && terrain !== "fog";
 }
 
 export function edgeTiles(board: Board, edge: Edge): Tile[] {
@@ -85,17 +90,52 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       if (Math.abs(column + row) <= 2) positions.push({ column, row, islandId: "main" });
     }
   }
-  if (variant === "seafarers") {
-    const islands = [
-      [[1, -4], [2, -4]],
-      [[4, -4], [4, -3], [5, -3], [4, -2], [4, -1]],
-      [[3, 1], [2, 2]],
-    ];
-    const islandTerrain = shuffle<Terrain>(["ore", "wool", "gold", "brick", "ore", "wood", "gold", "brick", "grain"], random);
-    for (const [index, island] of islands.entries()) {
-      for (const [column, row] of island) {
-        positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
-        terrain.push(islandTerrain.shift()!);
+  let fogDiscoveryDeck: FogDiscovery[] | undefined;
+  if (isSeafarers(variant)) {
+    if (variant === "four-islands") {
+      positions.length = 0;
+      terrain.length = 0;
+      const islands = [
+        [[1, -4], [2, -4], [0, -3], [1, -3], [0, -2]],
+        [[4, -4], [5, -4], [4, -3], [5, -3], [4, -2], [5, -2]],
+        [[-2, 0], [-1, 0], [-2, 1], [-1, 1], [-2, 2], [-1, 2]],
+        [[2, 0], [3, 0], [2, 1], [3, 1], [1, 2], [2, 2]],
+      ];
+      const islandTerrain = shuffle<Terrain>([
+        ...Array<Terrain>(5).fill("wood"), ...Array<Terrain>(4).fill("brick"),
+        ...Array<Terrain>(5).fill("wool"), ...Array<Terrain>(5).fill("grain"), ...Array<Terrain>(4).fill("ore"),
+      ], random);
+      for (const [index, island] of islands.entries()) {
+        for (const [column, row] of island) {
+          positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
+          terrain.push(islandTerrain.shift()!);
+        }
+      }
+    } else if (variant === "fog-islands") {
+      const fogPositions = [
+        [1, -4], [2, -4], [3, -4], [4, -4], [5, -4], [4, -3], [5, -3],
+        [4, -2], [5, -2], [4, -1], [4, 0], [3, 1], [2, 2],
+      ];
+      for (const [column, row] of fogPositions) {
+        positions.push({ column: column!, row: row! });
+        terrain.push("fog");
+      }
+      const discoveryNumbers = shuffle([2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
+      fogDiscoveryDeck = shuffle<FogDiscovery["terrain"]>([
+        "wood", "wood", "brick", "wool", "wool", "grain", "grain", "ore", "gold", "gold", "sea", "sea", "sea",
+      ], random).map(terrain => ({ terrain, number: terrain === "sea" ? null : discoveryNumbers.pop()! }));
+    } else {
+      const islands = [
+        [[1, -4], [2, -4]],
+        [[4, -4], [4, -3], [5, -3], [4, -2], [4, -1]],
+        [[3, 1], [2, 2]],
+      ];
+      const islandTerrain = shuffle<Terrain>(["ore", "wool", "gold", "brick", "ore", "wood", "gold", "brick", "grain"], random);
+      for (const [index, island] of islands.entries()) {
+        for (const [column, row] of island) {
+          positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
+          terrain.push(islandTerrain.shift()!);
+        }
       }
     }
     const rowRanges = [[1, 5], [0, 5], [-1, 5], [-1, 4], [-2, 4], [-2, 3], [-2, 2]];
@@ -111,12 +151,12 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   for (const { column, row, islandId } of positions) {
       const tile: Tile = {
         id: `tile-${tiles.length}`,
-        x: 60 * Math.sqrt(3) * (column + row / 2 - (variant === "seafarers" ? 1 : 0)),
-        y: 90 * (row + (variant === "seafarers" ? 1 : 0)),
+        x: 60 * Math.sqrt(3) * (column + row / 2 - (isSeafarers(variant) ? 1 : 0)),
+        y: 90 * (row + (isSeafarers(variant) ? 1 : 0)),
         terrain: terrain[tiles.length]!,
         number: null,
         vertexIds: [],
-        ...(variant === "seafarers" && islandId ? { islandId } : {}),
+        ...(isSeafarers(variant) && islandId ? { islandId } : {}),
       };
       for (let corner = 0; corner < 6; corner++) {
         const angle = (corner * 60 - 90) * Math.PI / 180;
@@ -147,11 +187,11 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       tiles.push(tile);
   }
 
-  const producingTiles = shuffle(tiles.filter(tile => tile.terrain !== "desert" && tile.terrain !== "sea"), random);
+  const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
-    if (redTiles.length === (variant === "seafarers" ? 6 : 4)) return true;
+    if (redTiles.length === (variant === "seafarers" || variant === "four-islands" ? 6 : 4)) return true;
     for (let index = start; index < producingTiles.length; index++) {
       const candidate = producingTiles[index]!;
       if (variant === "seafarers" && redTiles.filter(tile => (tile.islandId === "main") === (candidate.islandId === "main")).length >=
@@ -164,8 +204,10 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     return false;
   }
   if (!selectRedTiles(0)) throw new GameError("Unable to arrange nonadjacent red number tokens.");
-  const redNumbers = shuffle([6, 6, 8, 8], random);
-  const otherNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
+  const redNumbers = shuffle(variant === "four-islands" ? [6, 6, 6, 8, 8, 8] : [6, 6, 8, 8], random);
+  const otherNumbers = shuffle(variant === "four-islands"
+    ? [2, 3, 3, 4, 4, 4, 5, 5, 5, 9, 9, 10, 10, 11, 11, 12, 12]
+    : [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
   const islandRedNumbers = variant === "seafarers" ? shuffle([6, 8], random) : [];
   const islandOtherNumbers = variant === "seafarers" ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
   for (const tile of producingTiles) {
@@ -175,8 +217,9 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       : (remote ? islandOtherNumbers : otherNumbers).pop()!;
   }
 
-  const boundary = edges.filter(edge => variant === "seafarers"
-    ? tiles.filter(tile => tile.islandId === "main" && edge.vertexIds.every(id => tile.vertexIds.includes(id))).length === 1
+  const boundary = edges.filter(edge => isSeafarers(variant)
+    ? tiles.filter(tile => (variant === "four-islands" ? isLand(tile.terrain) : tile.islandId === "main") &&
+      edge.vertexIds.every(id => tile.vertexIds.includes(id))).length === 1
     : edgeTileCounts.get(edge.id) === 1);
   const angleOf = (edge: Edge) => {
     const first = vertices.find(vertex => vertex.id === edge.vertexIds[0])!;
@@ -188,9 +231,15 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     "any", "any", "any", "any", "wood", "brick", "wool", "grain", "ore",
   ], random);
   const offset = randomInteger(boundary.length, random);
-  const ports = portResources.map((resource, index) => ({
-    edgeId: boundary[(offset + Math.floor(index * boundary.length / 9)) % boundary.length]!.id,
-    resource,
-  }));
-  return { tiles, vertices, edges, ports, ...(variant === "seafarers" ? { variant } : {}) };
+  const portVertices = new Set<string>();
+  const ports = portResources.map((resource, index) => {
+    const start = (offset + Math.floor(index * boundary.length / 9)) % boundary.length;
+    const edge = variant === "four-islands"
+      ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
+      : boundary[start]!;
+    edge.vertexIds.forEach(id => portVertices.add(id));
+    return { edgeId: edge.id, resource };
+  });
+  return { tiles, vertices, edges, ports, ...(isSeafarers(variant) ? { variant } : {}),
+    ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}) };
 }

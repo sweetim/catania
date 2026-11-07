@@ -1,9 +1,16 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
-export type GameVariant = "original" | "seafarers";
+export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands"] as const;
+export type GameVariant = typeof GAME_VARIANTS[number];
+export function isGameVariant(value: unknown): value is GameVariant {
+  return GAME_VARIANTS.some(variant => variant === value);
+}
+export function isSeafarers(variant: GameVariant | undefined): boolean {
+  return variant !== undefined && variant !== "original";
+}
 export type Resources = Record<Resource, number>;
-export type Terrain = Resource | "desert" | "sea" | "gold";
+export type Terrain = Resource | "desert" | "sea" | "gold" | "fog";
 export type DevelopmentKind =
   | "knight"
   | "victory-point"
@@ -36,7 +43,15 @@ export type Edge = {
   kind?: "road" | "ship";
 };
 export type Port = { edgeId: string; resource: Resource | "any" };
-export type Board = { tiles: Tile[]; vertices: Vertex[]; edges: Edge[]; ports: Port[]; variant?: GameVariant };
+export type FogDiscovery = { terrain: Resource | "sea" | "gold"; number: number | null };
+export type Board = {
+  tiles: Tile[];
+  vertices: Vertex[];
+  edges: Edge[];
+  ports: Port[];
+  variant?: GameVariant;
+  fogDiscoveryDeck?: FogDiscovery[];
+};
 
 export type Player = {
   id: string;
@@ -47,13 +62,19 @@ export type Player = {
   developmentCards: { id: string; kind: DevelopmentKind; purchasedTurn: number }[];
   knightsPlayed: number;
 };
+export type ExplorationResumePhase =
+  | { type: "setup-settlement" }
+  | { type: "setup-road"; vertexId: string }
+  | { type: "roll" }
+  | { type: "actions" }
+  | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" };
 export type GamePhase =
   | { type: "setup-settlement" }
   | { type: "setup-road"; vertexId: string }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }
-  | { type: "gold"; required: Record<string, number> }
+  | { type: "gold"; required: Record<string, number>; resumePhase?: ExplorationResumePhase; resumePlayerId?: string }
   | {
       type: "robber";
       returnPhase: "roll" | "actions";
@@ -85,6 +106,7 @@ export type GameState = {
   phase: GamePhase;
   setupIndex: number;
   setupOrder: string[];
+  startingIslandIds?: Record<string, string[]>;
   turnNumber: number;
   dice: [number, number] | null;
   robberTileId: string;

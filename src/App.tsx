@@ -5,7 +5,7 @@ import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
-import { GameVariantSelector } from "./components/GameVariantSelector";
+import { GameVariantSelector, GameVariantSummary } from "./components/GameVariantSelector";
 import { FreeRouteChoice, GoldSelection } from "./components/SeafarersControls";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
@@ -62,7 +62,9 @@ import {
   legalSettlementVertices,
   RESOURCES,
   resourceTotal,
+  victoryTarget,
 } from "./game/engine";
+import { isGameVariant, isSeafarers } from "./game/types";
 import type {
   GameAction,
   GameState,
@@ -118,7 +120,7 @@ export function App() {
     const parameters = new URLSearchParams(window.location.search);
     const seed = normalizeMapSeed(parameters.get("map") ?? "");
     const variant = parameters.get("variant") ?? "original";
-    return seed && (variant === "original" || variant === "seafarers") ? { seed, variant } : null;
+    return seed && isGameVariant(variant) ? { seed, variant } : null;
   });
   const [variant, setVariant] = useState<GameVariant>(savedMap?.variant ?? "original");
   const [preview, setPreview] = useState(() => {
@@ -566,7 +568,9 @@ export function App() {
   const legalTiles =
     game && viewer && isActive && !rollBusy && game.phase.type === "robber"
       ? game.board.tiles
-          .filter((tile) => tile.terrain === "sea" ? tile.id !== game.pirateTileId : tile.id !== game.robberTileId)
+          .filter((tile) => tile.terrain !== "fog" && (tile.terrain === "sea"
+            ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
+            : tile.id !== game.robberTileId))
           .map((tile) => tile.id)
       : [];
   const selectedAction: GameAction | null =
@@ -780,10 +784,7 @@ export function App() {
                   setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant) });
                 }} />
               </div>
-              {variant === "seafarers" && <p className="text-xs leading-5 text-muted">
-                <strong>{translateText("Heading for New Shores")}</strong>{" "}
-                {translateText("Main island setup. Discover three islands. First to 13 points wins.")}
-              </p>}
+              {isSeafarers(variant) && <p className="text-xs leading-5 text-muted"><GameVariantSummary variant={variant} /></p>}
               <div className="grid grid-cols-2 gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                   <label
@@ -910,7 +911,12 @@ export function App() {
               />
             </div>
             <div className="flex shrink-0 flex-wrap justify-between gap-2 text-[10px] text-muted">
-              <span>{translateText(variant === "seafarers" ? "42 hexes. Three islands to discover." : "19 hexes. A new story every time.")}</span>
+              <span>{translateText(match(variant)
+                .with("original", () => "19 hexes. A new story every time." as const)
+                .with("seafarers", () => "42 hexes. Three islands to discover." as const)
+                .with("four-islands", () => "Four islands. New shores to settle." as const)
+                .with("fog-islands", () => "Unexplored fog. New discoveries await." as const)
+                .exhaustive())}</span>
               <span>{translateText("3-4 settlers / 60-120 minutes")}</span>
             </div>
           </section>
@@ -922,7 +928,7 @@ export function App() {
             {translateText("{name} takes the island.", { name: game.players.find((player) => player.id === game.winnerId)?.name ?? "" })}
           </h1>
           <p className="mt-4 text-muted">
-            {translateText(game.variant === "seafarers" ? "Thirteen points. Countless good deals. One more game?" : "Ten points. Countless good deals. One more game?")}
+            {translateText("{points} points. Countless good deals. One more game?", { points: victoryTarget(game.variant) })}
           </p>
           <div className="my-10 grid gap-4 text-left sm:grid-cols-2">
             {game.players.map((player) => {
@@ -941,9 +947,9 @@ export function App() {
                     {[
                       [translateText("Settlements"), score.settlements],
                       [translateText("Cities"), score.cities],
-                      [translateText(game.variant === "seafarers" ? "Longest Route" : "Longest Road"), score.longestRoad],
+                      [translateText(isSeafarers(game.variant) ? "Longest Route" : "Longest Road"), score.longestRoad],
                       [translateText("Largest Army"), score.largestArmy],
-                      ...(game.variant === "seafarers" ? [[translateText("Island bonuses"), score.islands ?? 0]] : []),
+                      ...(game.variant === "seafarers" || game.variant === "four-islands" ? [[translateText("Island bonuses"), score.islands ?? 0]] : []),
                       [translateText("Revealed victory-point cards"), score.hidden],
                     ].map(([label, points]) => (
                       <div className="flex justify-between" key={label}>
@@ -1044,7 +1050,7 @@ export function App() {
           </nav>
           <div className="table-feedback">
             <div className="roll-summary-feedback lg:hidden">
-              <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+              <RollSummary seafarers={isSeafarers(game.variant)} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
             </div>
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
@@ -1064,10 +1070,10 @@ export function App() {
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
                   routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                  routeChoice={isActive && game.variant === "seafarers" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                  routeChoice={isActive && isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                     ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
                     : undefined}
-                  onMovePirateOffBoard={isActive && !rollBusy && game.variant === "seafarers" && game.phase.type === "robber" && game.pirateTileId !== null
+                  onMovePirateOffBoard={isActive && !rollBusy && isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
                     ? () => perform({ type: "move-pirate", tileId: null }) : undefined}
                   showBlockedSettlementLocations={showBlockedSettlementLocations}
                   fillBoardWithWater={fillBoardWithWater}
@@ -1240,7 +1246,7 @@ export function App() {
                 onToggle={setBuildSectionOpen}
               >
                 <div className="build-options flex flex-col gap-2">
-                  {(["road", ...(game.variant === "seafarers" ? ["ship" as const] : []), "settlement", "city"] as const).map((piece) => {
+                  {(["road", ...(isSeafarers(game.variant) ? ["ship" as const] : []), "settlement", "city"] as const).map((piece) => {
                     const locations =
                       piece === "road"
                         ? legalRoadEdges(game, viewer.id)
@@ -1284,7 +1290,7 @@ export function App() {
                       </Fragment>
                     );
                   })}
-                  {game.variant === "seafarers" && <button className="button-secondary w-full"
+                  {isSeafarers(game.variant) && <button className="button-secondary w-full"
                     disabled={!normalActions || !movableShipEdges(game, viewer.id).some(id => legalShipDestinations(game, viewer.id, id).length)}
                     aria-pressed={buildMode === "move-ship"} onClick={() => {
                       setBuildMode(buildMode === "move-ship" ? null : "move-ship");
@@ -1400,7 +1406,7 @@ export function App() {
                   {!game.winnerId && gameMenu}
                 </div>
                 <div className="roll-summary-hand hidden lg:block">
-                  <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
+                  <RollSummary seafarers={isSeafarers(game.variant)} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} viewerId={viewer.id} />
                 </div>
                 <TurnInstructions
                   title={instructionTitle}
@@ -1439,13 +1445,13 @@ export function App() {
               winnerColor={winner.color}
               totalPoints={winnerScore.total}
               pointsUnit={translateText("points")}
-              summary={translateText("Ten points. Countless good deals. One more game?")}
+              summary={translateText("{points} points. Countless good deals. One more game?", { points: victoryTarget(game.variant) })}
               breakdown={[
                 { kind: "settlements", label: translateText("Settlements"), note: winnerScore.settlements ? translateText("{count} × {points} VP", { count: winnerScore.settlements, points: 1 }) : undefined, points: winnerScore.settlements },
                 { kind: "cities", label: translateText("Cities"), note: winnerScore.cities ? translateText("{count} × {points} VP", { count: winnerScore.cities / 2, points: 2 }) : undefined, points: winnerScore.cities },
-                { kind: "longest-road", label: translateText(game.variant === "seafarers" ? "Longest Route" : "Longest Road"), points: winnerScore.longestRoad },
+                { kind: "longest-road", label: translateText(isSeafarers(game.variant) ? "Longest Route" : "Longest Road"), points: winnerScore.longestRoad },
                 { kind: "largest-army", label: translateText("Largest Army"), points: winnerScore.largestArmy },
-                ...(game.variant === "seafarers" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
+                ...(game.variant === "seafarers" || game.variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
                 { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
               profileNote={humanCount === 1 && playerProfile && winner.control === "human"
@@ -1483,7 +1489,7 @@ export function App() {
             </section>
           )}
           <div className="table-feedback">
-            <RollSummary seafarers={game.variant === "seafarers"} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
+            <RollSummary seafarers={isSeafarers(game.variant)} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
           <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit />

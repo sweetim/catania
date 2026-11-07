@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Dialog, Logo } from "./GameUi";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { GAME_VARIANT_LABELS } from "./GameVariantSelector";
 import { useLanguage, useTranslation } from "../localization";
 import { profileTranslations } from "../translations/profile";
 import { createProfile, validProfileName, type PlayerProfile, type ProfileGame } from "../profile";
@@ -165,7 +166,7 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                     {game.won ? <path d="m5 13 4 4L19 7" /> : <path d="M6 6l12 12M18 6 6 18" />}
                                   </svg>
                                 </span>
-                                <span className="truncate text-sm font-medium">{translateText(game.variant === "seafarers" ? "Seafarers" : "Original")}</span>
+                                <span className="truncate text-sm font-medium">{translateText(GAME_VARIANT_LABELS[game.variant])}</span>
                               </div>
                               <time className="mt-1 block text-xs text-muted" dateTime={game.completedAt}>
                                 {new Date(game.completedAt).toLocaleDateString(language === "ja" ? "ja-JP" : "en-US", { dateStyle: "medium" })}

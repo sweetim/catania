@@ -67,6 +67,36 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
 
 export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: BoardTheme }) {
   const ink = theme.terrain[terrain].ink;
+  if (terrain === "fog") {
+    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {match(theme.id)
+        .with("illustrated", () => <>
+          <path d="M-43 11q-8-17 8-22-2-18 17-18 10-19 26-6 19-7 24 11 21 0 17 21 9 16-10 19H-32Z" fill="#f4f7f5" fillOpacity=".65" stroke="none" />
+          <path d="M-35-10H8m-25 12h52M-40 16H20m-32 12H34" />
+        </>)
+        .with("ceramic", () => <>
+          <path d="M-42-14h57q15 0 15-10t-14-6M-29 0h57M-39 15h56q16 0 16 9t-14 6" strokeWidth="3" />
+          <path d="m-39 0 4-4 4 4-4 4Zm70 0 4-4 4 4-4 4ZM-18-28H4M-23 29H3" />
+        </>)
+        .with("wooden", () => <>
+          <path d="M-42-19Q-18-32 5-19t37 0M-36-5Q-14-18 8-5t29 0M-43 9Q-18-4 6 9t37 0M-33 24Q-12 11 9 24t24 0" />
+          <path d="m-30-21 6-4m3 5 6-4M22 10l6-4m2 6 6-4M-22 23l6-4" opacity=".5" />
+        </>)
+        .with("pixel", () => <g fill={ink} stroke="none" shapeRendering="crispEdges">
+          <path d="M-40-24h12v-8h36v8h24v8h12v12H-44v-12h4ZM-36 4h64v8h12v8h-76ZM-24 28h48v4h-48Z" fillOpacity=".25" />
+          <path d="M-32-20H8v4h-40ZM-12-8h44v4h-44ZM-28 8h36v4h-36ZM0 20h32v4H0Z" />
+        </g>)
+        .with("space", () => <>
+          <path d="M-43 15Q-30-30 2-16T43-28M-41 27Q-19-4 9 9T42-7" strokeWidth="11" strokeOpacity=".25" />
+          <path d="M-38 10Q-9-17 18-4M-17 23Q5 6 35 11m-72-40h6m-3-3v6m58 29h6m-3-3v6" />
+        </>)
+        .with("underwater", () => <>
+          <path d="M-43-14Q-23-27-3-14t43 0M-36 2Q-18-11 2 2t35 0M-43 19Q-21 6 1 19t42 0" strokeWidth="7" strokeOpacity=".3" />
+          <circle cx="-27" cy="-29" r="3" /><circle cx="29" cy="-25" r="4" /><circle cx="19" cy="28" r="2" />
+        </>)
+        .exhaustive()}
+    </g>;
+  }
   if (terrain === "gold") {
     return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <ellipse cy="25" rx="35" ry="7" fill={ink} fillOpacity=".14" stroke="none" />

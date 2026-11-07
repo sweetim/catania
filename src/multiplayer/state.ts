@@ -5,7 +5,7 @@ import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
   legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal,
 } from "../game/engine";
-import type { GameAction, GameState, GameVariant } from "../game/types";
+import { isGameVariant, isSeafarers, type Board, type GameAction, type GameState, type GameVariant } from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
@@ -19,6 +19,11 @@ const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-ship", "
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
   if (!condition) throw new GameError(message);
+}
+
+function publicBoard(board: Board): PublicGame["board"] {
+  const { fogDiscoveryDeck, ...visibleBoard } = board;
+  return visibleBoard;
 }
 
 export function publicGame(game: GameState, players: RoomPlayer[], gameId: string): PublicGame {
@@ -36,7 +41,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
     .exhaustive();
   return structuredClone({
     variant: game.variant, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
-    board: game.board, bank: game.bank, activePlayerId: game.activePlayerId,
+    board: publicBoard(game.board), bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
     // Engine logs describe public events, never drawn cards, discarded kinds, or stolen resources.
@@ -49,8 +54,8 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
         resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
         knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
         score: game.phase.type === "finished" ? score.total : score.public,
-        // Island bonus points are public: they derive from buildings and island identifiers.
-        ...(game.variant === "seafarers" ? { islands: score.islands } : {}),
+        // Publish bonus points, not the host's starting-island bookkeeping.
+        ...(game.variant === "seafarers" || game.variant === "four-islands" ? { islands: score.islands } : {}),
         // The game is over: revealed victory points are public and each screen shows the full breakdown.
         ...(game.phase.type === "finished" ? { scoreBreakdown: score } : {}),
       };
@@ -84,7 +89,7 @@ export class HostRoom {
 
   setVariant(variant: GameVariant): void {
     requireRoom(!this.game, "The game version can only be changed in the lobby.");
-    requireRoom(variant === "original" || variant === "seafarers", "Choose Original or Seafarers.");
+    requireRoom(isGameVariant(variant), "Choose a supported game version.");
     if (variant === this.variant) return;
     this.mapSeed = generateMapSeed();
     this.previewBoard = createBoard(seededRandom(this.mapSeed), variant);
@@ -212,6 +217,10 @@ export class HostRoom {
     for (const player of this.game.players) player.id = playerIds.get(player.id)!;
     this.game.activePlayerId = playerIds.get(this.game.activePlayerId)!;
     this.game.setupOrder = this.game.setupOrder.map(playerId => playerIds.get(playerId)!);
+    if (this.game.startingIslandIds) {
+      this.game.startingIslandIds = Object.fromEntries(Object.entries(this.game.startingIslandIds)
+        .map(([playerId, islands]) => [playerIds.get(playerId)!, islands]));
+    }
     this.initialGame = structuredClone(this.game);
     this.waiting.clear();
     this.version++;
@@ -260,10 +269,10 @@ export class HostRoom {
     requireRoom(game, "The game has not started.");
     requireRoom(game.players.find(player => player.id === game.activePlayerId)?.control === "human", "The computer controls its own turn.");
     requireRoom(connectionId === undefined || this.seats.some(seat => seat.connectionId === connectionId && seat.player.id === game.activePlayerId), "Only the active player may choose a build.");
-    requireRoom(game.phase.type === "actions" || (game.variant === "seafarers" && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    requireRoom(game.phase.type === "actions" || (isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
       (piece === "road" || piece === "ship")), "Finish the current phase before choosing a build.");
     requireRoom(piece === null || piece === "road" || piece === "settlement" || piece === "city" ||
-      (game.variant === "seafarers" && (piece === "ship" || piece === "move-ship")), "Choose a valid build.");
+      (isSeafarers(game.variant) && (piece === "ship" || piece === "move-ship")), "Choose a valid build.");
     if (piece && piece !== "move-ship" && game.phase.type === "actions") {
       const player = game.players.find(player => player.id === game.activePlayerId)!;
       requireRoom(RESOURCES.every(resource => player.resources[resource] >= COSTS[piece][resource]), "Not enough resources for this build.");
@@ -291,7 +300,7 @@ export class HostRoom {
         legalShipDestinations(game, game.activePlayerId, action.edgeId).includes(action.destinationEdgeId))
       .with({ type: "move-robber" }, action => targets.tiles.includes(action.tileId))
       .with({ type: "move-pirate" }, action => action.tileId === null
-        ? game.variant === "seafarers" && game.phase.type === "robber" && game.pirateTileId !== null
+        ? isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
         : targets.tiles.includes(action.tileId))
       .otherwise(() => false);
     requireRoom(authorized, "Choose a highlighted board target for the current build or phase.");
@@ -325,7 +334,7 @@ export class HostRoom {
       if (command.type === "select-build") this.selectBuild(command.piece, connectionId);
       else {
         const action = parseAction(command.action);
-        requireRoom(!BOARD_ACTIONS.has(action.type), this.game?.variant === "seafarers"
+        requireRoom(!BOARD_ACTIONS.has(action.type), isSeafarers(this.game?.variant)
           ? "Place pieces and move the robber or pirate on the shared board, not a phone."
           : "Place pieces and move the robber on the shared board, not a phone.");
         requireRoom(this.game, "The game has not started.");
@@ -358,9 +367,9 @@ export class HostRoom {
     } else if (game.phase.type === "actions" && (this.buildMode === "road" || this.buildMode === "ship")) {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId) : legalRoadEdges(game, game.activePlayerId);
     } else if (game.phase.type === "robber") {
-      targets.tiles = game.board.tiles.filter(tile => tile.terrain === "sea"
-        ? game.variant === "seafarers" && tile.id !== game.pirateTileId
-        : tile.id !== game.robberTileId).map(tile => tile.id);
+      targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
+        ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
+        : tile.id !== game.robberTileId)).map(tile => tile.id);
     }
     return targets;
   }
@@ -376,7 +385,7 @@ export class HostRoom {
       ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
-      ...(host && !this.game ? { previewBoard: this.previewBoard } : {}),
+      ...(host && !this.game ? { previewBoard: publicBoard(this.previewBoard) } : {}),
       game: game ? publicGame(game, players, this.gameId!) : null,
       playerId: seat?.player.id ?? null, privatePlayer,
       privateThefts: game && privatePlayer ? game.thefts.filter(theft => theft.thiefId === privatePlayer.id || theft.victimId === privatePlayer.id) : [],

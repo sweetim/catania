@@ -36,7 +36,7 @@ export function getRollOutcome(previous: GameState, next: GameState): RollOutcom
   const blockedTileIds: string[] = [];
   if (rolledNumber !== 7) {
     for (const tile of next.board.tiles) {
-      if (tile.number !== rolledNumber || tile.terrain === "desert" || tile.terrain === "sea") continue;
+      if (tile.number !== rolledNumber || (!isResource(tile.terrain) && tile.terrain !== "gold")) continue;
       if (tile.id === next.robberTileId) {
         blockedTileIds.push(tile.id);
         continue;

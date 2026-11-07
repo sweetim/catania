@@ -1,7 +1,7 @@
 import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import type { GameAction } from "../game/types";
+import { isGameVariant, type GameAction } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
@@ -163,10 +163,10 @@ function phase(value: unknown): boolean {
 function board(value: unknown): boolean {
   const position = (value: RecordValue) => typeof value.x === "number" && Number.isFinite(value.x) && typeof value.y === "number" && Number.isFinite(value.y);
   return record(value) && fields(value, ["tiles", "vertices", "edges", "ports"], ["variant"]) &&
-    (!Object.hasOwn(value, "variant") || value.variant === "original" || value.variant === "seafarers") &&
+    (!Object.hasOwn(value, "variant") || isGameVariant(value.variant)) &&
     array(value.tiles, 42, tile => record(tile) && fields(tile, ["id", "x", "y", "terrain", "number", "vertexIds"], ["islandId"]) && identifier(tile.id, "tile") && position(tile) &&
-      (!Object.hasOwn(tile, "islandId") || ["main", "island-1", "island-2", "island-3"].includes(tile.islandId as string)) &&
-      (resource(tile.terrain) || ["desert", "sea", "gold"].includes(tile.terrain as string)) && (tile.number === null || integer(tile.number, 12)) && array(tile.vertexIds, 6, value => identifier(value, "vertex"))) &&
+      (!Object.hasOwn(tile, "islandId") || (typeof tile.islandId === "string" && /^(main|island-[1-9][0-9]{0,2})$/.test(tile.islandId))) &&
+      (resource(tile.terrain) || ["desert", "sea", "gold", "fog"].includes(tile.terrain as string)) && (tile.number === null || integer(tile.number, 12)) && array(tile.vertexIds, 6, value => identifier(value, "vertex"))) &&
     array(value.vertices, 130, vertex => record(vertex) && fields(vertex, ["id", "x", "y", "tileIds", "edgeIds", "building"]) && identifier(vertex.id, "vertex") && position(vertex) &&
       array(vertex.tileIds, 3, value => identifier(value, "tile")) && array(vertex.edgeIds, 3, value => identifier(value, "edge")) &&
       (vertex.building === null || (record(vertex.building) && fields(vertex.building, ["playerId", "kind"]) && identifier(vertex.building.playerId, "player") && ["settlement", "city"].includes(vertex.building.kind as string)))) &&
@@ -178,11 +178,11 @@ function board(value: unknown): boolean {
 function publicGame(value: unknown): boolean {
   if (!record(value) || !fields(value, ["variant", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
   const trade = value.trade;
-  return (value.variant === "original" || value.variant === "seafarers") && token(value.gameId) &&
+  return isGameVariant(value.variant) && token(value.gameId) &&
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
-    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && identifier(value.robberTileId, "tile") &&
+    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || (value.variant === "four-islands" && value.robberTileId === "")) &&
     record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"], ["expiresAt"]) &&
@@ -196,7 +196,7 @@ function snapshot(value: unknown): value is RoomSnapshot {
   let previousTheftId = 0;
   let previousMonopolyId = 0;
   return (!Object.hasOwn(value, "mapSeed") || (typeof value.mapSeed === "string" && normalizeMapSeed(value.mapSeed) === value.mapSeed)) &&
-    (value.variant === "original" || value.variant === "seafarers") &&
+    isGameVariant(value.variant) &&
     integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&
     (value.playerId === null || (identifier(value.playerId, "player") && (value.players as RecordValue[]).some(player => player.id === value.playerId && player.control === "human"))) &&
     (value.privatePlayer === null || (privatePlayer(value.privatePlayer) && (value.privatePlayer as RecordValue).id === value.playerId)) &&

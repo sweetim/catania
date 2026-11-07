@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { emptyResources, RESOURCES, resourceTotal } from "../game/engine";
-import type { DevelopmentKind, GameAction, GamePhase, GameVariant, Player, Resource, Resources } from "../game/types";
+import { isSeafarers, type DevelopmentKind, type GameAction, type GamePhase, type GameVariant, type Player, type Resource, type Resources } from "../game/types";
 import { resourceName, translate, type Language } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -36,7 +36,7 @@ export function getDevelopmentDescriptions(language: Language, variant: GameVari
   const descriptions = Object.fromEntries(Object.entries(DEVELOPMENT_DESCRIPTIONS).map(([kind, description]) =>
     [kind, translate(language, gameplayTranslations, description)],
   )) as Record<DevelopmentKind, string>;
-  if (variant === "seafarers") {
+  if (isSeafarers(variant)) {
     descriptions.knight = translate(language, gameplayTranslations, "Move the robber or pirate and steal one random resource from an adjacent opponent. Played Knights count toward Largest Army.");
     descriptions["victory-point"] = translate(language, gameplayTranslations, "One hidden victory point. Counts automatically toward victory on your turn, including when purchased.");
     descriptions["road-building"] = translate(language, gameplayTranslations, "Place two roads or ships for free, following the usual connection and piece-limit rules.");

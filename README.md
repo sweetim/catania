@@ -15,9 +15,11 @@ assets are local.
   history shown on the shared board when a game ends.
 - Every island has a map code; enter it to replay the exact same island later.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
-- Choose **Original** (default) or **Seafarers** before starting, locally or in the host lobby.
-  Seafarers includes **Heading for New Shores**, ships and movement, the pirate,
-  gold fields, island bonuses, and a 13-point victory target, with computer opponents.
+- Choose **Original** (default), **Seafarers** (Heading for New Shores),
+  **Four Islands**, or **Fog Islands** before starting, locally or in the host lobby.
+  Seafarers scenarios include ships and movement, the pirate, and computer opponents.
+  Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
+  terrain and discovery resources. Victory targets are 13 for New Shores and 12 for the new scenarios.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - English and Japanese interfaces, including help, accessible controls, activity, and errors.
 
@@ -94,9 +96,9 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
 
 - Games live in memory. Refreshing or closing the single-device game or multiplayer
   host loses the game; there is no saved-game recovery.
-- Seafarers currently includes only Heading for New Shores, using the randomized
-  four-player layout for both three- and four-player tables. Other scenarios and
-  their special rules are not included.
+- Seafarers supports Heading for New Shores, Four Islands, and Fog Islands.
+  Each uses the same randomized scenario layout for three- and four-player tables;
+  Fog Islands starts with one revealed main island. Other scenarios are not included.
 - Multiplayer targets devices on the same local network, including Ethernet and
   Wi-Fi together. It uses PeerJS Cloud signaling and Google STUN address discovery,
   requires internet access, and has no relay fallback.

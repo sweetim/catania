@@ -1,6 +1,6 @@
 # Catania Requirements
 
-Status: Original, the initial Seafarers scenario, and the PeerJS shared-board/private-phone mode described under Current Multiplayer Scope are implemented. Broader original proposals below remain separate from the current scope.
+Status: Original, three Seafarers scenarios (Heading for New Shores, Four Islands, and Fog Islands), and the PeerJS shared-board/private-phone mode described under Current Multiplayer Scope are implemented. Broader original proposals below remain separate from the current scope.
 
 Related document: [Architecture](architecture.md).
 
@@ -12,14 +12,19 @@ setup, finite banks and piece supplies, production, building, domestic and
 maritime trades, robber/discard sequences, development cards, awards, and a
 10-point victory with results and rematch.
 
-Local setup and the multiplayer host lobby offer **Original** (default) or
-**Seafarers**. The initial Seafarers scope is Heading for New Shores, using the
-randomized four-player layout for three or four players: ships with independent
-piece supplies, open-ended ship movement, the pirate, gold choices, mixed Longest
-Route, two-point bonuses per newly settled small island, and a 13-point victory.
-Both human and computer players use the same validated engine. Other Seafarers
-scenarios are outside this delivery; [gameplay](gameplay.md#seafarers-heading-for-new-shores)
-documents the available rules.
+Local setup and the multiplayer host lobby offer **Original** (default),
+**Seafarers** (Heading for New Shores), **Four Islands**, and **Fog Islands**.
+Seafarers scenarios share ships with independent supplies, open-ended movement,
+the pirate, gold choices, and mixed Longest Route. Heading for New Shores keeps
+its 13-point target and small-island bonuses. Four Islands awards two points for
+each settled island outside the player's starting islands and targets 12 points.
+Fog Islands reveals hidden terrain through route exploration, grants discovery
+resources, has no island bonuses, and targets 12 points. All use randomized
+42-hex scenario layouts shared by three- and four-player tables; Fog Islands
+starts on one revealed main island. Human and computer players use the same
+validated engine; hidden discovery decks stay out of multiplayer snapshots.
+Other scenarios remain outside this delivery;
+[gameplay](gameplay.md#seafarers-heading-for-new-shores) documents the available rules.
 
 The table has three or four total seats and a selectable human count from one
 to the seat count, defaulting to one. Local AI fills the remaining seats. Human

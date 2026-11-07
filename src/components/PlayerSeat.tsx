@@ -2,7 +2,7 @@ import { type CSSProperties } from "react";
 import { CardTypeIcon, DevelopmentCardIcon, getPlayerLabel, IslandIcon, PieceIcon } from "./GameUi";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
-import type { GameVariant } from "../game/types";
+import { isSeafarers, type GameVariant } from "../game/types";
 
 export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original" }: {
   variant?: GameVariant;
@@ -18,7 +18,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
 }) {
   const translateText = useTranslation(gameplayTranslations);
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
-  const roadLabel = translateText(variant === "seafarers" ? "{count} connected roads and ships" : player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
+  const roadLabel = translateText(isSeafarers(variant) ? "{count} connected roads and ships" : player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
   const islandCount = islandBonus / 2;
   const islandLabel = translateText(islandCount === 1 ? "Island bonus: {count} island (+{points} victory points)" : "Island bonus: {count} islands (+{points} victory points)", { count: islandCount, points: islandBonus });
 
@@ -50,7 +50,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
             <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
             <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>}
-          {longestRoadAward && <span role="img" aria-label={translateText(variant === "seafarers" ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} title={translateText(variant === "seafarers" ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} className="shrink-0 text-[#b58a2d]"><PieceIcon piece="road" /></span>}
+          {longestRoadAward && <span role="img" aria-label={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} title={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} className="shrink-0 text-[#b58a2d]"><PieceIcon piece="road" /></span>}
         </div>}
       </div>
     </div>

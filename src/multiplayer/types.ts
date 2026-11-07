@@ -31,13 +31,17 @@ export type ScoreBreakdown = {
 };
 
 export type PublicGame = Pick<GameState,
-  "board" | "bank" | "activePlayerId" | "turnNumber" | "dice" |
+  "bank" | "activePlayerId" | "turnNumber" | "dice" |
   "robberTileId" | "pirateTileId" | "variant" | "shipMoved" | "shipsBuiltThisTurn" |
   "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {
+  board: Omit<Board, "fogDiscoveryDeck">;
   gameId: string;
   players: PublicPlayer[];
-  phase: Exclude<GamePhase, { type: "robber" }> | {
+  phase: Exclude<GamePhase, { type: "robber" | "gold" }> | {
+    type: "gold";
+    required: Record<string, number>;
+  } | {
     type: "robber";
     returnPhase: "roll" | "actions";
   };
@@ -50,7 +54,7 @@ export type RoomSnapshot = {
   version: number;
   players: RoomPlayer[];
   pendingPlayers?: { connectionId: string; name: string }[];
-  previewBoard?: Board;
+  previewBoard?: Omit<Board, "fogDiscoveryDeck">;
   mapSeed?: string;
   profiles?: Record<string, ProfileStats>;
   game: PublicGame | null;

@@ -25,7 +25,7 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/components/GameplayDialogs.tsx` | Shared development cards, discard selection, public theft choices, and action confirmations. |
 | `src/components/PlayerSeat.tsx` | Shared player identity, card counts, public score, turn/leader styling, and award indicators. |
 | `src/components/TurnInstructions.tsx` | Shared phase headings, guidance, and instruction-panel presentation. |
-| `src/components/GameVariantSelector.tsx` | Shared Original/Seafarers setup choice for local tables and the host lobby. |
+| `src/components/GameVariantSelector.tsx` | Shared Original, New Shores, Four Islands, and Fog Islands setup choices and scenario summaries. |
 | `src/components/SeafarersControls.tsx` | Shared free road/ship choices and finite-bank gold-resource selection. |
 | `src/components/DevelopmentHand.tsx` | Shared grouped development-card list and eligible-copy selection. |
 | `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |
@@ -57,9 +57,15 @@ Gold production is a mandatory phase whose ordered obligations determine the
 current controller, including off-turn humans/computers. Public island bonuses
 derive from buildings and island identifiers, so city upgrades preserve them.
 Original retains its existing board, costs, ten-point target, and score shape.
-Seafarers adds island points and a thirteen-point target. The current scenario
-is Heading for New Shores using the randomized four-player layout at either
-supported table size.
+Heading for New Shores adds island points and a thirteen-point target.
+Four Islands and Fog Islands target twelve points, using distinct 42-hex layouts
+at either supported table size. Four Islands records each player's initial island
+identifiers to exclude them from subsequent settlement bonuses. Fog Islands stores
+unexplored tiles as `fog` with no number; a seeded host-only discovery deck reveals
+terrain when a built road/ship or moved ship reaches it. Exploration gold choices
+retain a continuation phase so free route placement and turn order resume correctly.
+Public boards omit the discovery deck, and public gold phases omit continuation
+bookkeeping. Computer exploration uses only visible fog locations.
 
 Profiles carry a human/computer control type through randomized turn order. A
 pure computer chooser returns one engine action at a time, including off-turn

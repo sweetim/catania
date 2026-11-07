@@ -19,7 +19,7 @@ Under **Separate multiplayer setup**, **Play across devices** immediately hosts 
 board for phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
-1. Choose **Original** (the default) or **Seafarers** under **Game version**,
+1. Choose **Original** (the default), **Seafarers**, **Four Islands**, or **Fog Islands** under **Game version**,
    then three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
@@ -31,7 +31,8 @@ preview; multiplayer players and a new island are set up independently.
 4. Roll, gather resources, build, trade, and play eligible development cards.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
-6. Reach 10 victory points in Original, or 13 in Seafarers, on your own turn. Inspect the revealed score breakdown
+6. Reach 10 victory points in Original, 13 in Seafarers (Heading for New Shores),
+   or 12 in Four Islands or Fog Islands, on your own turn. Inspect the revealed score breakdown
    and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
    game's **map code**.
 
@@ -64,7 +65,7 @@ this browser only, under `catania.profiles`.
 
 Expand **Game history** on a profile card to see completed solo and
 multiplayer-phone games, newest first. Each entry shows the win/loss result,
-Original/Seafarers version, turn count, final victory points, and completion
+selected game version/scenario, turn count, final victory points, and completion
 date; the stored game ID and map code remain on the device for replay.
 Unfinished games do not count. Existing lifetime totals are retained,
 but individual games played before this feature cannot be reconstructed.
@@ -98,7 +99,8 @@ phase transitions, and turn ownership are validated by the rules engine.
 
 Seafarers uses a randomized 42-hex layout: the original 19-hex main island,
 three smaller islands, and 14 sea hexes. This is the four-player scenario layout,
-also available with three players. Other Seafarers scenarios are not implemented.
+also available with three players. Four Islands and Fog Islands are separate
+choices in the same selector, with the shared ship, pirate, and route rules below.
 Changing versions generates a matching preview without changing player settings or
 the selected artwork theme. Shuffle preserves the version; starting keeps the
 exact preview. A rematch keeps the version and generates a new board.
@@ -136,6 +138,37 @@ Game version cannot change during play and is not saved across reloads.
 
 Computer opponents can settle the islands, build ships, resolve pirate/theft and
 gold choices, and complete games under the same rules as humans.
+
+### Four Islands
+
+A 42-hex map contains four disconnected islands with 23 resource hexes and 19 sea
+hexes, using the same layout for three or four players. Starting settlements may
+be placed on any island. Each player's starting islands are recorded independently:
+the first settlement on each other island earns two bonus points, even if another
+player arrived there first. Starting islands never award this bonus. City upgrades
+preserve earned bonuses. There is no desert; the robber begins off board and can
+enter revealed land on the first seven or Knight. Win at 12 points on your own turn.
+
+### Fog Islands
+
+A 42-hex map begins with a revealed 19-hex main island, 10 sea hexes, and 13 fog
+hexes. Use this same layout for three or four players. Place starting settlements
+only on the main island. Fog has no visible terrain or number and cannot support
+settlements or roads without adjoining revealed land; ships can approach it as water.
+
+When an endpoint of a newly built road or ship, or a moved ship, touches fog,
+reveal that hex for everyone. The seeded discovery deck contains eight resource
+hexes, two gold fields, and three sea hexes. A resource discovery grants one matching
+bank card if available; gold grants one available resource of choice; sea grants
+nothing. These rewards are separate from dice production. Resolve gold before
+continuing a free Road Building placement or returning to the previous phase.
+Revealed land can then support settlements and produce normally. Neither robber
+nor pirate may enter unexplored fog. There are no island bonuses; win at 12 points
+on your own turn. Computer opponents explore without inspecting the hidden deck.
+
+Map codes reproduce each scenario's initial board and, for Fog Islands, discovery
+deck; discoveries depend on which hexes are reached first. Multiplayer sends only
+revealed tiles and fog placeholders, never the hidden discovery deck.
 
 ## Board And Controls
 

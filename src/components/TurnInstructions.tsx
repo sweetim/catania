@@ -1,5 +1,6 @@
 import { match } from "ts-pattern";
-import type { GamePhase, GameVariant } from "../game/types";
+import { victoryTarget } from "../game/engine";
+import { isSeafarers, type GamePhase, type GameVariant } from "../game/types";
 import { translate, type Language } from "../i18n";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -34,7 +35,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
-      description: variant === "seafarers" ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
+      description: isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
@@ -55,8 +56,8 @@ export function getPhaseInstructions({
       description: translateText("Choose your gold resources"),
     }))
     .with({ type: "robber" }, () => ({
-      title: translateText(variant === "seafarers" ? "Move the robber or pirate." : pendingKnight ? "Move the robber." : "The robber is on the move."),
-      description: variant === "seafarers" ? translateText("Move the robber to land or the pirate to sea, then choose a victim.") : translateText(pendingKnight
+      title: translateText(isSeafarers(variant) ? "Move the robber or pirate." : pendingKnight ? "Move the robber." : "The robber is on the move."),
+      description: isSeafarers(variant) ? translateText("Move the robber to revealed land or the pirate to revealed sea, then choose a victim. Neither may enter fog.") : translateText(pendingKnight
         ? sharedBoard
           ? "Confirm a new hex on the shared board or cancel Knight."
           : "Confirm a new hex or cancel Knight."
@@ -66,11 +67,11 @@ export function getPhaseInstructions({
     }))
     .with({ type: "steal" }, () => ({
       title: translateText("Choose a neighboring player."),
-      description: translateText(variant === "seafarers" ? "Choose an opponent beside the robber or pirate." : "Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing."),
+      description: translateText(isSeafarers(variant) ? "Choose an opponent beside the robber or pirate." : "Choose an opponent beside the robber. Take one random resource if they have any; an empty hand gives you nothing."),
     }))
     .with({ type: "road-building" }, phase => ({
       title: translateText("Take the road less traveled."),
-      description: variant === "seafarers" ? translateText("Place {count} more roads or ships for free.", { count: phase.remaining }) : translateText(sharedBoard
+      description: isSeafarers(variant) ? translateText("Place {count} more roads or ships for free.", { count: phase.remaining }) : translateText(sharedBoard
         ? phase.remaining === 1
           ? "Place {count} more road for free. Confirm each placement on the shared board."
           : "Place {count} more roads for free. Confirm each placement on the shared board."
@@ -80,7 +81,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "finished" }, () => ({
       title: translateText("An island. A new legend."),
-      description: translateText(variant === "seafarers" ? "The first player to reach thirteen victory points on their turn wins." : "The first player to reach ten victory points on their turn wins."),
+      description: translateText("The first player to reach {points} victory points on their turn wins.", { points: victoryTarget(variant) }),
     }))
     .exhaustive();
 }

@@ -3,7 +3,8 @@ import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges,
   RESOURCES, resourceTotal, victoryTarget,
 } from "./engine";
-import { edgeTiles, isResource } from "./board";
+import { edgeTiles, isLand, isResource } from "./board";
+import { isSeafarers } from "./types";
 import type { GameAction, GameState, Resources } from "./types";
 
 export function getController(state: GameState): string {
@@ -63,10 +64,14 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       return bonus + 2 * Math.min(1, supply / 4);
     }, 0);
   }
-  const islandBonus = (vertexId: string): number => state.variant === "seafarers"
-    ? new Set(vertices.get(vertexId)!.tileIds.map(id => tiles.get(id)!.islandId).filter(island =>
-      island && island !== "main" && !state.board.vertices.some(vertex =>
-        vertex.building?.playerId === playerId && vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2 : 0;
+  const islandBonus = (vertexId: string): number =>
+    (state.variant === "seafarers" || state.variant === "four-islands") && !state.phase.type.startsWith("setup")
+      ? new Set(vertices.get(vertexId)!.tileIds.map(id => tiles.get(id)!.islandId).filter(island =>
+        island && (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(island) : island !== "main") &&
+        !state.board.vertices.some(vertex => vertex.building?.playerId === playerId &&
+          vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2 : 0;
+  const explorationValue = (vertexId: string): number => state.variant === "fog-islands"
+    ? vertices.get(vertexId)!.tileIds.filter(id => tiles.get(id)!.terrain === "fog").length * 8 : 0;
   const bestVertex = (locations: string[], balance = true): string | undefined =>
     locations.toSorted((first, second) => (vertexValue(second, balance) + islandBonus(second) * 10) -
       (vertexValue(first, balance) + islandBonus(first) * 10))[0];
@@ -82,7 +87,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     if (legal.length === 0) return null;
     const blocked = new Set(blockedSettlementVertices(state.board));
     const destinations = state.board.vertices.filter(vertex => !vertex.building && !blocked.has(vertex.id) &&
-      (state.variant !== "seafarers" || vertex.tileIds.some(id => tiles.get(id)!.terrain !== "sea")));
+      (!isSeafarers(state.variant) || vertex.tileIds.some(id => isLand(tiles.get(id)!.terrain)) || explorationValue(vertex.id) > 0));
     type Path = { vertexId: string; kind: "road" | "ship"; distance: number; firstEdge: string; firstKind: "road" | "ship" };
     const distances = new Map<string, Path>();
     const pending = new Set<string>();
@@ -107,8 +112,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         for (const kind of ["road", "ship"] as const) {
           if (kind !== path.kind && vertex.building?.playerId !== playerId) continue;
           if (edge.playerId ? (edge.kind ?? "road") !== kind : kind === "road"
-            ? state.variant === "seafarers" && !edgeTiles(state.board, edge).some(tile => tile.terrain !== "sea")
-            : state.variant !== "seafarers" || !edgeTiles(state.board, edge).some(tile => tile.terrain === "sea") ||
+            ? isSeafarers(state.variant) && !edgeTiles(state.board, edge).some(tile => isLand(tile.terrain))
+            : !isSeafarers(state.variant) || !edgeTiles(state.board, edge).some(tile => tile.terrain === "sea" || tile.terrain === "fog") ||
               edgeTiles(state.board, edge).some(tile => tile.id === state.pirateTileId)) continue;
           const next = edge.vertexIds.find(id => id !== path.vertexId)!;
           const nextKey = `${next}:${kind}`;
@@ -119,7 +124,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         }
       }
     }
-    const value = (path: Path) => (vertexValue(path.vertexId) + islandBonus(path.vertexId) * 10) / (path.distance + 1);
+    const value = (path: Path) => (vertexValue(path.vertexId) + islandBonus(path.vertexId) * 10 + explorationValue(path.vertexId)) / (path.distance + 1);
     const reachable = [...distances.values()].filter(path => destinations.some(vertex => vertex.id === path.vertexId))
       .toSorted((first, second) => value(second) - value(first));
     const destination = reachable[0];
@@ -200,11 +205,12 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         total + 0.3 * resourceTotal(state.players.find(other => other.id === owner)!.resources), 0);
       return blocking + stealable;
     };
-    const tile = state.board.tiles.filter(tile => tile.terrain !== "sea" && tile.id !== state.robberTileId)
+    const tile = state.board.tiles.filter(tile => isLand(tile.terrain) && tile.id !== state.robberTileId)
       .toSorted((first, second) => value(second) - value(first))[0]!;
-    const unblock = tiles.get(state.robberTileId)!.vertexIds.reduce((total, vertexId) => {
+    const robberTile = tiles.get(state.robberTileId);
+    const unblock = (robberTile?.vertexIds ?? []).reduce((total, vertexId) => {
       const building = vertices.get(vertexId)!.building;
-      const number = tiles.get(state.robberTileId)!.number;
+      const number = robberTile!.number;
       return total + (building?.playerId === playerId && number !== null
         ? 4 * (6 - Math.abs(number - 7)) * (building.kind === "city" ? 2 : 1) : 0);
     }, 0);
@@ -335,7 +341,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         const choice = match(card.kind)
           .with("victory-point", () => null)
           .with("knight", (): typeof developmentActions[number] | null => {
-            const blocked = tiles.get(state.robberTileId)!.vertexIds.some(id => vertices.get(id)!.building?.playerId === playerId);
+            const blocked = tiles.get(state.robberTileId)?.vertexIds.some(id => vertices.get(id)!.building?.playerId === playerId) ?? false;
             const army = state.awards.largestArmy !== playerId && player.knightsPlayed + 1 >= 3 &&
               player.knightsPlayed + 1 > Math.max(0, ...state.players.filter(other => other.id !== playerId).map(other => other.knightsPlayed));
             if (!blocked && !army && (phase.type === "roll" || robberMove().value <= 0)) return null;

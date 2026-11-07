@@ -1,5 +1,6 @@
 import { match } from "ts-pattern";
-import { createBoard, edgeTiles, isResource, randomInteger, secureRandom, shuffle } from "./board";
+import { createBoard, edgeTiles, isLand, isResource, randomInteger, secureRandom, shuffle } from "./board";
+import { isGameVariant, isSeafarers } from "./types";
 import { GameError } from "./messages";
 import type { GameMessage } from "./messages";
 import type { Board, DevelopmentKind, GameAction, GameState, GameVariant, Player, Resource, Resources } from "./types";
@@ -53,7 +54,7 @@ function pay(state: GameState, player: Player, cost: Resources): void {
 }
 
 export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom, selectedBoard?: Board, variant: GameVariant = selectedBoard?.variant ?? "original"): GameState {
-  requireRule(variant === "original" || variant === "seafarers", "Choose Original or Seafarers.");
+  requireRule(isGameVariant(variant), "Choose a supported game version.");
   requireRule(!selectedBoard || (selectedBoard.variant ?? "original") === variant, "The board must match the selected game version.");
   requireRule(profiles.length === 3 || profiles.length === 4, "A standard game needs three or four players.");
   requireRule(profiles.every(profile => profile.name.trim() && profile.color.trim()), "Each player needs a name and color.");
@@ -72,7 +73,8 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     variant, board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
     activePlayerId: players[0]!.id, phase: { type: "setup-settlement" }, setupIndex: 0,
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
-    turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")!.id,
+    ...(variant === "four-islands" ? { startingIslandIds: Object.fromEntries(players.map(player => [player.id, []])) } : {}),
+    turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
     pirateTileId: board.tiles.find(tile => tile.terrain === "sea")?.id ?? null,
     shipMoved: false, shipsBuiltThisTurn: [],
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
@@ -106,9 +108,9 @@ export function legalSettlementVertices(state: PlacementState, playerId: string)
   const blockedVertices = new Set(blockedSettlementVertices(state.board));
   return state.board.vertices.filter(vertex => {
     if (vertex.building || blockedVertices.has(vertex.id)) return false;
-    const land = state.board.tiles.filter(tile => vertex.tileIds.includes(tile.id) && tile.terrain !== "sea");
-    if (state.board.variant === "seafarers" && (land.length === 0 || (state.phase.type === "setup-settlement" &&
-      !land.some(tile => tile.islandId === "main")))) return false;
+    const land = state.board.tiles.filter(tile => vertex.tileIds.includes(tile.id) && isLand(tile.terrain));
+    if (isSeafarers(state.board.variant) && (land.length === 0 || (state.phase.type === "setup-settlement" &&
+      state.board.variant !== "four-islands" && !land.some(tile => tile.islandId === "main")))) return false;
     const adjacentEdges = state.board.edges.filter(edge => vertex.edgeIds.includes(edge.id));
     return state.phase.type === "setup-settlement" || adjacentEdges.some(edge => edge.playerId === playerId);
   }).map(vertex => vertex.id);
@@ -125,7 +127,7 @@ export function legalRoadEdges(state: PlacementState, playerId: string): string[
 }
 
 export function legalShipEdges(state: PlacementState, playerId: string): string[] {
-  if (state.board.variant !== "seafarers") return [];
+  if (!isSeafarers(state.board.variant)) return [];
   return legalRouteEdges(state, playerId, "ship");
 }
 
@@ -135,8 +137,8 @@ function legalRouteEdges(state: PlacementState, playerId: string, kind: "road" |
   return state.board.edges.filter(edge => {
     if (edge.playerId) return false;
     const tiles = edgeTiles(state.board, edge);
-    if (kind === "road" ? state.board.variant === "seafarers" && !tiles.some(tile => tile.terrain !== "sea") :
-      !tiles.some(tile => tile.terrain === "sea") || tiles.some(tile => tile.id === state.pirateTileId)) return false;
+    if (kind === "road" ? isSeafarers(state.board.variant) && !tiles.some(tile => isLand(tile.terrain)) :
+      !tiles.some(tile => tile.terrain === "sea" || tile.terrain === "fog") || tiles.some(tile => tile.id === state.pirateTileId)) return false;
     if (state.phase.type === "setup-road") return edge.vertexIds.includes(state.phase.vertexId);
     return edge.vertexIds.some(vertexId => {
       const vertex = state.board.vertices.find(vertex => vertex.id === vertexId)!;
@@ -166,7 +168,7 @@ export function legalShipDestinations(state: GameState | (PlacementState & Pick<
 }
 
 export function victoryTarget(variant: GameVariant): number {
-  return variant === "seafarers" ? 13 : 10;
+  return variant === "original" ? 10 : variant === "seafarers" ? 13 : 12;
 }
 
 export function getTradeRatio(state: { board: Board; players: Pick<Player, "id">[] }, playerId: string, resource: Resource): number {
@@ -220,13 +222,14 @@ export function getPublicScore(state: GameState, playerId: string): {
   const cities = pieceCount(state, playerId, "city") * 2;
   const longestRoad = state.awards.longestRoad === playerId ? 2 : 0;
   const largestArmy = state.awards.largestArmy === playerId ? 2 : 0;
-  const islands = state.variant === "seafarers" ? new Set(state.board.tiles.filter(tile =>
-    tile.islandId && tile.islandId !== "main" && tile.vertexIds.some(id =>
-      state.board.vertices.find(vertex => vertex.id === id)!.building?.playerId === playerId),
-  ).map(tile => tile.islandId)).size * 2 : 0;
+  const islands = state.variant === "seafarers" || state.variant === "four-islands"
+    ? new Set(state.board.tiles.filter(tile => tile.islandId &&
+      (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(tile.islandId) : tile.islandId !== "main") &&
+      tile.vertexIds.some(id => state.board.vertices.find(vertex => vertex.id === id)!.building?.playerId === playerId),
+    ).map(tile => tile.islandId)).size * 2 : 0;
   const publicPoints = settlements + cities + longestRoad + largestArmy + islands;
   return { public: publicPoints, settlements, cities, longestRoad, largestArmy,
-    ...(state.variant === "seafarers" ? { islands } : {}) };
+    ...(isSeafarers(state.variant) ? { islands } : {}) };
 }
 
 export function getScore(state: GameState, playerId: string): ReturnType<typeof getPublicScore> & { total: number; hidden: number } {
@@ -245,7 +248,7 @@ function updateAwards(state: GameState): void {
     const previous = state.awards[award];
     state.awards[award] = leaders.some(player => player.id === previous) ? previous : leaders.length === 1 ? leaders[0]!.id : null;
     if (state.awards[award] !== previous) {
-      const label = award === "longestRoad" ? state.variant === "seafarers" ? "Longest Route" : "Longest Road" : "Largest Army";
+      const label = award === "longestRoad" ? isSeafarers(state.variant) ? "Longest Route" : "Longest Road" : "Largest Army";
       state.log.push(state.awards[award]
         ? { key: "{player} takes {award}.", parameters: { player: playerFor(state, state.awards[award]!).name, award: label } }
         : { key: "{award} is unclaimed.", parameters: { award: label } });
@@ -254,7 +257,7 @@ function updateAwards(state: GameState): void {
 }
 
 function checkVictory(state: GameState): void {
-  if (state.phase.type.startsWith("setup") || state.winnerId) return;
+  if (state.phase.type.startsWith("setup") || (state.phase.type === "gold" && state.phase.resumePhase) || state.winnerId) return;
   if (getScore(state, state.activePlayerId).total >= victoryTarget(state.variant)) {
     state.winnerId = state.activePlayerId;
     state.phase = { type: "finished" };
@@ -267,7 +270,7 @@ function produce(state: GameState, number: number): Record<string, number> {
   const claims = Object.fromEntries(state.players.map(player => [player.id, emptyResources()]));
   const gold: Record<string, number> = {};
   for (const tile of state.board.tiles) {
-    if (tile.id === state.robberTileId || tile.number !== number || tile.terrain === "desert" || tile.terrain === "sea") continue;
+    if (tile.id === state.robberTileId || tile.number !== number || (!isResource(tile.terrain) && tile.terrain !== "gold")) continue;
     for (const vertexId of tile.vertexIds) {
       const building = state.board.vertices.find(vertex => vertex.id === vertexId)!.building;
       if (building) {
@@ -298,6 +301,34 @@ function produce(state: GameState, number: number): Record<string, number> {
     .filter(player => gold[player.id]).map(player => [player.id, gold[player.id]!]));
 }
 
+function exploreFog(state: GameState, playerId: string, edgeId: string): void {
+  if (state.variant !== "fog-islands") return;
+  const edge = state.board.edges.find(edge => edge.id === edgeId)!;
+  const player = playerFor(state, playerId);
+  let gold = 0;
+  for (const tile of state.board.tiles) {
+    if (tile.terrain !== "fog" || !tile.vertexIds.some(id => edge.vertexIds.includes(id))) continue;
+    const discovery = state.board.fogDiscoveryDeck?.shift();
+    requireRule(discovery, "The fog discovery deck is empty.");
+    tile.terrain = discovery.terrain;
+    tile.number = discovery.number;
+    if (isResource(tile.terrain) && state.bank[tile.terrain] > 0) {
+      state.bank[tile.terrain]--;
+      player.resources[tile.terrain]++;
+    } else if (tile.terrain === "gold") {
+      gold++;
+    }
+    state.log.push({ key: "{player} explores a fog hex.", parameters: { player: player.name } });
+  }
+  if (gold > 0 && resourceTotal(state.bank) > 0) {
+    const resumePhase = state.phase;
+    requireRule(resumePhase.type === "actions" || resumePhase.type === "roll" || resumePhase.type === "road-building" ||
+      resumePhase.type === "setup-settlement" || resumePhase.type === "setup-road", "Finish exploration before continuing.");
+    state.phase = { type: "gold", required: { [playerId]: gold }, resumePhase, resumePlayerId: state.activePlayerId };
+    state.activePlayerId = playerId;
+  }
+}
+
 export function applyAction(
   original: GameState, playerId: string, action: GameAction, random: () => number = secureRandom, now = Date.now(),
 ): GameState {
@@ -321,6 +352,13 @@ export function applyAction(
       const vertex = state.board.vertices.find(vertex => vertex.id === action.vertexId)!;
       vertex.building = { playerId, kind: "settlement" };
       if (setup) {
+        if (state.variant === "four-islands") {
+          state.startingIslandIds ??= {};
+          const islands = state.startingIslandIds[playerId] ??= [];
+          for (const tile of state.board.tiles) {
+            if (vertex.tileIds.includes(tile.id) && tile.islandId && !islands.includes(tile.islandId)) islands.push(tile.islandId);
+          }
+        }
         if (state.setupIndex >= state.players.length) {
           for (const tileId of vertex.tileIds) {
             const tile = state.board.tiles.find(tile => tile.id === tileId)!;
@@ -371,6 +409,7 @@ export function applyAction(
           state.phase = { type: state.phase.returnPhase };
         }
       }
+      exploreFog(state, playerId, edge.id);
     })
     .with({ type: "move-ship" }, action => {
       requireActions();
@@ -384,6 +423,7 @@ export function applyAction(
       destination.kind = "ship";
       state.shipMoved = true;
       state.log.push({ key: "{player} moves a ship.", parameters: { player: player.name } });
+      exploreFog(state, playerId, destination.id);
     })
     .with({ type: "roll" }, () => {
       requireRule(state.phase.type === "roll", "You may roll once per turn, after completing any pre-roll card effect.");
@@ -408,7 +448,11 @@ export function applyAction(
         "Choose exactly {count} available resources for gold production.", { count });
       transfer(state.bank, player.resources, action.resources);
       delete state.phase.required[playerId];
-      if (Object.keys(state.phase.required).length === 0) state.phase = { type: "actions" };
+      if (Object.keys(state.phase.required).length === 0) {
+        const { resumePhase, resumePlayerId } = state.phase;
+        state.phase = resumePhase ?? { type: "actions" };
+        if (resumePlayerId) state.activePlayerId = resumePlayerId;
+      }
       state.log.push({ key: "{player} collects gold production.", parameters: { player: player.name } });
     })
     .with({ type: "discard" }, action => {
@@ -438,7 +482,7 @@ export function applyAction(
       requireRule(state.phase.type === "robber", "Move the robber only after a seven or a Knight card.");
       const pirate = action.type === "move-pirate";
       if (pirate && action.tileId === null) {
-        requireRule(state.variant === "seafarers" && state.pirateTileId !== null, "Move the pirate to a different sea hex.");
+        requireRule(isSeafarers(state.variant) && state.pirateTileId !== null, "Move the pirate to a different sea hex.");
         state.pirateTileId = null;
         state.phase = { type: state.phase.returnPhase };
         state.log.push({ key: "{player} moves the pirate.", parameters: { player: player.name } });
@@ -446,8 +490,8 @@ export function applyAction(
       }
       const tile = state.board.tiles.find(tile => tile.id === action.tileId);
       requireRule(tile && (pirate
-        ? state.variant === "seafarers" && tile.terrain === "sea" && tile.id !== state.pirateTileId
-        : tile.terrain !== "sea" && tile.id !== state.robberTileId), pirate
+        ? isSeafarers(state.variant) && tile.terrain === "sea" && tile.id !== state.pirateTileId
+        : isLand(tile.terrain) && tile.id !== state.robberTileId), pirate
           ? "Move the pirate to a different sea hex."
           : "Move the robber to a different land hex, including the desert.");
       if (pirate) state.pirateTileId = tile.id;
@@ -462,7 +506,7 @@ export function applyAction(
     })
     .with({ type: "steal" }, action => {
       requireRule(state.phase.type === "steal", "Move the robber before choosing a victim.");
-      requireRule(state.phase.victimIds.includes(action.playerId), state.variant === "seafarers"
+      requireRule(state.phase.victimIds.includes(action.playerId), isSeafarers(state.variant)
         ? "Choose an eligible opponent beside the robber or pirate." : "Choose an opponent with a building adjacent to the robber.");
       const victim = playerFor(state, action.playerId);
       const total = resourceTotal(victim.resources);
@@ -587,7 +631,7 @@ export function applyAction(
           };
         })
         .with("road-building", () => {
-          const remaining = 15 - pieceCount(state, playerId, "road") + (state.variant === "seafarers" ? 15 - pieceCount(state, playerId, "ship") : 0);
+          const remaining = 15 - pieceCount(state, playerId, "road") + (isSeafarers(state.variant) ? 15 - pieceCount(state, playerId, "ship") : 0);
           requireRule(remaining > 0, "You need at least one road piece remaining to play Road Building.");
           state.phase = { type: "road-building", remaining: Math.min(2, remaining), returnPhase };
           if (legalRoadEdges(state, playerId).length === 0 && legalShipEdges(state, playerId).length === 0) state.phase = { type: returnPhase };
