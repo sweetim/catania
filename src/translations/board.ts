@@ -25,6 +25,7 @@ export const boardTranslations = {
   "{description}, produced resources this roll": "{description}、今回の出目で資源を産出",
   "Any resource harbor, trade {ratio}": "共通港、交換比率{ratio}",
   "{resource} harbor, trade {ratio}": "{resource}の港、交換比率{ratio}",
+  "Hold pressed to reveal the number hidden by this harbor": "押している間だけ港に隠れた数字を表示します",
   "ANY": "共通",
   "Move robber to {resource}": "盗賊を{resource}に移動",
   "Move robber to {resource} {number}": "盗賊を{resource}の{number}に移動",

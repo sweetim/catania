@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard, generateMapSeed, normalizeMapSeed, pirateStartTileId, seededRandom } from "../../src/game/board";
+import { createBoard, generateMapSeed, hiddenNumberTileIds, normalizeMapSeed, pirateStartTileId, portAnchor, seededRandom } from "../../src/game/board";
 
 function randomFromSeed(seed: number): () => number {
   return () => {
@@ -246,6 +246,35 @@ describe("fog islands board", () => {
       const board = createBoard(random, "fog-islands");
       expect(board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(23);
       expect(board.fogDiscoveryDeck).toHaveLength(23);
+    }
+  });
+});
+
+describe("port label overlap", () => {
+  test("anchors every harbor label over open sea, clear of all number tokens", () => {
+    for (const variant of ["original", "seafarers", "four-islands", "fog-islands"] as const) {
+      for (let seed = 1; seed <= 40; seed++) {
+        const board = createBoard(randomFromSeed(seed), variant);
+        expect(hiddenNumberTileIds(board), variant).toEqual([]);
+      }
+    }
+  });
+
+  test("lists revealed fog hexes whose number token a harbor label covers", () => {
+    const board = createBoard(seededRandom("ABCD2345"), "fog-islands");
+    for (const port of board.ports) {
+      const anchor = portAnchor(board, port);
+      const covered = board.tiles.find(tile => tile.terrain === "fog" &&
+        Math.hypot(tile.x - anchor.portX, tile.y + 2 - anchor.portY) < 19);
+      if (!covered) continue;
+      expect(hiddenNumberTileIds(board)).toEqual([]);
+      covered.terrain = "wood";
+      covered.number = 8;
+      expect(hiddenNumberTileIds(board)).toEqual([covered.id]);
+      covered.terrain = "sea";
+      covered.number = null;
+      expect(hiddenNumberTileIds(board)).toEqual([]);
+      break;
     }
   });
 });

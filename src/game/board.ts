@@ -1,6 +1,6 @@
 import { GameError } from "./messages";
 import { isSeafarers } from "./types";
-import type { Board, Edge, FogDiscovery, GameVariant, Resource, Terrain, Tile, Vertex } from "./types";
+import type { Board, Edge, FogDiscovery, GameVariant, Port, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function isResource(terrain: Terrain): terrain is Resource {
   return terrain !== "desert" && terrain !== "sea" && terrain !== "gold" && terrain !== "fog";
@@ -12,6 +12,34 @@ export function isLand(terrain: Terrain): boolean {
 
 export function edgeTiles(board: Board, edge: Edge): Tile[] {
   return board.tiles.filter(tile => edge.vertexIds.every(id => tile.vertexIds.includes(id)));
+}
+
+/** Locates a harbor's walkway start (coast-edge midpoint) and its label anchor at sea. */
+export function portAnchor(board: Board, port: Port): { x: number; y: number; portX: number; portY: number } {
+  const edge = board.edges.find(edge => edge.id === port.edgeId)!;
+  const first = board.vertices.find(vertex => vertex.id === edge.vertexIds[0])!;
+  const second = board.vertices.find(vertex => vertex.id === edge.vertexIds[1])!;
+  const x = (first.x + second.x) / 2;
+  const y = (first.y + second.y) / 2;
+  const distance = Math.hypot(x, y);
+  const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog")!;
+  const coastDistance = Math.hypot(x - land.x, y - land.y);
+  const directionX = isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
+  const directionY = isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
+  return { x, y, portX: x + directionX * 51, portY: y + directionY * 51 };
+}
+
+/** Lists number-carrying tiles covered by a harbor label, so the board can offer a press-and-hold peek. */
+export function hiddenNumberTileIds(board: Board): string[] {
+  const anchors = board.ports.map(port => portAnchor(board, port));
+  return board.tiles
+    .filter(tile => tile.terrain !== "fog" && tile.number !== null)
+    .filter(tile => anchors.some(anchor => {
+      const nearestX = Math.max(anchor.portX - 27, Math.min(tile.x, anchor.portX + 27));
+      const nearestY = Math.max(anchor.portY - 17, Math.min(tile.y + 2, anchor.portY + 17));
+      return Math.hypot(tile.x - nearestX, tile.y + 2 - nearestY) < 19;
+    }))
+    .map(tile => tile.id);
 }
 
 export function secureRandom(): number {

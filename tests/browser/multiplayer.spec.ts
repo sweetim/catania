@@ -956,6 +956,64 @@ test("invitation copies inline with temporary confirmation and a selectable fail
   await expect(confirmation).toHaveText("");
 });
 
+test("shared board header shows and copies the host-only map code", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  const mapSeed = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  const copy = host.getByRole("button", { name: "Copy map code", exact: true });
+  const confirmation = copy.getByRole("status");
+  await expect(copy).toHaveText(mapSeed);
+  await expect(copy).toHaveAttribute("title", "Copy map code");
+  await expect(copy.locator("svg")).toHaveCount(1);
+  await expect(copy).toBeInViewport({ ratio: 1 });
+  await expect(phone.getByRole("button", { name: "Copy map code", exact: true })).toHaveCount(0);
+  await host.evaluate(() => {
+    const copiedMapCodes: string[] = [];
+    Object.assign(window, { copiedMapCodes });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { copiedMapCodes.push(text); } } });
+  });
+  await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await copy.click();
+  await expect(confirmation).toHaveText("Copied");
+  await expect(copy).toHaveAttribute("title", "Map code copied");
+  expect(await host.evaluate(() => (window as unknown as { copiedMapCodes: string[] }).copiedMapCodes)).toEqual([mapSeed]);
+  await host.clock.runFor(2_000);
+  await expect(confirmation).toHaveText(mapSeed);
+  await expect(copy).toHaveAttribute("title", "Copy map code");
+  await host.evaluate(() => { navigator.clipboard.writeText = async () => { throw new DOMException("Clipboard permission denied", "NotAllowedError"); }; });
+  await copy.click();
+  await expect(confirmation).toHaveText(mapSeed);
+  await expect(host.getByRole("alert")).toHaveText("Map code could not be copied.");
+  await host.evaluate(() => {
+    const windowWithCodes = window as unknown as { copiedMapCodes: string[] };
+    navigator.clipboard.writeText = async (text: string) => { windowWithCodes.copiedMapCodes.push(text); };
+  });
+  await copy.click();
+  await expect(host.getByRole("alert")).toHaveCount(0);
+  await expect(confirmation).toHaveText("Copied");
+  await host.clock.runFor(2_000);
+  await selectMenuLanguage(host, "en", "ja");
+  const japaneseCopy = host.getByRole("button", { name: "マップコードをコピー", exact: true });
+  const japaneseConfirmation = japaneseCopy.getByRole("status");
+  await expect(japaneseCopy).toHaveAttribute("title", "マップコードをコピー");
+  await expect(japaneseConfirmation).toHaveText(mapSeed);
+  await japaneseCopy.click();
+  await expect(japaneseConfirmation).toHaveText("コピーしました");
+  expect(await host.evaluate(() => (window as unknown as { copiedMapCodes: string[] }).copiedMapCodes)).toEqual([mapSeed, mapSeed, mapSeed]);
+  await host.clock.runFor(2_000);
+  await selectMenuLanguage(host, "ja", "en");
+  await expect(copy).toHaveText(mapSeed);
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "shared-board-map-code");
+});
+
 test("host map seed toolbar automatically loads complete codes across languages and widths", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await hostGame(host);
@@ -2248,6 +2306,14 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory).toContainText("1 × 1 VP");
   await expect(victory.locator(".confetti-piece")).toHaveCount(28);
   await expect(victory.getByRole("button", { name: "Leave room", exact: true })).toBeVisible();
+  // The gold exit leads as a full-width bar and the lone quiet exit spans its own full-width row below.
+  const victoryActions = victory.locator(".victory-actions");
+  const victoryActionsBox = (await victoryActions.boundingBox())!;
+  const leaveRoomBox = (await victory.getByRole("button", { name: "Leave room", exact: true }).boundingBox())!;
+  const viewIslandBox = (await victory.getByRole("button", { name: "View the island", exact: true }).boundingBox())!;
+  expect(leaveRoomBox.width).toBeCloseTo(victoryActionsBox.width, 0);
+  expect(viewIslandBox.width, "View the island fills its row instead of collapsing into the corner").toBeCloseTo(victoryActionsBox.width, 0);
+  expect(viewIslandBox.y).toBeGreaterThan(leaveRoomBox.y);
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "victory-popup-phone");
   await victory.getByRole("button", { name: "View the island", exact: true }).click();

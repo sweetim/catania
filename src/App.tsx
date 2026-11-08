@@ -1468,9 +1468,7 @@ export function App() {
               profileNote={humanCount === 1 && playerProfile && winner.control === "human"
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", profileStats(playerProfile))
                 : undefined}
-              mapNote={gameMapSeed
-                ? translateText("Map code: {code}. Enter it before starting to replay this island.", { code: gameMapSeed })
-                : undefined}
+              mapCode={gameMapSeed ?? undefined}
             >
               <button className="button-secondary" onClick={returnToTable}>
                 {translateText("Back to home")}

@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
-import { edgeTiles, isResource } from "../game/board";
-import { isSeafarers, type Board as BoardState, type Player, type Terrain } from "../game/types";
+import { edgeTiles, hiddenNumberTileIds, isResource, portAnchor } from "../game/board";
+import { type Board as BoardState, type Player, type Terrain, type Tile } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
@@ -19,6 +19,71 @@ import { getPlayerLabel } from "./GameUi";
 import { ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
+
+function NumberToken({ x, y, number, matchesRoll, blocked }: {
+  x: number;
+  y: number;
+  number: number;
+  matchesRoll: boolean;
+  blocked: boolean;
+}) {
+  const probability = 6 - Math.abs(7 - number);
+  const frequent = number === 6 || number === 8;
+  return (
+    <g
+      className={`number-token${matchesRoll ? " number-token-highlight" : ""}${blocked ? " number-token-blocked" : ""}`}
+      transform={`translate(${x} ${y + 2})`}
+    >
+      {matchesRoll && (
+        <circle
+          className="number-token-halo"
+          r="25"
+          fill={blocked ? "none" : "#f4cf75"}
+          fillOpacity="0.3"
+          stroke={blocked ? "#817d71" : "#ae772c"}
+          strokeWidth={blocked ? "1.5" : "2"}
+          strokeDasharray={blocked ? "3 4" : undefined}
+          opacity={blocked ? "0.7" : "1"}
+          pointerEvents="none"
+        />
+      )}
+      <circle cy="3" r="19.5" fill="#35453a" opacity="0.22" />
+      <circle cy="1.5" r="19" fill="#b8a27b" />
+      <circle
+        className="number-token-face"
+        r="19"
+        fill={blocked ? "#e6e1d4" : matchesRoll ? "#ffecab" : "#fbf4df"}
+        stroke={blocked ? "#887f6c" : matchesRoll ? "#ac6b24" : "#c8b998"}
+        strokeWidth={matchesRoll ? "2.2" : "1.3"}
+      />
+      <circle
+        r="16.3"
+        fill="none"
+        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : "#e7ddc5"}
+        strokeWidth="0.7"
+      />
+      <text
+        y="4.5"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="23"
+        fontWeight="700"
+        fill={frequent ? "#b14e38" : "#394b42"}
+      >
+        {number}
+      </text>
+      {Array.from({ length: probability }, (_, index) => (
+        <circle
+          key={index}
+          cx={(index - (probability - 1) / 2) * 4.3}
+          cy="11"
+          r="1.35"
+          fill={frequent ? "#b14e38" : "#59644f"}
+        />
+      ))}
+    </g>
+  );
+}
 
 export function Board({
   board,
@@ -94,6 +159,7 @@ export function Board({
   const [zoom, setZoom] = useState(1);
   const [viewportSize, setViewportSize] = useState({ width: 710, height: 674 });
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [peekedTileId, setPeekedTileId] = useState<string | null>(null);
   const verticesById = new Map(
     board.vertices.map((vertex) => [vertex.id, vertex]),
   );
@@ -145,6 +211,8 @@ export function Board({
     (legalTiles.has(tile.id) && (selectedId === tile.id || focusedId === tile.id)),
   ).map((tile) => tile.id));
   const blockedVertices = showBlockedSettlementLocations ? blockedSettlementVertices(board) : [];
+  const hiddenNumberIds = new Set(hiddenNumberTileIds(board));
+  const peekedTile = peekedTileId === null ? undefined : board.tiles.find(tile => tile.id === peekedTileId);
   const mapWidth = fit
     ? Math.min(viewportSize.width, (viewportSize.height * viewWidth) / viewHeight)
     : viewportSize.width;
@@ -288,6 +356,24 @@ export function Board({
   function terrainResourceName(terrain: Terrain) {
     return isResource(terrain) ? resourceName(language, terrain).toLowerCase()
       : translateText(terrain === "sea" ? "Sea" : terrain === "fog" ? "Fog" : terrain === "gold" ? "Gold" : "Desert").toLowerCase();
+  }
+
+  function tileDescription(tile: Tile) {
+    const number = tile.terrain === "fog" ? null : tile.number;
+    const probability = number === null ? 0 : 6 - Math.abs(7 - number);
+    let description = tile.terrain === "fog"
+      ? translateText("Unexplored fog; terrain and number concealed")
+      : translateText(number === null
+        ? "{terrain}, {resource}, no production"
+        : "{terrain}, {resource}, roll {number}, {probability} chances out of 36", {
+        terrain: getTerrainName(theme, tile.terrain, language),
+        resource: terrainResourceName(tile.terrain),
+        number: number ?? "",
+        probability,
+      });
+    if (tile.terrain !== "fog" && robberTileId === tile.id) description = translateText("{description}, blocked by the robber", { description });
+    if (tile.terrain !== "fog" && producingTileIds.includes(tile.id)) description = translateText("{description}, produced resources this roll", { description });
+    return description;
   }
 
   function targetProperties(
@@ -736,29 +822,15 @@ export function Board({
                   return `${vertex.x},${vertex.y}`;
                 })
                 .join(" ");
-              const number = tile.terrain === "fog" ? null : tile.number;
-              const probability =
-                number === null ? 0 : 6 - Math.abs(7 - number);
-              const frequent = number === 6 || number === 8;
-              const matchesRoll = number !== null && number === rolledNumber;
-              const blocked = matchesRoll && robberTileId === tile.id;
-              const raised = raisedTileIds.has(tile.id);
-              const fogRevealGeneration = fogReveals.generations.get(tile.id);
-              const fogRevealVeilKey = fogRevealGeneration === undefined
-                ? null
-                : `${fogReveals.version}:${tile.id}:${fogRevealGeneration}`;
-              let description = tile.terrain === "fog"
-                ? translateText("Unexplored fog; terrain and number concealed")
-                : translateText(number === null
-                  ? "{terrain}, {resource}, no production"
-                  : "{terrain}, {resource}, roll {number}, {probability} chances out of 36", {
-                  terrain: getTerrainName(theme, tile.terrain, language),
-                  resource: terrainResourceName(tile.terrain),
-                  number: number ?? "",
-                  probability,
-                });
-              if (tile.terrain !== "fog" && robberTileId === tile.id) description = translateText("{description}, blocked by the robber", { description });
-              if (tile.terrain !== "fog" && producingTileIds.includes(tile.id)) description = translateText("{description}, produced resources this roll", { description });
+               const number = tile.terrain === "fog" ? null : tile.number;
+               const matchesRoll = number !== null && number === rolledNumber;
+               const blocked = matchesRoll && robberTileId === tile.id;
+               const raised = raisedTileIds.has(tile.id);
+               const fogRevealGeneration = fogReveals.generations.get(tile.id);
+               const fogRevealVeilKey = fogRevealGeneration === undefined
+                 ? null
+                 : `${fogReveals.version}:${tile.id}:${fogRevealGeneration}`;
+               const description = tileDescription(tile);
               return (
                 <g
                   key={tile.id}
@@ -812,58 +884,13 @@ export function Board({
                     {getTerrainName(theme, tile.terrain, language).toUpperCase()}
                   </text>
                   {number !== null && (
-                    <g
-                      className={`number-token${matchesRoll ? " number-token-highlight" : ""}${blocked ? " number-token-blocked" : ""}`}
-                      transform={`translate(${tile.x} ${tile.y + 2})`}
-                    >
-                      {matchesRoll && (
-                        <circle
-                          className="number-token-halo"
-                          r="25"
-                          fill={blocked ? "none" : "#f4cf75"}
-                          fillOpacity="0.3"
-                          stroke={blocked ? "#817d71" : "#ae772c"}
-                          strokeWidth={blocked ? "1.5" : "2"}
-                          strokeDasharray={blocked ? "3 4" : undefined}
-                          opacity={blocked ? "0.7" : "1"}
-                          pointerEvents="none"
-                        />
-                      )}
-                      <circle cy="3" r="19.5" fill="#35453a" opacity="0.22" />
-                      <circle cy="1.5" r="19" fill="#b8a27b" />
-                      <circle
-                        className="number-token-face"
-                        r="19"
-                        fill={blocked ? "#e6e1d4" : matchesRoll ? "#ffecab" : "#fbf4df"}
-                        stroke={blocked ? "#887f6c" : matchesRoll ? "#ac6b24" : "#c8b998"}
-                        strokeWidth={matchesRoll ? "2.2" : "1.3"}
-                      />
-                      <circle
-                        r="16.3"
-                        fill="none"
-                        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : "#e7ddc5"}
-                        strokeWidth="0.7"
-                      />
-                      <text
-                        y="4.5"
-                        textAnchor="middle"
-                        fontFamily="Georgia, 'Times New Roman', serif"
-                        fontSize="23"
-                        fontWeight="700"
-                        fill={frequent ? "#b14e38" : "#394b42"}
-                      >
-                        {number}
-                      </text>
-                      {Array.from({ length: probability }, (_, index) => (
-                        <circle
-                          key={index}
-                          cx={(index - (probability - 1) / 2) * 4.3}
-                          cy="11"
-                          r="1.35"
-                          fill={frequent ? "#b14e38" : "#59644f"}
-                        />
-                      ))}
-                    </g>
+                    <NumberToken
+                      x={tile.x}
+                      y={tile.y}
+                      number={number}
+                      matchesRoll={matchesRoll}
+                      blocked={blocked}
+                    />
                   )}
                   {fogRevealVeilKey !== null && !completedVeils.has(fogRevealVeilKey) && (
                     <g
@@ -925,17 +952,7 @@ export function Board({
             </g>
 
             {board.ports.map((port) => {
-              const { x, y } = edgeGeometry.find(
-                ({ edge }) => edge.id === port.edgeId,
-              )!;
-              const distance = Math.hypot(x, y);
-              const edge = board.edges.find(edge => edge.id === port.edgeId)!;
-              const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog")!;
-              const coastDistance = Math.hypot(x - land.x, y - land.y);
-              const directionX = isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
-              const directionY = isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
-              const portX = x + directionX * 51;
-              const portY = y + directionY * 51;
+              const { x, y, portX, portY } = portAnchor(board, port);
               const ratio = port.resource === "any" ? "3:1" : "2:1";
               return (
                 <g
@@ -1048,12 +1065,58 @@ export function Board({
                         >
                           {resourceName(language, port.resource).toUpperCase()}
                         </text>
-                      </>
-                    )}
-                  </g>
-                </g>
-              );
-            })}
+                       </>
+                     )}
+                   </g>
+                 </g>
+               );
+             })}
+
+            {peekedTile && hiddenNumberIds.has(peekedTile.id) && peekedTile.number !== null && (
+              <g className="number-peek" aria-hidden="true" pointerEvents="none">
+                <NumberToken
+                  x={peekedTile.x}
+                  y={peekedTile.y}
+                  number={peekedTile.number}
+                  matchesRoll={peekedTile.number === rolledNumber}
+                  blocked={peekedTile.number === rolledNumber && robberTileId === peekedTile.id}
+                />
+              </g>
+            )}
+            {board.tiles
+              .filter(tile => hiddenNumberIds.has(tile.id))
+              .map(tile => (
+                <circle
+                  key={`number-peek-${tile.id}`}
+                  cx={tile.x}
+                  cy={tile.y + 2}
+                  r="20"
+                  fill="transparent"
+                  className="number-peek-target cursor-pointer outline-none"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${tileDescription(tile)}. ${translateText("Hold pressed to reveal the number hidden by this harbor")}`}
+                  onPointerDown={event => {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    setPeekedTileId(tile.id);
+                  }}
+                  onPointerUp={() => setPeekedTileId(current => current === tile.id ? null : current)}
+                  onPointerCancel={() => setPeekedTileId(current => current === tile.id ? null : current)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      if (!event.repeat) setPeekedTileId(tile.id);
+                    }
+                  }}
+                  onKeyUp={event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setPeekedTileId(current => current === tile.id ? null : current);
+                    }
+                  }}
+                  onContextMenu={event => event.preventDefault()}
+                />
+              ))}
 
             {board.tiles
               .filter((tile) => legalTiles.has(tile.id))

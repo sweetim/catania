@@ -522,7 +522,24 @@ export function MultiplayerApp() {
     <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
       {!privateGame && <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
-        {sharedGame && <span className="ml-auto text-[10px] text-muted max-sm:sr-only sm:mx-auto sm:text-xs" role="status">{translateText("Shared board / {status}", { status: translateText(view?.status === "connected" ? "Connected" : "Offline") })}</span>}
+        {sharedGame && snapshot?.mapSeed && <button type="button" className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[10px] font-semibold text-muted hover:bg-moss hover:text-ink sm:mx-auto sm:text-xs" aria-label={translateText("Copy map code")} title={translateText(copied ? "Map code copied" : "Copy map code")} onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(snapshot.mapSeed!);
+            window.clearTimeout(copyFeedbackTimer.current);
+            setCopied(true);
+            setLocalError("");
+            copyFeedbackTimer.current = window.setTimeout(() => setCopied(false), 2_000);
+          } catch {
+            window.clearTimeout(copyFeedbackTimer.current);
+            setCopied(false);
+            setLocalError("Map code could not be copied.");
+          }
+        }}>
+          <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {copied ? <path d="m5 12 4 4L19 6" /> : <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>}
+          </svg>
+          <span role="status">{copied ? translateText("Copied") : snapshot.mapSeed}</span>
+        </button>}
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
@@ -715,9 +732,7 @@ export function MultiplayerApp() {
               profileNote={snapshot.profiles?.[victoryWinner.id]
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", snapshot.profiles[victoryWinner.id])
                 : undefined}
-              mapNote={snapshot.mapSeed
-                ? translateText("Map code: {code}. Enter it before starting to replay this island.", { code: snapshot.mapSeed })
-                : undefined}
+              mapCode={snapshot.mapSeed}
             >
               <button className="button-primary" disabled={disabled} onClick={() => session.current?.endGame()}>
                 {translateText("Return to lobby")}

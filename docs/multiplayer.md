@@ -51,9 +51,9 @@ The shared screen hosts the game without occupying a player seat.
    On desktop, the map fills the left column, with the invitation above the player
    controls on the right. The panels fit the viewport without page scrolling.
    A 16-pixel gap separates the navigation from the lobby panels at every screen size.
-   Mobile stacks the map, invitation, and players and allows scrolling. The connected-status
-   line is omitted from the host lobby; connection failures and recovery controls
-   remain visible.
+    Mobile stacks the map, invitation, and players and allows scrolling. No connected-status
+    line appears in the header; connection failures and recovery controls
+    remain visible.
 4. Place settlements, cities, and roads, and move the robber on the shared board.
    Select a build on the active player's phone, then confirm its location
    on the board; the confirmation shows the acting player's name and color. Phones keep their own cards visible and handle rolls, discards,
@@ -75,7 +75,12 @@ player cards and map as single-device play. The map fills the remaining viewport
 without page scrolling. On tablets and larger screens, all seats fit without
 horizontal scrolling; narrow cards place the name above a horizontal row of counts.
 On phones, the player strip scrolls horizontally while the map remains visible.
-Theme, zoom, and placement confirmation stay on the map. The header uses the same
+Theme, zoom, and placement confirmation stay on the map. During play, the header
+between the logo and the **Game** dropdown shows the game's **map code**; clicking
+it copies the code for replaying this island later. The code stays host-only, and
+the header shows no connected-status line; connection failures and recovery
+controls remain visible.
+The header uses the same
 **Game** dropdown as single-device play, in both the lobby and the game.
 **Language** changes this device's interface language.
 **Help** includes the rules, build costs, development-card reference, and

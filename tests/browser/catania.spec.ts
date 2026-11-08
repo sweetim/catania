@@ -2686,6 +2686,47 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await screenshot(page, testInfo, "fog-reveal", false);
 });
 
+test("Fog Islands press-and-hold reveals a number token covered by a harbor label", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  // On ABCD2345, the setup ship at edge-22 from vertex-18 reveals wool hex tile-24 (11) under a harbor label.
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  await mapCode.fill("ABCD2345");
+  await mapCode.press("Enter");
+  await showHomeView(page, "Setup");
+  await seedRandomness(page, 17);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  await page.getByRole("button", { name: "Place settlement at vertex-18", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
+  await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
+  const coveredTile = createBoard(seededRandom("ABCD2345"), "fog-islands").tiles.find(tile => tile.id === "tile-24")!;
+  expect(coveredTile.number).toBe(11);
+  const peek = page.getByRole("button", { name: /Hold pressed to reveal the number hidden by this harbor/ });
+  await expect(peek).toHaveCount(1);
+  await expect(page.locator(".number-peek")).toHaveCount(0);
+  // Holding the target paints the token above the harbor label; releasing restores the label.
+  await peek.hover();
+  await page.mouse.down();
+  await expect(page.locator(".number-peek")).toHaveCount(1);
+  await expect(page.locator(".number-peek text")).toHaveText("11");
+  await screenshot(page, testInfo, "port-number-peek", false);
+  await page.mouse.up();
+  await expect(page.locator(".number-peek")).toHaveCount(0);
+  // Keyboard hold works the same way.
+  await peek.focus();
+  await page.keyboard.down("Enter");
+  await expect(page.locator(".number-peek")).toHaveCount(1);
+  await page.keyboard.up("Enter");
+  await expect(page.locator(".number-peek")).toHaveCount(0);
+});
+
 async function seedRandomness(page: Page, initialSeed: number, initialValues: number[] = []) {
   await page.evaluate(({ initialSeed, initialValues }) => {
     let seed = initialSeed;
@@ -3720,12 +3761,18 @@ test("a won game pops the winner up over the board with the point breakdown and 
   await expect(victory).not.toContainText("0 ×");
   // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
   await expect(victory.locator(".confetti-piece")).toHaveCount(28);
+  // The replayable map code sits under the eyebrow as an island-icon badge, without the how-to sentence.
+  const mapCode = victory.locator(".victory-map-code");
+  await expect(mapCode).toBeVisible();
+  await expect(mapCode).toHaveText(/^[2-9A-HKMNP-Z]{8}$/);
+  await expect(mapCode.locator("svg")).toHaveCount(1);
+  await expect(victory).not.toContainText("Enter it before starting");
   await expect(victory.getByRole("button", { name: "Back to home", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "View the island", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
   // The restart choice leads as a full-width gold bar; the two quieter exits share a row beneath it.
   const actions = victory.locator(".victory-actions");
-  await expect(actions).toHaveCSS("display", "grid");
+  await expect(actions).toHaveCSS("display", "flex");
   const actionsBox = (await actions.boundingBox())!;
   const restartBox = (await victory.getByRole("button", { name: "Restart", exact: true }).boundingBox())!;
   expect(restartBox.width).toBeCloseTo(actionsBox.width, 0);
@@ -3735,6 +3782,8 @@ test("a won game pops the winner up over the board with the point breakdown and 
   expect(Math.abs(backHomeBox.y - viewIslandBox.y)).toBeLessThan(1);
   expect(Math.abs(backHomeBox.height - viewIslandBox.height)).toBeLessThan(1);
   expect(backHomeBox.width + viewIslandBox.width).toBeLessThan(actionsBox.width);
+  expect(backHomeBox.width, "Back to home keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
+  expect(viewIslandBox.width, "View the island keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
   // The winning island stays mounted behind the popup.
   await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
   await noPageOverflow(page);

@@ -90,7 +90,7 @@ export function VictoryDialog({
   summary,
   breakdown,
   profileNote,
-  mapNote,
+  mapCode,
   children,
 }: {
   eyebrow: string;
@@ -102,7 +102,7 @@ export function VictoryDialog({
   summary: string;
   breakdown: readonly VictoryBreakdownRow[];
   profileNote?: string;
-  mapNote?: string;
+  mapCode?: string;
   children: ReactNode;
 }) {
   return (
@@ -116,6 +116,14 @@ export function VictoryDialog({
       <div className="victory-card panel w-full max-w-md p-6 text-center sm:p-8">
         <div className="victory-stagger text-left">
           <p className="eyebrow">{eyebrow}</p>
+          {mapCode && (
+            <p className="mt-2">
+              <span className="victory-map-code inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.08em] tabular-nums text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]">
+                <IslandIcon className="h-3 w-2.5 shrink-0" />
+                <span className="whitespace-nowrap">{mapCode}</span>
+              </span>
+            </p>
+          )}
           <div className="mt-3 flex items-center gap-3">
             <span
               aria-hidden="true"
@@ -145,10 +153,9 @@ export function VictoryDialog({
             </dl>
           )}
           <p className="mt-4 text-sm leading-6 text-muted">{summary}</p>
-          {(profileNote || mapNote) && (
+          {profileNote && (
             <div className="mt-2 space-y-1 text-xs leading-5 text-muted">
-              {profileNote && <p>{profileNote}</p>}
-              {mapNote && <p>{mapNote}</p>}
+              <p>{profileNote}</p>
             </div>
           )}
           <div className="victory-actions mt-6">{children}</div>

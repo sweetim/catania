@@ -482,6 +482,7 @@
 
 .number-token-highlight:not(.number-token-blocked) { animation: token-glow 650ms ease-out both; }
 .number-token-blocked { stroke-dasharray: 3 3; }
+.number-peek-target:focus-visible { stroke: #5d4525; stroke-width: 2; stroke-dasharray: 3 3; }
 
 @media (min-width: 1024px) {
   .game-table { display: grid; grid-template-columns: minmax(0, 1fr) 350px; grid-template-rows: auto 64px minmax(0, 1fr); column-gap: 16px; padding: 8px 20px 12px; }
@@ -731,14 +732,14 @@
 }
 
 .victory-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .victory-actions .button-primary {
   --victory-gold: linear-gradient(180deg, #c69a3f 0%, #b58a2d 100%);
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
   min-height: 3rem;
   border-radius: 0.875rem;
   background: var(--victory-gold);
@@ -766,6 +767,7 @@
 }
 
 .victory-actions .button-secondary {
+  flex: 1 1 0;
   min-height: 3rem;
   border: 1px solid #e3d3a4;
   border-radius: 0.875rem;

@@ -63,7 +63,6 @@ export const appTranslations = {
   "Map code": "マップコード",
   "Replay map": "このマップを再現",
   "Enter a valid 8-character map code.": "8文字の有効なマップコードを入力してください。",
-  "Map code: {code}. Enter it before starting to replay this island.": "マップコード：{code}。同じ島で再戦するときは、開始前に入力してください。",
   "Player history: {games} games / {wins} wins / {points} total points": "プレイヤー履歴：{games}戦 / {wins}勝 / 合計{points}点",
   "Profile": "プロフィール",
   "This saved map link is invalid.": "保存したマップのリンクが無効です。",
