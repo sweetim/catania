@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/browser",
+  testMatch: ["robber-repro.spec.ts"],
   timeout: 240_000,
   expect: { timeout: 10_000 },
   reporter: [["list"]],

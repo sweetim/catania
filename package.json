@@ -9,7 +9,9 @@
     "build": "bun run build.ts",
     "typecheck": "tsgo --noEmit",
     "test": "bun test tests/game",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:browser:pwa": "playwright test --config playwright.pwa.config.ts",
+    "test:browser:robber": "playwright test --config playwright.robber.config.ts"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.1.2",
