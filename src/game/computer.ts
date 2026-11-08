@@ -3,7 +3,7 @@ import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges,
   RESOURCES, resourceTotal, victoryTarget,
 } from "./engine";
-import { edgeTiles, isLand, isResource } from "./board";
+import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
 import { isSeafarers } from "./types";
 import type { GameAction, GameState, Resources } from "./types";
 
@@ -46,10 +46,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const tile = tiles.get(tileId)!;
     if (tile.terrain === "desert" || tile.number === null) return value;
     return value + (6 - Math.abs(tile.number - 7)) *
-      (tile.terrain === "gold" ? 1.8 : tile.terrain === "ore" || tile.terrain === "grain" ? 1.2 : 1) *
+      (tile.terrain === "gold" ? 2.4 : tile.terrain === "ore" || tile.terrain === "grain" ? 1.2 : 1) *
       (balance && isResource(tile.terrain) ? 1 / (1 + production[tile.terrain] / 6) : 1) *
       (balance ? 1 / (1 + (numberProduction.get(tile.number) ?? 0) / 18) : 1);
   }, 0) + (balance ? portValue(vertexId) : 0);
+  const revealedPortEdges = new Set(state.board.ports.filter(port => isPortRevealed(state.board, port)).map(port => port.edgeId));
   function portValue(vertexId: string): number {
     const local = emptyResources();
     for (const tileId of vertices.get(vertexId)!.tileIds) {
@@ -57,7 +58,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       if (isResource(tile.terrain) && tile.number !== null) local[tile.terrain] += 6 - Math.abs(tile.number - 7);
     }
     return state.board.ports.reduce((bonus, port) => {
-      const edge = edges.get(port.edgeId);
+      const edge = revealedPortEdges.has(port.edgeId) ? edges.get(port.edgeId) : undefined;
       if (!edge || !edge.vertexIds.includes(vertexId)) return bonus;
       if (port.resource === "any") return bonus + 0.8;
       const supply = production[port.resource] + local[port.resource];
@@ -70,7 +71,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         island && (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(island) : island !== "main") &&
         !state.board.vertices.some(vertex => vertex.building?.playerId === playerId &&
           vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2 : 0;
-  const explorationValue = (vertexId: string): number => state.variant === "fog-islands"
+  const explorationValue = (vertexId: string): number => state.variant === "fog-islands" || state.variant === "foggy-world"
     ? vertices.get(vertexId)!.tileIds.filter(id => tiles.get(id)!.terrain === "fog").length * 8 : 0;
   const bestVertex = (locations: string[], balance = true): string | undefined =>
     locations.toSorted((first, second) => (vertexValue(second, balance) + islandBonus(second) * 10) -
@@ -267,6 +268,14 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
   }
 
   return match(state.phase)
+    .with({ type: "reveal" }, (): GameAction => {
+      // Without peeking at the deck, prefer fog beside revealed land, which is most likely settleable.
+      const revealedVertices = new Set(state.board.tiles.filter(tile => tile.terrain !== "fog").flatMap(tile => tile.vertexIds));
+      const tile = state.board.tiles.filter(tile => tile.terrain === "fog")
+        .toSorted((first, second) => second.vertexIds.filter(id => revealedVertices.has(id)).length -
+          first.vertexIds.filter(id => revealedVertices.has(id)).length)[0]!;
+      return { type: "reveal-tile", tileId: tile.id };
+    })
     .with({ type: "setup-settlement" }, (): GameAction | null => {
       const vertexId = bestVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;
@@ -402,9 +411,14 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       if (target && deficit(player.resources, target.cost) === 0) return target.action;
       if (!state.computerTradeRequested && target) {
         const surplus = RESOURCES.reduce((total, resource) => total + Math.max(0, player.resources[resource] - target.cost[resource]), 0);
-        if (surplus >= deficit(player.resources, target.cost)) {
+        if (surplus >= 1) {
+          const missing = RESOURCES.filter(resource => target.cost[resource] > player.resources[resource]);
+          // A single-card request lets any opponent holding the resource complete the trade.
+          const scarce = missing.toSorted((first, second) =>
+            (target.cost[second] - player.resources[second]) / (1 + production[second]) -
+            (target.cost[first] - player.resources[first]) / (1 + production[first]))[0]!;
           const receive = emptyResources();
-          for (const resource of RESOURCES) receive[resource] = Math.max(0, target.cost[resource] - player.resources[resource]);
+          receive[scarce] = 1;
           return { type: "request-trade", receive };
         }
       }

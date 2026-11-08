@@ -1,7 +1,7 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
-export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands"] as const;
+export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world"] as const;
 export type GameVariant = typeof GAME_VARIANTS[number];
 export function isGameVariant(value: unknown): value is GameVariant {
   return GAME_VARIANTS.some(variant => variant === value);
@@ -43,7 +43,7 @@ export type Edge = {
   kind?: "road" | "ship";
 };
 export type Port = { edgeId: string; resource: Resource | "any" };
-export type FogDiscovery = { terrain: Resource | "sea" | "gold"; number: number | null };
+export type FogDiscovery = { terrain: Resource | "sea" | "gold" | "desert"; number: number | null };
 export type Board = {
   tiles: Tile[];
   vertices: Vertex[];
@@ -65,12 +65,14 @@ export type Player = {
 export type ExplorationResumePhase =
   | { type: "setup-settlement" }
   | { type: "setup-road"; vertexId: string }
+  | { type: "reveal" }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" };
 export type GamePhase =
   | { type: "setup-settlement" }
   | { type: "setup-road"; vertexId: string }
+  | { type: "reveal" }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }
@@ -124,6 +126,7 @@ export type GameState = {
 };
 export type GameAction =
   | { type: "place-settlement"; vertexId: string }
+  | { type: "reveal-tile"; tileId: string }
   | { type: "place-city"; vertexId: string }
   | { type: "place-road"; edgeId: string }
   | { type: "place-ship"; edgeId: string }

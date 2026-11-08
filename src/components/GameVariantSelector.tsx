@@ -7,12 +7,14 @@ export const GAME_VARIANT_LABELS = {
   seafarers: "Seafarers",
   "four-islands": "Four Islands",
   "fog-islands": "Fog Islands",
+  "foggy-world": "Foggy World",
 } as const satisfies Record<GameVariant, keyof typeof seafarersTranslations>;
 
 const SCENARIO_DESCRIPTIONS = {
   seafarers: "Main island setup. Discover three islands. First to 13 points wins.",
   "four-islands": "Start on any of four islands. Earn 2 bonus points per island not occupied by your starting settlements. First to 12 points wins.",
   "fog-islands": "Start on any revealed starting island. Explore fog with roads and ships and collect discovery resources. No island bonuses. First to 12 points wins.",
+  "foggy-world": "Every hex starts hidden under fog. Before each starting settlement, reveal fog hexes of your choice: sea grants nothing and lets you choose again. First to 12 points wins.",
 } as const;
 
 export function GameVariantSummary({ variant }: { variant: GameVariant }) {

@@ -93,6 +93,12 @@ All pieces, hands, rolls, trades, and pending actions are cleared. The room,
 invitation, seat credentials, and device preferences stay intact; disconnected
 players can rejoin their existing seats in the reset game. Player phones cannot
 reset the game. Cancelling leaves the current game unchanged.
+The host can also choose **Return to lobby** and confirm to end the current game
+at any time, not only after a victory: every connected screen returns to the
+lobby with the same island (including its map code and preview) and the same
+players, seats, and reconnect credentials, ready to admit changes and start
+again. All game progress is lost; player phones cannot return the room to the
+lobby. Cancelling leaves the current game unchanged.
 **Leave room** opens the existing confirmation: leaving as host ends the room for
 everyone, while leaving as a player keeps their seat reserved while the host stays
 open. Escape, clicking outside, or tabbing away dismisses the menu; closing its
@@ -278,8 +284,9 @@ an invitation in a reused tab.
 ## Room Lifetime And Limits
 
 Keep the host tab open and its device awake. Closing or refreshing the host loses
-the room and game; host migration, saved-game recovery, and an
-in-room rematch are not provided. Create a new room for another game.
+the room and game; host migration and saved-game recovery are not provided. Use
+**Game > Return to lobby** to end a game and start another on the same island
+with the same players in the same room.
 
 ## Deploy To Vercel
 

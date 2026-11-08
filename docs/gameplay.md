@@ -19,7 +19,8 @@ Under **Separate multiplayer setup**, **Play across devices** immediately hosts 
 board for phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
-1. Choose **Original** (the default), **Seafarers**, **Four Islands**, or **Fog Islands** under **Game version**,
+1. Choose **Original** (the default), **Seafarers**, **Four Islands**, **Fog Islands**, or
+   **Foggy World** under **Game version**,
    then three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
@@ -32,7 +33,7 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, 13 in Seafarers (Heading for New Shores),
-   or 12 in Four Islands or Fog Islands, on your own turn. Inspect the revealed score breakdown
+   or 12 in Four Islands, Fog Islands, or Foggy World, on your own turn. Inspect the revealed score breakdown
    and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
    game's **map code**.
 
@@ -120,10 +121,13 @@ Game version cannot change during play and is not saved across reloads.
   ship beside the pirate cannot move. Removing a ship cannot leave its destination
   connected only through the removed piece.
 - On a seven or Knight, choose a different land hex for the robber, a different
-  sea hex for the pirate, or **Move pirate off board**. The pirate steals from one
-  player with an adjacent ship; coastal buildings alone do not qualify. It prevents
-  building and moving ships on its hex, but does not break existing routes, block
-  ports, or stop land production. Knight can be cancelled before either token moves.
+  sea hex for the pirate, or **Move pirate off board**. The pirate chip to the
+  right of the **Theme** button indicates whether the pirate ship is on the
+  board and becomes the off-board move while the pirate can be moved. The pirate
+  steals from one player with an adjacent ship; coastal buildings alone do not
+  qualify. It prevents building and moving ships on its hex, but does not break
+  existing routes, block ports, or stop land production. Knight can be cancelled
+  before either token moves.
 - Gold fields produce any available bank resource: one card per settlement or two
   per city. Eligible players choose in turn order, starting with the active player;
   pass-and-play hands switch to the next chooser. Finish these choices before
@@ -172,9 +176,33 @@ Revealed land can then support settlements and produce normally. Neither robber
 nor pirate may enter unexplored fog. There are no island bonuses; win at 12 points
 on your own turn. Computer opponents explore without inspecting the hidden deck.
 
-Map codes reproduce each scenario's initial board and, for Fog Islands, discovery
+Map codes reproduce each scenario's initial board and, for Fog Islands and Foggy World, discovery
 deck; discoveries depend on which hexes are reached first. Multiplayer sends only
 revealed tiles and fog placeholders, never the hidden discovery deck.
+
+### Foggy World
+
+A 42-hex map begins completely covered by fog; nothing is revealed, not even
+the island. Harbors stay hidden with their coast hex: each harbor appears, and
+starts granting its trade ratio, only when the fog hex carrying it is revealed.
+The seeded
+discovery deck covers every hex: 26 resource hexes, two gold fields, one desert,
+and 13 sea hexes, with 28 number tokens. The robber and pirate both start off
+board and may enter revealed land or discovered sea on the first seven or Knight.
+
+Before each of the eight starting settlements, the placing player selects fog
+hexes of their choice, one at a time, until revealing land. A revealed sea hex
+grants nothing and the player selects again; resource land grants one matching
+bank card; gold grants one available resource of choice before settling; desert
+ends the reveal with nothing. Settlements may then be placed on any revealed
+land. Starting roads and ships also reveal adjacent fog with the same rewards.
+
+After setup, play follows the Fog Islands exploration rules: endpoints of newly
+built roads and ships, and moved ships, reveal adjacent fog with the same
+rewards; revealed land supports settlements and produces normally; neither
+robber nor pirate may enter fog. There are no island bonuses; win at 12 points
+on your own turn. Computer opponents select reveal hexes without inspecting the
+hidden deck.
 
 ## Board And Controls
 

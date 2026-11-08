@@ -14,7 +14,9 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
     ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach 12 points on your own turn to win."
     : variant === "fog-islands"
       ? "Place starting settlements on any revealed starting island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach 12 points on your own turn to win."
-      : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.";
+      : variant === "foggy-world"
+        ? "Before each starting settlement, reveal fog hexes of your choice. Sea grants nothing and lets you select again; resource land grants one matching bank card, gold grants one resource choice, and desert ends the reveal. Place the settlement on any revealed land. Each harbor appears only when the hex carrying it is revealed, and grants its trade ratio from then on. After setup, endpoints of newly placed roads or ships, and moved ships, reveal adjacent fog with the same rewards. Neither robber nor pirate may enter fog. There are no island bonuses. Reach 12 points on your own turn to win."
+        : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.";
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>
       <div className="space-y-8 text-sm leading-7 text-muted">

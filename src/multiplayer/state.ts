@@ -15,7 +15,7 @@ import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
-const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate"]);
+const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate", "reveal-tile"]);
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
   if (!condition) throw new GameError(message);
@@ -30,6 +30,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
   const phase = match(game.phase)
     .with({ type: "setup-settlement" }, () => ({ type: "setup-settlement" } as const))
     .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId } as const))
+    .with({ type: "reveal" }, () => ({ type: "reveal" } as const))
     .with({ type: "roll" }, () => ({ type: "roll" } as const))
     .with({ type: "actions" }, () => ({ type: "actions" } as const))
     .with({ type: "discard" }, phase => ({ type: "discard", required: { ...phase.required } } as const))
@@ -236,8 +237,8 @@ export class HostRoom {
   }
 
   endGame(): void {
+    // Any started game can be abandoned this way: the lobby keeps the same island and seats.
     requireRoom(this.game, "The game has not started.");
-    requireRoom(this.game.phase.type === "finished", "Finish the game before returning to the lobby.");
     this.game = null;
     this.gameId = null;
     this.initialGame = null;
@@ -299,6 +300,7 @@ export class HostRoom {
       .with({ type: "move-ship" }, action => this.buildMode === "move-ship" &&
         legalShipDestinations(game, game.activePlayerId, action.edgeId).includes(action.destinationEdgeId))
       .with({ type: "move-robber" }, action => targets.tiles.includes(action.tileId))
+      .with({ type: "reveal-tile" }, action => game.phase.type === "reveal" && targets.tiles.includes(action.tileId))
       .with({ type: "move-pirate" }, action => action.tileId === null
         ? isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
         : targets.tiles.includes(action.tileId))
@@ -380,6 +382,8 @@ export class HostRoom {
       targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
         ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
         : tile.id !== game.robberTileId)).map(tile => tile.id);
+    } else if (game.phase.type === "reveal") {
+      targets.tiles = game.board.tiles.filter(tile => tile.terrain === "fog").map(tile => tile.id);
     }
     return targets;
   }

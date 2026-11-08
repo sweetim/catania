@@ -723,28 +723,38 @@ describe("victory results and lobby return", () => {
     }
   });
 
-  test("endGame requires a finished game, then returns every screen to the lobby with seats intact", () => {
+  test("endGame works mid-game and returns every screen to the lobby with the same island and seats", () => {
+    expect(() => lobby().room.endGame()).toThrow("not started");
     const { room, credentials } = started();
-    expect(() => room.endGame()).toThrow("Finish the game");
-    room.game!.phase = { type: "finished" };
-    room.game!.winnerId = room.game!.activePlayerId;
+    // Progress does not block the return: hands, phases, and build modes are abandoned.
+    give(room.game!, room.game!.activePlayerId, { wood: 1, brick: 1 });
+    room.game!.phase = { type: "actions" };
+    room.buildMode = "road";
+    const mapSeed = room.snapshot().mapSeed!;
     const version = room.version;
     room.endGame();
     expect(room.version).toBe(version + 1);
     expect(room.game).toBeNull();
     expect(room.buildMode).toBeNull();
     // The lobby returns with its preview, connected seats and reconnectable credentials.
-    expect(room.snapshot().previewBoard).toBeDefined();
+    const preview = room.snapshot().previewBoard!;
+    expect(preview).toBeDefined();
+    expect(room.snapshot().mapSeed).toBe(mapSeed);
     expect(room.snapshot().players.map(player => player.name)).toEqual(["Ada", "Grace", "Linus"]);
-    expect(room.snapshot("connection-1").game).toBeNull();
-    expect(room.snapshot("connection-1").privatePlayer).toBeNull();
-    expect(room.snapshot("connection-1").privateScore).toBeNull();
-    expect(() => parseServerMessage({ type: "snapshot", snapshot: room.snapshot("connection-1") })).not.toThrow();
+    const phone = room.snapshot("connection-1");
+    expect(phone.game).toBeNull();
+    expect(phone.privatePlayer).toBeNull();
+    expect(phone.privateScore).toBeNull();
+    expect(phone.playerId).toBe("player-1");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: phone })).not.toThrow();
     room.disconnect("connection-1");
     room.join("replacement", { type: "join", secret, name: "Reconnected", credential: credentials[0]! });
     room.start();
+    // The restarted game uses the same island with the same seats.
     expect(room.game).not.toBeNull();
-    expect(() => room.endGame()).toThrow("Finish the game");
+    expect(room.game!.board).toEqual(preview);
+    expect(room.snapshot().mapSeed).toBe(mapSeed);
+    expect(room.snapshot("replacement").game!.players.map(player => player.name).toSorted()).toEqual(["Ada", "Grace", "Linus"]);
   });
 });
 

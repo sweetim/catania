@@ -94,6 +94,26 @@ describe("computer strategic planning", () => {
     expect(chooseAndApply(state).action).toEqual({ type: "place-settlement", vertexId: "balanced" });
   });
 
+  test("settles on a gold hex that can cover any shortage over richer fixed-resource spots", () => {
+    const state = strategicGame();
+    state.phase = { type: "setup-settlement" };
+    state.board.edges = [];
+    state.board.vertices = [
+      { id: "home", x: 0, y: 0, tileIds: ["ore", "grain"], edgeIds: [], building: { playerId: state.activePlayerId, kind: "settlement" } },
+      { id: "gold-spot", x: 0, y: 0, tileIds: ["gold", "desert"], edgeIds: [], building: null },
+      { id: "plain-spot", x: 0, y: 0, tileIds: ["wool", "wood"], edgeIds: [], building: null },
+    ];
+    state.board.tiles = [
+      { id: "ore", x: 0, y: 0, terrain: "ore", number: 8, vertexIds: ["home"] },
+      { id: "grain", x: 0, y: 0, terrain: "grain", number: 6, vertexIds: ["home"] },
+      { id: "gold", x: 0, y: 0, terrain: "gold", number: 8, vertexIds: ["gold-spot"] },
+      { id: "desert", x: 0, y: 0, terrain: "desert", number: null, vertexIds: ["gold-spot"] },
+      { id: "wool", x: 0, y: 0, terrain: "wool", number: 6, vertexIds: ["plain-spot"] },
+      { id: "wood", x: 0, y: 0, terrain: "wood", number: 8, vertexIds: ["plain-spot"] },
+    ];
+    expect(chooseAndApply(state).action).toEqual({ type: "place-settlement", vertexId: "gold-spot" });
+  });
+
   test("upgrades strong production before buying a weak reachable settlement", () => {
     const state = strategicGame();
     setResources(state, state.activePlayerId, resources({ wood: 1, brick: 1, wool: 1, grain: 3, ore: 3 }));
@@ -690,7 +710,9 @@ describe("computer-initiated player trades", () => {
   test.each([
     { inventory: resources({ wood: 1, grain: 2, ore: 2 }), receive: resources({ ore: 1 }) },
     { inventory: resources({ wood: 5 }), receive: resources({ brick: 1 }) },
-  ])("requests the selected build's missing cards when surplus can fund equal-count prices", ({ inventory, receive }) => {
+    { inventory: resources({ wool: 4, grain: 4 }), receive: resources({ wood: 1 }) },
+    { inventory: resources({ wool: 3, grain: 3 }), receive: resources({ ore: 1 }) },
+  ])("requests exactly one missing card for the selected build when surplus can pay", ({ inventory, receive }) => {
     const state = requestingGame(inventory);
     const before = structuredClone(state);
     expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "request-trade", receive });

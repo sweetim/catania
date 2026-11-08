@@ -78,6 +78,8 @@ export function parseAction(value: unknown): GameAction {
       valid = fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex"); break;
     case "place-road": case "place-ship":
       valid = fields(value, ["type", "edgeId"]) && identifier(value.edgeId, "edge"); break;
+    case "reveal-tile":
+      valid = fields(value, ["type", "tileId"]) && identifier(value.tileId, "tile"); break;
     case "move-ship":
       valid = fields(value, ["type", "edgeId", "destinationEdgeId"]) && identifier(value.edgeId, "edge") && identifier(value.destinationEdgeId, "edge"); break;
     case "move-pirate":
@@ -160,7 +162,7 @@ function privatePlayer(value: unknown): boolean {
 function phase(value: unknown): boolean {
   if (!record(value)) return false;
   switch (value.type) {
-    case "setup-settlement": case "roll": case "actions": case "finished": return fields(value, ["type"]);
+    case "setup-settlement": case "reveal": case "roll": case "actions": case "finished": return fields(value, ["type"]);
     case "setup-road": return fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex");
     case "discard": case "gold": return fields(value, ["type", "required"]) && record(value.required) && Object.entries(value.required).every(([key, count]) => identifier(key, "player") && integer(count, 47));
     case "robber": return fields(value, ["type", "returnPhase"]) && ["roll", "actions"].includes(value.returnPhase as string);
@@ -191,7 +193,7 @@ function publicGame(value: unknown): boolean {
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
-    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || (value.variant === "four-islands" && value.robberTileId === "")) &&
+    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || value.variant === "foggy-world") && value.robberTileId === "")) &&
     record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"], ["expiresAt"]) &&

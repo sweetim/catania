@@ -379,7 +379,7 @@ export function MultiplayerApp() {
   const [localError, setLocalError] = useState<keyof typeof multiplayerUiTranslations | "">("");
   const [qrCode, setQrCode] = useState("");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("illustrated");
-  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | "reset" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | "reset" | "lobby" | null>(null);
   const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [movingShip, setMovingShip] = useState<{ edgeId: string; version: number } | null>(null);
@@ -511,7 +511,9 @@ export function MultiplayerApp() {
   const currentSelection = selected?.version === snapshot?.version ? selected : null;
   const movingShipId = movingShip?.version === snapshot?.version && snapshot?.buildMode === "move-ship" ? movingShip?.edgeId : null;
   const selectedAction: GameAction | null = !currentSelection || !game ? null : match(currentSelection.kind)
-    .with("tile", (): GameAction => ({ type: game.board.tiles.find(tile => tile.id === currentSelection.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: currentSelection.id }))
+    .with("tile", (): GameAction => game.phase.type === "reveal"
+      ? { type: "reveal-tile", tileId: currentSelection.id }
+      : { type: game.board.tiles.find(tile => tile.id === currentSelection.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: currentSelection.id })
     .with("edge", (): GameAction => movingShipId
       ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: currentSelection.id }
       : { type: snapshot?.buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(currentSelection.id) ? "place-ship" : "place-road", edgeId: currentSelection.id })
@@ -547,6 +549,7 @@ export function MultiplayerApp() {
           { label: translateText("Help"), onSelect: () => setDialog("help") },
           ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
           ...(host && game ? [{ label: translateText("Reset game"), disabled, onSelect: () => setDialog("reset") }] : []),
+          ...(host && game ? [{ label: translateText("Return to lobby"), disabled, onSelect: () => setDialog("lobby") }] : []),
         ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
@@ -700,9 +703,13 @@ export function MultiplayerApp() {
                 routeChoice={isSeafarers(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
                   : undefined}
-                onMovePirateOffBoard={!disabled && activePlayer?.control === "human" && isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
-                  ? () => session.current?.perform({ type: "move-pirate", tileId: null }, snapshot.version) : undefined}
+                pirateIndicator={isSeafarers(game.variant) ? {
+                  onBoard: game.pirateTileId !== null,
+                  enabled: !disabled && activePlayer?.control === "human" && game.phase.type === "robber" && game.pirateTileId !== null,
+                  onSelect: () => session.current?.perform({ type: "move-pirate", tileId: null }, snapshot.version),
+                } : undefined}
                 legalVertexIds={snapshot.boardTargets.vertices} legalEdgeIds={movingShipId ? legalShipDestinations(game, game.activePlayerId, movingShipId) : snapshot.boardTargets.edges} legalTileIds={snapshot.boardTargets.tiles}
+                tileSelectionMode={game.phase.type === "reveal" ? "reveal" : "robber"}
                 interactive={!disabled && activePlayer?.control !== "computer" && !game.winnerId} selectedId={currentSelection?.id ?? movingShipId}
                 showBlockedSettlementLocations={boardSettings.showBlockedSettlementLocations} fillBoardWithWater={boardSettings.fillBoardWithWater}
                 rolledNumber={game.dice ? game.dice[0] + game.dice[1] : undefined}
@@ -713,7 +720,8 @@ export function MultiplayerApp() {
                     setSelected(null);
                   } else setSelected({ kind, id, version: snapshot.version });
                 }}
-                confirmation={selectedAction ? { title: selectedAction.type === "move-robber" ? translateText("Move the robber here?")
+                confirmation={selectedAction ? { title: selectedAction.type === "reveal-tile" ? translateText("Reveal this fog hex?")
+                  : selectedAction.type === "move-robber" ? translateText("Move the robber here?")
                   : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
                   : selectedAction.type === "move-ship" ? translateText("Move the ship here?")
                   : translateText("Confirm {piece}?", { piece: pieceName(language, selectedAction.type === "place-ship" ? "ship" : selectedAction.type === "place-road" ? "road" : selectedAction.type === "place-city" ? "city" : "settlement") }),
@@ -787,6 +795,18 @@ export function MultiplayerApp() {
             setMovingShip(null);
             setDialog(null);
           }}>{translateText("Reset game")}</button>
+        </div>
+      </Dialog>}
+      {dialog === "lobby" && host && game && <Dialog title={translateText("Return to the lobby?")} onClose={() => setDialog(null)}>
+        <p className="mb-5 text-sm leading-6">{translateText("End this game for everyone and return to the lobby with the same island and players. All current progress will be lost.")}</p>
+        <div className="flex gap-3">
+          <button className="button-secondary" onClick={() => setDialog(null)}>{translateText("Keep playing")}</button>
+          <button className="button-primary" disabled={disabled} onClick={() => {
+            session.current?.endGame();
+            setSelected(null);
+            setMovingShip(null);
+            setDialog(null);
+          }}>{translateText("Return to lobby")}</button>
         </div>
       </Dialog>}
       {dialog === "leave" && <Dialog title={translateText(host ? "Close this room?" : "Leave this room?")} onClose={() => setDialog(null)}>

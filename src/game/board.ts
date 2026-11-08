@@ -22,16 +22,30 @@ export function portAnchor(board: Board, port: Port): { x: number; y: number; po
   const x = (first.x + second.x) / 2;
   const y = (first.y + second.y) / 2;
   const distance = Math.hypot(x, y);
-  const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog")!;
-  const coastDistance = Math.hypot(x - land.x, y - land.y);
-  const directionX = isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
-  const directionY = isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
+  const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog");
+  // A Foggy World harbor may sit beside unrevealed fog; point its label away from the board center instead.
+  const coastDistance = land === undefined ? distance : Math.hypot(x - land.x, y - land.y);
+  const directionX = land !== undefined && isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
+  const directionY = land !== undefined && isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
   return { x, y, portX: x + directionX * 51, portY: y + directionY * 51 };
+}
+
+/** The land-side hex a harbor sits on: the coast hex whose reveal also reveals the harbor. */
+export function portHexId(board: Board, port: Port): string {
+  const edge = board.edges.find(edge => edge.id === port.edgeId)!;
+  const tiles = edgeTiles(board, edge);
+  return (tiles.find(tile => tile.terrain !== "sea" && tile.terrain !== "fog") ?? tiles.find(tile => tile.islandId === "main"))!.id;
+}
+
+/** In Foggy World a harbor stays hidden until the fog hex carrying it is revealed. */
+export function isPortRevealed(board: Board, port: Port): boolean {
+  return board.variant !== "foggy-world" ||
+    board.tiles.find(tile => tile.id === portHexId(board, port))!.terrain !== "fog";
 }
 
 /** Lists number-carrying tiles covered by a harbor label, so the board can offer a press-and-hold peek. */
 export function hiddenNumberTileIds(board: Board): string[] {
-  const anchors = board.ports.map(port => portAnchor(board, port));
+  const anchors = board.ports.filter(port => isPortRevealed(board, port)).map(port => portAnchor(board, port));
   return board.tiles
     .filter(tile => tile.terrain !== "fog" && tile.number !== null)
     .filter(tile => anchors.some(anchor => {
@@ -242,6 +256,25 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         "wood", "wood", "brick", "wool", "wool", "grain", "grain", "ore", "gold", "gold",
         ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
       ], random).map(terrain => ({ terrain, number: terrain === "sea" ? null : discoveryNumbers.pop()! }));
+    } else if (variant === "foggy-world") {
+      positions.length = 0;
+      terrain.length = 0;
+      // The hidden island only anchors the harbors; its hexes stay fog like the rest of the world.
+      for (const [column, row] of fogIslandLayout(random)) {
+        positions.push({ column, row, islandId: "main" });
+        terrain.push("fog");
+      }
+      const discoveryNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12, 6, 6, 8, 8,
+        2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
+      fogDiscoveryDeck = shuffle<FogDiscovery["terrain"]>([
+        "wood", "wood", "wood", "wood", "wood", "wood",
+        "brick", "brick", "brick", "brick",
+        "wool", "wool", "wool", "wool", "wool", "wool",
+        "grain", "grain", "grain", "grain", "grain", "grain",
+        "ore", "ore", "ore", "ore",
+        "gold", "gold", "desert",
+        ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
+      ], random).map(terrain => ({ terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()! }));
     } else {
       const islands = [
         [[1, -4], [2, -4]],
@@ -261,7 +294,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       for (let column = range[0]!; column <= range[1]!; column++) {
         if (positions.some(position => position.column === column && position.row === row)) continue;
         positions.push({ column, row });
-        terrain.push(variant === "fog-islands" ? "fog" : "sea");
+        terrain.push(variant === "fog-islands" || variant === "foggy-world" ? "fog" : "sea");
       }
     }
   }
@@ -307,7 +340,8 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
   const redTileTarget = variant === "seafarers" ? 6
-    : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23) : 4;
+    : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23)
+    : variant === "foggy-world" ? 0 : 4;
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
     if (redTiles.length === redTileTarget) return true;
@@ -355,7 +389,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   const portVertices = new Set<string>();
   const ports = portResources.map((resource, index) => {
     const start = (offset + Math.floor(index * boundary.length / 9)) % boundary.length;
-    const edge = variant === "four-islands" || variant === "fog-islands"
+    const edge = variant === "four-islands" || variant === "fog-islands" || variant === "foggy-world"
       ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
       : boundary[start]!;
     edge.vertexIds.forEach(id => portVertices.add(id));

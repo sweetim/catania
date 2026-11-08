@@ -22,10 +22,10 @@ bunx playwright install chromium
 
 Rule tests use injected randomness and cover legal and illegal actions, computer
 decisions, and complete AI games. Computer trading coverage includes once-per-turn
-requests, useful and affordable prices, computer-to-computer exchanges, hidden-hand
+single-card requests, useful and affordable prices, computer-to-computer exchanges, hidden-hand
 privacy, exact 15-second deadlines, and resuming maritime trades after withdrawal.
-Strategic regressions check complementary setup production, productive city
-upgrades, production-aware waiting versus immediate purchases, goal-aligned
+Strategic regressions check complementary setup production, gold-hex settlement
+preference, productive city upgrades, production-aware waiting versus immediate purchases, goal-aligned
 bank trades/discards/gold, alternative trade goals, selective development cards,
 winning builds and route awards, and public-leader targeting without hidden-card
 access. Seeded complete games verify legal, finite actions and resource conservation.

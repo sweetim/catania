@@ -23,6 +23,8 @@ export const multiplayerUiTranslations = {
   "Reset game": "ゲームをリセット",
   "Reset this game?": "ゲームをリセットしますか？",
   "Restart from the first settlement on the same island with the same players. All current progress will be lost.": "同じ島とプレイヤーで最初の開拓地の配置からやり直します。現在の進行状況はすべて失われます。",
+  "Return to the lobby?": "ロビーに戻りますか？",
+  "End this game for everyone and return to the lobby with the same island and players. All current progress will be lost.": "このゲームを全員分終了して、同じ島と同じプレイヤーのままロビーに戻ります。現在の進行状況はすべて失われます。",
   "Save name": "名前を保存",
   "The game changed. Close and reopen this dialog to review the latest state.": "ゲームの状況が変わりました。この画面を閉じて開き直し、最新の状況を確認してください。",
   "The island is in motion.": "島の物語が進んでいます。",

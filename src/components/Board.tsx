@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
-import { edgeTiles, hiddenNumberTileIds, isResource, portAnchor } from "../game/board";
+import { edgeTiles, hiddenNumberTileIds, isPortRevealed, isResource, portAnchor } from "../game/board";
 import { type Board as BoardState, type Player, type Terrain, type Tile } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -91,10 +91,11 @@ export function Board({
   robberTileId,
   pirateTileId,
   routeMode,
-  onMovePirateOffBoard,
+  pirateIndicator,
   legalVertexIds = [],
   legalEdgeIds = [],
   legalTileIds = [],
+  tileSelectionMode,
   showBlockedSettlementLocations = false,
   fillBoardWithWater = false,
   producingTileIds = [],
@@ -115,7 +116,12 @@ export function Board({
   robberTileId?: string;
   pirateTileId?: string | null;
   routeMode?: "road" | "ship" | "move-ship" | null;
-  onMovePirateOffBoard?: () => void;
+  tileSelectionMode?: "robber" | "reveal";
+  pirateIndicator?: {
+    onBoard: boolean;
+    enabled: boolean;
+    onSelect: () => void;
+  };
   legalVertexIds?: string[];
   legalEdgeIds?: string[];
   legalTileIds?: string[];
@@ -211,8 +217,10 @@ export function Board({
     (legalTiles.has(tile.id) && (selectedId === tile.id || focusedId === tile.id)),
   ).map((tile) => tile.id));
   const blockedVertices = showBlockedSettlementLocations ? blockedSettlementVertices(board) : [];
+  const visiblePorts = board.ports.filter(port => isPortRevealed(board, port));
   const hiddenNumberIds = new Set(hiddenNumberTileIds(board));
   const peekedTile = peekedTileId === null ? undefined : board.tiles.find(tile => tile.id === peekedTileId);
+  const peekedTileRaised = peekedTile !== undefined && raisedTileIds.has(peekedTile.id);
   const mapWidth = fit
     ? Math.min(viewportSize.width, (viewportSize.height * viewWidth) / viewHeight)
     : viewportSize.width;
@@ -514,7 +522,7 @@ export function Board({
               {translateText(canSelect
                 ? "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Highlighted locations can be selected with Enter or Space."
                 : "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Read-only board.",
-              { tiles: board.tiles.length, ports: board.ports.length })}
+              { tiles: board.tiles.length, ports: visiblePorts.length })}
             </desc>
             <defs>
               <radialGradient
@@ -826,6 +834,7 @@ export function Board({
                const matchesRoll = number !== null && number === rolledNumber;
                const blocked = matchesRoll && robberTileId === tile.id;
                const raised = raisedTileIds.has(tile.id);
+               const peekingThisTile = peekedTileId === tile.id && hiddenNumberIds.has(tile.id);
                const fogRevealGeneration = fogReveals.generations.get(tile.id);
                const fogRevealVeilKey = fogRevealGeneration === undefined
                  ? null
@@ -883,7 +892,7 @@ export function Board({
                   >
                     {getTerrainName(theme, tile.terrain, language).toUpperCase()}
                   </text>
-                  {number !== null && (
+                  {number !== null && !peekingThisTile && (
                     <NumberToken
                       x={tile.x}
                       y={tile.y}
@@ -951,7 +960,7 @@ export function Board({
                 ))}
             </g>
 
-            {board.ports.map((port) => {
+            {visiblePorts.map((port) => {
               const { x, y, portX, portY } = portAnchor(board, port);
               const ratio = port.resource === "any" ? "3:1" : "2:1";
               return (
@@ -1073,7 +1082,12 @@ export function Board({
              })}
 
             {peekedTile && hiddenNumberIds.has(peekedTile.id) && peekedTile.number !== null && (
-              <g className="number-peek" aria-hidden="true" pointerEvents="none">
+              <g
+                className={`number-peek${peekedTileRaised ? " terrain-hex-raised" : ""}`}
+                transform={peekedTileRaised ? `translate(0 ${-tileElevation})` : undefined}
+                aria-hidden="true"
+                pointerEvents="none"
+              >
                 <NumberToken
                   x={peekedTile.x}
                   y={peekedTile.y}
@@ -1083,29 +1097,6 @@ export function Board({
                 />
               </g>
             )}
-            {board.tiles
-              .filter(tile => hiddenNumberIds.has(tile.id))
-              .map(tile => (
-                <circle
-                  key={`number-peek-${tile.id}`}
-                  cx={tile.x}
-                  cy={tile.y + 2}
-                  r="20"
-                  fill="transparent"
-                  className="number-peek-target cursor-pointer outline-none"
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={peekedTileId === tile.id}
-                  aria-label={`${tileDescription(tile)}. ${translateText("Toggle to reveal the number hidden by this harbor")}`}
-                  onClick={() => setPeekedTileId(current => current === tile.id ? null : tile.id)}
-                  onKeyDown={event => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      if (!event.repeat) setPeekedTileId(current => current === tile.id ? null : tile.id);
-                    }
-                  }}
-                />
-              ))}
 
             {board.tiles
               .filter((tile) => legalTiles.has(tile.id))
@@ -1124,7 +1115,7 @@ export function Board({
                     {...targetProperties(
                       "tile",
                       tile.id,
-                      tile.terrain === "sea" ? translateText("Move pirate to sea") : translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
+                      tileSelectionMode === "reveal" ? translateText("Reveal fog hex at {location}", { location: tile.id }) : tile.terrain === "sea" ? translateText("Move pirate to sea") : translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
                         resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
                       }),
                     )}
@@ -1528,6 +1519,29 @@ export function Board({
                   </g>
                 );
               })}
+            {board.tiles
+              .filter(tile => hiddenNumberIds.has(tile.id))
+              .map(tile => (
+                <circle
+                  key={`number-peek-${tile.id}`}
+                  cx={tile.x}
+                  cy={tile.y + 2}
+                  r="20"
+                  fill="transparent"
+                  className="number-peek-target cursor-pointer outline-none"
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={peekedTileId === tile.id}
+                  aria-label={`${tileDescription(tile)}. ${translateText("Toggle to reveal the number hidden by this harbor")}`}
+                  onClick={() => setPeekedTileId(current => current === tile.id ? null : tile.id)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      if (!event.repeat) setPeekedTileId(current => current === tile.id ? null : tile.id);
+                    }
+                  }}
+                />
+              ))}
           </svg>
         </div>
       </div>
@@ -1575,13 +1589,10 @@ export function Board({
         className={`board-controls flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
         {routeChoice && <div className="basis-full">{routeChoice}</div>}
-        {onMovePirateOffBoard && <button className="button-secondary mr-auto px-2 text-xs" onClick={onMovePirateOffBoard}>
-          {translateText("Move pirate off board")}
-        </button>}
         {onChangeTheme && (
           <button
             type="button"
-            className={`board-theme-button ${victoryTarget === undefined ? "mr-auto" : ""}`}
+            className={`board-theme-button ${victoryTarget === undefined && !pirateIndicator ? "mr-auto" : ""}`}
             onClick={onChangeTheme}
             aria-label={translateText("Change theme")}
             aria-haspopup="dialog"
@@ -1592,6 +1603,21 @@ export function Board({
               <circle cx="7.5" cy="10" r="1" /><circle cx="11" cy="6.5" r="1" /><circle cx="16" cy="8" r="1" /><circle cx="7.5" cy="15" r="1" />
             </svg>
             <span className="board-theme-label">{translateText("Theme")}</span>
+          </button>
+        )}
+        {pirateIndicator && (
+          <button
+            type="button"
+            className="button-secondary px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white/50"
+            disabled={!pirateIndicator.enabled}
+            onClick={pirateIndicator.onSelect}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+              <path d="M4 15h16l-2.5 4h-11Z" />
+              <path d="M12 15V4" />
+              <path d="M12 4l6 8h-6Z" />
+            </svg>
+            <span>{translateText(pirateIndicator.onBoard ? "Move pirate off board" : "Pirate off board")}</span>
           </button>
         )}
         {victoryTarget !== undefined && (

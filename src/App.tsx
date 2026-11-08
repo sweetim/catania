@@ -441,7 +441,7 @@ export function App() {
       !(next.phase.type === "discard" && (next.phase.required[viewerId ?? ""] ?? 0) > 0)) return;
     if (game?.phase.type === "roll" && next.phase.type === "actions") return;
     setMobileView(
-      ["setup-settlement", "setup-road", "road-building", "robber"].includes(
+      ["setup-settlement", "setup-road", "reveal", "road-building", "robber"].includes(
         next.phase.type,
       )
         ? "board"
@@ -581,18 +581,22 @@ export function App() {
         : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =
-    game && viewer && isActive && !rollBusy && game.phase.type === "robber"
-      ? game.board.tiles
-          .filter((tile) => tile.terrain !== "fog" && (tile.terrain === "sea"
-            ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
-            : tile.id !== game.robberTileId))
-          .map((tile) => tile.id)
+    game && viewer && isActive && !rollBusy && (game.phase.type === "robber" || game.phase.type === "reveal")
+      ? game.phase.type === "reveal"
+        ? game.board.tiles.filter((tile) => tile.terrain === "fog").map((tile) => tile.id)
+        : game.board.tiles
+            .filter((tile) => tile.terrain !== "fog" && (tile.terrain === "sea"
+              ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
+              : tile.id !== game.robberTileId))
+            .map((tile) => tile.id)
       : [];
   const selectedAction: GameAction | null =
     !selected || !game
       ? null
       : selected.kind === "tile"
-        ? { type: game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
+        ? game.phase.type === "reveal"
+          ? { type: "reveal-tile", tileId: selected.id }
+          : { type: game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
         : selected.kind === "edge"
           ? buildMode === "move-ship" && movingShipId
             ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
@@ -1023,6 +1027,7 @@ export function App() {
                   [
                     "setup-settlement",
                     "setup-road",
+                    "reveal",
                     "road-building",
                     "robber",
                   ].includes(game.phase.type)
@@ -1083,8 +1088,14 @@ export function App() {
                   routeChoice={isActive && isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                     ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
                     : undefined}
-                  onMovePirateOffBoard={isActive && !rollBusy && isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
-                    ? () => perform({ type: "move-pirate", tileId: null }) : undefined}
+                  pirateIndicator={isSeafarers(game.variant) ? {
+                    onBoard: game.pirateTileId !== null,
+                    enabled: isActive && !rollBusy && game.phase.type === "robber",
+                    onSelect: () => {
+                      if (game.pirateTileId !== null) perform({ type: "move-pirate", tileId: null });
+                      else setError("Move the robber or pirate.");
+                    },
+                  } : undefined}
                   showBlockedSettlementLocations={showBlockedSettlementLocations}
                   fillBoardWithWater={fillBoardWithWater}
                   producingTileIds={producingTileIds}
@@ -1095,10 +1106,11 @@ export function App() {
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
+                  tileSelectionMode={game.phase.type === "reveal" ? "reveal" : "robber"}
                   selectedId={selected?.id ?? movingShipId}
                   confirmation={selectedAction && selected ? {
                     title: selected.kind === "tile"
-                      ? translateText(selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
+                      ? translateText(selectedAction.type === "reveal-tile" ? "Reveal this fog hex?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
                       : selected.kind === "edge"
                         ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
                         : buildMode === "city"
@@ -1412,7 +1424,7 @@ export function App() {
                     <span className="shrink-0 text-xs font-medium text-muted"> - {translateText(isActive ? "Your turn" : "Their turn")}</span>
                   </h2>
                   <span className="turn-number">
-                    {game.phase.type.startsWith("setup") ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
+                    {game.phase.type.startsWith("setup") || game.phase.type === "reveal" ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
                   </span>
                   {!game.winnerId && gameMenu}
                 </div>

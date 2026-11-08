@@ -320,7 +320,7 @@ async function expectPhase(pages: Page[], phase: string, activePlayer: string) {
   }
 }
 
-async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Leave room") {
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Return to lobby" | "Leave room") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -496,6 +496,73 @@ for (const variant of ["original", "seafarers"] as const) {
   });
 }
 
+test("host Return to lobby ends a running game for everyone with the same island and players", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const mapCodeInput = host.getByLabel("Map code", { exact: true });
+  const mapCode = await mapCodeInput.inputValue();
+  const names = ["Ada", "Grace", "Linus"];
+  const phones: Page[] = [];
+  for (const name of names) {
+    const phone = await multiplayer.newPage(name, true);
+    phones.push(phone);
+    await requestSeat(phone, invitation, name);
+    await host.getByRole("button", { name: `Admit ${name}`, exact: true }).click();
+  }
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  for (const phone of phones) await expect(phone.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  const initial = await latestSnapshot(phones[0]!);
+  const credentials = await Promise.all(phones.map(phone => phone.evaluate(() => Object.entries(sessionStorage))));
+  await host.getByRole("button", { name: /^Place settlement at/ }).first().click();
+  await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-road");
+  const progressed = await latestSnapshot(phones[0]!);
+  expect(progressed.game!.board.vertices.some(vertex => vertex.building)).toBe(true);
+
+  for (const phone of phones) {
+    await phone.getByRole("button", { name: "Game", exact: true }).click();
+    await expect(phone.getByRole("button", { name: "Return to lobby", exact: true })).toHaveCount(0);
+    await phone.keyboard.press("Escape");
+  }
+
+  await chooseGameOption(host, "Return to lobby");
+  const confirmation = host.getByRole("dialog", { name: "Return to the lobby?", exact: true });
+  await expect(confirmation).toContainText("same island and players");
+  await expect(confirmation).toBeInViewport({ ratio: 1 });
+  await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-road");
+  expect((await latestSnapshot(phones[0]!)).version).toBe(progressed.version);
+
+  await chooseGameOption(host, "Return to lobby");
+  await screenshot(host, testInfo, "host-return-to-lobby-confirmation");
+  await confirmation.getByRole("button", { name: "Return to lobby", exact: true }).click();
+  await expect(host.getByRole("heading", { name: "Scan. Join. Settle in.", exact: true })).toBeVisible();
+  // The lobby keeps the same island and roster.
+  await expect(mapCodeInput).toHaveValue(mapCode);
+  await expect(host.getByRole("list", { name: "Players", exact: true })).toContainText("Ada");
+  for (const [index, phone] of phones.entries()) {
+    const lobby = await latestSnapshot(phone);
+    expect(lobby.game).toBeNull();
+    expect(lobby.version).toBe(progressed.version + 1);
+    expect(lobby.players.map(player => player.name)).toEqual(names);
+    expect(lobby.playerId).toBe(initial.players[index]!.id);
+    expect(await phone.evaluate(() => Object.entries(sessionStorage))).toEqual(credentials[index]);
+    await expect(phone.getByRole("heading", { name: `Welcome, ${names[index]}.`, exact: true })).toBeVisible();
+    await expect(phone.getByText("Your seat is reserved. The host will start when everyone is connected.", { exact: true })).toBeVisible();
+  }
+
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  await expect.poll(async () => (await latestSnapshot(phones[0]!)).game?.phase.type).toBe("setup-settlement");
+  const restarted = await latestSnapshot(phones[0]!);
+  await expectPhase([host, ...phones], "setup-settlement",
+    restarted.game!.players.find(player => player.id === restarted.game!.activePlayerId)!.name);
+  expect(restarted.game!.board).toEqual(initial.game!.board);
+  expect(restarted.game!.gameId).not.toBe(initial.game!.gameId);
+  for (const phone of phones) await expect(phone.getByRole("region", { name: "Dice tray", exact: true })).toBeVisible();
+});
+
 test("room Game menu shares navigation and preserves host and player leave behavior", async ({ multiplayer, isMobile }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
@@ -515,7 +582,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
 
   for (const [name, page, options] of [
-    ["host", host, ["Help", "Settings", "Reset game", "Leave room"]],
+    ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Leave room"]],
     ["phone", phone, ["Help", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });

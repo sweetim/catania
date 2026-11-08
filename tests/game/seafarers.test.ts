@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard, edgeTiles, seededRandom } from "../../src/game/board";
+import { createBoard, edgeTiles, isPortRevealed, portAnchor, portHexId, seededRandom } from "../../src/game/board";
 import { chooseComputerAction, getController } from "../../src/game/computer";
 import {
-  applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, legalRoadEdges,
+  applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalRoadEdges,
   legalSettlementVertices, legalShipDestinations, legalShipEdges, movableShipEdges, RESOURCES, resourceTotal,
 } from "../../src/game/engine";
 import type { GameAction, GameState, Player, Resources } from "../../src/game/types";
@@ -177,6 +177,227 @@ describe("Fog Islands exploration", () => {
     expect(state.players.find(player => player.id === playerId)!.resources.wood).toBe(terrain === "sea" ? 0 : discoveries.length);
     assertConservation(state);
   });
+});
+
+describe("Foggy World", () => {
+  test("covers every hex with fog and a matching 42-entry discovery deck", () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const board = createBoard(randomFromSeed(seed), "foggy-world");
+      expect(board.variant).toBe("foggy-world");
+      expect(board.tiles).toHaveLength(42);
+      expect(board.tiles.every(tile => tile.terrain === "fog")).toBe(true);
+      expect(board.tiles.filter(tile => tile.islandId === "main")).toHaveLength(19);
+      expect(board.ports).toHaveLength(9);
+      const deck = board.fogDiscoveryDeck!;
+      expect(deck).toHaveLength(42);
+      expect(Object.fromEntries(["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"].map(terrain =>
+        [terrain, deck.filter(discovery => discovery.terrain === terrain).length])))
+        .toEqual({ wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13 });
+      expect(deck.filter(discovery => discovery.terrain === "sea" || discovery.terrain === "desert")
+        .every(discovery => discovery.number === null)).toBe(true);
+      expect(deck.filter(discovery => discovery.number !== null).flatMap(discovery => discovery.number === null ? [] : [discovery.number]).sort((first, second) => first - second))
+        .toEqual([2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12]);
+      // Harbor labels anchor outward while everything is fog, so the preview renders.
+      for (const port of board.ports) expect(portAnchor(board, port).portX).toBeDefined();
+    }
+    expect(createBoard(seededRandom("6SMHDES6"), "foggy-world")).toEqual(createBoard(seededRandom("6SMHDES6"), "foggy-world"));
+  });
+
+  test("the reveal step repeats on sea and settles on the first land, gold defers a choice", () => {
+    const start = () => {
+      const state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "foggy-world");
+      expect(state.phase.type).toBe("reveal");
+      expect(state.pirateTileId).toBeNull();
+      expect(state.robberTileId).toBe("");
+      return state;
+    };
+    const playerId = start().activePlayerId;
+
+    let state = start();
+    state.board.fogDiscoveryDeck = [{ terrain: "sea", number: null }, { terrain: "wood", number: 5 }];
+    const firstFog = state.board.tiles.find(tile => tile.terrain === "fog")!;
+    state = applyAction(state, playerId, { type: "reveal-tile", tileId: firstFog.id });
+    expect(state.phase.type).toBe("reveal");
+    expect(state.activePlayerId).toBe(playerId);
+    expect(state.board.tiles.find(tile => tile.id === firstFog.id)!.terrain).toBe("sea");
+    expect(state.players.find(player => player.id === playerId)!.resources).toEqual(emptyResources());
+    expect(() => applyAction(state, playerId, { type: "reveal-tile", tileId: firstFog.id })).toThrow("unexplored fog");
+    const secondFog = state.board.tiles.find(tile => tile.terrain === "fog" && tile.id !== firstFog.id)!;
+    state = applyAction(state, playerId, { type: "reveal-tile", tileId: secondFog.id });
+    expect(state.phase.type).toBe("setup-settlement");
+    expect(state.board.tiles.find(tile => tile.id === secondFog.id)).toMatchObject({ terrain: "wood", number: 5 });
+    expect(state.players.find(player => player.id === playerId)!.resources).toEqual(resources({ wood: 1 }));
+    expect(state.board.fogDiscoveryDeck).toHaveLength(0);
+    assertConservation(state);
+
+    state = start();
+    state.board.fogDiscoveryDeck = [{ terrain: "gold", number: 6 }];
+    state = applyAction(state, playerId, { type: "reveal-tile", tileId: state.board.tiles.find(tile => tile.terrain === "fog")!.id });
+    expect(state.phase).toMatchObject({ type: "gold", required: { [playerId]: 1 } });
+    state = applyAction(state, playerId, { type: "choose-gold", resources: resources({ ore: 1 }) });
+    expect(state.phase.type).toBe("setup-settlement");
+    expect(state.players.find(player => player.id === playerId)!.resources).toEqual(resources({ ore: 1 }));
+    assertConservation(state);
+
+    state = start();
+    state.board.fogDiscoveryDeck = [{ terrain: "desert", number: null }];
+    state = applyAction(state, playerId, { type: "reveal-tile", tileId: state.board.tiles.find(tile => tile.terrain === "fog")!.id });
+    expect(state.phase.type).toBe("setup-settlement");
+    expect(state.players.find(player => player.id === playerId)!.resources).toEqual(emptyResources());
+    expect(() => applyAction(state, playerId, { type: "reveal-tile", tileId: state.board.tiles.find(tile => tile.terrain === "fog")!.id }))
+      .toThrow("before placing");
+  });
+
+  test.each([3, 4])("varied worlds support a complete %s-player setup with reveal steps", playerCount => {
+    function resolveMandatory(current: GameState): GameState {
+      while (current.phase.type === "gold" || current.phase.type === "reveal") {
+        if (current.phase.type === "gold") {
+          const chooser = Object.keys(current.phase.required)[0]!;
+          const amount = current.phase.required[chooser]!;
+          const resource = RESOURCES.find(resource => current.bank[resource] >= amount)!;
+          current = applyAction(current, chooser, { type: "choose-gold", resources: resources({ [resource]: amount }) });
+        } else {
+          current = applyAction(current, current.activePlayerId,
+            { type: "reveal-tile", tileId: current.board.tiles.find(tile => tile.terrain === "fog")!.id });
+        }
+      }
+      return current;
+    }
+    for (let seed = 0; seed < 10; seed++) {
+      let state = createGame(profiles.slice(0, playerCount), randomFromSeed(seed), undefined, "foggy-world");
+      for (let placement = 0; placement < playerCount * 2; placement++) {
+        state = resolveMandatory(state);
+        expect(state.phase.type).toBe("setup-settlement");
+        const playerId = state.activePlayerId;
+        const vertexId = legalSettlementVertices(state, playerId)[0]!;
+        expect(vertexId).toBeDefined();
+        state = applyAction(state, playerId, { type: "place-settlement", vertexId });
+        const roadId = legalRoadEdges(state, playerId)[0];
+        state = applyAction(state, playerId, roadId
+          ? { type: "place-road", edgeId: roadId }
+          : { type: "place-ship", edgeId: legalShipEdges(state, playerId)[0]! });
+      }
+      state = resolveMandatory(state);
+      expect(state.phase.type).toBe("roll");
+      expect(state.board.vertices.filter(vertex => vertex.building)).toHaveLength(playerCount * 2);
+      expect(state.board.tiles.filter(tile => tile.terrain !== "fog").length).toBeGreaterThanOrEqual(playerCount * 2);
+      assertConservation(state);
+    }
+  });
+
+  test("setup routes still explore adjacent fog and pass the turn into the next player's reveal step", () => {
+    let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "foggy-world");
+    const playerId = state.activePlayerId;
+    while (state.phase.type === "reveal") {
+      state = applyAction(state, playerId, { type: "reveal-tile", tileId: state.board.tiles.find(tile => tile.terrain === "fog")!.id });
+    }
+    state.board.fogDiscoveryDeck = state.board.fogDiscoveryDeck!.slice(0, 1).map(() => ({ terrain: "wood" as const, number: 5 }));
+    const vertexId = legalSettlementVertices(state, playerId).find(id =>
+      state.board.vertices.find(vertex => vertex.id === id)!.tileIds
+        .some(tileId => state.board.tiles.find(tile => tile.id === tileId)!.terrain === "fog"))!;
+    state = applyAction(state, playerId, { type: "place-settlement", vertexId });
+    const edgeId = legalShipEdges(state, playerId).find(id => {
+      const edge = state.board.edges.find(edge => edge.id === id)!;
+      return edge.vertexIds.includes(vertexId) && state.board.tiles.some(tile => tile.terrain === "fog" &&
+        tile.vertexIds.some(id => edge.vertexIds.includes(id)));
+    })!;
+    expect(edgeId).toBeDefined();
+    state = applyAction(state, playerId, { type: "place-ship", edgeId });
+    expect(state.setupIndex).toBe(1);
+    expect(state.activePlayerId).toBe(state.setupOrder[1]!);
+    expect(state.phase.type).toBe("reveal");
+    expect(state.board.tiles.filter(tile => tile.terrain === "fog").length).toBeLessThan(42);
+    expect(state.board.fogDiscoveryDeck).toHaveLength(0);
+    assertConservation(state);
+  });
+
+  test("harbors stay hidden until their own coast hex is revealed, then grant their trade ratio", () => {
+    let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "foggy-world");
+    const playerId = state.activePlayerId;
+    expect(state.board.ports.every(port => !isPortRevealed(state.board, port))).toBe(true);
+    const fogIslands = createBoard(randomFromSeed(1), "fog-islands");
+    expect(fogIslands.ports.every(port => isPortRevealed(fogIslands, port))).toBe(true);
+    const port = state.board.ports.find(port => port.resource !== "any") ?? state.board.ports[0]!;
+    const tradedResource = port.resource === "any" ? "wood" : port.resource;
+    const hexId = portHexId(state.board, port);
+    expect(state.board.tiles.find(tile => tile.id === hexId)!.terrain).toBe("fog");
+    const edge = state.board.edges.find(edge => edge.id === port.edgeId)!;
+    state.board.vertices.find(vertex => vertex.id === edge.vertexIds[0])!.building = { playerId, kind: "settlement" };
+    expect(getTradeRatio(state, playerId, tradedResource)).toBe(4);
+    state.phase = { type: "reveal" };
+    state.board.fogDiscoveryDeck = [{ terrain: "sea", number: null }];
+    state = applyAction(state, playerId, { type: "reveal-tile", tileId: hexId });
+    expect(isPortRevealed(state.board, port)).toBe(true);
+    expect(getTradeRatio(state, playerId, tradedResource)).toBe(port.resource === "any" ? 3 : 2);
+  });
+
+  test("robber and pirate start off board and may enter only revealed hexes", () => {
+    const state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "foggy-world");
+    state.phase = { type: "robber", returnPhase: "actions" };
+    const playerId = state.activePlayerId;
+    const fog = state.board.tiles.find(tile => tile.terrain === "fog")!;
+    expect(() => applyAction(state, playerId, { type: "move-robber", tileId: fog.id })).toThrow("land hex");
+    expect(() => applyAction(state, playerId, { type: "move-pirate", tileId: fog.id })).toThrow("sea hex");
+    const revealed = structuredClone(state);
+    const land = revealed.board.tiles[0]!;
+    land.terrain = "wood";
+    land.number = 5;
+    const sea = revealed.board.tiles[1]!;
+    sea.terrain = "sea";
+    expect(applyAction(revealed, playerId, { type: "move-robber", tileId: land.id }).robberTileId).toBe(land.id);
+    expect(applyAction(revealed, playerId, { type: "move-pirate", tileId: sea.id }).pirateTileId).toBe(sea.id);
+  });
+
+  test("hosts reveal on the shared board only, while the discovery deck stays hidden from phones", () => {
+    const room = new HostRoom("secret");
+    for (let index = 0; index < 3; index++) {
+      room.join(`phone-${index + 1}`, { type: "join", secret: "secret", name: profiles[index]!.name });
+      room.admit(`phone-${index + 1}`);
+    }
+    room.setVariant("foggy-world");
+    const preview = room.snapshot().previewBoard!;
+    expect(preview.tiles.every(tile => tile.terrain === "fog")).toBe(true);
+    expect("fogDiscoveryDeck" in preview).toBe(false);
+    room.start();
+    expect(room.game!.phase.type).toBe("reveal");
+    const playerId = room.game!.activePlayerId;
+    const connection = playerId.replace("player-", "phone-");
+    const target = room.snapshot().boardTargets.tiles[0]!;
+    expect(room.game!.board.tiles.find(tile => tile.id === target)!.terrain).toBe("fog");
+    expect(room.command(connection, { type: "action", requestId: "reveal", version: room.version, action: { type: "reveal-tile", tileId: target } }).error).not.toBeNull();
+    room.performBoard({ type: "reveal-tile", tileId: target });
+    const revealed = room.game!.board.tiles.find(tile => tile.id === target)!;
+    expect(revealed.terrain).not.toBe("fog");
+    expect(room.game!.board.fogDiscoveryDeck).toHaveLength(41);
+    expect(["reveal", "setup-settlement"]).toContain(room.game!.phase.type);
+    const snapshot = room.snapshot(connection);
+    expect(parseServerMessage({ type: "snapshot", snapshot })).toEqual({ type: "snapshot", snapshot });
+    expect("fogDiscoveryDeck" in snapshot.game!.board).toBe(false);
+    expect(parseAction({ type: "reveal-tile", tileId: "tile-41" })).toEqual({ type: "reveal-tile", tileId: "tile-41" });
+    expect(() => parseAction({ type: "reveal-tile", tileId: "tile-41", unexpected: true })).toThrow("unexpected");
+  });
+
+  test("three computers finish a legal foggy world game at twelve points", () => {
+    const random = randomFromSeed(3);
+    let state = createGame(profiles.slice(0, 3).map(profile => ({ ...profile, control: "computer" })), random, undefined, "foggy-world");
+    let actions = 0;
+    let reveals = 0;
+    while (!state.winnerId && actions < 10000) {
+      const decision = state.players.map(player => ({ playerId: player.id, action: chooseComputerAction(state, player.id) }))
+        .find(decision => decision.action);
+      const playerId = decision!.playerId;
+      const action = decision!.action;
+      expect(action).not.toBeNull();
+      if (!action) break;
+      if (action.type === "reveal-tile") reveals++;
+      state = applyAction(state, playerId, action, random);
+      assertConservation(state);
+      actions++;
+    }
+    expect(state.winnerId).not.toBeNull();
+    expect(reveals).toBeGreaterThan(0);
+    expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
+  }, 60000);
 });
 
 describe("ships and shipping routes", () => {

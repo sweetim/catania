@@ -39,6 +39,10 @@ export function getPhaseInstructions({
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
+    .with({ type: "reveal" }, () => ({
+      title: translateText("Step into the fog."),
+      description: translateText("Select a fog hex to reveal it. Sea grants nothing and lets you choose again; the first land reveal ends your selection."),
+    }))
     .with({ type: "roll" }, () => ({
       title: translateText("Let the dice decide."),
       description: translateText("Roll two dice to gather resources. You may play an eligible development card before rolling."),

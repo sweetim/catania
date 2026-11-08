@@ -2616,6 +2616,91 @@ test("Seafarers aligns diagonal ships and preserves vertical ships with variant-
   await expect(help.getByText("Ship", { exact: true })).toHaveCount(1);
 });
 
+test("zoom bar pirate chip indicates the pirate and moves it off and back onto the board", async ({ page, isMobile }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  await seedRandomness(page, 17);
+  let seed = 17;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
+  })), random, createBoard(seededRandom(mapCode), "seafarers"));
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  for (let placement = 0; placement < 6; placement++) {
+    if (placement !== 3) await revealHand(page);
+    await showView(page, "board");
+    const vertexId = legalSettlementVertices(state, state.activePlayerId)[0]!;
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    const edgeId = legalRoadEdges(state, state.activePlayerId)[0]!;
+    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId });
+  }
+
+  const pirate = page.getByRole("img", { name: /^Pirate;/ });
+  const controls = page.getByRole("region", { name: "Game board", exact: true }).locator(".board-controls");
+  const offBoardChip = controls.getByRole("button", { name: "Pirate off board", exact: true });
+  const removeChip = controls.getByRole("button", { name: "Move pirate off board", exact: true });
+
+  // The pirate starts on the board, so the chip reads as the off-board move and stays inactive outside the robber phase.
+  await showView(page, "board");
+  await expect(pirate).toHaveCount(1);
+  await expect(removeChip).toBeVisible();
+  await expect(removeChip).toBeDisabled();
+
+  await showView(page, "hand");
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  let diceIndex = 0;
+  state = applyAction(state, state.activePlayerId, { type: "roll" }, () => ([3, 4][diceIndex++]! - 0.5) / 6);
+  expect(state.phase.type).toBe("robber");
+  await showView(page, "board");
+  await expect(removeChip).toBeEnabled();
+  await removeChip.click();
+  state = applyAction(state, state.activePlayerId, { type: "move-pirate", tileId: null });
+  await showView(page, "board");
+  await expect(pirate).toHaveCount(0);
+  await expect(offBoardChip).toBeVisible();
+  await expect(offBoardChip).toBeDisabled();
+
+  // On the next seven with the pirate off the board, the chip points to the sea hexes and placing returns the pirate.
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "end-turn" });
+  await revealHand(page);
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  diceIndex = 0;
+  state = applyAction(state, state.activePlayerId, { type: "roll" }, () => ([3, 4][diceIndex++]! - 0.5) / 6);
+  expect(state.phase.type).toBe("robber");
+  await showView(page, "board");
+  await expect(offBoardChip).toBeEnabled();
+  await offBoardChip.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Move the robber or pirate." })).toBeVisible();
+  const seaTiles = state.board.tiles.filter(tile => tile.terrain === "sea");
+  const destination = seaTiles[0]!;
+  await page.getByRole("button", { name: "Move pirate to sea", exact: true }).nth(0).click();
+  await expect(page.getByText("Move the pirate here?", { exact: true })).toBeVisible();
+  await screenshot(page, testInfo, "pirate-chip-off-board", false);
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "move-pirate", tileId: destination.id });
+  await showView(page, "board");
+  await expect(pirate).toHaveCount(1);
+  await expect(removeChip).toBeVisible();
+  await expect(removeChip).toBeDisabled();
+  expect(state.pirateTileId).toBe(destination.id);
+  await noPageOverflow(page);
+});
+
 test("Fog Islands varies the starting islands between map codes and conceals every surrounding tile", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
@@ -2645,41 +2730,6 @@ test("Fog Islands varies the starting islands between map codes and conceals eve
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
   await noHorizontalOverflow(page);
   await screenshot(page, testInfo, "fog-islands-preview", false);
-});
-
-test("DEBUG fog flow state", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", error => errors.push(String(error)));
-  await page.goto("/");
-  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
-  await showHomeView(page, "Island");
-  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
-  await mapCode.fill("ABCD2345");
-  await mapCode.press("Enter");
-  await showHomeView(page, "Setup");
-  await seedRandomness(page, 17);
-  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
-  await revealHand(page);
-  await showView(page, "board");
-  await expect(page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" })).toHaveCount(23);
-  await page.getByRole("button", { name: "Place settlement at vertex-18", exact: true }).click();
-  const confirmButtons = page.getByRole("button", { name: "Confirm placement", exact: true });
-  console.log("confirm buttons before settle confirm:", await confirmButtons.count());
-  await confirmButtons.first().click();
-  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
-  await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
-  console.log("confirm buttons before ship confirm:", await page.getByRole("button", { name: "Confirm placement", exact: true }).count());
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await page.waitForTimeout(1500);
-  console.log("after ship confirm:");
-  console.log("  fog imgs:", await page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" }).count());
-  console.log("  veil:", await page.locator(".fog-reveal-veil").count());
-  console.log("  ship dialog:", await page.getByText("Build a ship here?", { exact: true }).count());
-  console.log("  ship at edge-22:", await page.getByRole("img", { name: /ship at edge-22/ }).count());
-  console.log("  wool 11:", await page.getByRole("img", { name: /^Pasture, wool, roll 11/ }).count());
-  console.log("  pageerrors:", errors);
 });
 
 test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
@@ -2740,16 +2790,20 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await page.getByRole("button", { name: "Choose ships", exact: true }).click();
   await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await expect(page.getByRole("img", { name: /^Pasture, wool, roll 11/ })).toBeVisible();
+  // Dismiss the pass-the-device handoff so the board is clickable again.
+  await revealHand(page);
   const peek = page.getByRole("button", { name: /Toggle to reveal the number hidden by this harbor/ });
   await expect(peek).toHaveCount(1);
   await expect(page.locator(".number-peek")).toHaveCount(0);
-  // Clicking paints the token above the harbor label; clicking again restores the label.
+  // Clicking replaces the hidden token above the harbor label; clicking again restores the label.
+  const numberTokens = page.locator("g.number-token");
+  const tokenCount = await numberTokens.count();
   await peek.click();
   await expect(peek).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".number-peek")).toHaveCount(1);
   await expect(page.locator(".number-peek text")).toHaveText("11");
+  // The peeked copy stands in for the covered token instead of doubling it.
+  await expect(numberTokens).toHaveCount(tokenCount);
   await screenshot(page, testInfo, "port-number-peek", false);
   await peek.click();
   await expect(peek).toHaveAttribute("aria-pressed", "false");
@@ -2760,6 +2814,65 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await expect(page.locator(".number-peek")).toHaveCount(1);
   await page.keyboard.press("Enter");
   await expect(page.locator(".number-peek")).toHaveCount(0);
+});
+
+test("Foggy World hides every hex and harbor, and the reveal step repeats on sea", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
+  await expect(page.getByText("Every hex starts hidden under fog.", { exact: false }).first()).toBeVisible();
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+  const harbors = page.getByRole("img", { name: /harbor, trade/ });
+  await expect(fogLabels).toHaveCount(42);
+  await expect(harbors).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Pirate;/ })).toHaveCount(0);
+  await mapCode.fill("77889999");
+  await mapCode.press("Enter");
+  await expect(fogLabels).toHaveCount(42);
+  await showHomeView(page, "Setup");
+  await seedRandomness(page, 1);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  // On 77889999 the discovery deck starts sea, grain 11, wool 8, so the first player repeats a sea reveal.
+  await expect(page.getByRole("heading", { name: "Step into the fog." })).toBeVisible();
+  await page.getByRole("button", { name: "Reveal fog hex at tile-0", exact: true }).click();
+  await expect(page.getByText("Reveal this fog hex?", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(fogLabels).toHaveCount(41);
+  await expect(page.getByRole("img", { name: "Sea, sea, no production", exact: true })).toBeVisible();
+  // tile-0 carries a harbor, which appears only once its hex is revealed.
+  await expect(harbors).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "Step into the fog." })).toBeVisible();
+  await page.getByRole("button", { name: "Reveal fog hex at tile-1", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  const veil = page.locator(".fog-reveal-veil");
+  await expect(veil).toHaveCount(1);
+  await expect(veil).toHaveCount(0);
+  await expect(page.getByRole("img", { name: /^Fields, grain, roll 11/ })).toBeVisible();
+  await expect(harbors).toHaveCount(1);
+  const collection = page.getByRole("region", { name: "Resource collection" });
+  await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
+  await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+  await page.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.getByRole("button", { name: "Build road at edge-3", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  // The setup road explores tile-3 (grain, revealing its harbor) and tile-39 (sea).
+  await expect(fogLabels).toHaveCount(38);
+  await expect(harbors).toHaveCount(2);
+  // The snake order continues with the next player's own reveal step.
+  await revealHand(page);
+  await showView(page, "board");
+  await expect(page.getByRole("heading", { name: "Step into the fog." })).toBeVisible();
+  await page.getByRole("button", { name: "Reveal fog hex at tile-2", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(page.getByRole("img", { name: /^Pasture, wool, roll 8/ })).toBeVisible();
+  await expect(fogLabels).toHaveCount(37);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "foggy-world-reveal", false);
 });
 
 async function seedRandomness(page: Page, initialSeed: number, initialValues: number[] = []) {
