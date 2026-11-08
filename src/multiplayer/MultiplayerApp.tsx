@@ -522,7 +522,7 @@ export function MultiplayerApp() {
     <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
       {!privateGame && <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
-        {sharedGame && snapshot?.mapSeed && <button type="button" className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[10px] font-semibold text-muted hover:bg-moss hover:text-ink sm:mx-auto sm:text-xs" aria-label={translateText("Copy map code")} title={translateText(copied ? "Map code copied" : "Copy map code")} onClick={async () => {
+        {sharedGame && snapshot?.mapSeed && <button type="button" className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-0.5 text-[10px] font-bold tracking-[.08em] tabular-nums text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814] hover:border-[#cdb87e] hover:to-[#eee0b8] sm:mx-auto" aria-label={translateText("Copy map code")} title={translateText(copied ? "Map code copied" : "Copy map code")} onClick={async () => {
           try {
             await navigator.clipboard.writeText(snapshot.mapSeed!);
             window.clearTimeout(copyFeedbackTimer.current);
@@ -535,10 +535,13 @@ export function MultiplayerApp() {
             setLocalError("Map code could not be copied.");
           }
         }}>
-          <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6l6-3 6 3 6-2v14l-6 2-6-2-6 3V6Z" /><path d="M9 3v15" /><path d="M15 6v14" />
+          </svg>
+          <span role="status" className="whitespace-nowrap">{copied ? translateText("Copied") : snapshot.mapSeed}</span>
+          <svg aria-hidden="true" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             {copied ? <path d="m5 12 4 4L19 6" /> : <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>}
           </svg>
-          <span role="status">{copied ? translateText("Copied") : snapshot.mapSeed}</span>
         </button>}
         {view ? <GameMenu actions={[
           { label: translateText("Help"), onSelect: () => setDialog("help") },
@@ -721,13 +724,14 @@ export function MultiplayerApp() {
           </section>
           {victoryWinner && !victoryDismissed && (
             <VictoryDialog
-              eyebrow={translateText("The island has a new legend")}
+              eyebrow={snapshot.mapSeed
+                ? translateText("The island {code} has a new legend", { code: snapshot.mapSeed })
+                : translateText("The island has a new legend")}
               headline={translateText("{name} takes the island.", { name: victoryWinner.name })}
               winnerName={victoryWinner.name}
               winnerColor={victoryWinner.color}
               totalPoints={victoryWinner.score}
               pointsUnit={translateText("points")}
-              summary={translateText("The room keeps its players and invitation. Start the next game from the lobby.")}
               breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText, game.variant)}
               profileNote={snapshot.profiles?.[victoryWinner.id]
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", snapshot.profiles[victoryWinner.id])

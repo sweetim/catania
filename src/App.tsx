@@ -1450,7 +1450,9 @@ export function App() {
           </div>
           {winner && winnerScore && !victoryDismissed && (
             <VictoryDialog
-              eyebrow={translateText("The island has a new legend")}
+              eyebrow={gameMapSeed
+                ? translateText("The island {code} has a new legend", { code: gameMapSeed })
+                : translateText("The island has a new legend")}
               headline={translateText("{name} takes the island.", { name: winner.name })}
               winnerName={winner.name}
               winnerColor={winner.color}

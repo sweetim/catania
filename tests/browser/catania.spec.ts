@@ -2647,6 +2647,41 @@ test("Fog Islands varies the starting islands between map codes and conceals eve
   await screenshot(page, testInfo, "fog-islands-preview", false);
 });
 
+test("DEBUG fog flow state", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(String(error)));
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  await mapCode.fill("ABCD2345");
+  await mapCode.press("Enter");
+  await showHomeView(page, "Setup");
+  await seedRandomness(page, 17);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  await expect(page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" })).toHaveCount(23);
+  await page.getByRole("button", { name: "Place settlement at vertex-18", exact: true }).click();
+  const confirmButtons = page.getByRole("button", { name: "Confirm placement", exact: true });
+  console.log("confirm buttons before settle confirm:", await confirmButtons.count());
+  await confirmButtons.first().click();
+  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
+  await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
+  await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
+  console.log("confirm buttons before ship confirm:", await page.getByRole("button", { name: "Confirm placement", exact: true }).count());
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.waitForTimeout(1500);
+  console.log("after ship confirm:");
+  console.log("  fog imgs:", await page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" }).count());
+  console.log("  veil:", await page.locator(".fog-reveal-veil").count());
+  console.log("  ship dialog:", await page.getByText("Build a ship here?", { exact: true }).count());
+  console.log("  ship at edge-22:", await page.getByRole("img", { name: /ship at edge-22/ }).count());
+  console.log("  wool 11:", await page.getByRole("img", { name: /^Pasture, wool, roll 11/ }).count());
+  console.log("  pageerrors:", errors);
+});
+
 test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -2686,7 +2721,7 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await screenshot(page, testInfo, "fog-reveal", false);
 });
 
-test("Fog Islands press-and-hold reveals a number token covered by a harbor label", async ({ page }, testInfo) => {
+test("Fog Islands toggling reveals a number token covered by a harbor label", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
@@ -2706,24 +2741,24 @@ test("Fog Islands press-and-hold reveals a number token covered by a harbor labe
   await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  const coveredTile = createBoard(seededRandom("ABCD2345"), "fog-islands").tiles.find(tile => tile.id === "tile-24")!;
-  expect(coveredTile.number).toBe(11);
-  const peek = page.getByRole("button", { name: /Hold pressed to reveal the number hidden by this harbor/ });
+  await expect(page.getByRole("img", { name: /^Pasture, wool, roll 11/ })).toBeVisible();
+  const peek = page.getByRole("button", { name: /Toggle to reveal the number hidden by this harbor/ });
   await expect(peek).toHaveCount(1);
   await expect(page.locator(".number-peek")).toHaveCount(0);
-  // Holding the target paints the token above the harbor label; releasing restores the label.
-  await peek.hover();
-  await page.mouse.down();
+  // Clicking paints the token above the harbor label; clicking again restores the label.
+  await peek.click();
+  await expect(peek).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".number-peek")).toHaveCount(1);
   await expect(page.locator(".number-peek text")).toHaveText("11");
   await screenshot(page, testInfo, "port-number-peek", false);
-  await page.mouse.up();
+  await peek.click();
+  await expect(peek).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".number-peek")).toHaveCount(0);
-  // Keyboard hold works the same way.
+  // The keyboard toggles the same way.
   await peek.focus();
-  await page.keyboard.down("Enter");
+  await page.keyboard.press("Enter");
   await expect(page.locator(".number-peek")).toHaveCount(1);
-  await page.keyboard.up("Enter");
+  await page.keyboard.press("Enter");
   await expect(page.locator(".number-peek")).toHaveCount(0);
 });
 
@@ -3761,12 +3796,25 @@ test("a won game pops the winner up over the board with the point breakdown and 
   await expect(victory).not.toContainText("0 ×");
   // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
   await expect(victory.locator(".confetti-piece")).toHaveCount(28);
-  // The replayable map code sits under the eyebrow as an island-icon badge, without the how-to sentence.
-  const mapCode = victory.locator(".victory-map-code");
-  await expect(mapCode).toBeVisible();
-  await expect(mapCode).toHaveText(/^[2-9A-HKMNP-Z]{8}$/);
+  // The replayable map code badge sits inline in the eyebrow sentence behind a map icon, without the how-to sentence.
+  const eyebrowLine = victory.locator(".eyebrow");
+  await expect(eyebrowLine).toContainText(/the island/i);
+  await expect(eyebrowLine).toContainText(/has a new legend/i);
+  const mapCode = victory.getByRole("button", { name: "Copy map code", exact: true });
+  const seed = (await mapCode.getByRole("status").innerText()).trim();
+  expect(seed).toMatch(/^[2-9A-HKMNP-Z]{8}$/);
+  await expect(eyebrowLine.locator(".victory-map-code")).toBeVisible();
   await expect(mapCode.locator("svg")).toHaveCount(1);
   await expect(victory).not.toContainText("Enter it before starting");
+  // Clicking the badge copies the island's map code.
+  await page.evaluate(() => {
+    const copiedMapCodes: string[] = [];
+    Object.assign(window, { copiedMapCodes });
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { copiedMapCodes.push(text); } } });
+  });
+  await mapCode.click();
+  await expect(mapCode.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => (window as unknown as { copiedMapCodes: string[] }).copiedMapCodes)).toEqual([seed]);
   await expect(victory.getByRole("button", { name: "Back to home", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "View the island", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "Restart", exact: true })).toBeVisible();

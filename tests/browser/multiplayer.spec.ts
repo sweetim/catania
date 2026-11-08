@@ -970,7 +970,7 @@ test("shared board header shows and copies the host-only map code", async ({ mul
   const confirmation = copy.getByRole("status");
   await expect(copy).toHaveText(mapSeed);
   await expect(copy).toHaveAttribute("title", "Copy map code");
-  await expect(copy.locator("svg")).toHaveCount(1);
+  await expect(copy.locator("svg")).toHaveCount(2);
   await expect(copy).toBeInViewport({ ratio: 1 });
   await expect(phone.getByRole("button", { name: "Copy map code", exact: true })).toHaveCount(0);
   await host.evaluate(() => {

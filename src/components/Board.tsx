@@ -1095,26 +1095,15 @@ export function Board({
                   className="number-peek-target cursor-pointer outline-none"
                   role="button"
                   tabIndex={0}
-                  aria-label={`${tileDescription(tile)}. ${translateText("Hold pressed to reveal the number hidden by this harbor")}`}
-                  onPointerDown={event => {
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    setPeekedTileId(tile.id);
-                  }}
-                  onPointerUp={() => setPeekedTileId(current => current === tile.id ? null : current)}
-                  onPointerCancel={() => setPeekedTileId(current => current === tile.id ? null : current)}
+                  aria-pressed={peekedTileId === tile.id}
+                  aria-label={`${tileDescription(tile)}. ${translateText("Toggle to reveal the number hidden by this harbor")}`}
+                  onClick={() => setPeekedTileId(current => current === tile.id ? null : tile.id)}
                   onKeyDown={event => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      if (!event.repeat) setPeekedTileId(tile.id);
+                      if (!event.repeat) setPeekedTileId(current => current === tile.id ? null : tile.id);
                     }
                   }}
-                  onKeyUp={event => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setPeekedTileId(current => current === tile.id ? null : current);
-                    }
-                  }}
-                  onContextMenu={event => event.preventDefault()}
                 />
               ))}
 

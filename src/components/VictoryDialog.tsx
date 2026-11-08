@@ -1,5 +1,7 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useRef, useState } from "react";
 import { match } from "ts-pattern";
+import { useTranslation } from "../localization";
+import { appTranslations } from "../translations/app";
 import { DevelopmentCardIcon, IslandIcon, PieceIcon } from "./GameUi";
 
 export type VictoryBreakdownKind =
@@ -99,12 +101,17 @@ export function VictoryDialog({
   winnerColor: string;
   totalPoints: number;
   pointsUnit: string;
-  summary: string;
+  summary?: string;
   breakdown: readonly VictoryBreakdownRow[];
   profileNote?: string;
   mapCode?: string;
   children: ReactNode;
 }) {
+  const translateText = useTranslation(appTranslations);
+  const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<number | undefined>(undefined);
+  const badgeCode = mapCode != null && eyebrow.includes(mapCode) ? mapCode : null;
+  const eyebrowParts = badgeCode != null ? eyebrow.split(badgeCode) : null;
   return (
     <div
       className="victory-overlay fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-ink/45 p-4 backdrop-blur-sm"
@@ -115,15 +122,38 @@ export function VictoryDialog({
       <Confetti />
       <div className="victory-card panel w-full max-w-md p-6 text-center sm:p-8">
         <div className="victory-stagger text-left">
-          <p className="eyebrow">{eyebrow}</p>
-          {mapCode && (
-            <p className="mt-2">
-              <span className="victory-map-code inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[.08em] tabular-nums text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]">
-                <IslandIcon className="h-3 w-2.5 shrink-0" />
-                <span className="whitespace-nowrap">{mapCode}</span>
-              </span>
-            </p>
-          )}
+          <p className="eyebrow">
+            {eyebrowParts && badgeCode != null ? (
+              <>
+                {eyebrowParts[0]}
+                <button
+                  type="button"
+                  className="victory-map-code mx-1 inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-0.5 align-middle text-[10px] font-bold tracking-[.08em] tabular-nums text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]"
+                  aria-label={translateText("Copy map code")}
+                  title={translateText(copied ? "Map code copied" : "Copy map code")}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(badgeCode);
+                      window.clearTimeout(copyFeedbackTimer.current);
+                      setCopied(true);
+                      copyFeedbackTimer.current = window.setTimeout(() => setCopied(false), 2_000);
+                    } catch {
+                      window.clearTimeout(copyFeedbackTimer.current);
+                      setCopied(false);
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0">
+                    {copied
+                      ? <path d="m5 12 4 4L19 6" />
+                      : <><path d="M3 6l6-3 6 3 6-2v14l-6 2-6-2-6 3V6Z" /><path d="M9 3v15" /><path d="M15 6v14" /></>}
+                  </svg>
+                  <span role="status" className="whitespace-nowrap">{copied ? translateText("Copied") : badgeCode}</span>
+                </button>
+                {eyebrowParts.slice(1).join(badgeCode)}
+              </>
+            ) : eyebrow}
+          </p>
           <div className="mt-3 flex items-center gap-3">
             <span
               aria-hidden="true"
@@ -152,7 +182,7 @@ export function VictoryDialog({
               ))}
             </dl>
           )}
-          <p className="mt-4 text-sm leading-6 text-muted">{summary}</p>
+          {summary && <p className="mt-4 text-sm leading-6 text-muted">{summary}</p>}
           {profileNote && (
             <div className="mt-2 space-y-1 text-xs leading-5 text-muted">
               <p>{profileNote}</p>
