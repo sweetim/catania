@@ -7,6 +7,7 @@ import { formatGameMessage } from "../../src/game/messages";
 import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
 import { ACTIVE_PROFILE_STORAGE_KEY, PROFILES_STORAGE_KEY } from "../../src/profile";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
+import { parseInvitationUrl } from "../../src/multiplayer/invitation";
 import type { TradeIdentity } from "../../src/multiplayer/protocol";
 import { HostRoom, publicGame } from "../../src/multiplayer/state";
 import type { MultiplayerSession, SessionView } from "../../src/multiplayer/types";
@@ -1828,4 +1829,20 @@ test("host removal and renaming propagate while terminal clients clear revoked i
     else Reflect.deleteProperty(globalThis, "sessionStorage");
     mock.module("peerjs", () => ({ default: OriginalPeer }));
   }
+});
+
+describe("invitation URLs", () => {
+  test("parses host and secret from a Catania invitation link", () => {
+    const invitation = parseInvitationUrl("https://catania.example/play?multiplayer=1#host=host-id&secret=secret-id");
+    expect(invitation).toMatchObject({ hostId: "host-id", secret: "secret-id" });
+    expect(invitation!.url.origin).toBe("https://catania.example");
+  });
+
+  test("rejects links without multiplayer routing, host, or secret, and non-URL text", () => {
+    expect(parseInvitationUrl("https://catania.example/#host=host-id&secret=secret-id")).toBeNull();
+    expect(parseInvitationUrl("https://catania.example/?multiplayer=1#host=host-id")).toBeNull();
+    expect(parseInvitationUrl("https://catania.example/?multiplayer=1#secret=secret-id")).toBeNull();
+    expect(parseInvitationUrl("catania")).toBeNull();
+    expect(parseInvitationUrl("")).toBeNull();
+  });
 });

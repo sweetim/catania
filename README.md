@@ -10,6 +10,8 @@ assets are local.
 
 - Solo AI opponents or human pass-and-play on one device.
 - Shared-board multiplayer with QR invitations, private phone hands, and optional computer opponents.
+  Join by scanning the invitation with the phone's camera or the home page's in-app
+  scanner (in-app scanning needs HTTPS).
 - Named per-device player profiles (created, selected, or renamed when entering):
   lifetime games, wins, and points, prefilled seat names, and the winner's
   history shown on the shared board when a game ends.

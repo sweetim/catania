@@ -30,6 +30,7 @@ import { useLanguage, useTranslation } from "../localization";
 import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "../themes";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { hostSession, joinSession } from "./session";
+import { parseInvitationUrl } from "./invitation";
 import { validName, type TradeIdentity } from "./protocol";
 import { MultiplayerDice } from "./MultiplayerDice";
 import type { BuildMode, Invitation, MultiplayerSession, PublicGame, RoomSnapshot, SessionView } from "./types";
@@ -159,6 +160,16 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     : canPay(COSTS.city) && !game.board.vertices.some(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "settlement")
       ? translateText("You have no settlements to upgrade. Build a settlement first.")
       : null;
+  const roadUnavailable = game.board.edges.filter(edge => edge.playerId === player.id && (edge.kind ?? "road") === "road").length >= 15
+    ? translateText("All 15 roads are on the board.")
+    : normalActions && canPay(COSTS.road) && legalRoadEdges(game, player.id).length === 0
+      ? translateText("No legal position. Roads must connect to your roads, settlements, or cities.")
+      : null;
+  const shipUnavailable = game.board.edges.filter(edge => edge.playerId === player.id && edge.kind === "ship").length >= 15
+    ? translateText("All 15 ships are on the board.")
+    : normalActions && canPay(COSTS.ship) && legalShipEdges(game, player.id).length === 0
+      ? translateText("No legal position. Ships must connect to your ships, settlements, or cities.")
+      : null;
   const trade = game.trade;
   const tradeIdentity = trade ? JSON.stringify([trade.offeredBy, trade.give, trade.receive]) : null;
   const staleMessage = translateText("The game changed. Close and reopen this dialog to review the latest state.");
@@ -252,7 +263,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
               : piece === "ship" ? legalShipEdges(game, player.id) : piece === "city"
                 ? legalCityVertices(game, player.id)
                 : legalSettlementVertices(game, player.id);
-            const explanation = piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
+            const explanation = piece === "road" ? roadUnavailable : piece === "ship" ? shipUnavailable : piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
             const unavailable = explanation ?? (!normalActions
               ? translateText("Available after rolling on your turn.")
               : !canPay(COSTS[piece])
@@ -354,12 +365,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
 export function MultiplayerApp() {
   const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
-  const [invitation] = useState<Invitation | null>(() => {
-    const parameters = new URLSearchParams(window.location.hash.slice(1));
-    const hostId = parameters.get("host");
-    const secret = parameters.get("secret");
-    return hostId && secret ? { hostId, secret } : null;
-  });
+  const [invitation] = useState<Invitation | null>(() => parseInvitationUrl(window.location.href));
   const [name, setName] = useState(() => {
     try {
       const stored = invitation ? sessionStorage.getItem(`catania.multiplayer.name.${invitation.hostId}`) : null;

@@ -30,6 +30,7 @@ import { defaultComputerName, resourceName, type Language, type TranslationParam
 import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
 import { ProfileGate } from "./components/ProfileGate";
+import { ScanToJoin } from "./components/ScanToJoin";
 import {
   activeProfile, createProfile, profileStats, readProfileState, recordGameResult, removeProfile,
   writeProfileState, type PlayerProfile, type ProfileState,
@@ -157,7 +158,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | "reset" | null
+    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | "reset" | "scan" | null
   >(null);
   const gamePaused = dialog === "restart" || dialog === "reset";
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
@@ -542,6 +543,20 @@ export function App() {
         ? translateText("You have no settlements to upgrade. Build a settlement first.")
         : null
     : null;
+  const roadUnavailable = game && viewer
+    ? game.board.edges.filter(edge => edge.playerId === viewer.id && (edge.kind ?? "road") === "road").length >= 15
+      ? translateText("All 15 roads are on the board.")
+      : normalActions && canAfford(COSTS.road) && legalRoadEdges(game, viewer.id).length === 0
+        ? translateText("No legal position. Roads must connect to your roads, settlements, or cities.")
+        : null
+  : null;
+  const shipUnavailable = game && viewer
+    ? game.board.edges.filter(edge => edge.playerId === viewer.id && edge.kind === "ship").length >= 15
+      ? translateText("All 15 ships are on the board.")
+      : normalActions && canAfford(COSTS.ship) && legalShipEdges(game, viewer.id).length === 0
+        ? translateText("No legal position. Ships must connect to your ships, settlements, or cities.")
+        : null
+  : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-settlement" || buildMode === "settlement"
@@ -858,9 +873,14 @@ export function App() {
           </section>
           <section className="home-multiplayer" aria-label={translateText("Cross-device play")}>
             <h2 className="eyebrow mb-2">{translateText("Separate multiplayer setup")}</h2>
-            <a className="button-primary w-full justify-between" href="/?multiplayer=1">
-              {translateText("Play across devices")} <Arrow />
-            </a>
+            <div className="grid gap-2">
+              <a className="button-primary w-full justify-between" href="/?multiplayer=1">
+                {translateText("Play across devices")} <Arrow />
+              </a>
+              <button className="button-secondary w-full justify-between" onClick={() => setDialog("scan")}>
+                {translateText("Scan to join a board")} <Arrow />
+              </button>
+            </div>
           </section>
           <section
             id="home-island"
@@ -1244,7 +1264,7 @@ export function App() {
                         : piece === "ship" ? legalShipEdges(game, viewer.id) : piece === "city"
                           ? legalCityVertices(game, viewer.id)
                           : legalSettlementVertices(game, viewer.id);
-                    const explanation = piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
+                    const explanation = piece === "road" ? roadUnavailable : piece === "ship" ? shipUnavailable : piece === "settlement" ? settlementUnavailable : piece === "city" ? cityUnavailable : null;
                     const unavailable = explanation ?? (!normalActions
                       ? translateText("Available after rolling on your turn.")
                       : !canAfford(COSTS[piece])
@@ -1500,6 +1520,7 @@ export function App() {
 
       {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "help" && <HelpDialog variant={game?.variant ?? variant} onClose={() => setDialog(null)} />}
+      {dialog === "scan" && !game && <ScanToJoin onClose={() => setDialog(null)} />}
       {game && !game.winnerId && <PrivateNotices key={gameInstanceId} thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
       {dialog === "players" && game && needsHandoff && (
         <Dialog title={translateText("Pass the device")} onClose={() => setDialog(null)}>

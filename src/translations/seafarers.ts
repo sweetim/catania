@@ -20,6 +20,8 @@ export const seafarersTranslations = {
   "Longest Route (+2) ": "最長交易路（+2） ",
   "Main island setup. Discover three islands. First to 13 points wins.": "本島から出発し、3つの島を開拓します。先に13点に到達すると勝利です。",
   "Build ship": "船を建造",
+  "All 15 ships are on the board.": "15隻すべての船が盤上にあります。",
+  "No legal position. Ships must connect to your ships, settlements, or cities.": "建設できる場所がありません。船は自分の船・開拓地・都市につながっている必要があります。",
   "Choose ships": "船を選択",
   "Choose roads": "街道を選択",
   "Move ship": "船を移動",

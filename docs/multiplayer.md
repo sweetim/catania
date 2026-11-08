@@ -15,6 +15,11 @@ The shared screen hosts the game without occupying a player seat.
    phones can work together. Each human player scans the displayed
    QR code with their phone's camera, opens the link, and enters a distinct name.
    Scanning the invitation does not connect the phone to Wi-Fi.
+   Phones can also scan without leaving the app: choose **Scan to join a board**
+   beside **Play across devices** on the home page and point the camera at the
+   host's code; the scanned invitation opens the same join flow. In-app scanning
+   needs an HTTPS page with camera permission (it is unavailable on plain-HTTP
+   LAN development URLs, which instead show guidance to use the phone's camera).
    The copy icon immediately after the invitation URL copies the same link and shows
    a checkmark with **Copied** for two seconds. If clipboard access fails, select the
    URL to copy it manually.

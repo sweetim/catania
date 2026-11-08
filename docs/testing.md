@@ -231,7 +231,10 @@ compatibility or public STUN reachability. Separately check a deployed Vercel ho
 and three physical phones on the intended local network, including a desktop on
 Ethernet and Android Chrome on Wi-Fi:
 
-1. Scan the invitation and admit each phone.
+1. Scan the invitation and admit each phone. On one phone, join through the home
+   page's **Scan to join a board** scanner over HTTPS, including its permission
+   prompt; on a plain-HTTP development URL, confirm the dialog instead guides the
+   player to the phone's camera app.
 2. Complete setup, roll, trade, and discard.
 3. Reconnect a phone after backgrounding it.
 4. Verify that the shared screen never shows a private hand.

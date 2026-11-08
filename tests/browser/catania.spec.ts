@@ -2943,6 +2943,28 @@ test("settlement build hides descriptions for the roll requirement and missing r
   await screenshot(page, testInfo, "settlement-missing-resources", false);
 });
 
+test("road build hides the connection description before rolling and while short on resources", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  let state = await prepareRollGame(page);
+  await revealBuildSection(page);
+  const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
+  const road = building.getByRole("button", { name: /^Build road\b/ });
+  const explanation = building.locator("#road-build-explanation");
+  await expect(road).toBeDisabled();
+  await expect(road).not.toHaveAttribute("aria-describedby");
+  await expect(road).toHaveAttribute("title", "Available after rolling on your turn.");
+  await expect(explanation).toHaveCount(0);
+
+  await chooseDice(page, [1, 1]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "roll" }, () => 0);
+  const player = state.players.find(player => player.id === state.activePlayerId)!;
+  const affordRoad = RESOURCES.every(resource => player.resources[resource] >= COSTS.road[resource]);
+  await expect(road).toHaveAttribute("title", affordRoad ? "Select a location on the board." : "You need more resources.");
+  await expect(road).not.toHaveAttribute("aria-describedby");
+  await expect(explanation).toHaveCount(0);
+});
+
 test("settlement build shows a description only for exhausted pieces and recovers after a city upgrade", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });

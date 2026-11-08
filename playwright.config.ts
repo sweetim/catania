@@ -5,7 +5,7 @@ const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: ["catania.spec.ts", "multiplayer.spec.ts", "localization.spec.ts", "profile.spec.ts"],
+  testMatch: ["catania.spec.ts", "multiplayer.spec.ts", "localization.spec.ts", "profile.spec.ts", "scan.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
