@@ -151,7 +151,7 @@ export function VictoryDialog({
               {mapNote && <p>{mapNote}</p>}
             </div>
           )}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{children}</div>
+          <div className="victory-actions mt-6">{children}</div>
         </div>
       </div>
     </div>

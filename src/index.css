@@ -730,6 +730,57 @@
   box-shadow: inset 0 0 0 1px #ffffff8c, 0 1px 3px #253b3614;
 }
 
+.victory-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.victory-actions .button-primary {
+  --victory-gold: linear-gradient(180deg, #c69a3f 0%, #b58a2d 100%);
+  grid-column: 1 / -1;
+  min-height: 3rem;
+  border-radius: 0.875rem;
+  background: var(--victory-gold);
+  color: #fffdf6;
+  box-shadow: inset 0 1px 0 #ffffff4d, 0 12px 24px -12px #b58a2dcc;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.victory-actions .button-primary:hover:not(:disabled) {
+  background: var(--victory-gold);
+  color: #fffdf6;
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.victory-actions .button-primary:disabled {
+  background: var(--victory-gold);
+  color: #fffdf6;
+  filter: saturate(0.5) opacity(0.65);
+}
+
+.victory-actions .button-primary:disabled:hover {
+  background: var(--victory-gold);
+  color: #fffdf6;
+}
+
+.victory-actions .button-secondary {
+  min-height: 3rem;
+  border: 1px solid #e3d3a4;
+  border-radius: 0.875rem;
+  background: #fffdf6b3;
+  color: var(--color-ink);
+  box-shadow: inset 0 1px 0 #ffffff66;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.victory-actions .button-secondary:hover {
+  background: #fffdf6;
+  border-color: #d8c286;
+  transform: translateY(-1px);
+}
+
 .confetti-layer {
   position: absolute;
   inset: 0;

@@ -3701,6 +3701,18 @@ test("a won game pops the winner up over the board with the point breakdown and 
   await expect(victory.getByRole("button", { name: "Back to home", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "View the island", exact: true })).toBeVisible();
   await expect(victory.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
+  // The restart choice leads as a full-width gold bar; the two quieter exits share a row beneath it.
+  const actions = victory.locator(".victory-actions");
+  await expect(actions).toHaveCSS("display", "grid");
+  const actionsBox = (await actions.boundingBox())!;
+  const restartBox = (await victory.getByRole("button", { name: "Restart", exact: true }).boundingBox())!;
+  expect(restartBox.width).toBeCloseTo(actionsBox.width, 0);
+  await expect(victory.getByRole("button", { name: "Restart", exact: true })).toHaveCSS("background-image", /linear-gradient\(rgb\(198, 154, 63\) 0%, rgb\(181, 138, 45\) 100%\)/);
+  const backHomeBox = (await victory.getByRole("button", { name: "Back to home", exact: true }).boundingBox())!;
+  const viewIslandBox = (await victory.getByRole("button", { name: "View the island", exact: true }).boundingBox())!;
+  expect(Math.abs(backHomeBox.y - viewIslandBox.y)).toBeLessThan(1);
+  expect(Math.abs(backHomeBox.height - viewIslandBox.height)).toBeLessThan(1);
+  expect(backHomeBox.width + viewIslandBox.width).toBeLessThan(actionsBox.width);
   // The winning island stays mounted behind the popup.
   await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
   await noPageOverflow(page);
