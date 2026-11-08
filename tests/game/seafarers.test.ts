@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createBoard, edgeTiles } from "../../src/game/board";
+import { createBoard, edgeTiles, seededRandom } from "../../src/game/board";
 import { chooseComputerAction, getController } from "../../src/game/computer";
 import {
   applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, legalRoadEdges,
@@ -7,7 +7,7 @@ import {
 } from "../../src/game/engine";
 import type { GameAction, GameState, Player, Resources } from "../../src/game/types";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
-import { HostRoom } from "../../src/multiplayer/state";
+import { HostRoom, publicGame } from "../../src/multiplayer/state";
 
 function randomFromSeed(seed: number) {
   return () => {
@@ -270,6 +270,38 @@ describe("ships and shipping routes", () => {
     other.building = null;
     expect(getLongestRoadLength(state, playerId)).toBe(2);
     expect(ship.kind).toBe("ship");
+  });
+
+  test("an eight-piece mixed route joins five roads only through an own settlement or city", () => {
+    const state = createGame(profiles.slice(0, 3), randomFromSeed(1), createBoard(seededRandom("6SMHDES6"), "fog-islands"));
+    const playerId = state.activePlayerId;
+    state.phase = { type: "actions" };
+    const path = [50, 53, 54, 96, 98, 97, 74, 71, 92, 32, 31, 99, 101, 65].map(index => `vertex-${index}`);
+    for (let index = 0; index < path.length - 1; index++) {
+      const edge = state.board.edges.find(edge => edge.vertexIds.includes(path[index]!) && edge.vertexIds.includes(path[index + 1]!))!;
+      expect(edge).toBeDefined();
+      edge.playerId = playerId;
+      edge.kind = index === 6 || index === 7 ? "ship" : "road";
+    }
+    state.board.vertices.find(vertex => vertex.id === path[6])!.building = { playerId, kind: "settlement" };
+    const junction = state.board.vertices.find(vertex => vertex.id === path[8])!;
+    expect(getLongestRoadLength(state, playerId)).toBe(8);
+    expect(publicGame(state, [], "mixed-route").players.find(player => player.id === playerId)!.longestRoad).toBe(8);
+
+    for (const kind of ["settlement", "city"] as const) {
+      const joined = structuredClone(state);
+      joined.board.vertices.find(vertex => vertex.id === junction.id)!.building = { playerId, kind };
+      const awarded = applyAction(joined, playerId, { type: "end-turn" });
+      expect(getLongestRoadLength(awarded, playerId)).toBe(13);
+      expect(awarded.awards.longestRoad).toBe(playerId);
+      expect(getScore(awarded, playerId).longestRoad).toBe(2);
+      const published = publicGame(awarded, [], "mixed-route");
+      expect(published.players.find(player => player.id === playerId)!.longestRoad).toBe(13);
+      expect(published.awards.longestRoad).toBe(playerId);
+    }
+
+    junction.building = { playerId: state.players.find(player => player.id !== playerId)!.id, kind: "settlement" };
+    expect(getLongestRoadLength(state, playerId)).toBe(8);
   });
 
   test("Road Building can place two free ships or mixed pieces and does not finish early when only ships remain", () => {
