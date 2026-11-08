@@ -11,6 +11,7 @@ bun run test
 bun run typecheck
 bun run build
 bun run test:browser
+bun run test:browser:pwa
 ```
 
 If Chromium is not installed, install it before running browser tests:
@@ -50,6 +51,13 @@ fixtures, gold rendering/payload checks are separate from engine authority tests
 The browser suite selects `tests/browser/catania.spec.ts`,
 `tests/browser/multiplayer.spec.ts`, and `tests/browser/localization.spec.ts`
 through [`playwright.config.ts`](../playwright.config.ts).
+The separate `bun run test:browser:pwa` run builds `dist/` and serves it with
+[`scripts/serve-dist.ts`](../scripts/serve-dist.ts) through
+[`playwright.pwa.config.ts`](../playwright.pwa.config.ts). Its checks cover the
+web app manifest fields, PNG icon responses, the injected manifest and icon
+links, service-worker registration, and an offline reload of the cached shell;
+the service worker registers only in production builds, so the main dev-server
+suite never exercises it.
 Tests exercise the interface in desktop and mobile Chromium viewports and write
 diagnostic screenshots to `test-results/`, including each theme's preview, actual
 game board, and resource cards, plus the theme dialog.
@@ -137,7 +145,8 @@ and logs. Existing English browser tests explicitly use `en-US`.
 ## Browser Test Servers
 
 Browser tests use the declared Playwright dependency, a dedicated application
-server on port 4173, and a test-only PeerServer on port 4176. Existing servers are
+server on port 4173, and a test-only PeerServer on port 4176. The PWA run adds a
+dist static server on port 4180. Existing servers are
 not reused. Set `PLAYWRIGHT_PORT` and `PLAYWRIGHT_SIGNALING_PORT` to use different
 application and signaling ports when another test run occupies the defaults:
 
@@ -146,6 +155,7 @@ PLAYWRIGHT_PORT=4191 PLAYWRIGHT_SIGNALING_PORT=4192 bun run test:browser
 ```
 
 Each setting is optional; their defaults remain 4173 and 4176 respectively.
+`PLAYWRIGHT_DIST_PORT` overrides the PWA dist-server port the same way.
 Multiplayer tests route signaling to that local server and exercise native browser
 WebRTC connections. The harness overrides `RTCPeerConnection` construction to use
 `iceServers: []`, since native STUN traffic bypasses HTTP/WebSocket interception.

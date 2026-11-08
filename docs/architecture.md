@@ -127,6 +127,23 @@ viewports, a TypeScript check, and the production build. Desktop/mobile viewport
 automation does not establish Android or iOS browser compatibility, real-device
 touch behavior, or the ability to join a Wi-Fi room.
 
+## Progressive Web App
+
+`public/` holds the verbatim-served PWA files: `manifest.webmanifest`,
+`sw.js`, `favicon.svg`, `apple-touch-icon.png`, and `icons/` (any and maskable
+PNGs generated from the Logo hexagon mark by `scripts/generate-icons.ts`).
+`build.ts` copies them into `dist/` unchanged so the service worker and manifest
+keep exact URLs; `src/index.ts` serves them from `public/` outside the build.
+`src/pwa.ts` injects the manifest and icon links at runtime (Bun's bundler
+cannot resolve the absolute public URLs from `src/index.html`) and registers
+the service worker in production only, so development hot reloading is never
+shadowed by caches. The worker precaches the shell, warms its cache with the
+first load's asset URLs through a `CACHE_URLS` message, serves navigations
+network-first with a cached fallback, and serves immutable hashed assets and
+public files cache-first; its `VERSION` constant releases cache updates.
+Games stay in memory: offline support means the app launches and plays
+single-device without a network, while multiplayer still requires connectivity.
+
 ## Current PeerJS Multiplayer
 
 Vercel serves the static `dist` build configured by `vercel.json`. No application

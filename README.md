@@ -21,6 +21,8 @@ assets are local.
   Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
   terrain and discovery resources. Victory targets are 13 for New Shores and 12 for the new scenarios.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
+- Installable as a progressive web app: add Catania to a home screen and launch it
+  offline; single-device play keeps working without a network.
 - English and Japanese interfaces, including help, accessible controls, activity, and errors.
 
 ## Quick Start
@@ -71,9 +73,11 @@ Documentation uses the English control names.
 
 ## Build And Deploy
 
-`bun run build` produces a static browser bundle in `dist/`.
+`bun run build` produces a static browser bundle in `dist/`, including the
+`public/` progressive-web-app files (manifest, service worker, and icons).
 `bun run start` runs a production-mode source server through Bun; it does not
-serve `dist/`.
+serve `dist/`. To preview a build locally, run
+`PORT=4180 bun run scripts/serve-dist.ts` after building.
 
 For Vercel, import the repository. [`vercel.json`](vercel.json) configures the
 build command and output directory; no application backend or secrets are needed.
@@ -87,6 +91,7 @@ bun run test
 bun run typecheck
 bun run build
 bun run test:browser
+bun run test:browser:pwa
 ```
 
 Browser tests require Chromium: `bunx playwright install chromium`.
