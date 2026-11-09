@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
 import { match } from "ts-pattern";
-import { Board } from "./components/Board";
+import { Board, useFogRevealHistory } from "./components/Board";
 import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
 import { GameMenu } from "./components/GameMenu";
@@ -61,6 +61,7 @@ import {
   legalShipDestinations,
   movableShipEdges,
   legalSettlementVertices,
+  legalSetupRevealTiles,
   RESOURCES,
   resourceTotal,
   victoryTarget,
@@ -76,6 +77,7 @@ import type {
 import "./index.css";
 import { getRollOutcome, type RollOutcome } from "./rollPresentation";
 import { getResourceGains } from "./resourceReceipt";
+import { generateIdentifier } from "./identity";
 
 type RollPresentation = {
   outcome: RollOutcome;
@@ -144,6 +146,7 @@ export function App() {
   const [humanCount, setHumanCount] = useState(1);
   const [homeView, setHomeView] = useState<"setup" | "island">(savedMap ? "island" : "setup");
   const [game, setGame] = useState<GameState | null>(null);
+  const fogRevealHistory = useFogRevealHistory();
   const initialGame = useRef<{ state: GameState; mapSeed: string } | null>(null);
   const [victoryDismissed, setVictoryDismissed] = useState(false);
   const [rollPresentation, setRollPresentation] = useState<RollPresentation | null>(null);
@@ -354,8 +357,12 @@ export function App() {
 
   function initializeGame(next: GameState, mapSeed: string) {
     initialGame.current = { state: next, mapSeed };
+    fogRevealHistory.current.terrains.clear();
+    fogRevealHistory.current.generations.clear();
+    fogRevealHistory.current.completedVeils.clear();
+    fogRevealHistory.current.version++;
     setGameMapSeed(mapSeed);
-    setGameInstanceId(crypto.randomUUID());
+    setGameInstanceId(generateIdentifier());
     setGameProfileId(profileState.activeId);
     setRollPresentation(null);
     setResourceReceipt(null);
@@ -441,7 +448,7 @@ export function App() {
       !(next.phase.type === "discard" && (next.phase.required[viewerId ?? ""] ?? 0) > 0)) return;
     if (game?.phase.type === "roll" && next.phase.type === "actions") return;
     setMobileView(
-      ["setup-settlement", "setup-road", "reveal", "road-building", "robber"].includes(
+      ["setup-settlement", "setup-reveal", "setup-road", "road-building", "robber"].includes(
         next.phase.type,
       )
         ? "board"
@@ -581,22 +588,21 @@ export function App() {
         : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =
-    game && viewer && isActive && !rollBusy && (game.phase.type === "robber" || game.phase.type === "reveal")
-      ? game.phase.type === "reveal"
-        ? game.board.tiles.filter((tile) => tile.terrain === "fog").map((tile) => tile.id)
-        : game.board.tiles
+    game && viewer && isActive && !rollBusy
+      ? game.phase.type === "setup-reveal"
+        ? legalSetupRevealTiles(game, viewer.id)
+        : game.phase.type === "robber" ? game.board.tiles
             .filter((tile) => tile.terrain !== "fog" && (tile.terrain === "sea"
               ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
               : tile.id !== game.robberTileId))
             .map((tile) => tile.id)
+        : []
       : [];
   const selectedAction: GameAction | null =
     !selected || !game
       ? null
       : selected.kind === "tile"
-        ? game.phase.type === "reveal"
-          ? { type: "reveal-tile", tileId: selected.id }
-          : { type: game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
+        ? { type: game.phase.type === "setup-reveal" ? "reveal-tile" : game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
         : selected.kind === "edge"
           ? buildMode === "move-ship" && movingShipId
             ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
@@ -992,6 +998,7 @@ export function App() {
           <div className="handoff-island">
             <Board
               board={game.board}
+              fogRevealHistory={fogRevealHistory}
               players={game.players}
               robberTileId={game.robberTileId}
               pirateTileId={game.pirateTileId}
@@ -1026,8 +1033,8 @@ export function App() {
                 setMobileView(
                   [
                     "setup-settlement",
+                    "setup-reveal",
                     "setup-road",
-                    "reveal",
                     "road-building",
                     "robber",
                   ].includes(game.phase.type)
@@ -1081,6 +1088,7 @@ export function App() {
               <div className="board-tablemat">
                 <Board
                   board={game.board}
+                  fogRevealHistory={fogRevealHistory}
                   players={game.players}
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
@@ -1106,11 +1114,11 @@ export function App() {
                   legalVertexIds={legalVertices}
                   legalEdgeIds={legalEdges}
                   legalTileIds={legalTiles}
-                  tileSelectionMode={game.phase.type === "reveal" ? "reveal" : "robber"}
+                  tileSelectionMode={game.phase.type === "setup-reveal" ? "setup" : "robber"}
                   selectedId={selected?.id ?? movingShipId}
                   confirmation={selectedAction && selected ? {
                     title: selected.kind === "tile"
-                      ? translateText(selectedAction.type === "reveal-tile" ? "Reveal this fog hex?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
+                      ? translateText(selectedAction.type === "reveal-tile" ? "Choose this starting cell?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
                       : selected.kind === "edge"
                         ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
                         : buildMode === "city"
@@ -1424,7 +1432,7 @@ export function App() {
                     <span className="shrink-0 text-xs font-medium text-muted"> - {translateText(isActive ? "Your turn" : "Their turn")}</span>
                   </h2>
                   <span className="turn-number">
-                    {game.phase.type.startsWith("setup") || game.phase.type === "reveal" ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
+                    {game.phase.type.startsWith("setup") ? translateText("Setup") : translateText("Turn {number}", { number: game.turnNumber })}
                   </span>
                   {!game.winnerId && gameMenu}
                 </div>
@@ -1515,7 +1523,7 @@ export function App() {
             <RollSummary seafarers={isSeafarers(game.variant)} outcome={rollPresentation?.outcome} stage={rollPresentation?.stage} />
             <BankSupply resources={game.bank} developmentCards={game.developmentDeck.length} />
           </div>
-          <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit victoryTarget={victoryTarget(game.variant)} />
+          <Board board={game.board} fogRevealHistory={fogRevealHistory} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} showBlockedSettlementLocations={showBlockedSettlementLocations} fillBoardWithWater={fillBoardWithWater} producingTileIds={producingTileIds} rolledNumber={rolledNumber} onChangeTheme={() => setDialog("theme")} interactive={false} compact fit victoryTarget={victoryTarget(game.variant)} />
           {error && <p role="alert" className="mt-4 text-sm text-clay">{errorText}</p>}
         </main>
       )}

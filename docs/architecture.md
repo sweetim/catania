@@ -41,6 +41,10 @@ Seafarers board). `applyAction` takes
 state, a player identity, an action, and an optional random source; it returns a
 new state or throws a validation error without changing the input. Production
 randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.
+Profile, game, and multiplayer identifiers use UUID v4 through `src/identity.ts`.
+It prefers `crypto.randomUUID` and falls back to `crypto.getRandomValues` when
+that API is unavailable, including on plain-HTTP network origins. Invitations
+and reconnect credentials retain cryptographic randomness in either path.
 All purchases and placements pass through the engine, including local actions.
 Human-selected board positions are previews until confirmed; computer actions
 are applied automatically through the same rules.

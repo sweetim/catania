@@ -30,17 +30,55 @@ export function portAnchor(board: Board, port: Port): { x: number; y: number; po
   return { x, y, portX: x + directionX * 51, portY: y + directionY * 51 };
 }
 
-/** The land-side hex a harbor sits on: the coast hex whose reveal also reveals the harbor. */
+/** The land-side hex a harbor sits on, or its initial fog anchor before placement. */
 export function portHexId(board: Board, port: Port): string {
   const edge = board.edges.find(edge => edge.id === port.edgeId)!;
   const tiles = edgeTiles(board, edge);
   return (tiles.find(tile => tile.terrain !== "sea" && tile.terrain !== "fog") ?? tiles.find(tile => tile.islandId === "main"))!.id;
 }
 
-/** In Foggy World a harbor stays hidden until the fog hex carrying it is revealed. */
+function isRevealedCoast(board: Board, edge: Edge): boolean {
+  const tiles = edgeTiles(board, edge);
+  return tiles.filter(tile => isLand(tile.terrain)).length === 1 &&
+    tiles.every(tile => tile.terrain !== "fog");
+}
+
+/** Foggy World harbors need a placed, revealed land-sea coast, including the outer map edge. */
 export function isPortRevealed(board: Board, port: Port): boolean {
   return board.variant !== "foggy-world" ||
-    board.tiles.find(tile => tile.id === portHexId(board, port))!.terrain !== "fog";
+    (!port.awaitingCoast && isRevealedCoast(board, board.edges.find(edge => edge.id === port.edgeId)!));
+}
+
+export function relocateFoggyWorldPorts(board: Board): void {
+  if (board.variant !== "foggy-world") return;
+  const coastEdges = board.edges.filter(edge => isRevealedCoast(board, edge));
+  const establishedPorts = new Set(board.ports.filter(port => isPortRevealed(board, port)));
+  const occupiedVertices = new Set(board.ports.filter(port => establishedPorts.has(port))
+    .flatMap(port => board.edges.find(edge => edge.id === port.edgeId)!.vertexIds));
+  const verticesById = new Map(board.vertices.map(vertex => [vertex.id, vertex]));
+  const midpoint = (edge: Edge) => {
+    const first = verticesById.get(edge.vertexIds[0])!;
+    const second = verticesById.get(edge.vertexIds[1])!;
+    return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+  };
+  for (const port of board.ports) {
+    if (establishedPorts.has(port)) continue;
+    const origin = midpoint(board.edges.find(edge => edge.id === port.edgeId)!);
+    const distance = (edge: Edge) => {
+      const position = midpoint(edge);
+      return Math.hypot(position.x - origin.x, position.y - origin.y);
+    };
+    const destination = coastEdges.filter(edge => edge.vertexIds.every(id => !occupiedVertices.has(id)))
+      .sort((first, second) => distance(first) - distance(second))[0];
+    if (destination === undefined) {
+      // Retain the old edge only as a deterministic relocation origin, never as an active harbor.
+      port.awaitingCoast = true;
+      continue;
+    }
+    port.edgeId = destination.id;
+    delete port.awaitingCoast;
+    destination.vertexIds.forEach(id => occupiedVertices.add(id));
+  }
 }
 
 /** Lists number-carrying tiles covered by a harbor label, so the board can offer a press-and-hold peek. */

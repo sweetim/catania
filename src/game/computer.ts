@@ -1,7 +1,7 @@
 import { match } from "ts-pattern";
 import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges,
-  RESOURCES, resourceTotal, victoryTarget,
+  legalSetupRevealTiles, RESOURCES, resourceTotal, victoryTarget,
 } from "./engine";
 import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
 import { isSeafarers } from "./types";
@@ -268,14 +268,9 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
   }
 
   return match(state.phase)
-    .with({ type: "reveal" }, (): GameAction => {
-      // Without peeking at the deck, prefer fog beside revealed land, which is most likely settleable.
-      const revealedVertices = new Set(state.board.tiles.filter(tile => tile.terrain !== "fog").flatMap(tile => tile.vertexIds));
-      const tile = state.board.tiles.filter(tile => tile.terrain === "fog")
-        .toSorted((first, second) => second.vertexIds.filter(id => revealedVertices.has(id)).length -
-          first.vertexIds.filter(id => revealedVertices.has(id)).length)[0]!;
-      return { type: "reveal-tile", tileId: tile.id };
-    })
+    .with({ type: "setup-reveal" }, (): GameAction => ({
+      type: "reveal-tile", tileId: legalSetupRevealTiles(state, playerId)[0]!,
+    }))
     .with({ type: "setup-settlement" }, (): GameAction | null => {
       const vertexId = bestVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;

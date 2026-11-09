@@ -78,13 +78,11 @@ export function parseAction(value: unknown): GameAction {
       valid = fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex"); break;
     case "place-road": case "place-ship":
       valid = fields(value, ["type", "edgeId"]) && identifier(value.edgeId, "edge"); break;
-    case "reveal-tile":
-      valid = fields(value, ["type", "tileId"]) && identifier(value.tileId, "tile"); break;
     case "move-ship":
       valid = fields(value, ["type", "edgeId", "destinationEdgeId"]) && identifier(value.edgeId, "edge") && identifier(value.destinationEdgeId, "edge"); break;
     case "move-pirate":
       valid = fields(value, ["type", "tileId"]) && (value.tileId === null || identifier(value.tileId, "tile")); break;
-    case "move-robber":
+    case "move-robber": case "reveal-tile":
       valid = fields(value, ["type", "tileId"]) && identifier(value.tileId, "tile"); break;
     case "steal": case "complete-trade":
       valid = fields(value, ["type", "playerId"]) && identifier(value.playerId, "player"); break;
@@ -162,7 +160,8 @@ function privatePlayer(value: unknown): boolean {
 function phase(value: unknown): boolean {
   if (!record(value)) return false;
   switch (value.type) {
-    case "setup-settlement": case "reveal": case "roll": case "actions": case "finished": return fields(value, ["type"]);
+    case "setup-reveal": case "roll": case "actions": case "finished": return fields(value, ["type"]);
+    case "setup-settlement": return fields(value, ["type"], ["tileId"]) && (!Object.hasOwn(value, "tileId") || identifier(value.tileId, "tile"));
     case "setup-road": return fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex");
     case "discard": case "gold": return fields(value, ["type", "required"]) && record(value.required) && Object.entries(value.required).every(([key, count]) => identifier(key, "player") && integer(count, 47));
     case "robber": return fields(value, ["type", "returnPhase"]) && ["roll", "actions"].includes(value.returnPhase as string);
@@ -184,7 +183,9 @@ function board(value: unknown): boolean {
     array(value.edges, 180, edge => record(edge) && fields(edge, ["id", "vertexIds", "playerId"], ["kind"]) &&
       (!Object.hasOwn(edge, "kind") || edge.kind === "road" || edge.kind === "ship") && identifier(edge.id, "edge") && Array.isArray(edge.vertexIds) && edge.vertexIds.length === 2 &&
       edge.vertexIds.every(value => identifier(value, "vertex")) && (edge.playerId === null || identifier(edge.playerId, "player"))) &&
-    array(value.ports, 9, port => record(port) && fields(port, ["edgeId", "resource"]) && identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
+    array(value.ports, 9, port => record(port) && fields(port, ["edgeId", "resource"], ["awaitingCoast"]) &&
+      (!Object.hasOwn(port, "awaitingCoast") || typeof port.awaitingCoast === "boolean") &&
+      identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
 function publicGame(value: unknown): boolean {
   if (!record(value) || !fields(value, ["variant", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;

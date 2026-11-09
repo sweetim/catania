@@ -25,7 +25,9 @@ export function getPhaseInstructions({
   return match(phase)
     .with({ type: "setup-settlement" }, () => ({
       title: translateText("Find a place to call home."),
-      description: translateText(sharedBoard
+      description: translateText(variant === "foggy-world"
+        ? "Choose a highlighted node on the selected land cell for your settlement."
+        : sharedBoard
         ? secondSettlement
           ? "Place your second settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
           : "Place your first settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
@@ -33,15 +35,15 @@ export function getPhaseInstructions({
           ? "Place your second settlement on a highlighted intersection. Leave at least two edges between settlements."
           : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),
     }))
+    .with({ type: "setup-reveal" }, () => ({
+      title: translateText("Choose a starting cell."),
+      description: translateText("Reveal one cell. Sea? Choose again. Land? Place a settlement on that cell."),
+    }))
     .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
       description: isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
-    }))
-    .with({ type: "reveal" }, () => ({
-      title: translateText("Step into the fog."),
-      description: translateText("Select a fog hex to reveal it. Sea grants nothing and lets you choose again; the first land reveal ends your selection."),
     }))
     .with({ type: "roll" }, () => ({
       title: translateText("Let the dice decide."),

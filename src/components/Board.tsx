@@ -85,8 +85,18 @@ function NumberToken({ x, y, number, matchesRoll, blocked }: {
   );
 }
 
+export function useFogRevealHistory() {
+  return useRef({
+    terrains: new Map<string, Terrain>(),
+    generations: new Map<string, number>(),
+    completedVeils: new Set<string>(),
+    version: 0,
+  });
+}
+
 export function Board({
   board,
+  fogRevealHistory,
   players,
   robberTileId,
   pirateTileId,
@@ -95,7 +105,7 @@ export function Board({
   legalVertexIds = [],
   legalEdgeIds = [],
   legalTileIds = [],
-  tileSelectionMode,
+  tileSelectionMode = "robber",
   showBlockedSettlementLocations = false,
   fillBoardWithWater = false,
   producingTileIds = [],
@@ -112,11 +122,11 @@ export function Board({
   victoryTarget,
 }: {
   board: BoardState;
+  fogRevealHistory?: ReturnType<typeof useFogRevealHistory>;
   players: Pick<Player, "id" | "name" | "color" | "control">[];
   robberTileId?: string;
   pirateTileId?: string | null;
   routeMode?: "road" | "ship" | "move-ship" | null;
-  tileSelectionMode?: "robber" | "reveal";
   pirateIndicator?: {
     onBoard: boolean;
     enabled: boolean;
@@ -125,6 +135,7 @@ export function Board({
   legalVertexIds?: string[];
   legalEdgeIds?: string[];
   legalTileIds?: string[];
+  tileSelectionMode?: "setup" | "robber";
   showBlockedSettlementLocations?: boolean;
   fillBoardWithWater?: boolean;
   producingTileIds?: string[];
@@ -170,12 +181,9 @@ export function Board({
     board.vertices.map((vertex) => [vertex.id, vertex]),
   );
   const playersById = new Map(players.map((player) => [player.id, player]));
-  const fogRevealState = useRef<{ terrains: Map<string, Terrain>; generations: Map<string, number>; version: number }>({
-    terrains: new Map(),
-    generations: new Map(),
-    version: 0,
-  });
-  const [completedVeils, setCompletedVeils] = useState(() => new Set<string>());
+  const localFogRevealHistory = useFogRevealHistory();
+  const fogRevealState = fogRevealHistory ?? localFogRevealHistory;
+  const [, setFogRevealRevision] = useState(0);
   const fogReveals = useMemo(() => {
     const { terrains, generations } = fogRevealState.current;
     // A genuine reveal only turns fog tiles into their discovered terrain; any other terrain
@@ -197,7 +205,7 @@ export function Board({
     }
     fogRevealState.current.terrains = new Map(board.tiles.map((tile) => [tile.id, tile.terrain]));
     return { generations: fogRevealState.current.generations, version: fogRevealState.current.version };
-  }, [board]);
+  }, [board, fogRevealState]);
   const halfWidth = Math.max(
     355,
     ...board.vertices.map((vertex) => Math.abs(vertex.x) + 85),
@@ -901,7 +909,7 @@ export function Board({
                       blocked={blocked}
                     />
                   )}
-                  {fogRevealVeilKey !== null && !completedVeils.has(fogRevealVeilKey) && (
+                  {fogRevealVeilKey !== null && !fogRevealState.current.completedVeils.has(fogRevealVeilKey) && (
                     <g
                       key={`fog-reveal-${fogRevealVeilKey}`}
                       className="fog-reveal-veil"
@@ -910,7 +918,8 @@ export function Board({
                         // Remove the veil once it has lifted so later DOM reordering (for example
                         // dice-roll highlights) cannot restart the finished animation.
                         if (event.animationName === "fog-lift") {
-                          setCompletedVeils(current => new Set(current).add(fogRevealVeilKey));
+                          fogRevealState.current.completedVeils.add(fogRevealVeilKey);
+                          setFogRevealRevision(current => current + 1);
                         }
                       }}
                     >
@@ -1115,7 +1124,7 @@ export function Board({
                     {...targetProperties(
                       "tile",
                       tile.id,
-                      tileSelectionMode === "reveal" ? translateText("Reveal fog hex at {location}", { location: tile.id }) : tile.terrain === "sea" ? translateText("Move pirate to sea") : translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
+                      tileSelectionMode === "setup" ? translateText("Choose starting cell at {location}", { location: tile.id }) : tile.terrain === "sea" ? translateText("Move pirate to sea") : translateText(tile.number === null ? "Move robber to {resource}" : "Move robber to {resource} {number}", {
                         resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
                       }),
                     )}

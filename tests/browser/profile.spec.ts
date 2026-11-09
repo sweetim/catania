@@ -81,6 +81,59 @@ async function expectNoOverflow(page: Page) {
     .toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
+test("profile creation persists and starts a game without randomUUID", async ({ page, isMobile }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("catania.profiles");
+    localStorage.removeItem("catania.profile.active");
+  });
+  await page.reload();
+  expect(await page.evaluate(() => typeof crypto.randomUUID)).toBe("undefined");
+  await page.getByLabel("Profile name", { exact: true }).fill("Nora");
+  await page.getByRole("button", { name: "Create and continue", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Nora");
+  const saved = await page.evaluate(() => ({
+    profiles: JSON.parse(localStorage.getItem("catania.profiles")!),
+    activeId: localStorage.getItem("catania.profile.active"),
+  }));
+  expect(saved.profiles).toMatchObject([{ id: saved.activeId, name: "Nora", games: 0, wins: 0, totalPoints: 0 }]);
+  expect(saved.activeId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Nora");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  if (isMobile) await page.getByRole("navigation", { name: "Game views", exact: true }).getByRole("button", { name: "board", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
+  await expectNoOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("profile-without-random-uuid.png"), fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test("legacy profiles migrate without randomUUID", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+  });
+  await page.evaluate(() => {
+    localStorage.removeItem("catania.profiles");
+    localStorage.removeItem("catania.profile.active");
+    localStorage.setItem("catania.profile", JSON.stringify({ games: 3, wins: 1, totalPoints: 27, lastRecordedGameId: "game-3" }));
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Continue as Player", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Player");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Player 1 name", exact: true })).toHaveValue("Player");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("catania.profiles")!))).toMatchObject([
+    { name: "Player", games: 3, wins: 1, totalPoints: 27 },
+  ]);
+  expect(errors).toEqual([]);
+});
+
 test("profile history survives reload and shows completed game results and stats", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();

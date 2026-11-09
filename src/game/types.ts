@@ -42,7 +42,7 @@ export type Edge = {
   playerId: string | null;
   kind?: "road" | "ship";
 };
-export type Port = { edgeId: string; resource: Resource | "any" };
+export type Port = { edgeId: string; resource: Resource | "any"; awaitingCoast?: boolean };
 export type FogDiscovery = { terrain: Resource | "sea" | "gold" | "desert"; number: number | null };
 export type Board = {
   tiles: Tile[];
@@ -63,16 +63,16 @@ export type Player = {
   knightsPlayed: number;
 };
 export type ExplorationResumePhase =
-  | { type: "setup-settlement" }
+  | { type: "setup-settlement"; tileId?: string }
+  | { type: "setup-reveal" }
   | { type: "setup-road"; vertexId: string }
-  | { type: "reveal" }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" };
 export type GamePhase =
-  | { type: "setup-settlement" }
+  | { type: "setup-settlement"; tileId?: string }
+  | { type: "setup-reveal" }
   | { type: "setup-road"; vertexId: string }
-  | { type: "reveal" }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }

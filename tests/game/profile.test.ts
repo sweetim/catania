@@ -128,6 +128,26 @@ describe("player profile storage", () => {
     expect(createProfile(" Grace ").name).toBe("Grace");
     expect(createProfile("Grace").id).not.toBe(createProfile("Grace").id);
   });
+
+  test("creates and migrates profiles when randomUUID is unavailable", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+    try {
+      const created = createProfile("Grace");
+      const storage = memoryStorage();
+      expect(writeProfileState({ profiles: [created], activeId: created.id }, storage)).toBe(true);
+      expect(activeProfile(readProfileState(storage))).toEqual(created);
+      const migrated = readProfileState(memoryStorage({
+        "catania.profile": JSON.stringify({ games: 3, wins: 1, totalPoints: 27, lastRecordedGameId: "game-3" }),
+      }));
+      expect(migrated.profiles).toHaveLength(1);
+      expect(migrated.profiles[0]).toMatchObject({ name: "Player", games: 3, wins: 1, totalPoints: 27 });
+      expect(migrated.profiles[0]!.id).not.toBe(created.id);
+    } finally {
+      if (descriptor) Object.defineProperty(crypto, "randomUUID", descriptor);
+      else Reflect.deleteProperty(crypto, "randomUUID");
+    }
+  });
 });
 
 describe("recording finished games", () => {

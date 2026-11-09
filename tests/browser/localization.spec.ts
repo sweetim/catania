@@ -48,7 +48,7 @@ test.describe("Japanese browser locale", () => {
     const profile = page.getByRole("button", { name: "Alexとして続ける", exact: true });
     const profileCard = page.getByRole("listitem").filter({ has: profile });
     await expect(profileCard).toContainText("現在のプロフィール");
-    await expect(profileCard.locator(".grid > span")).toHaveText(["0対戦数", "0勝利数", "0合計点"]);
+    await expect(profileCard.locator(".grid > span")).toHaveText(["0対戦数", "0勝利数", "0%勝率", "0合計点"]);
     await expect(page.getByRole("button", { name: "現在のプロフィールに戻る", exact: true })).toHaveCount(0);
     await expect(page.getByText("ゲームで使う名前を入力してください。", { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);

@@ -1,6 +1,7 @@
 import { normalizeMapSeed } from "./game/board";
 import { GameError } from "./game/messages";
 import { isGameVariant, type GameVariant } from "./game/types";
+import { generateIdentifier } from "./identity";
 
 export type ProfileStats = { games: number; wins: number; totalPoints: number };
 export type ProfileGameResult = {
@@ -100,7 +101,7 @@ export function readProfileState(storage: ProfileStorage | null = browserStorage
     profiles = parsed.map(profileFrom).filter((profile): profile is PlayerProfile => profile !== null);
   } else if (legacy !== null) {
     // The pre-profile release stored one anonymous record; it becomes a profile named "Player".
-    const migrated = profileFrom({ ...parse(legacy) as object, id: crypto.randomUUID(), name: "Player" });
+    const migrated = profileFrom({ ...parse(legacy) as object, id: generateIdentifier(), name: "Player" });
     if (migrated) profiles = [migrated];
   }
   const activeId = profiles.some(profile => profile.id === rawActive) ? rawActive : null;
@@ -121,7 +122,7 @@ export function writeProfileState(state: ProfileState, storage: ProfileStorage |
 }
 
 export function createProfile(name: string): PlayerProfile {
-  return { id: crypto.randomUUID(), name: name.trim().normalize("NFC"), games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null, history: [] };
+  return { id: generateIdentifier(), name: name.trim().normalize("NFC"), games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null, history: [] };
 }
 
 export function activeProfile(state: ProfileState): PlayerProfile | null {

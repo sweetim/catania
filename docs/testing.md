@@ -91,6 +91,17 @@ automatic withdrawal at the deadline, private phone request presentation, and
 keeping computer hands hidden throughout an exchange.
 Single-device request fixtures decline earlier computer requests before the
 human's first roll and use scripted dice that trigger the intended build request.
+Mirrored solo fixtures also resolve off-turn computer responses and human declines
+before advancing the requester, preserving the real single-card trading rules.
+Foggy World setup regressions cover cell-first discovery followed by legal nodes
+restricted to the selected land cell, repeated sea discoveries, rejection of
+cells without legal settlement nodes, revealed-land selection when no eligible
+fog remains, persistent sea
+attempts, discovery rewards and gold choices, legal road/ship selection, shared-board
+authority, hidden discovery decks, and complete three- and four-player setups.
+Fog reveal regressions cover setup discoveries across private handoffs without
+replaying completed veils. Menu checks include tabbing out of the document, and
+short desktop lobbies retain a map at least 400 pixels tall with inline version labels.
 Connection tests cover STUN-only configuration for hosts, players, and recreated
 peers; unanswered negotiations, direct ICE failures/timeouts, and missing initial
 snapshots; private-data-free diagnostics; and clearing old errors on retries.

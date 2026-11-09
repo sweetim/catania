@@ -48,7 +48,8 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
   }, [icon, open]);
 
   useEffect(() => {
-    const dismissMenu = (event: PointerEvent | FocusEvent) => {
+    const dismissMenu = (event: PointerEvent | FocusEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent && event.key !== "Tab") return;
       if (menu.current && event.target instanceof Node && !menu.current.contains(event.target)) {
         menu.current.open = false;
       }
@@ -56,9 +57,12 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
     document.addEventListener("pointerdown", dismissMenu);
     // Safari can blur a menu control before delivering a tapped item's click.
     document.addEventListener("focusin", dismissMenu);
+    // Tabbing into browser chrome has no next focusin target in the document.
+    document.addEventListener("keyup", dismissMenu);
     return () => {
       document.removeEventListener("pointerdown", dismissMenu);
       document.removeEventListener("focusin", dismissMenu);
+      document.removeEventListener("keyup", dismissMenu);
     };
   }, []);
 

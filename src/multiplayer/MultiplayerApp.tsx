@@ -511,9 +511,7 @@ export function MultiplayerApp() {
   const currentSelection = selected?.version === snapshot?.version ? selected : null;
   const movingShipId = movingShip?.version === snapshot?.version && snapshot?.buildMode === "move-ship" ? movingShip?.edgeId : null;
   const selectedAction: GameAction | null = !currentSelection || !game ? null : match(currentSelection.kind)
-    .with("tile", (): GameAction => game.phase.type === "reveal"
-      ? { type: "reveal-tile", tileId: currentSelection.id }
-      : { type: game.board.tiles.find(tile => tile.id === currentSelection.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: currentSelection.id })
+    .with("tile", (): GameAction => ({ type: game.phase.type === "setup-reveal" ? "reveal-tile" : game.board.tiles.find(tile => tile.id === currentSelection.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: currentSelection.id }))
     .with("edge", (): GameAction => movingShipId
       ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: currentSelection.id }
       : { type: snapshot?.buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(currentSelection.id) ? "place-ship" : "place-road", edgeId: currentSelection.id })
@@ -709,7 +707,7 @@ export function MultiplayerApp() {
                   onSelect: () => session.current?.perform({ type: "move-pirate", tileId: null }, snapshot.version),
                 } : undefined}
                 legalVertexIds={snapshot.boardTargets.vertices} legalEdgeIds={movingShipId ? legalShipDestinations(game, game.activePlayerId, movingShipId) : snapshot.boardTargets.edges} legalTileIds={snapshot.boardTargets.tiles}
-                tileSelectionMode={game.phase.type === "reveal" ? "reveal" : "robber"}
+                tileSelectionMode={game.phase.type === "setup-reveal" ? "setup" : "robber"}
                 interactive={!disabled && activePlayer?.control !== "computer" && !game.winnerId} selectedId={currentSelection?.id ?? movingShipId}
                 showBlockedSettlementLocations={boardSettings.showBlockedSettlementLocations} fillBoardWithWater={boardSettings.fillBoardWithWater}
                 rolledNumber={game.dice ? game.dice[0] + game.dice[1] : undefined}
@@ -720,7 +718,7 @@ export function MultiplayerApp() {
                     setSelected(null);
                   } else setSelected({ kind, id, version: snapshot.version });
                 }}
-                confirmation={selectedAction ? { title: selectedAction.type === "reveal-tile" ? translateText("Reveal this fog hex?")
+                confirmation={selectedAction ? { title: selectedAction.type === "reveal-tile" ? translateText("Choose this starting cell?")
                   : selectedAction.type === "move-robber" ? translateText("Move the robber here?")
                   : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
                   : selectedAction.type === "move-ship" ? translateText("Move the ship here?")

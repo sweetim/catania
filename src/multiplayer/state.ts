@@ -3,19 +3,20 @@ import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "..
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
-  legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal,
+  legalRoadEdges, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal,
 } from "../game/engine";
 import { isGameVariant, isSeafarers, type Board, type GameAction, type GameState, type GameVariant } from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
 import type { ProfileStats } from "../profile";
+import { generateIdentifier } from "../identity";
 import { parseAction, validName } from "./protocol";
 import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
-const BOARD_ACTIONS = new Set(["place-settlement", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate", "reveal-tile"]);
+const BOARD_ACTIONS = new Set(["place-settlement", "reveal-tile", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate"]);
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
   if (!condition) throw new GameError(message);
@@ -28,9 +29,9 @@ function publicBoard(board: Board): PublicGame["board"] {
 
 export function publicGame(game: GameState, players: RoomPlayer[], gameId: string): PublicGame {
   const phase = match(game.phase)
-    .with({ type: "setup-settlement" }, () => ({ type: "setup-settlement" } as const))
+    .with({ type: "setup-settlement" }, phase => ({ type: "setup-settlement", ...(phase.tileId ? { tileId: phase.tileId } : {}) } as const))
+    .with({ type: "setup-reveal" }, () => ({ type: "setup-reveal" } as const))
     .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId } as const))
-    .with({ type: "reveal" }, () => ({ type: "reveal" } as const))
     .with({ type: "roll" }, () => ({ type: "roll" } as const))
     .with({ type: "actions" }, () => ({ type: "actions" } as const))
     .with({ type: "discard" }, phase => ({ type: "discard", required: { ...phase.required } } as const))
@@ -120,7 +121,7 @@ export class HostRoom {
     const index = PLAYER_COLORS.findIndex(color => !this.seats.some(seat => seat.player.color === color));
     const seat: Seat = {
       player: { id: `player-${index + 1}`, name, color: PLAYER_COLORS[index]!, control },
-      credential: control === "human" ? crypto.randomUUID() : null, connectionId, requests: new Map(),
+      credential: control === "human" ? generateIdentifier() : null, connectionId, requests: new Map(),
       profile: null,
     };
     this.seats.push(seat);
@@ -211,7 +212,7 @@ export class HostRoom {
     requireRoom(this.seats.every(seat => seat.player.control === "computer" || seat.connectionId), "All admitted human players must be connected before starting.");
     this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard);
     // Each game gets a stable identity for player-profile recording, and per-game profile stats start fresh.
-    this.gameId = crypto.randomUUID();
+    this.gameId = generateIdentifier();
     for (const seat of this.seats) seat.profile = null;
     // The engine numbers input profiles; preserve lobby identity when removed players leave gaps.
     const playerIds = new Map(this.seats.map((seat, index) => [`player-${index + 1}`, seat.player.id]));
@@ -230,7 +231,7 @@ export class HostRoom {
   resetGame(): void {
     requireRoom(this.game && this.initialGame, "The game has not started.");
     this.game = structuredClone(this.initialGame);
-    this.gameId = crypto.randomUUID();
+    this.gameId = generateIdentifier();
     this.buildMode = null;
     for (const seat of this.seats) seat.profile = null;
     this.version++;
@@ -300,7 +301,7 @@ export class HostRoom {
       .with({ type: "move-ship" }, action => this.buildMode === "move-ship" &&
         legalShipDestinations(game, game.activePlayerId, action.edgeId).includes(action.destinationEdgeId))
       .with({ type: "move-robber" }, action => targets.tiles.includes(action.tileId))
-      .with({ type: "reveal-tile" }, action => game.phase.type === "reveal" && targets.tiles.includes(action.tileId))
+      .with({ type: "reveal-tile" }, action => legalSetupRevealTiles(game, game.activePlayerId).includes(action.tileId))
       .with({ type: "move-pirate" }, action => action.tileId === null
         ? isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
         : targets.tiles.includes(action.tileId))
@@ -378,12 +379,12 @@ export class HostRoom {
         : [...legalRoadEdges(game, game.activePlayerId), ...legalShipEdges(game, game.activePlayerId)];
     } else if (game.phase.type === "actions" && (this.buildMode === "road" || this.buildMode === "ship")) {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId) : legalRoadEdges(game, game.activePlayerId);
+    } else if (game.phase.type === "setup-reveal") {
+      targets.tiles = legalSetupRevealTiles(game, game.activePlayerId);
     } else if (game.phase.type === "robber") {
       targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
         ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
         : tile.id !== game.robberTileId)).map(tile => tile.id);
-    } else if (game.phase.type === "reveal") {
-      targets.tiles = game.board.tiles.filter(tile => tile.terrain === "fog").map(tile => tile.id);
     }
     return targets;
   }

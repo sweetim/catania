@@ -197,6 +197,8 @@
   .multiplayer-lobby-invitation .lobby-invitation-link { grid-area: link; min-width: 0; margin: 0; }
   .multiplayer-lobby-island { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px; }
   .multiplayer-lobby-island > :first-child { flex: none; margin: 0; }
+  .multiplayer-lobby-island > :first-child label { display: flex; align-items: center; gap: 8px; }
+  .multiplayer-lobby-island > :first-child label > span { margin-bottom: 0; white-space: nowrap; }
   .multiplayer-lobby-island h2 { font-size: 20px; }
   .multiplayer-lobby-map { flex: 1; height: auto; min-height: 0; }
   .multiplayer-lobby-map .board-controls { height: 52px; padding-block: 4px; }

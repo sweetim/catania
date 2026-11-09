@@ -6,7 +6,7 @@ export const boardTranslations = {
   "Fog": "霧",
   "Unexplored fog; terrain and number concealed": "未探索の霧：地形と数字は未公開",
   "Move pirate to sea": "海賊を海に移動",
-  "Reveal fog hex at {location}": "{location}の霧のタイルを公開",
+  "Choose starting cell at {location}": "{location}を初期配置のタイルに選択",
   "Move pirate off board": "海賊を盤外へ移動",
   "Pirate off board": "海賊は盤外です",
   "Pirate; adjacent ships cannot be built or moved": "海賊：隣接する船の建造・移動はできません",

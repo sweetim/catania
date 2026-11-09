@@ -53,6 +53,10 @@ disabling its development-server host checks. Without `HOST`, the default
 listening behavior is unchanged. Only expose the development server on trusted
 networks.
 
+Player profiles and game identifiers work on plain-HTTP network addresses even
+when `crypto.randomUUID` is unavailable; they use `crypto.getRandomValues` instead.
+Camera scanning still requires HTTPS.
+
 ## Language
 
 The initial language follows the first supported language in your browser's

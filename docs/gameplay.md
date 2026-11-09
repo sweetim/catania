@@ -183,25 +183,35 @@ revealed tiles and fog placeholders, never the hidden discovery deck.
 ### Foggy World
 
 A 42-hex map begins completely covered by fog; nothing is revealed, not even
-the island. Harbors stay hidden with their coast hex: each harbor appears, and
-starts granting its trade ratio, only when the fog hex carrying it is revealed.
+the island. All nine harbors retain their trade types, but appear and grant their
+trade ratios only on revealed land-sea coastlines, including the outer map edge.
+After each discovery, unplaced harbors move to the nearest available revealed
+coast without sharing endpoints. Harbors wait hidden and inactive when there is
+not enough revealed coastline; established coastal harbors stay in place.
 The seeded
 discovery deck covers every hex: 26 resource hexes, two gold fields, one desert,
 and 13 sea hexes, with 28 number tokens. The robber and pirate both start off
 board and may enter revealed land or discovered sea on the first seven or Knight.
 
-Before each of the eight starting settlements, the placing player selects fog
-hexes of their choice, one at a time, until revealing land. A revealed sea hex
-grants nothing and the player selects again; resource land grants one matching
-bank card; gold grants one available resource of choice before settling; desert
-ends the reveal with nothing. Settlements may then be placed on any revealed
-land. Starting roads and ships also reveal adjacent fog with the same rewards.
+For each starting settlement, choose a hidden cell first. Only that cell is
+revealed for everyone. If it is sea, it stays revealed and the same player chooses
+another cell, even if nearby land was already visible. After revealing land,
+choose a legal settlement node belonging to that cell, following the normal
+distance rule. Other revealed land cells cannot be used for this placement.
+Cells without any legal settlement nodes cannot be selected. If no eligible fog
+remains, choose an eligible revealed land cell instead, without a discovery reward.
+Each newly revealed resource hex grants one matching available
+bank card; each gold hex grants one available resource of choice; sea and desert
+grant nothing. Resolve gold choices before choosing the settlement node, then choose a connected road or ship on a
+legal edge. Starting roads and ships also reveal adjacent fog with the same rewards.
+Each player places two settlements in forward then reverse order; the second
+settlement also grants the usual resources from adjacent revealed resource land.
 
 After setup, play follows the Fog Islands exploration rules: endpoints of newly
 built roads and ships, and moved ships, reveal adjacent fog with the same
 rewards; revealed land supports settlements and produces normally; neither
 robber nor pirate may enter fog. There are no island bonuses; win at 12 points
-on your own turn. Computer opponents select reveal hexes without inspecting the
+on your own turn. Computer opponents select starting cells and settlement nodes without inspecting the
 hidden deck.
 
 ## Board And Controls

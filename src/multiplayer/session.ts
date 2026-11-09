@@ -8,6 +8,7 @@ import { profileStats, recordGameResultForActive } from "../profile";import { pa
 import type { Command, ServerMessage, TradeIdentity } from "./protocol";
 import { HostRoom } from "./state";
 import type { BuildMode, Invitation, MultiplayerSession, SessionView } from "./types";
+import { generateIdentifier } from "../identity";
 
 type Timer = ReturnType<typeof setTimeout>;
 const RETRY_DELAY = 2000;
@@ -96,8 +97,8 @@ function signaling(id: string, callbacks: {
 }
 
 export function hostSession(onChange: (view: SessionView) => void): MultiplayerSession {
-  const hostId = crypto.randomUUID();
-  const secret = crypto.randomUUID();
+  const hostId = generateIdentifier();
+  const secret = generateIdentifier();
   const room = new HostRoom(secret);
   let closed = false;
   let signalingError: GameMessage | null = null;
@@ -171,7 +172,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
     },
     connection: connection => {
       if (closed || connections.size >= 24 || connection.serialization !== "binary") { connection.close(); return; }
-      const connectionId = crypto.randomUUID();
+      const connectionId = generateIdentifier();
       const entry = { connection, joined: false, timeout: setTimeout(() => remove(connectionId), CONNECTION_TIMEOUT) };
       connections.set(connectionId, entry);
       connection.on("close", () => remove(connectionId));
@@ -392,7 +393,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
       }
     });
   }
-  const link = signaling(crypto.randomUUID(), {
+  const link = signaling(generateIdentifier(), {
     ready: () => { signalingError = null; if (connection?.open) { view = { ...view, error: null }; publish(); } else connect(); },
     failed: error => {
       signalingError = error;
@@ -407,7 +408,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
       view = { ...view, error: { key: "Wait until the host admits your connected phone." } }; publish(); return;
     }
     if (requestId) return;
-    requestId = crypto.randomUUID();
+    requestId = generateIdentifier();
     let message: Command;
     try { message = parseClientMessage({ ...intent, requestId, version: expectedVersion ?? view.snapshot.version }) as Command; }
     catch (error) { clearPending(); view = { ...view, error: gameErrorMessage(error, "Invalid action.") }; publish(); return; }
