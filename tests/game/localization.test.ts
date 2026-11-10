@@ -6,6 +6,8 @@ import { gameplayTranslations } from "../../src/translations/gameplay";
 import { helpTranslations } from "../../src/translations/help";
 import { multiplayerUiTranslations } from "../../src/translations/multiplayer-ui";
 import { HostRoom } from "../../src/multiplayer/state";
+import { getPhaseInstructions } from "../../src/components/TurnInstructions";
+import { getDevelopmentDescriptions } from "../../src/components/GameplayDialogs";
 
 describe("language selection", () => {
   test("uses the first supported browser language, including regional locales", () => {
@@ -36,6 +38,34 @@ describe("language selection", () => {
 });
 
 describe("translations", () => {
+  test.each(["en", "ja"] as const)("Foggy World explains direct second settlements and route choices in %s", language => {
+    const secondSettlement = getPhaseInstructions({
+      phase: { type: "setup-reveal" }, secondSettlement: true, variant: "foggy-world", language,
+    });
+    expect(secondSettlement.title).toBe(language === "en" ? "Place your second settlement." : "2つ目の開拓地を配置しましょう。");
+    expect(secondSettlement.description).toContain(language === "en" ? "directly" : "直接");
+    for (const tileId of [undefined, "tile-1"]) {
+      const route = getPhaseInstructions({
+        phase: { type: "setup-road", vertexId: "vertex-1", ...(tileId ? { tileId } : {}) },
+        secondSettlement: true, variant: "foggy-world", language,
+      });
+      expect(route.description).toContain(language === "en" ? "Choose Road or Ship first" : "まず街道か船を選び");
+      expect(route.description).toContain(language === "en"
+        ? tileId ? "selected cell" : "revealed land"
+        : tileId ? "選んだタイル" : "公開済みの陸地");
+    }
+  });
+
+  test.each([3, 13])("custom %s-point games show the selected target in finished-turn instructions", points => {
+    const options = { phase: { type: "finished" }, secondSettlement: false, victoryPointsToWin: points } as const;
+    expect(getPhaseInstructions({ ...options, language: "en" }).description)
+      .toBe(`The first player to reach ${points} victory points on their turn wins.`);
+    expect(getPhaseInstructions({ ...options, language: "ja" }).description)
+      .toBe(`自分の手番に先に${points}勝利点に到達したプレイヤーが勝利します。`);
+    expect(getDevelopmentDescriptions("en", "original", points)["victory-point"])
+      .toBe("One hidden victory point. Counts automatically toward victory on your turn, including when purchased.");
+  });
+
   const messages = { "{player} receives {count} cards.": "{player}はカードを{count}枚受け取ります。" };
 
   test("keeps English text and interpolates whole Japanese sentences", () => {

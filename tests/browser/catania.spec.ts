@@ -2820,12 +2820,99 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await expect(page.locator(".number-peek")).toHaveCount(0);
 });
 
+for (const selection of ["revealed land", "new fog"] as const) {
+test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  await mapCode.fill("77889999");
+  await mapCode.press("Enter");
+  await showHomeView(page, "Setup");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  const collection = page.getByRole("region", { name: "Resource collection" });
+  async function dismissCollection() {
+    await showView(page, "hand");
+    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    await showView(page, "board");
+  }
+  for (const [tileId, vertexId, edgeId] of [
+    ["tile-1", "vertex-3", "edge-3"],
+    ["tile-2", "vertex-7", "edge-7"],
+    ["tile-13", "vertex-39", "edge-46"],
+  ]) {
+    await revealHand(page);
+    await showView(page, "board");
+    await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await dismissCollection();
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
+    await page.getByRole("button", { name: "Choose roads", exact: true }).click();
+    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  }
+  await dismissCollection();
+  await expect(page.getByRole("heading", { name: "Place your second settlement.", exact: true })).toBeVisible();
+  await expect(page.getByText("Place your second settlement directly on a highlighted node on revealed land, or reveal a new cell. Sea? Choose again.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose starting cell at tile-12", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Place settlement at vertex-9", exact: true })).toBeVisible();
+  const fog = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+  const fogCount = await fog.count();
+  expect(fogCount).toBeGreaterThan(0);
+  const tileId = selection === "revealed land" ? "tile-1" : "tile-12";
+  await screenshot(page, testInfo, "foggy-world-second-settlement-choices", false);
+  if (selection === "revealed land") {
+    const node = page.getByRole("button", { name: "Place settlement at vertex-9", exact: true });
+    await node.click();
+    await expect(page.getByText("Settle here?", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(fog).toHaveCount(fogCount);
+    await node.click();
+  } else {
+    await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(fog).toHaveCount(fogCount - 1);
+    await showView(page, "hand");
+    await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
+    await dismissCollection();
+    await page.getByRole("button", { name: /^Place settlement at / }).first().click();
+  }
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(fog).toHaveCount(fogCount - (selection === "new fog" ? 1 : 0));
+  await dismissCollection();
+  await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
+  const chooseRoads = page.getByRole("button", { name: "Choose roads", exact: true });
+  const chooseShips = page.getByRole("button", { name: "Choose ships", exact: true });
+  await expect(chooseRoads).toHaveAttribute("aria-pressed", "false");
+  await expect(chooseShips).toHaveAttribute("aria-pressed", "false");
+  await chooseShips.click();
+  await expect(page.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Build ship at / }).first()).toBeVisible();
+  await chooseRoads.click();
+  const board = createBoard(seededRandom("77889999"), "foggy-world");
+  const tile = board.tiles.find(tile => tile.id === tileId)!;
+  const boundaryEdges = board.edges.filter(edge => edge.vertexIds.every(id => tile.vertexIds.includes(id))).map(edge => edge.id);
+  const routeTargets = await page.getByRole("button", { name: /^Build road at / }).evaluateAll(targets =>
+    targets.map(target => target.getAttribute("aria-label")!.replace("Build road at ", "")),
+  );
+  expect(routeTargets.length).toBeGreaterThan(0);
+  expect(routeTargets.every(id => selection === "new fog" ? boundaryEdges.includes(id)
+    : board.edges.find(edge => edge.id === id)!.vertexIds.includes("vertex-9"))).toBe(true);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, `foggy-world-second-${selection.replaceAll(" ", "-")}`, false);
+});
+}
+
 for (const piece of ["road", "ship"] as const) {
 test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
-  await expect(page.getByText("Every hex starts hidden under fog.", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("Every hex starts hidden under fog", { exact: false }).first()).toBeVisible();
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
@@ -2847,7 +2934,7 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   const revealTargets = page.getByRole("button", { name: /^Choose starting cell at / });
   await expect(revealTargets).toHaveCount(42);
   await screenshot(page, testInfo, "foggy-world-starting-cell", false);
-  await page.getByRole("button", { name: "Choose starting cell at tile-2", exact: true }).click();
+  await page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
   await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
   await expect(fogLabels).toHaveCount(42);
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
@@ -2857,47 +2944,51 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
   await expect(revealTargets).toHaveCount(41);
-  await expect(page.getByRole("button", { name: "Choose starting cell at tile-2", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
   await expect(fogLabels).toHaveCount(41);
-  await page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
+  await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
   await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(fogLabels).toHaveCount(41);
   await expect(revealTargets).toHaveCount(41);
-  await page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
+  await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(fogLabels).toHaveCount(40);
   await expect(revealTargets).toHaveCount(0);
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
   await expect(page.getByRole("img", { name: /^Fields, grain, roll 11/ })).toBeVisible();
-  await expect(harbors).toHaveCount(0);
+  await expect(harbors).toHaveCount(1);
   const collection = page.getByRole("region", { name: "Resource collection" });
   await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
   await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
   await showView(page, "board");
   await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
-  const selectedCell = createBoard(seededRandom("77889999"), "foggy-world").tiles.find(tile => tile.id === "tile-0")!;
+  const selectedCell = createBoard(seededRandom("77889999"), "foggy-world").tiles.find(tile => tile.id === "tile-1")!;
   await expect.poll(() => page.getByRole("button", { name: /^Place settlement at / }).evaluateAll(targets =>
     targets.map(target => target.getAttribute("aria-label")).sort(),
   )).toEqual(selectedCell.vertexIds.map(id => `Place settlement at ${id}`).sort());
   await expect(page.getByRole("img", { name: /'s settlement at / })).toHaveCount(0);
   await screenshot(page, testInfo, "foggy-world-cell-first-nodes", false);
-  await page.getByRole("button", { name: "Place settlement at vertex-0", exact: true }).click();
+  await page.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
+  await expect(page.getByText("Choose Road or Ship first, then choose an edge of the selected cell beside your new settlement.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
   const chooseRoads = page.getByRole("button", { name: "Choose roads", exact: true });
   const chooseShips = page.getByRole("button", { name: "Choose ships", exact: true });
   await chooseShips.click();
   await expect(chooseShips).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Build ship at edge-0", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build ship at edge-3", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build ship at edge-2", exact: true })).toHaveCount(0);
   await chooseRoads.click();
   await expect(chooseRoads).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
   if (piece === "ship") await chooseShips.click();
   await screenshot(page, testInfo, `foggy-world-route-choice-${piece}`, false);
-  await page.getByRole("button", { name: `Build ${piece} at edge-0`, exact: true }).click();
+  await page.getByRole("button", { name: `Build ${piece} at edge-3`, exact: true }).click();
   await expect(page.getByText(piece === "ship" ? "Build a ship here?" : "Build a road here?", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await revealHand(page);
@@ -2906,10 +2997,10 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await expect(revealTargets.first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await expect(page.getByRole("img", { name: /^Pasture, wool, roll 8/ })).toBeVisible();
-  await expect(fogLabels).toHaveCount(37);
+  await expect(page.getByRole("img", { name: /^Hills, brick, roll 10/ })).toBeVisible();
+  await expect(fogLabels).toHaveCount(38);
   await expect(harbors).toHaveCount(1);
-  await expect(page.getByRole("img", { name: new RegExp(`'s ${piece} at edge-0$`) })).toHaveCount(1);
+  await expect(page.getByRole("img", { name: new RegExp(`'s ${piece} at edge-3$`) })).toHaveCount(1);
   const coastMidpoints = await page.locator('.board-map g[stroke="#b8a777"] > line').evaluateAll(lines => lines.map(element => {
     const line = element as SVGLineElement;
     return { x: (line.x1.baseVal.value + line.x2.baseVal.value) / 2, y: (line.y1.baseVal.value + line.y2.baseVal.value) / 2 };
@@ -2926,7 +3017,7 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   }
   await noPageOverflow(page);
   await screenshot(page, testInfo, `foggy-world-node-${piece}`, false);
-  await expect(fogLabels).toHaveCount(37);
+  await expect(fogLabels).toHaveCount(38);
   await page.getByRole("button", { name: "Choose starting cell at tile-38", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await showView(page, "hand");
@@ -2937,7 +3028,7 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await gold.getByRole("button", { name: "Collect resources", exact: true }).click();
   if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
   await showView(page, "board");
-  await expect(fogLabels).toHaveCount(36);
+  await expect(fogLabels).toHaveCount(37);
   await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
   await expect(revealTargets).toHaveCount(0);
   await page.getByRole("button", { name: "Place settlement at vertex-8", exact: true }).click();

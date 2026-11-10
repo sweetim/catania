@@ -3,9 +3,9 @@ import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "..
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
-  legalRoadEdges, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal,
+  legalRoadEdges, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
 } from "../game/engine";
-import { isGameVariant, isSeafarers, type Board, type GameAction, type GameState, type GameVariant } from "../game/types";
+import { isGameVariant, isSeafarers, isVictoryPointsToWin, type Board, type GameAction, type GameState, type GameVariant } from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
@@ -23,7 +23,7 @@ function requireRoom(condition: unknown, message: GameMessage["key"]): asserts c
 }
 
 function publicBoard(board: Board): PublicGame["board"] {
-  const { fogDiscoveryDeck, ...visibleBoard } = board;
+  const { fogDiscoveryDeck, fogDiscoveriesByTileId, ...visibleBoard } = board;
   return visibleBoard;
 }
 
@@ -31,7 +31,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
   const phase = match(game.phase)
     .with({ type: "setup-settlement" }, phase => ({ type: "setup-settlement", ...(phase.tileId ? { tileId: phase.tileId } : {}) } as const))
     .with({ type: "setup-reveal" }, () => ({ type: "setup-reveal" } as const))
-    .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId } as const))
+    .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId, ...(phase.tileId ? { tileId: phase.tileId } : {}) } as const))
     .with({ type: "roll" }, () => ({ type: "roll" } as const))
     .with({ type: "actions" }, () => ({ type: "actions" } as const))
     .with({ type: "discard" }, phase => ({ type: "discard", required: { ...phase.required } } as const))
@@ -42,7 +42,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
     .with({ type: "finished" }, () => ({ type: "finished" } as const))
     .exhaustive();
   return structuredClone({
-    variant: game.variant, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
+    variant: game.variant, victoryPointsToWin: game.victoryPointsToWin, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
     board: publicBoard(game.board), bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
@@ -77,6 +77,7 @@ type Seat = {
 
 export class HostRoom {
   variant: GameVariant = "original";
+  victoryPointsToWin = victoryTarget(this.variant);
   version = 0;
   game: GameState | null = null;
   buildMode: BuildMode = null;
@@ -96,6 +97,15 @@ export class HostRoom {
     this.mapSeed = generateMapSeed();
     this.previewBoard = createBoard(seededRandom(this.mapSeed), variant);
     this.variant = variant;
+    this.victoryPointsToWin = victoryTarget(variant);
+    this.version++;
+  }
+
+  setVictoryPointsToWin(points: number): void {
+    requireRoom(!this.game, "The victory target can only be changed in the lobby.");
+    requireRoom(isVictoryPointsToWin(points), "Choose a whole number from 3 to 13 victory points.");
+    if (points === this.victoryPointsToWin) return;
+    this.victoryPointsToWin = points;
     this.version++;
   }
 
@@ -210,7 +220,7 @@ export class HostRoom {
     requireRoom(!this.game, "The game has already started.");
     requireRoom(this.seats.length >= 3 && this.seats.length <= 4, "Add three or four players before starting.");
     requireRoom(this.seats.every(seat => seat.player.control === "computer" || seat.connectionId), "All admitted human players must be connected before starting.");
-    this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard);
+    this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard, this.variant, this.victoryPointsToWin);
     // Each game gets a stable identity for player-profile recording, and per-game profile stats start fresh.
     this.gameId = generateIdentifier();
     for (const seat of this.seats) seat.profile = null;
@@ -292,7 +302,7 @@ export class HostRoom {
     requireRoom(BOARD_ACTIONS.has(action.type), "The shared board can only place pieces or move the robber. Use the active player's phone for other actions.");
     const targets = this.targets();
     const authorized = match(action)
-      .with({ type: "place-settlement" }, action => (game.phase.type === "setup-settlement" || this.buildMode === "settlement") && targets.vertices.includes(action.vertexId))
+      .with({ type: "place-settlement" }, action => (game.phase.type === "setup-settlement" || game.phase.type === "setup-reveal" || this.buildMode === "settlement") && targets.vertices.includes(action.vertexId))
       .with({ type: "place-city" }, action => this.buildMode === "city" && targets.vertices.includes(action.vertexId))
       .with({ type: "place-road" }, action => (this.buildMode === null || this.buildMode === "road") &&
         targets.edges.includes(action.edgeId) && legalRoadEdges(game, game.activePlayerId).includes(action.edgeId))
@@ -376,10 +386,12 @@ export class HostRoom {
     } else if (game.phase.type === "setup-road" || game.phase.type === "road-building") {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId)
         : this.buildMode === "road" ? legalRoadEdges(game, game.activePlayerId)
-        : [...legalRoadEdges(game, game.activePlayerId), ...legalShipEdges(game, game.activePlayerId)];
+      : game.variant === "foggy-world" && game.phase.type === "setup-road" ? []
+      : [...legalRoadEdges(game, game.activePlayerId), ...legalShipEdges(game, game.activePlayerId)];
     } else if (game.phase.type === "actions" && (this.buildMode === "road" || this.buildMode === "ship")) {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId) : legalRoadEdges(game, game.activePlayerId);
     } else if (game.phase.type === "setup-reveal") {
+      targets.vertices = legalSettlementVertices(game, game.activePlayerId);
       targets.tiles = legalSetupRevealTiles(game, game.activePlayerId);
     } else if (game.phase.type === "robber") {
       targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
@@ -396,7 +408,7 @@ export class HostRoom {
     const game = host || seat ? this.game : null;
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
-      version: this.version, players, variant: this.variant,
+      version: this.version, players, variant: this.variant, victoryPointsToWin: this.victoryPointsToWin,
       ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),

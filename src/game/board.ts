@@ -264,6 +264,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     }
   }
   let fogDiscoveryDeck: FogDiscovery[] | undefined;
+  let fogDiscoveriesByTileId: Record<string, FogDiscovery> | undefined;
   if (isSeafarers(variant)) {
     if (variant === "four-islands") {
       positions.length = 0;
@@ -304,7 +305,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       }
       const discoveryNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12, 6, 6, 8, 8,
         2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
-      fogDiscoveryDeck = shuffle<FogDiscovery["terrain"]>([
+      fogDiscoveriesByTileId = Object.fromEntries(shuffle<FogDiscovery["terrain"]>([
         "wood", "wood", "wood", "wood", "wood", "wood",
         "brick", "brick", "brick", "brick",
         "wool", "wool", "wool", "wool", "wool", "wool",
@@ -312,7 +313,9 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         "ore", "ore", "ore", "ore",
         "gold", "gold", "desert",
         ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
-      ], random).map(terrain => ({ terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()! }));
+      ], random).map((terrain, index) => [`tile-${index}`, {
+        terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()!,
+      }]));
     } else {
       const islands = [
         [[1, -4], [2, -4]],
@@ -434,7 +437,8 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     return { edgeId: edge.id, resource };
   });
   return { tiles, vertices, edges, ports, ...(isSeafarers(variant) ? { variant } : {}),
-    ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}) };
+    ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}),
+    ...(fogDiscoveriesByTileId ? { fogDiscoveriesByTileId } : {}) };
 }
 
 /** Picks the pirate ship's starting sea tile, so it varies with every shuffle. */

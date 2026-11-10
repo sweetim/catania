@@ -120,6 +120,8 @@ export function Board({
   compact = false,
   fit = false,
   victoryTarget,
+  onChangeVictoryTarget,
+  victoryTargetDisabled = false,
 }: {
   board: BoardState;
   fogRevealHistory?: ReturnType<typeof useFogRevealHistory>;
@@ -155,6 +157,8 @@ export function Board({
   compact?: boolean;
   fit?: boolean;
   victoryTarget?: number;
+  onChangeVictoryTarget?: (points: number) => void;
+  victoryTargetDisabled?: boolean;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(boardTranslations);
@@ -1631,12 +1635,29 @@ export function Board({
         )}
         {victoryTarget !== undefined && (
           <span className="@container pointer-events-none flex min-w-0 flex-1 items-center justify-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[10px] font-bold uppercase tabular-nums tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]">
+            <span
+              className={`relative inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[10px] font-bold uppercase tabular-nums tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814] ${onChangeVictoryTarget ? "pointer-events-auto focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#886636] @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden" : ""}`}
+              title={onChangeVictoryTarget ? translateText("Victory points to win") : undefined}
+            >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
                 <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
               </svg>
               <span className="whitespace-nowrap @max-[120px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
               <span className="hidden whitespace-nowrap @max-[120px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
+              {onChangeVictoryTarget && <>
+                <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="hidden shrink-0 @min-[120px]:block">
+                  <path d="m3 4.5 3 3 3-3" />
+                </svg>
+                <select
+                  aria-label={translateText("Victory points to win")}
+                  className="absolute inset-x-0 top-1/2 min-h-11 w-full -translate-y-1/2 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  value={victoryTarget}
+                  disabled={victoryTargetDisabled}
+                  onChange={event => onChangeVictoryTarget(Number(event.target.value))}
+                >
+                  {Array.from({ length: 11 }, (_, index) => index + 3).map(points => <option key={points} value={points}>{points}</option>)}
+                </select>
+              </>}
             </span>
           </span>
         )}

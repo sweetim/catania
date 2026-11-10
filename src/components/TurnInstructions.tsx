@@ -12,6 +12,7 @@ export function getPhaseInstructions({
   sharedBoard = false,
   language = "en",
   variant = "original",
+  victoryPointsToWin = victoryTarget(variant),
 }: {
   phase: GamePhase;
   secondSettlement: boolean;
@@ -19,6 +20,7 @@ export function getPhaseInstructions({
   sharedBoard?: boolean;
   language?: Language;
   variant?: GameVariant;
+  victoryPointsToWin?: number;
 }) {
   const translateText = (message: keyof typeof gameplayTranslations, parameters?: Record<string, string | number>) =>
     translate(language, gameplayTranslations, message, parameters);
@@ -36,12 +38,17 @@ export function getPhaseInstructions({
           : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),
     }))
     .with({ type: "setup-reveal" }, () => ({
-      title: translateText("Choose a starting cell."),
-      description: translateText("Reveal one cell. Sea? Choose again. Land? Place a settlement on that cell."),
+      title: translateText(secondSettlement ? "Place your second settlement." : "Choose a starting cell."),
+      description: translateText(secondSettlement
+        ? "Place your second settlement directly on a highlighted node on revealed land, or reveal a new cell. Sea? Choose again."
+        : "Reveal one cell. Sea? Choose again. Land? Place a settlement on that cell."),
     }))
-    .with({ type: "setup-road" }, () => ({
+    .with({ type: "setup-road" }, phase => ({
       title: translateText("Every journey starts here."),
-      description: isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
+      description: variant === "foggy-world" ? translateText(phase.tileId
+        ? "Choose Road or Ship first, then choose an edge of the selected cell beside your new settlement."
+        : "Choose Road or Ship first, then choose an edge bordering revealed land beside your new settlement.")
+        : isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
@@ -87,7 +94,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "finished" }, () => ({
       title: translateText("An island. A new legend."),
-      description: translateText("The first player to reach {points} victory points on their turn wins.", { points: victoryTarget(variant) }),
+      description: translateText("The first player to reach {points} victory points on their turn wins.", { points: victoryPointsToWin }),
     }))
     .exhaustive();
 }

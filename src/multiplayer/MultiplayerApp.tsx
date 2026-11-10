@@ -21,7 +21,7 @@ import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
-import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget } from "../game/engine";
+import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
 import { isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
@@ -205,6 +205,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     language,
     phase: game.phase,
     variant: game.variant,
+    victoryPointsToWin: game.victoryPointsToWin,
     secondSettlement: game.board.vertices.filter(vertex => vertex.building).length >= game.players.length,
     pendingKnight: game.canCancelKnight,
     sharedBoard: true,
@@ -296,7 +297,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         <p className="sr-only">{translateText("Building needs resources, an available piece, and a legal connection after your roll.")}</p>
         <button className="button-secondary mt-2 w-full px-2" disabled={disabled || !normalActions} onClick={() => { setEditorVersion(snapshot.version); setEditor("trade"); }}>{translateText("Make a trade")}</button>
       </CollapsibleSection>
-      <DevelopmentHand variant={game.variant} cards={player.developmentCards} turnNumber={game.turnNumber} onSelect={cardId => { setDevelopmentCardId(cardId); setEditorVersion(snapshot.version); setEditor("development"); }} />
+      <DevelopmentHand variant={game.variant} victoryPointsToWin={game.victoryPointsToWin} cards={player.developmentCards} turnNumber={game.turnNumber} onSelect={cardId => { setDevelopmentCardId(cardId); setEditorVersion(snapshot.version); setEditor("development"); }} />
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
@@ -354,7 +355,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
 
     {editor === "trade" && <TradeDialog game={game} player={player} initialMode={tradeMode} onModeChange={setTradeMode} initialOffer={trade?.offeredBy === player.id ? trade : undefined} disabled={disabled || !normalActions || editorStale} error={editorStale ? staleMessage : error}
       onClose={() => { setEditor(null); if (trade) setDetails("trade-response"); }} onSubmit={action => send(action, editorVersion)} />}
-    {editor === "development" && <DevelopmentDialog variant={game.variant} player={player} bank={game.bank} turnNumber={game.turnNumber} phaseType={game.phase.type} developmentPlayed={game.developmentPlayed} initialCardId={developmentCardId} active={active} disabled={disabled || editorStale} error={editorStale ? staleMessage : error}
+    {editor === "development" && <DevelopmentDialog variant={game.variant} victoryPointsToWin={game.victoryPointsToWin} player={player} bank={game.bank} turnNumber={game.turnNumber} phaseType={game.phase.type} developmentPlayed={game.developmentPlayed} initialCardId={developmentCardId} active={active} disabled={disabled || editorStale} error={editorStale ? staleMessage : error}
       onClose={() => setEditor(null)} onSubmit={action => send(action, editorVersion)} />}
     {confirmation && <ActionConfirmation title={translateText(confirmation.title, confirmation.parameters)} player={{ name: player.name, color: player.color }} description={confirmation.description ? translateText(confirmation.description, confirmation.parameters) : undefined} exchange={confirmation.exchange} resources={confirmation.action.type === "steal" ? undefined : player.resources}
       disabled={disabled || confirmation.version !== snapshot.version} error={confirmation.version !== snapshot.version ? staleMessage : error}
@@ -600,7 +601,9 @@ export function MultiplayerApp() {
                   interactive={false}
                   compact
                   fit
-                  victoryTarget={victoryTarget(snapshot.variant)}
+                  victoryTarget={snapshot.victoryPointsToWin}
+                  onChangeVictoryTarget={points => session.current?.setVictoryPointsToWin(points)}
+                  victoryTargetDisabled={disabled}
                   onChangeTheme={() => setDialog("theme")}
                   headerControls={<MapSeedControls
                     value={mapCode}
@@ -611,7 +614,7 @@ export function MultiplayerApp() {
                   />}
                 />
               </div>
-              {isSeafarers(snapshot.variant) && <p className="mt-4 text-xs leading-5 text-muted"><GameVariantSummary variant={snapshot.variant} /></p>}
+              {isSeafarers(snapshot.variant) && <p className="mt-4 text-xs leading-5 text-muted"><GameVariantSummary variant={snapshot.variant} victoryPointsToWin={snapshot.victoryPointsToWin} /></p>}
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
           {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
@@ -649,7 +652,7 @@ export function MultiplayerApp() {
             <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
             {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
             {!host && snapshot && <p className="my-4 text-xs leading-5 text-muted">
-              {snapshot.variant === "original" ? translateText("Original") : <GameVariantSummary variant={snapshot.variant} />}
+              {snapshot.variant === "original" ? <>{translateText("Original")} / {translateText("First to {points} points wins.", { points: snapshot.victoryPointsToWin })}</> : <GameVariantSummary variant={snapshot.variant} victoryPointsToWin={snapshot.victoryPointsToWin} />}
             </p>}
             {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
             {snapshot && <>
@@ -696,7 +699,7 @@ export function MultiplayerApp() {
           <section aria-label={translateText("Shared game board")} className="table-board flex min-w-0 flex-1">
             <div className="board-tablemat">
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
-                victoryTarget={victoryTarget(game.variant)}
+                victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
                 routeChoice={isSeafarers(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
@@ -781,7 +784,7 @@ export function MultiplayerApp() {
       </main>
       {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices key={game.gameId} thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
       {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
-      {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} multiplayer onClose={() => setDialog(null)} />}
+      {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} victoryPointsToWin={game?.victoryPointsToWin ?? snapshot?.victoryPointsToWin} multiplayer onClose={() => setDialog(null)} />}
       {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "reset" && host && game && <Dialog title={translateText("Reset this game?")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText("Restart from the first settlement on the same island with the same players. All current progress will be lost.")}</p>

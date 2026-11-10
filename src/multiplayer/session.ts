@@ -219,6 +219,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   onChange(view);
   return {
     setVariant: variant => perform(() => room.setVariant(variant)),
+    setVictoryPointsToWin: points => perform(() => room.setVictoryPointsToWin(points)),
     shuffleBoard: () => perform(() => room.shuffleBoard()),
     useMapSeed: seed => perform(() => room.useMapSeed(seed)),
     startGame: () => perform(() => {
@@ -420,7 +421,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    setVariant: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
+    setVariant: hostOnly, setVictoryPointsToWin: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion, trade) => command({ type: "action", action, ...(trade ? { trade } : {}) }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

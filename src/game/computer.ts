@@ -1,7 +1,7 @@
 import { match } from "ts-pattern";
 import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges,
-  legalSetupRevealTiles, RESOURCES, resourceTotal, victoryTarget,
+  legalSetupRevealTiles, RESOURCES, resourceTotal,
 } from "./engine";
 import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
 import { isSeafarers } from "./types";
@@ -79,7 +79,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
   const planningState: GameState = { ...state, activePlayerId: playerId, phase: { type: "actions" } };
   const publicScores = new Map(state.players.map(other => [other.id, getPublicScore(state, other.id).public]));
   const score = getScore(state, playerId).total;
-  const winsWith = (points: number) => score + points >= victoryTarget(state.variant);
+  const winsWith = (points: number) => score + points >= state.victoryPointsToWin;
 
   function bestRoad(roadState: GameState): { edgeId: string; kind: "road" | "ship"; expansion: boolean; value: number; points: number } | null {
     const roads = legalRoadEdges(roadState, playerId);
@@ -230,7 +230,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const before = Math.max(0, ...targets.map(target => priority(target)));
     const after = { ...player.resources };
     if (trade.give === null) {
-      if (publicScores.get(trade.offeredBy)! >= victoryTarget(state.variant) - 1) {
+      if (publicScores.get(trade.offeredBy)! >= state.victoryPointsToWin - 1) {
         return { type: "respond-trade", accept: false };
       }
       if (RESOURCES.some(resource => player.resources[resource] < trade.receive[resource])) {
@@ -258,7 +258,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     }
     for (const resource of RESOURCES) after[resource] += trade.give[resource] - trade.receive[resource];
     const improvement = Math.max(0, ...targets.map(target => priority(target, after))) - before;
-    const contender = publicScores.get(trade.offeredBy)! >= victoryTarget(state.variant) - 1;
+    const contender = publicScores.get(trade.offeredBy)! >= state.victoryPointsToWin - 1;
     return {
       type: "respond-trade",
       accept: !contender && RESOURCES.every(resource => player.resources[resource] >= trade.receive[resource]) &&
@@ -268,9 +268,12 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
   }
 
   return match(state.phase)
-    .with({ type: "setup-reveal" }, (): GameAction => ({
-      type: "reveal-tile", tileId: legalSetupRevealTiles(state, playerId)[0]!,
-    }))
+    .with({ type: "setup-reveal" }, (): GameAction | null => {
+      const tileId = legalSetupRevealTiles(state, playerId)[0];
+      if (tileId) return { type: "reveal-tile", tileId };
+      const vertexId = bestVertex(legalSettlementVertices(state, playerId));
+      return vertexId ? { type: "place-settlement", vertexId } : null;
+    })
     .with({ type: "setup-settlement" }, (): GameAction | null => {
       const vertexId = bestVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;
@@ -325,7 +328,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         for (const [otherId, price] of Object.entries(trade.responses)) {
           if (!price || resourceTotal(price) > resourceTotal(trade.receive) ||
             RESOURCES.some(resource => price[resource] > player.resources[resource]) ||
-            publicScores.get(otherId)! >= victoryTarget(state.variant) - 1) continue;
+            publicScores.get(otherId)! >= state.victoryPointsToWin - 1) continue;
           const after = { ...player.resources };
           for (const resource of RESOURCES) after[resource] += trade.receive[resource] - price[resource];
           if (deficit(after, cost) < deficit(player.resources, cost)) {

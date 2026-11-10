@@ -33,10 +33,10 @@ export type ScoreBreakdown = {
 
 export type PublicGame = Pick<GameState,
   "bank" | "activePlayerId" | "turnNumber" | "dice" |
-  "robberTileId" | "pirateTileId" | "variant" | "shipMoved" | "shipsBuiltThisTurn" |
+  "robberTileId" | "pirateTileId" | "variant" | "victoryPointsToWin" | "shipMoved" | "shipsBuiltThisTurn" |
   "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {
-  board: Omit<Board, "fogDiscoveryDeck">;
+  board: Omit<Board, "fogDiscoveryDeck" | "fogDiscoveriesByTileId">;
   gameId: string;
   players: PublicPlayer[];
   phase: Exclude<GamePhase, { type: "robber" | "gold" }> | {
@@ -52,10 +52,11 @@ export type PublicGame = Pick<GameState,
 
 export type RoomSnapshot = {
   variant: GameVariant;
+  victoryPointsToWin: number;
   version: number;
   players: RoomPlayer[];
   pendingPlayers?: { connectionId: string; name: string }[];
-  previewBoard?: Omit<Board, "fogDiscoveryDeck">;
+  previewBoard?: Omit<Board, "fogDiscoveryDeck" | "fogDiscoveriesByTileId">;
   mapSeed?: string;
   profiles?: Record<string, ProfileStats>;
   game: PublicGame | null;
@@ -81,6 +82,7 @@ export type SessionView = {
 
 export type MultiplayerSession = {
   setVariant: (variant: GameVariant) => void;
+  setVictoryPointsToWin: (points: number) => void;
   startGame: () => void;
   resetGame: () => void;
   endGame: () => void;

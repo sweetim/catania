@@ -80,6 +80,11 @@ renaming and left-side player avatars, exact lobby-map preservation after zero o
 multiple shuffles, one phone with two automatic computer opponents, private-hand
 projections, and reconnect readiness. Host-session tests cover computer timer cleanup,
 stale callbacks, off-turn discards/trades, and shared-board authority restrictions.
+Victory-target regressions cover the host-only 3-13 selector in the map's gold VP
+badge, keyboard selection, narrow-screen touch targets, scenario-default resets,
+phone synchronization, localized rules, unchanged maps, and reset/rematch retention.
+Engine and computer tests verify custom winning thresholds, including both endpoints,
+and network validation rejects invalid targets and phone configuration commands.
 Reset regressions cover Original and Seafarers on desktop and mobile, confirmation
 and cancellation, exact initial islands and turn order, cleared hands and pending
 placements, resetting during a roll, host-only authority, synchronized phones,
@@ -95,10 +100,12 @@ Mirrored solo fixtures also resolve off-turn computer responses and human declin
 before advancing the requester, preserving the real single-card trading rules.
 Foggy World setup regressions cover cell-first discovery followed by legal nodes
 restricted to the selected land cell, repeated sea discoveries, rejection of
-cells without legal settlement nodes, revealed-land selection when no eligible
-fog remains, persistent sea
-attempts, discovery rewards and gold choices, legal road/ship selection, shared-board
-authority, hidden discovery decks, and complete three- and four-player setups.
+cells without legal settlement nodes, direct second-settlement placement on
+revealed-land nodes alongside fog reveal targets, persistent sea attempts,
+discovery rewards and gold choices, explicit Road/Ship choices before setup edges
+appear, route placement restricted to the selected cell's boundary (or adjacent
+revealed land after direct placement), shared-board authority, hidden fixed terrain,
+discovery-order independence, and complete three- and four-player setups.
 Fog reveal regressions cover setup discoveries across private handoffs without
 replaying completed veils. Menu checks include tabbing out of the document, and
 short desktop lobbies retain a map at least 400 pixels tall with inline version labels.

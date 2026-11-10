@@ -36,7 +36,15 @@ The shared screen hosts the game without occupying a player seat.
    The host chooses **Original**, **Seafarers** (Heading for New Shores),
    **Four Islands**, or **Fog Islands** under **Game version**; Original is the default.
    Changing the version regenerates the preview and synchronizes the choice to all
-   phones without changing the roster. All scenarios use the rules described in the
+   phones without changing the roster. Select the gold **VP** badge in the map's
+   zoom bar to choose **Victory points to win** from **3 to 13**. The map, phone lobby summaries,
+   help, and victory checks use this target. It stays fixed during play and is
+   preserved when resetting the game or returning to the lobby for a rematch.
+   Changing the game version resets it to that scenario's default: **10** for
+   Original, **13** for Seafarers, and **12** for the other scenarios.
+   Shuffling or loading a map code does not change it; map codes describe only the
+   island, not the victory target. Phones cannot change the target.
+   All scenarios use the rules described in the
    [gameplay guide](gameplay.md#seafarers-heading-for-new-shores). Fog discoveries
    appear on every device, but the hidden discovery deck remains with the host.
     Choose **Shuffle** to generate another island before starting. Every generated

@@ -5,27 +5,27 @@ import { helpTranslations } from "../translations/help";
 import { getDevelopmentNames, getDevelopmentDescriptions } from "./GameplayDialogs";
 import { CardTypeIcon, Cost, DevelopmentCardIcon, Dialog, PieceIcon } from "./GameUi";
 
-export function HelpDialog({ onClose, multiplayer = false, variant = "original" }: { onClose: () => void; multiplayer?: boolean; variant?: GameVariant }) {
+export function HelpDialog({ onClose, multiplayer = false, variant = "original", victoryPointsToWin = victoryTarget(variant) }: { onClose: () => void; multiplayer?: boolean; variant?: GameVariant; victoryPointsToWin?: number }) {
   const { language } = useLanguage();
   const translateText = useTranslation(helpTranslations);
   const developmentNames = getDevelopmentNames(language);
-  const developmentDescriptions = getDevelopmentDescriptions(language, variant);
+  const developmentDescriptions = getDevelopmentDescriptions(language, variant, victoryPointsToWin);
   const scenarioRules = variant === "four-islands"
-    ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach 12 points on your own turn to win."
+    ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach {points} points on your own turn to win."
     : variant === "fog-islands"
-      ? "Place starting settlements on any revealed starting island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach 12 points on your own turn to win."
+      ? "Place starting settlements on any revealed starting island. When an endpoint of a newly placed road or ship, or a moved ship, touches fog, reveal that hex. Resource land immediately grants one matching resource from the bank; gold grants one resource choice; sea grants nothing. There are no island bonuses. Reach {points} points on your own turn to win."
       : variant === "foggy-world"
-        ? "Choose a hidden cell before each starting settlement. Reveal only that cell. Sea stays revealed and lets you choose another cell. After land is revealed, place your settlement at a legal node belonging to that cell. Cells without legal settlement nodes cannot be selected. If no eligible fog remains, choose a revealed land cell instead. Each resource discovery grants one matching available bank card, gold grants one available resource choice before settlement placement, and sea or desert grants nothing. Then choose a connected road or ship on a legal edge. All nine harbors keep their trade types and appear only on revealed land-sea coasts, including the outer map edge. Unplaced harbors move to the nearest available coast after each discovery, or wait hidden and inactive until space is available. Established coastal harbors stay in place. After setup, endpoints of newly placed roads or ships, and moved ships, reveal adjacent fog with the same rewards. Neither robber nor pirate may enter fog. There are no island bonuses. Reach 12 points on your own turn to win."
-        : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach 13 points on your own turn to win.";
+        ? "Terrain and numbers are fixed before play and hidden under fog. Choose a hidden cell for your first settlement; for your second, place directly on a legal node on revealed land or choose a hidden cell. Reveal only the chosen cell. Sea stays revealed and lets you choose another cell. After revealing land, place your settlement at a legal node belonging to that cell. Cells without legal settlement nodes cannot be selected. If no eligible fog remains for your first settlement, choose a revealed land cell instead. Each resource discovery grants one matching available bank card, gold grants one available resource choice before settlement placement, and sea or desert grants nothing. Using revealed land grants no discovery reward. After placing a settlement, choose Road or Ship before choosing its edge. The route must touch your new settlement and border the selected cell, or any adjacent revealed land when settling directly. All nine harbors keep their trade types and appear only on revealed land-sea coasts, including the outer map edge. Unplaced harbors move to the nearest available coast after each discovery, or wait hidden and inactive until space is available. Established coastal harbors stay in place. After setup, endpoints of newly placed roads or ships, and moved ships, reveal adjacent fog with the same rewards. Neither robber nor pirate may enter fog. There are no island bonuses. Reach {points} points on your own turn to win."
+        : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach {points} points on your own turn to win.";
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>
       <div className="space-y-8 text-sm leading-7 text-muted">
         <p className="font-serif text-xl text-ink">
-          {translateText("Good neighbors. Clever trades. {points} victory points.", { points: victoryTarget(variant) })}
+          {translateText("Good neighbors. Clever trades. {points} victory points.", { points: victoryPointsToWin })}
         </p>
         {isSeafarers(variant) && <section aria-labelledby="help-seafarers" className="space-y-3">
           <h3 id="help-seafarers" className="font-serif text-2xl text-ink">{translateText("Seafarers rules")}</h3>
-          <p>{translateText(scenarioRules)}</p>
+          <p>{translateText(scenarioRules, { points: victoryPointsToWin })}</p>
           <p>{translateText("A ship costs 1 wood and 1 wool; you have 15 ships in addition to 15 roads. Ships use sea or coastal edges and connect to your ships or buildings. Roads and ships join only at your settlement or city. Both count toward Longest Route. Road Building may place either piece.")}</p>
           <p>{translateText("After rolling, move at most one open-ended ship per turn, never one built this turn. Ships between your buildings cannot move. The pirate blocks building and moving ships on its hex, but does not break existing routes or block harbors.")}</p>
           <p>{translateText("On a seven or Knight, move the robber to another revealed land hex or the pirate to another revealed sea hex or off the board. Neither may enter fog. The pirate steals from a player with an adjacent ship. Gold fields produce one resource choice per settlement or two per city, chosen from the bank in turn order starting with the active player.")}</p>
@@ -45,8 +45,8 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
             </li>
             <li>
               <strong className="text-ink">{translateText("Trade, build, and pass.")}</strong>{" "}
-              {isSeafarers(variant) ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach {points} points on your own turn to win.", { points: victoryTarget(variant) })
-                : translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach 10 points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board") })}
+              {isSeafarers(variant) ? translateText("Trade, build, and buy cards after rolling. Confirm placements on the board. Finish all required choices before ending your turn. Reach {points} points on your own turn to win.", { points: victoryPointsToWin })
+                : translateText("After rolling, trade, build, and buy cards in any order while you have the resources. Select a highlighted location on the {board}, then confirm the placement; Cancel or Escape clears the preview. Finish required choices before ending your turn. Reach {points} points on your own turn to win.", { board: translateText(multiplayer ? "shared board" : "board"), points: victoryPointsToWin })}
             </li>
           </ol>
         </section>
@@ -123,7 +123,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original" 
           </p>
           <p>
             <strong className="text-ink">{translateText("Points and victory.")}</strong>{" "}
-            {translateText(isSeafarers(variant) ? scenarioRules : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least 10 on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.")}
+            {translateText(isSeafarers(variant) ? scenarioRules : "Each settlement is 1 point, each city 2, and each hidden victory-point card 1. Longest Road and Largest Army are worth 2 points each. Reach at least {points} on your own turn to win, including cards bought that turn. Opponents see only your public score until the game ends.", { points: victoryPointsToWin })}
           </p>
           <p>
             <strong className="text-ink">{translateText("Longest Road and Largest Army.")}</strong>{" "}

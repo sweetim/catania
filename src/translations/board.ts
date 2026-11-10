@@ -52,6 +52,7 @@ export const boardTranslations = {
   "Zoom in": "拡大",
   "{points} VP to win": "勝利は{points}勝利点",
   "{points} VP": "{points}勝利点",
+  "Victory points to win": "勝利に必要な勝利点",
   "Settings": "設定",
   "Show blocked settlement locations": "開拓地を建設できない場所を表示",
   "Crosses mark empty corners next to any settlement or city, where the distance rule prevents building. Unmarked corners still require the usual roads, resources, and available pieces on your turn.": "開拓地や都市に隣接し、距離のルールによって建設できない空き交差点に×印を表示します。印のない交差点でも、自分の手番に建設するには通常どおり街道、資源、未使用のコマが必要です。",

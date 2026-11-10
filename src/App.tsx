@@ -566,7 +566,7 @@ export function App() {
   : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
-      ? game.phase.type === "setup-settlement" || buildMode === "settlement"
+      ? game.phase.type === "setup-settlement" || game.phase.type === "setup-reveal" || buildMode === "settlement"
         ? legalSettlementVertices(game, viewer.id)
         : buildMode === "city"
           ? legalCityVertices(game, viewer.id)
@@ -585,6 +585,7 @@ export function App() {
           : movableShipEdges(game, viewer.id).filter(id => legalShipDestinations(game, viewer.id, id).length)
         : buildMode === "ship" ? legalShipEdges(game, viewer.id)
         : buildMode === "road" ? legalRoadEdges(game, viewer.id)
+        : game.variant === "foggy-world" && game.phase.type === "setup-road" ? []
         : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =

@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
 import { createBoard, edgeTiles, isLand, isPortRevealed, isResource, pirateStartTileId, randomInteger, relocateFoggyWorldPorts, secureRandom, shuffle } from "./board";
-import { isGameVariant, isSeafarers } from "./types";
+import { isGameVariant, isSeafarers, isVictoryPointsToWin } from "./types";
 import { GameError } from "./messages";
 import type { GameMessage } from "./messages";
 import type { Board, DevelopmentKind, FogDiscovery, GameAction, GameState, GameVariant, Player, Resource, Resources, Tile, Vertex } from "./types";
@@ -53,8 +53,9 @@ function pay(state: GameState, player: Player, cost: Resources): void {
   transfer(player.resources, state.bank, cost);
 }
 
-export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom, selectedBoard?: Board, variant: GameVariant = selectedBoard?.variant ?? "original"): GameState {
+export function createGame(profiles: Pick<Player, "name" | "color" | "control">[], random: () => number = secureRandom, selectedBoard?: Board, variant: GameVariant = selectedBoard?.variant ?? "original", victoryPointsToWin = victoryTarget(variant)): GameState {
   requireRule(isGameVariant(variant), "Choose a supported game version.");
+  requireRule(isVictoryPointsToWin(victoryPointsToWin), "Choose a whole number from 3 to 13 victory points.");
   requireRule(!selectedBoard || (selectedBoard.variant ?? "original") === variant, "The board must match the selected game version.");
   requireRule(profiles.length === 3 || profiles.length === 4, "A standard game needs three or four players.");
   requireRule(profiles.every(profile => profile.name.trim() && profile.color.trim()), "Each player needs a name and color.");
@@ -70,7 +71,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     "road-building", "road-building", "year-of-plenty", "year-of-plenty", "monopoly", "monopoly",
   ], random);
   return {
-    variant, board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
+    variant, victoryPointsToWin, board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
     activePlayerId: players[0]!.id, phase: variant === "foggy-world" ? { type: "setup-reveal" } : { type: "setup-settlement" }, setupIndex: 0,
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     ...(variant === "four-islands" ? { startingIslandIds: Object.fromEntries(players.map(player => [player.id, []])) } : {}),
@@ -103,8 +104,10 @@ export function blockedSettlementVertices(board: Board): string[] {
 }
 
 export function legalSettlementVertices(state: PlacementState, playerId: string): string[] {
+  const revealedSetup = state.board.variant === "foggy-world" && state.phase.type === "setup-reveal" &&
+    pieceCount(state, playerId, "settlement") > 0;
   if (state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
-    !["setup-settlement", "actions"].includes(state.phase.type) || pieceCount(state, playerId, "settlement") >= 5) return [];
+    (!revealedSetup && !["setup-settlement", "actions"].includes(state.phase.type)) || pieceCount(state, playerId, "settlement") >= 5) return [];
   const blockedVertices = new Set(blockedSettlementVertices(state.board));
   const selectedTileId = state.phase.type === "setup-settlement" ? state.phase.tileId : undefined;
   return state.board.vertices.filter(vertex => {
@@ -113,6 +116,7 @@ export function legalSettlementVertices(state: PlacementState, playerId: string)
     if (state.board.variant === "foggy-world" && state.phase.type === "setup-settlement") {
       return land.some(tile => tile.id === selectedTileId);
     }
+    if (revealedSetup) return land.length > 0;
     if (isSeafarers(state.board.variant) && (land.length === 0 || (state.phase.type === "setup-settlement" &&
       state.board.variant !== "four-islands" && state.board.variant !== "foggy-world" && !land.some(tile => tile.islandId === "main")))) return false;
     const adjacentEdges = state.board.edges.filter(edge => vertex.edgeIds.includes(edge.id));
@@ -128,7 +132,8 @@ export function legalSetupRevealTiles(state: PlacementState, playerId: string): 
   const availableVertices = new Set(state.board.vertices.filter(vertex => !vertex.building && !blockedVertices.has(vertex.id)).map(vertex => vertex.id));
   const tiles = state.board.tiles.filter(tile => tile.vertexIds.some(id => availableVertices.has(id)));
   const fog = tiles.filter(tile => tile.terrain === "fog");
-  return (fog.length ? fog : tiles.filter(tile => isLand(tile.terrain))).map(tile => tile.id);
+  return (fog.length || pieceCount(state, playerId, "settlement") > 0
+    ? fog : tiles.filter(tile => isLand(tile.terrain))).map(tile => tile.id);
 }
 
 export function legalCityVertices(state: PlacementState, playerId: string): string[] {
@@ -154,7 +159,11 @@ function legalRouteEdges(state: PlacementState, playerId: string, kind: "road" |
     const tiles = edgeTiles(state.board, edge);
     if (kind === "road" ? isSeafarers(state.board.variant) && !tiles.some(tile => isLand(tile.terrain)) :
       !tiles.some(tile => tile.terrain === "sea" || tile.terrain === "fog") || tiles.some(tile => tile.id === state.pirateTileId)) return false;
-    if (state.phase.type === "setup-road") return edge.vertexIds.includes(state.phase.vertexId);
+    if (state.phase.type === "setup-road") {
+      const selectedTileId = state.phase.tileId;
+      return edge.vertexIds.includes(state.phase.vertexId) &&
+        (state.board.variant !== "foggy-world" || tiles.some(tile => selectedTileId ? tile.id === selectedTileId : isLand(tile.terrain)));
+    }
     return edge.vertexIds.some(vertexId => {
       const vertex = state.board.vertices.find(vertex => vertex.id === vertexId)!;
       if (vertex.building) return vertex.building.playerId === playerId;
@@ -274,7 +283,7 @@ function updateAwards(state: GameState): void {
 
 function checkVictory(state: GameState): void {
   if (state.phase.type.startsWith("setup") || (state.phase.type === "gold" && state.phase.resumePhase) || state.winnerId) return;
-  if (getScore(state, state.activePlayerId).total >= victoryTarget(state.variant)) {
+  if (getScore(state, state.activePlayerId).total >= state.victoryPointsToWin) {
     state.winnerId = state.activePlayerId;
     state.phase = { type: "finished" };
     state.trade = null;
@@ -317,10 +326,12 @@ function produce(state: GameState, number: number): Record<string, number> {
     .filter(player => gold[player.id]).map(player => [player.id, gold[player.id]!]));
 }
 
-/** Applies the next fog discovery to a hex and grants its immediate reward; returns the revealed terrain. */
+/** Reveals a hex's fixed terrain in Foggy World, or the next discovery elsewhere, and grants its reward. */
 function discoverFromFog(state: GameState, player: Player, tile: Tile): FogDiscovery["terrain"] {
-  const discovery = state.board.fogDiscoveryDeck?.shift();
-  requireRule(discovery, "The fog discovery deck is empty.");
+  const discovery = state.variant === "foggy-world"
+    ? state.board.fogDiscoveriesByTileId?.[tile.id] : state.board.fogDiscoveryDeck?.shift();
+  requireRule(discovery, state.variant === "foggy-world" ? "The fog cell has no hidden terrain." : "The fog discovery deck is empty.");
+  if (state.board.fogDiscoveriesByTileId) delete state.board.fogDiscoveriesByTileId[tile.id];
   tile.terrain = discovery.terrain;
   tile.number = discovery.number;
   relocateFoggyWorldPorts(state.board);
@@ -376,7 +387,8 @@ function placeSettlement(state: GameState, player: Player, vertex: Vertex, setup
         player.resources[tile.terrain]++;
       }
     }
-    state.phase = { type: "setup-road", vertexId: vertex.id };
+    const tileId = state.phase.type === "setup-settlement" ? state.phase.tileId : undefined;
+    state.phase = { type: "setup-road", vertexId: vertex.id, ...(tileId ? { tileId } : {}) };
   }
   state.log.push({ key: "{player} builds a settlement.", parameters: { player: player.name } });
 }
@@ -399,7 +411,7 @@ export function applyAction(
     .with({ type: "place-settlement" }, action => {
       requireRule(legalSettlementVertices(state, playerId).includes(action.vertexId),
         "Choose an empty legal intersection, at least two edges from other buildings, connected to your road after setup; you have at most five settlements.");
-      const setup = state.phase.type === "setup-settlement";
+      const setup = state.phase.type === "setup-settlement" || state.phase.type === "setup-reveal";
       if (!setup) pay(state, player, COSTS.settlement);
       const vertex = state.board.vertices.find(vertex => vertex.id === action.vertexId)!;
       placeSettlement(state, player, vertex, setup);

@@ -6,12 +6,14 @@ import { getDevelopmentDescriptions, getDevelopmentNames } from "./GameplayDialo
 
 export function DevelopmentHand({
   variant = "original",
+  victoryPointsToWin,
   cards,
   turnNumber,
   inert,
   onSelect,
 }: {
   variant?: GameVariant;
+  victoryPointsToWin?: number;
   cards: Player["developmentCards"];
   turnNumber: number;
   inert?: boolean;
@@ -20,7 +22,7 @@ export function DevelopmentHand({
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
   const developmentNames = getDevelopmentNames(language);
-  const developmentDescriptions = getDevelopmentDescriptions(language, variant);
+  const developmentDescriptions = getDevelopmentDescriptions(language, variant, victoryPointsToWin);
   if (cards.length === 0) return null;
 
   return (

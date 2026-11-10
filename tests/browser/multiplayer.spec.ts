@@ -13,7 +13,7 @@ const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 type WireMessage = { direction: "sent" | "received"; message: Record<string, unknown> };
 type WireFrame = { direction: WireMessage["direction"]; channel: number; bytes: number[] };
 type ObservedWindow = Window & {
-  multiplayerProbe: { channels: RTCDataChannel[]; frames: WireFrame[]; connections: RTCPeerConnection[]; blockedSends?: number };
+  multiplayerProbe: { documentId: string; channels: RTCDataChannel[]; frames: WireFrame[]; connections: RTCPeerConnection[]; blockedSends?: number };
 };
 type MultiplayerHarness = {
   newPage: (name: string, phone?: boolean, locale?: string) => Promise<Page>;
@@ -87,7 +87,7 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
         route.onClose(() => { pageClosedSocket = true; socket.close(); });
       });
       await context.addInitScript(() => {
-        const probe: ObservedWindow["multiplayerProbe"] = { channels: [], frames: [], connections: [] };
+        const probe: ObservedWindow["multiplayerProbe"] = { documentId: crypto.randomUUID(), channels: [], frames: [], connections: [] };
         (window as unknown as ObservedWindow).multiplayerProbe = probe;
         // Native STUN traffic bypasses HTTP routing; keep discovery local in tests.
         window.RTCPeerConnection = new Proxy(window.RTCPeerConnection, {
@@ -150,14 +150,14 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
   },
 });
 
-const observations = new WeakMap<Page, { generation: number; messages: WireMessage[]; chunks: Map<string, Uint8Array[]> }>();
+const observations = new WeakMap<Page, { documentId: string; messages: WireMessage[]; chunks: Map<string, Uint8Array[]> }>();
 
 async function messages(page: Page) {
-  const { generation, frames } = await page.evaluate(() => ({
-    generation: performance.timeOrigin,
+  const { documentId, frames } = await page.evaluate(() => ({
+    documentId: (window as unknown as ObservedWindow).multiplayerProbe.documentId,
     frames: (window as unknown as ObservedWindow).multiplayerProbe.frames.splice(0),
   }));
-  if (observations.get(page)?.generation !== generation) observations.set(page, { generation, messages: [], chunks: new Map() });
+  if (observations.get(page)?.documentId !== documentId) observations.set(page, { documentId, messages: [], chunks: new Map() });
   const { messages, chunks } = observations.get(page)!;
   for (const { direction, channel, bytes } of frames) {
     let message = unpack(Uint8Array.from(bytes).buffer) as Record<string, unknown>;
@@ -330,6 +330,103 @@ async function selectMenuLanguage(page: Page, currentLanguage: "en" | "ja", next
   await page.getByRole("combobox", { name: currentLanguage === "ja" ? "言語" : "Language", exact: true }).selectOption(nextLanguage);
   await page.keyboard.press("Escape");
 }
+
+test("host configures 3 to 13 victory points from the lobby map badge and synchronizes phones", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const mapControls = host.locator(".board-controls");
+  const target = mapControls.getByRole("combobox", { name: "Victory points to win", exact: true });
+  await expect(host.getByRole("combobox", { name: "Victory points to win", exact: true })).toHaveCount(1);
+  await expect(target).toHaveValue("10");
+  await expect(target.locator("option")).toHaveText(Array.from({ length: 11 }, (_, index) => String(index + 3)));
+  await expect(target.locator("..")).toContainText("10 VP to win");
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await expect(phone.getByRole("combobox", { name: "Victory points to win", exact: true })).toHaveCount(0);
+
+  await target.focus();
+  await expect(target).toBeFocused();
+  await target.press("ArrowDown");
+  await expect(target).toHaveValue("11");
+  await expect(phone.getByText("First to 11 points wins.", { exact: false })).toBeVisible();
+  await target.press("ArrowUp");
+  await expect(target).toHaveValue("10");
+
+  for (const [variant, defaultTarget] of [["original", 10], ["seafarers", 13], ["four-islands", 12], ["fog-islands", 12], ["foggy-world", 12]] as const) {
+    await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await expect(target).toHaveValue(String(defaultTarget));
+    const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
+    for (const points of [3, 13, 7]) {
+      await target.selectOption(String(points));
+      await expect(host.locator(".board-controls").getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
+      await expect(phone.getByText(`First to ${points} points wins.`, { exact: false })).toBeVisible();
+      await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(points);
+      await expect(host.getByRole("textbox", { name: "Map code", exact: true })).toHaveValue(mapCode);
+    }
+    for (const device of [host, phone]) {
+      await chooseGameOption(device, "Help");
+      const help = device.getByRole("dialog", { name: "Help", exact: true });
+      await expect(help).toContainText("Good neighbors. Clever trades. 7 victory points.");
+      await expect(help).toContainText("Reach 7 points on your own turn to win.");
+      await expect(help).not.toContainText(`Reach ${defaultTarget} points`);
+      await device.keyboard.press("Escape");
+    }
+  }
+
+  await selectMenuLanguage(host, "en", "ja");
+  const japaneseTarget = host.getByRole("combobox", { name: "勝利に必要な勝利点", exact: true });
+  await japaneseTarget.selectOption("3");
+  await expect(host.getByText("先に3点に到達すると勝利です。", { exact: false })).toBeVisible();
+  await expect(phone.getByText("First to 3 points wins.", { exact: false })).toBeVisible();
+  await host.getByRole("button", { name: "ゲーム", exact: true }).click();
+  await host.getByRole("button", { name: "ヘルプ", exact: true }).click();
+  await expect(host.getByRole("dialog")).toContainText("自分の手番に3点に到達すると勝利です。");
+  await host.keyboard.press("Escape");
+  await selectMenuLanguage(host, "ja", "en");
+  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("original");
+  await expect(target).toHaveValue("10");
+  await target.selectOption("7");
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "configured-lobby-victory-target");
+  const originalViewport = host.viewportSize()!;
+  await host.setViewportSize({ width: 320, height: 568 });
+  await target.scrollIntoViewIfNeeded();
+  await expect(target).toBeInViewport({ ratio: 1 });
+  const controlsBounds = (await mapControls.boundingBox())!;
+  const themeBounds = (await mapControls.getByRole("button", { name: "Change theme", exact: true }).boundingBox())!;
+  const zoomBounds = (await mapControls.getByRole("button", { name: "Zoom out", exact: true }).boundingBox())!;
+  for (const points of [3, 13, 7]) {
+    await target.selectOption(String(points));
+    await expect(target).toHaveValue(String(points));
+    const targetBounds = (await target.boundingBox())!;
+    expect(targetBounds.height).toBeGreaterThanOrEqual(44);
+    expect(targetBounds.x).toBeGreaterThanOrEqual(themeBounds.x + themeBounds.width);
+    expect(targetBounds.x + targetBounds.width).toBeLessThanOrEqual(zoomBounds.x);
+    expect(targetBounds.y).toBeGreaterThanOrEqual(controlsBounds.y);
+    expect(targetBounds.y + targetBounds.height).toBeLessThanOrEqual(controlsBounds.y + controlsBounds.height);
+  }
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "narrow-lobby-victory-target");
+  await host.setViewportSize(originalViewport);
+
+  await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(phone.getByTestId("game-phase")).toBeVisible();
+  await expect(target).toHaveCount(0);
+  await expect.poll(async () => (await latestSnapshot(phone)).game!.victoryPointsToWin).toBe(7);
+  await expect(host.locator(".board-controls").getByText(/^7 VP(?: to win)?$/).filter({ visible: true })).toBeVisible();
+  await chooseGameOption(host, "Reset game");
+  await host.getByRole("dialog").getByRole("button", { name: "Reset game", exact: true }).click();
+  await expect.poll(async () => (await latestSnapshot(phone)).game!.victoryPointsToWin).toBe(7);
+  await chooseGameOption(host, "Return to lobby");
+  await host.getByRole("dialog").getByRole("button", { name: "Return to lobby", exact: true }).click();
+  await expect(target).toHaveValue("7");
+  await expect(phone.getByText("First to 7 points wins.", { exact: false })).toBeVisible();
+});
 
 test("multiplayer admission, actions and reset work without randomUUID", async ({ multiplayer }) => {
   const host = await multiplayer.newPage("Host");
@@ -1438,16 +1535,17 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
   const initial = await latestSnapshot(phone);
   expect(initial.boardTargets.vertices).toEqual([]);
   expect(initial.boardTargets.tiles).toHaveLength(42);
-  await host.getByRole("button", { name: "Choose starting cell at tile-2", exact: true }).click();
+  await host.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
   await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   for (const viewer of phones.values()) {
     await expect.poll(async () => (await latestSnapshot(viewer)).game!.board.tiles.filter(tile => tile.terrain === "fog").length).toBe(41);
     const snapshot = await latestSnapshot(viewer);
     expect(snapshot.game!.board.vertices.every(vertex => vertex.building === null)).toBe(true);
     expect(snapshot.boardTargets.tiles).toHaveLength(41);
-    expect(snapshot.boardTargets.tiles).not.toContain("tile-2");
+    expect(snapshot.boardTargets.tiles).not.toContain("tile-0");
     expect(snapshot.boardTargets.vertices).toEqual([]);
     expect("fogDiscoveryDeck" in snapshot.game!.board).toBe(false);
+    expect("fogDiscoveriesByTileId" in snapshot.game!.board).toBe(false);
   }
   await expectPhase([host, ...phones.values()], "setup-reveal", activeName);
   for (const viewer of phones.values()) {
@@ -1457,38 +1555,81 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
     expect(snapshot.game!.board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(41);
     expect(snapshot.game!.board.vertices.every(vertex => vertex.building === null)).toBe(true);
     expect("fogDiscoveryDeck" in snapshot.game!.board).toBe(false);
+    expect("fogDiscoveriesByTileId" in snapshot.game!.board).toBe(false);
   }
-  await host.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
+  await host.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
   await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expectPhase([host, ...phones.values()], "setup-settlement", activeName);
   for (const viewer of phones.values()) {
     const snapshot = await latestSnapshot(viewer);
-    expect(snapshot.game!.phase).toEqual({ type: "setup-settlement", tileId: "tile-0" });
-    expect(snapshot.boardTargets.vertices.toSorted()).toEqual(snapshot.game!.board.tiles.find(tile => tile.id === "tile-0")!.vertexIds.toSorted());
+    expect(snapshot.game!.phase).toEqual({ type: "setup-settlement", tileId: "tile-1" });
+    expect(snapshot.boardTargets.vertices.toSorted()).toEqual(snapshot.game!.board.tiles.find(tile => tile.id === "tile-1")!.vertexIds.toSorted());
     expect(snapshot.boardTargets.tiles).toEqual([]);
     expect(snapshot.game!.board.vertices.every(vertex => vertex.building === null)).toBe(true);
   }
   expect((await latestSnapshot(phone)).privatePlayer!.resources).toEqual({ ...emptyResources(), grain: 1 });
   expect((await latestSnapshot(phone)).game!.board.tiles.filter(tile => tile.terrain === "fog")).toHaveLength(40);
-  await host.getByRole("button", { name: "Place settlement at vertex-0", exact: true }).click();
+  await host.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
   await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expectPhase([host, ...phones.values()], "setup-road", activeName);
+  await expect(host.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
   await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await expect(host.getByRole("button", { name: "Build ship at edge-0", exact: true })).toBeVisible();
+  await expect(host.getByRole("button", { name: "Build ship at edge-3", exact: true })).toBeVisible();
+  await expect(host.getByRole("button", { name: "Build ship at edge-2", exact: true })).toHaveCount(0);
   await expect(host.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
   await phone.getByRole("button", { name: "Choose roads", exact: true }).click();
-  await expect(host.getByRole("button", { name: "Build road at edge-0", exact: true })).toBeVisible();
+  await expect(host.getByRole("button", { name: "Build road at edge-3", exact: true })).toBeVisible();
+  await expect(host.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
   await expect(host.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
   await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await host.getByRole("button", { name: "Build ship at edge-0", exact: true }).click();
+  await host.getByRole("button", { name: "Build ship at edge-3", exact: true }).click();
   await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   for (const viewer of phones.values()) {
-    await expect.poll(async () => (await latestSnapshot(viewer)).game!.board.edges.find(edge => edge.id === "edge-0")?.kind).toBe("ship");
+    await expect.poll(async () => (await latestSnapshot(viewer)).game!.board.edges.find(edge => edge.id === "edge-3")?.kind).toBe("ship");
     const snapshot = await latestSnapshot(viewer);
     expect(snapshot.game!.phase.type).toBe("setup-reveal");
-    expect(snapshot.game!.activePlayerId).not.toBe(snapshot.game!.board.edges.find(edge => edge.id === "edge-0")!.playerId);
-    expect(snapshot.game!.board.tiles.find(tile => tile.id === "tile-2")!.terrain).toBe("sea");
+    expect(snapshot.game!.activePlayerId).not.toBe(snapshot.game!.board.edges.find(edge => edge.id === "edge-3")!.playerId);
+    expect(snapshot.game!.board.tiles.find(tile => tile.id === "tile-0")!.terrain).toBe("sea");
   }
+  for (const [tileId, vertexId, edgeId] of [
+    ["tile-2", "vertex-7", "edge-7"],
+    ["tile-13", "vertex-39", "edge-46"],
+  ]) {
+    await host.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await host.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const snapshot = await latestSnapshot(phone);
+    const currentPhone = phones.get(snapshot.game!.players.find(player => player.id === snapshot.game!.activePlayerId)!.name)!;
+    await currentPhone.getByRole("button", { name: "Choose roads", exact: true }).click();
+    await host.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect.poll(async () => (await latestSnapshot(phone)).game!.phase.type).toBe("setup-reveal");
+  }
+  for (const viewer of phones.values()) {
+    const snapshot = await latestSnapshot(viewer);
+    expect(snapshot.boardTargets.tiles).not.toContain("tile-1");
+    expect(snapshot.boardTargets.tiles).toContain("tile-12");
+    expect(snapshot.boardTargets.vertices).toContain("vertex-9");
+    expect("fogDiscoveriesByTileId" in snapshot.game!.board).toBe(false);
+  }
+  const before = await latestSnapshot(phone);
+  await expect(host.getByRole("button", { name: "Choose starting cell at tile-1", exact: true })).toHaveCount(0);
+  await host.getByRole("button", { name: "Place settlement at vertex-9", exact: true }).click();
+  await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect.poll(async () => (await latestSnapshot(phone)).game!.phase).toEqual({ type: "setup-road", vertexId: "vertex-9" });
+  const reused = await latestSnapshot(phone);
+  expect(reused.game!.board.tiles).toEqual(before.game!.board.tiles);
+  expect(reused.game!.bank.grain).toBe(before.game!.bank.grain - 1);
+  expect(reused.boardTargets.vertices).toEqual([]);
+  expect(reused.boardTargets.edges).toEqual([]);
+  const currentPhone = phones.get(reused.game!.players.find(player => player.id === reused.game!.activePlayerId)!.name)!;
+  await currentPhone.getByRole("button", { name: "Choose ships", exact: true }).click();
+  await expect(host.getByRole("button", { name: /^Build ship at / }).first()).toBeVisible();
+  await expect(host.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
+  await host.getByRole("button", { name: "Choose roads", exact: true }).click();
+  await expect(host.getByRole("button", { name: /^Build road at / }).first()).toBeVisible();
+  await expect(host.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
   await noHorizontalOverflow(host);
   await privateScreenFits(phone);
   await screenshot(host, testInfo, "foggy-world-shared-nodes");
@@ -1901,7 +2042,7 @@ test("host and three private phones play over real PeerJS channels and recover a
     const snapshots = (await messages(phone)).filter(entry => entry.direction === "received" && entry.message.type === "snapshot");
     for (const entry of snapshots) {
       const snapshot = entry.message.snapshot as RoomSnapshot;
-      expect(Object.keys(snapshot).sort()).toEqual(["version", "variant", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"].sort());
+      expect(Object.keys(snapshot).sort()).toEqual(["version", "variant", "victoryPointsToWin", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"].sort());
       expect(snapshot).not.toHaveProperty("pendingPlayers");
       expect(snapshot.privateThefts).toEqual([]);
       expect(snapshot.privateMonopolies).toEqual([]);
@@ -2216,8 +2357,10 @@ test("private robbery notices time each queued event and ignore unrelated resour
 
 test("private monopoly notices report each victim's losses and queue behind unread theft notices", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const receivedSnapshot = await latestSnapshot(phone);
   await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  expect(await latestSnapshot(phone)).toEqual(receivedSnapshot);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
   const opponent = game.players.find(other => other.id !== player.id)!;
@@ -2255,6 +2398,36 @@ test("private monopoly notices report each victim's losses and queue behind unre
   await expect(robberyNotice).toHaveCount(1);
   await expect(robberyAnnouncement).toHaveText(`${opponent.name} robbed you of 1 ${RESOURCE_NAMES.wool}.`);
   expect(await sentActions(phone)).toEqual([]);
+});
+
+test("private custom-target cards and victory instructions use the configured points", async ({ multiplayer }) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const game = snapshot.game!;
+  const player = snapshot.privatePlayer!;
+  snapshot.victoryPointsToWin = 3;
+  game.victoryPointsToWin = 3;
+  player.developmentCards = [{ id: "development-1", kind: "victory-point", purchasedTurn: 1 }];
+  snapshot.privateScore = 1;
+  await present();
+  const hand = phone.getByRole("region", { name: "Your development cards", exact: true });
+  await expect(hand).toContainText("Counts automatically toward victory on your turn");
+  await expect(hand).not.toContainText("ten points");
+  await hand.getByRole("button", { name: /^Victory point/ }).click();
+  await expect(phone.getByRole("dialog")).toContainText("Counts automatically toward victory on your turn");
+  await expect(phone.getByRole("dialog")).not.toContainText("ten points");
+  await phone.keyboard.press("Escape");
+
+  game.phase = { type: "finished" };
+  game.winnerId = player.id;
+  const winner = game.players.find(other => other.id === player.id)!;
+  winner.score = 3;
+  winner.scoreBreakdown = { public: 2, total: 3, settlements: 2, cities: 0, hidden: 1, longestRoad: 0, largestArmy: 0 };
+  snapshot.privateScore = 3;
+  await present();
+  await expect(phone.getByRole("dialog")).toContainText("Alex takes the island.");
+  await phone.getByRole("button", { name: "View the island", exact: true }).click();
+  await expect(phone.getByTestId("game-phase")).toContainText("The first player to reach 3 victory points on their turn wins.");
+  await expect(phone.getByTestId("game-phase")).not.toContainText("reach 10 victory points");
 });
 
 test("private instructions and grouped development cards match single-device gameplay", async ({ multiplayer }, testInfo) => {

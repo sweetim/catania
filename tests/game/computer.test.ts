@@ -206,6 +206,22 @@ describe("computer strategic planning", () => {
     expect(result.state.winnerId).toBe(player.id);
   });
 
+  test.each([3, 7, 13])("prioritizes an immediate win at the configured %s-point target", points => {
+    const state = strategicGame();
+    state.victoryPointsToWin = points;
+    const player = state.players.find(player => player.id === state.activePlayerId)!;
+    player.developmentCards = [
+      ...Array.from({ length: points - 2 }, (_, index) => ({ id: `point-${index}`, kind: "victory-point" as const, purchasedTurn: 0 })),
+      { id: "knight", kind: "knight", purchasedTurn: 0 },
+    ];
+    state.robberTileId = "ore";
+    setResources(state, player.id, resources({ grain: 2, ore: 3 }));
+    const result = chooseAndApply(state);
+    expect(result.action).toEqual({ type: "place-city", vertexId: "home" });
+    expect(result.state.winnerId).toBe(player.id);
+    expect(getScore(result.state, player.id).total).toBe(points);
+  });
+
   test("can claim Largest Army before rolling even without blocked production", () => {
     const state = strategicGame();
     state.phase = { type: "roll" };

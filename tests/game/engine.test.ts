@@ -100,6 +100,14 @@ function productionState(): GameState {
 }
 
 describe("initialization and snake setup", () => {
+  test.each([3, 13])("accepts a custom victory target of %s", points => {
+    expect(createGame(profiles, undefined, undefined, "original", points).victoryPointsToWin).toBe(points);
+  });
+
+  test.each([2, 14, 3.5, NaN, Infinity])("rejects invalid victory target %s", points => {
+    expect(() => createGame(profiles, undefined, undefined, "original", points)).toThrow("3 to 13");
+  });
+
   test("uses an independent copy of the selected island and starts its robber on the desert", () => {
     const preview = createBoard(() => 0);
     const original = structuredClone(preview);

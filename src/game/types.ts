@@ -6,6 +6,9 @@ export type GameVariant = typeof GAME_VARIANTS[number];
 export function isGameVariant(value: unknown): value is GameVariant {
   return GAME_VARIANTS.some(variant => variant === value);
 }
+export function isVictoryPointsToWin(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 3 && value <= 13;
+}
 export function isSeafarers(variant: GameVariant | undefined): boolean {
   return variant !== undefined && variant !== "original";
 }
@@ -51,6 +54,7 @@ export type Board = {
   ports: Port[];
   variant?: GameVariant;
   fogDiscoveryDeck?: FogDiscovery[];
+  fogDiscoveriesByTileId?: Record<string, FogDiscovery>;
 };
 
 export type Player = {
@@ -65,14 +69,14 @@ export type Player = {
 export type ExplorationResumePhase =
   | { type: "setup-settlement"; tileId?: string }
   | { type: "setup-reveal" }
-  | { type: "setup-road"; vertexId: string }
+  | { type: "setup-road"; vertexId: string; tileId?: string }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" };
 export type GamePhase =
   | { type: "setup-settlement"; tileId?: string }
   | { type: "setup-reveal" }
-  | { type: "setup-road"; vertexId: string }
+  | { type: "setup-road"; vertexId: string; tileId?: string }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }
@@ -100,6 +104,7 @@ export type TheftEvent = { id: number; thiefId: string; victimId: string; resour
 export type MonopolyEvent = { id: number; playerId: string; resource: Resource; losses: Record<string, number> };
 export type GameState = {
   variant: GameVariant;
+  victoryPointsToWin: number;
   board: Board;
   players: Player[];
   bank: Resources;

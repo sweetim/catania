@@ -4,7 +4,7 @@ import { chooseComputerAction, getComputerActionDelay } from "../../src/game/com
 import { createBoard, seededRandom } from "../../src/game/board";
 import { emptyResources, getScore, legalRoadEdges, resourceTotal } from "../../src/game/engine";
 import { formatGameMessage } from "../../src/game/messages";
-import type { GameAction, GamePhase, GameState, MonopolyEvent, Resources } from "../../src/game/types";
+import { GAME_VARIANTS, type GameAction, type GamePhase, type GameState, type MonopolyEvent, type Resources } from "../../src/game/types";
 import { ACTIVE_PROFILE_STORAGE_KEY, PROFILES_STORAGE_KEY } from "../../src/profile";
 import { parseAction, parseClientMessage, parseServerMessage } from "../../src/multiplayer/protocol";
 import { parseInvitationUrl } from "../../src/multiplayer/invitation";
@@ -126,6 +126,107 @@ describe("host lobby board preview", () => {
     }
     expect(() => parseClientMessage({ type: "shuffle-board", requestId: "request", version: room.version })).toThrow();
     expect(() => parseClientMessage({ type: "join", secret, name: "Linus", previewBoard })).toThrow();
+  });
+});
+
+describe("multiplayer victory target", () => {
+  test.each(GAME_VARIANTS)("%s defaults and version changes use the scenario target", variant => {
+    const { room } = lobby();
+    room.setVictoryPointsToWin(3);
+    if (variant === "original") room.setVariant("seafarers");
+    room.setVariant(variant);
+    const target = variant === "original" ? 10 : variant === "seafarers" ? 13 : 12;
+    expect(room.snapshot().victoryPointsToWin).toBe(target);
+    expect(room.snapshot("connection-1").victoryPointsToWin).toBe(target);
+    room.start();
+    expect(room.game!.victoryPointsToWin).toBe(target);
+  });
+
+  test("accepts every integer from 3 to 13 without changing the map or seats", () => {
+    const { room } = lobby();
+    const initial = room.snapshot();
+    for (let points = 3; points <= 13; points++) {
+      const version = room.version;
+      room.setVictoryPointsToWin(points);
+      expect(room.version).toBe(version + 1);
+      const snapshot = room.snapshot();
+      expect(snapshot.victoryPointsToWin).toBe(points);
+      expect(snapshot.previewBoard).toEqual(initial.previewBoard);
+      expect(snapshot.mapSeed).toBe(initial.mapSeed);
+      expect(snapshot.players).toEqual(initial.players);
+      const phone = room.snapshot("connection-1");
+      expect(phone.victoryPointsToWin).toBe(points);
+      expect(parseServerMessage({ type: "snapshot", snapshot: phone })).toMatchObject({ snapshot: { victoryPointsToWin: points } });
+      room.setVictoryPointsToWin(points);
+      expect(room.version).toBe(version + 1);
+    }
+  });
+
+  test.each([2, 14, 3.5, NaN, Infinity, -1])("rejects invalid target %s without changing the room", points => {
+    const { room } = lobby();
+    const before = room.snapshot();
+    expect(() => room.setVictoryPointsToWin(points)).toThrow("3 to 13");
+    expect(room.snapshot()).toEqual(before);
+  });
+
+  test("preserves the custom target through map changes, reset and rematch and locks it during play", () => {
+    const { room } = lobby();
+    room.setVictoryPointsToWin(7);
+    room.setVariant("original");
+    room.shuffleBoard();
+    room.useMapSeed("ABCDEFGH");
+    expect(room.snapshot().victoryPointsToWin).toBe(7);
+    room.start();
+    const initial = room.snapshot();
+    expect(() => room.setVictoryPointsToWin(8)).toThrow("lobby");
+    expect(room.snapshot()).toEqual(initial);
+    expect(room.game!.victoryPointsToWin).toBe(7);
+    room.resetGame();
+    expect(room.game!.victoryPointsToWin).toBe(7);
+    room.endGame();
+    expect(room.snapshot().victoryPointsToWin).toBe(7);
+    room.start();
+    expect(room.snapshot("connection-1").game!.victoryPointsToWin).toBe(7);
+  });
+
+  for (const variant of GAME_VARIANTS) {
+    test.each([3, 7, 13])(`${variant} wins at the selected %s points, not before`, points => {
+      const { room } = lobby();
+      room.setVariant(variant);
+      room.setVictoryPointsToWin(points);
+      room.start();
+      const game = room.game!;
+      game.phase = { type: "actions" };
+      game.turnNumber = 3;
+      const player = game.players.find(player => player.id === game.activePlayerId)!;
+      player.developmentCards = Array.from({ length: points - 2 }, (_, index) =>
+        ({ id: `development-${index + 1}`, kind: "victory-point", purchasedTurn: 0 }));
+      game.developmentDeck = ["victory-point", "victory-point"];
+      give(game, player.id, { wool: 2, grain: 2, ore: 2 });
+      expect(send(room, activeConnection(room), { type: "buy-development" }).error).toBeNull();
+      expect(getScore(room.game!, player.id).total).toBe(points - 1);
+      expect(room.game!.winnerId).toBeNull();
+      expect(send(room, activeConnection(room), { type: "buy-development" }).error).toBeNull();
+      expect(getScore(room.game!, player.id).total).toBe(points);
+      expect(room.game!.winnerId).toBe(player.id);
+      expect(room.game!.phase.type).toBe("finished");
+      const phone = room.snapshot(connectionFor(player.id));
+      expect(phone.game!.victoryPointsToWin).toBe(points);
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: phone })).not.toThrow();
+    });
+  }
+
+  test("the phone protocol rejects invalid or inconsistent targets and target-changing commands", () => {
+    const { room } = started();
+    const snapshot = room.snapshot("connection-1");
+    for (const points of [2, 14, 3.5, null, "7", undefined]) {
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, victoryPointsToWin: points } })).toThrow();
+      expect(() => parseServerMessage({ type: "snapshot", snapshot: {
+        ...snapshot, game: { ...snapshot.game!, victoryPointsToWin: points },
+      } })).toThrow();
+    }
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...snapshot, victoryPointsToWin: 7 } })).toThrow();
+    expect(() => parseClientMessage({ type: "set-victory-points-to-win", requestId: "request", version: room.version, points: 7 })).toThrow();
   });
 });
 
@@ -634,7 +735,7 @@ describe("public and private multiplayer projections", () => {
     const host = room.snapshot();
     const guest = room.snapshot("connection-1");
     expect(Object.keys(host.game!).sort()).toEqual([
-      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "gameId", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
+      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "gameId", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "victoryPointsToWin", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
     ].sort());
     expect(host.game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
     expect(host.game!.canCancelKnight).toBe(true);
@@ -1501,7 +1602,10 @@ test("host session schedules one computer action, discards stale work, cleans ti
     expect(views.at(-1)!.snapshot!.players).toHaveLength(0);
     for (let index = 0; index < 3; index++) host.addComputer();
     const startingBoard = views.at(-1)!.snapshot!.previewBoard!;
+    host.setVictoryPointsToWin(7);
+    expect(views.at(-1)!.snapshot!.victoryPointsToWin).toBe(7);
     host.startGame();
+    expect(views.at(-1)!.snapshot!.game!.victoryPointsToWin).toBe(7);
     expect(views.at(-1)!.snapshot).not.toHaveProperty("previewBoard");
     expect(views.at(-1)!.snapshot!.game!.board).toEqual(startingBoard);
     host.shuffleBoard();
@@ -1547,7 +1651,7 @@ test("host session schedules one computer action, discards stale work, cleans ti
     peers.at(-1)!.emit("open");
     connection.emit("open");
     expect(connection.send).toHaveBeenCalledTimes(1);
-    for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard(), () => guest!.resetGame()]) {
+    for (const operation of [() => guest!.addComputer(), () => guest!.removePlayer("player-2"), () => guest!.renameComputer("player-2", "New name"), () => guest!.shuffleBoard(), () => guest!.resetGame(), () => guest!.setVictoryPointsToWin(7)]) {
       operation();
       expect(views.at(-1)!.error?.key).toContain("Only the shared host");
       expect(connection.send).toHaveBeenCalledTimes(1);

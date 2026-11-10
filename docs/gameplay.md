@@ -176,9 +176,11 @@ Revealed land can then support settlements and produce normally. Neither robber
 nor pirate may enter unexplored fog. There are no island bonuses; win at 12 points
 on your own turn. Computer opponents explore without inspecting the hidden deck.
 
-Map codes reproduce each scenario's initial board and, for Fog Islands and Foggy World, discovery
-deck; discoveries depend on which hexes are reached first. Multiplayer sends only
-revealed tiles and fog placeholders, never the hidden discovery deck.
+Map codes reproduce each scenario's initial board. In Fog Islands, they also reproduce
+the discovery deck; discoveries depend on which hexes are reached first. In Foggy
+World, each cell's terrain and number are fixed before play, independent of discovery
+order. Multiplayer sends only revealed tiles and fog placeholders, never hidden
+terrain assignments or discovery decks.
 
 ### Foggy World
 
@@ -188,22 +190,33 @@ trade ratios only on revealed land-sea coastlines, including the outer map edge.
 After each discovery, unplaced harbors move to the nearest available revealed
 coast without sharing endpoints. Harbors wait hidden and inactive when there is
 not enough revealed coastline; established coastal harbors stay in place.
-The seeded
-discovery deck covers every hex: 26 resource hexes, two gold fields, one desert,
-and 13 sea hexes, with 28 number tokens. The robber and pirate both start off
+The seeded map assigns fixed terrain and numbers to every cell before play:
+26 resource hexes, two gold fields, one desert, and 13 sea hexes, with 28 number
+tokens. Revealing a cell uncovers its existing contents rather than drawing from
+a deck. The robber and pirate both start off
 board and may enter revealed land or discovered sea on the first seven or Knight.
 
-For each starting settlement, choose a hidden cell first. Only that cell is
+For the first starting settlement, choose a hidden cell first. For the second,
+either reveal an eligible hidden cell or place directly on a highlighted legal
+settlement node on revealed land, without selecting that land cell first.
+Only the selected hidden cell is
 revealed for everyone. If it is sea, it stays revealed and the same player chooses
 another cell, even if nearby land was already visible. After revealing land,
 choose a legal settlement node belonging to that cell, following the normal
 distance rule. Other revealed land cells cannot be used for this placement.
-Cells without any legal settlement nodes cannot be selected. If no eligible fog
-remains, choose an eligible revealed land cell instead, without a discovery reward.
+Cells without any legal settlement nodes cannot be selected. Using revealed
+land grants no discovery reward. If no eligible fog remains for the first
+settlement, choose an eligible revealed land cell instead, without a discovery reward.
 Each newly revealed resource hex grants one matching available
 bank card; each gold hex grants one available resource of choice; sea and desert
-grant nothing. Resolve gold choices before choosing the settlement node, then choose a connected road or ship on a
-legal edge. Starting roads and ships also reveal adjacent fog with the same rewards.
+grant nothing. Resolve gold choices before choosing the settlement node. After
+placing each starting settlement, explicitly choose **Road** or **Ship** before
+placement edges appear. The route must touch the new settlement and follow normal
+road/ship terrain rules. After revealing a cell, use one of that cell's six
+boundary edges. After placing directly on revealed land, use an edge bordering
+any revealed land cell touching the new settlement. Edges extending away from
+eligible land are not allowed during setup. Starting roads and ships also
+reveal adjacent fog with the same rewards.
 Each player places two settlements in forward then reverse order; the second
 settlement also grants the usual resources from adjacent revealed resource land.
 
@@ -212,7 +225,7 @@ built roads and ships, and moved ships, reveal adjacent fog with the same
 rewards; revealed land supports settlements and produces normally; neither
 robber nor pirate may enter fog. There are no island bonuses; win at 12 points
 on your own turn. Computer opponents select starting cells and settlement nodes without inspecting the
-hidden deck.
+hidden terrain.
 
 ## Board And Controls
 
