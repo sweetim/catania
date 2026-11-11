@@ -2707,6 +2707,30 @@ test("declining a computer trade request identifies the open trade and survives 
   await expect(request).toHaveCount(0);
 });
 
+test("a computer trade request stays answerable after the phone chose a price and another computer replied", async ({ multiplayer }) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const game = snapshot.game!;
+  const requester = game.players.find(other => other.control === "computer")!;
+  const responder = game.players.find(other => other.control === "computer" && other.id !== requester.id)!;
+  game.activePlayerId = requester.id;
+  game.phase = { type: "actions" };
+  game.trade = { offeredBy: requester.id, give: null, receive: { ...emptyResources(), ore: 1 }, responses: {} };
+  await present();
+  const request = phone.getByRole("dialog", { name: "Trade request", exact: true });
+  await request.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
+  const propose = request.getByRole("button", { name: "Propose price", exact: true });
+  await expect(propose).toBeEnabled();
+  game.trade!.responses[responder.id] = false;
+  await present();
+  await expect(request.getByRole("alert")).toHaveCount(0);
+  await expect(propose).toBeEnabled();
+  await propose.click();
+  await expect.poll(() => sentActions(phone)).toEqual([expect.objectContaining({
+    action: { type: "propose-trade", price: { ...emptyResources(), wood: 1 } },
+    trade: { offeredBy: requester.id, give: null, receive: { ...emptyResources(), ore: 1 } },
+  })]);
+});
+
 test("dismissed mandatory private dialogs stay reachable while builds are collapsed", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;

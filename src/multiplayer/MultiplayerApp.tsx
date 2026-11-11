@@ -139,7 +139,6 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   const [developmentCardId, setDevelopmentCardId] = useState<string | null>(null);
   const [tradeMode, setTradeMode] = useState<"bank" | "players">("bank");
   const [editorVersion, setEditorVersion] = useState(snapshot.version);
-  const [responseVersion, setResponseVersion] = useState<number | null>(null);
   const [confirmation, setConfirmation] = useState<{
     action: GameAction;
     title: keyof typeof multiplayerUiTranslations;
@@ -174,13 +173,11 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   const tradeIdentity = trade ? JSON.stringify([trade.offeredBy, trade.give, trade.receive]) : null;
   const staleMessage = translateText("The game changed. Close and reopen this dialog to review the latest state.");
   const editorStale = editorVersion !== snapshot.version;
-  const responseStale = responseVersion !== null && responseVersion !== snapshot.version;
 
   useEffect(() => { setChosen(emptyResources()); }, [game.phase.type]);
 
   useEffect(() => {
     setChosen(emptyResources());
-    setResponseVersion(null);
   }, [tradeIdentity]);
 
   useEffect(() => {
@@ -315,7 +312,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       <div className="turn-action">
         {discardCount !== undefined ? <button className="button-primary" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
           : active && game.phase.type === "steal" ? <button className="button-primary" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
-          : trade ? <button className="button-primary" onClick={() => { setResponseVersion(null); setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
+          : trade ? <button className="button-primary" onClick={() => { setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
           : active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
           : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}>{translateText("Roll the dice")}</button>}
         {active && game.phase.type === "road-building" && snapshot.boardTargets.edges.length === 0 ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "skip-roads" })}>{translateText("Finish Road Building")}</button>
@@ -340,17 +337,17 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       }} /></div>
     </Dialog>}
     {details === "trade-response" && trade && <Dialog title={translateText(trade.give ? "Trade offer" : "Trade request")} onClose={() => setDetails(null)} summary={<ResourceInventory resources={player.resources} />}>
-      <OpenTrade trade={trade} viewer={player} players={game.players} chosenResources={chosen} disabled={disabled || responseStale}
-        onChangeResources={resources => { setResponseVersion(current => current ?? snapshot.version); setChosen(resources); }}
+      <OpenTrade trade={trade} viewer={player} players={game.players} chosenResources={chosen} disabled={disabled}
+        onChangeResources={setChosen}
         onComplete={(playerId, price) => {
           setDetails(null);
           setConfirmation({ action: { type: "complete-trade", playerId }, title: "Trade with {name}", parameters: { name: game.players.find(other => other.id === playerId)!.name }, exchange: { give: price, receive: trade.receive }, version: snapshot.version, returnTo: "trade-response" });
         }}
         onEdit={() => { setDetails(null); setTradeMode("players"); setEditorVersion(snapshot.version); setEditor("trade"); }}
         onWithdraw={() => send({ type: "cancel-trade" })}
-        onRespond={action => send(action, responseVersion ?? snapshot.version,
+        onRespond={action => send(action, snapshot.version,
           trade ? { offeredBy: trade.offeredBy, give: trade.give, receive: trade.receive } : undefined)} />
-      {(responseStale || error) && <p role="alert" className="mt-4 text-sm text-clay">{responseStale ? staleMessage : error}</p>}
+      {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
     </Dialog>}
 
     {editor === "trade" && <TradeDialog game={game} player={player} initialMode={tradeMode} onModeChange={setTradeMode} initialOffer={trade?.offeredBy === player.id ? trade : undefined} disabled={disabled || !normalActions || editorStale} error={editorStale ? staleMessage : error}
