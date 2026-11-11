@@ -148,6 +148,7 @@ export function Board({
     player?: { name: string; color: string };
     onConfirm: () => void;
     onCancel: () => void;
+    choices?: { label: string; icon?: ReactNode; onConfirm: () => void }[];
   };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   onChangeTheme?: () => void;
@@ -355,6 +356,15 @@ export function Board({
     confirmation?.onCancel();
     if (target?.isConnected && target.getClientRects().length && !target.closest("[inert]")) {
       target.focus({ preventScroll: true });
+    }
+  }
+
+  function runConfirmation(action: () => void) {
+    const focusWasInConfirmation = confirmationReference.current?.contains(document.activeElement);
+    action();
+    const viewport = viewportReference.current;
+    if (focusWasInConfirmation && viewport?.getClientRects().length && !viewport.closest("[inert]")) {
+      viewport.focus({ preventScroll: true });
     }
   }
 
@@ -1574,27 +1584,35 @@ export function Board({
             </p>
           )}
           <p id={`${illustrationId}-confirmation-title`}>{confirmation.title}</p>
-          <div>
+          <div className={confirmation.choices ? "placement-confirmation-choices" : undefined}>
             <button type="button" className="button-secondary" onClick={cancelConfirmation}>
               {translateText("Cancel")}
             </button>
-            <button
-              ref={confirmButtonReference}
-              type="button"
-              aria-label={translateText("Confirm placement")}
-              aria-describedby={`${illustrationId}-confirmation-title`}
-              className="button-primary"
-              onClick={() => {
-                const focusWasInConfirmation = confirmationReference.current?.contains(document.activeElement);
-                confirmation.onConfirm();
-                const viewport = viewportReference.current;
-                if (focusWasInConfirmation && viewport?.getClientRects().length && !viewport.closest("[inert]")) {
-                  viewport.focus({ preventScroll: true });
-                }
-              }}
-            >
-              {translateText("Confirm")}
-            </button>
+            {confirmation.choices ? confirmation.choices.map((choice, index) => (
+              <button
+                key={choice.label}
+                ref={index === 0 ? confirmButtonReference : undefined}
+                type="button"
+                aria-label={choice.label}
+                aria-describedby={`${illustrationId}-confirmation-title`}
+                className="button-primary"
+                onClick={() => runConfirmation(choice.onConfirm)}
+              >
+                {choice.icon && <span className="flex shrink-0 items-center [&>svg]:h-4 [&>svg]:w-4">{choice.icon}</span>}
+                {choice.label}
+              </button>
+            )) : (
+              <button
+                ref={confirmButtonReference}
+                type="button"
+                aria-label={translateText("Confirm placement")}
+                aria-describedby={`${illustrationId}-confirmation-title`}
+                className="button-primary"
+                onClick={() => runConfirmation(confirmation.onConfirm)}
+              >
+                {translateText("Confirm")}
+              </button>
+            )}
           </div>
         </div>
       )}

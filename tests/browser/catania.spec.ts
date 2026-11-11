@@ -2849,10 +2849,12 @@ test(`Foggy World second settlement can choose ${selection} while fog remains`, 
     await dismissCollection();
     await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-    await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
-    await page.getByRole("button", { name: "Choose roads", exact: true }).click();
     await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+    await expect(routeDialog).toBeVisible();
+    const roadChoice = routeDialog.getByRole("button", { name: "Build road", exact: true });
+    if (await roadChoice.isVisible()) await roadChoice.click();
+    else await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   }
   await dismissCollection();
   await expect(page.getByRole("heading", { name: "Place your second settlement.", exact: true })).toBeVisible();
@@ -2864,6 +2866,7 @@ test(`Foggy World second settlement can choose ${selection} while fog remains`, 
   const fogCount = await fog.count();
   expect(fogCount).toBeGreaterThan(0);
   const tileId = selection === "revealed land" ? "tile-1" : "tile-12";
+  let placedVertexId = "vertex-9";
   await screenshot(page, testInfo, "foggy-world-second-settlement-choices", false);
   if (selection === "revealed land") {
     const node = page.getByRole("button", { name: "Place settlement at vertex-9", exact: true });
@@ -2879,29 +2882,21 @@ test(`Foggy World second settlement can choose ${selection} while fog remains`, 
     await showView(page, "hand");
     await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
     await dismissCollection();
-    await page.getByRole("button", { name: /^Place settlement at / }).first().click();
+    const node = page.getByRole("button", { name: /^Place settlement at / }).first();
+    placedVertexId = ((await node.getAttribute("aria-label"))!).replace("Place settlement at ", "");
+    await node.click();
   }
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(fog).toHaveCount(fogCount - (selection === "new fog" ? 1 : 0));
   await dismissCollection();
-  await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
-  const chooseRoads = page.getByRole("button", { name: "Choose roads", exact: true });
-  const chooseShips = page.getByRole("button", { name: "Choose ships", exact: true });
-  await expect(chooseRoads).toHaveAttribute("aria-pressed", "false");
-  await expect(chooseShips).toHaveAttribute("aria-pressed", "false");
-  await chooseShips.click();
-  await expect(page.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Build ship at / }).first()).toBeVisible();
-  await chooseRoads.click();
+  await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
   const board = createBoard(seededRandom("77889999"), "foggy-world");
-  const tile = board.tiles.find(tile => tile.id === tileId)!;
-  const boundaryEdges = board.edges.filter(edge => edge.vertexIds.every(id => tile.vertexIds.includes(id))).map(edge => edge.id);
-  const routeTargets = await page.getByRole("button", { name: /^Build road at / }).evaluateAll(targets =>
-    targets.map(target => target.getAttribute("aria-label")!.replace("Build road at ", "")),
+  const routeTargets = await page.getByRole("button", { name: /^Build (road|ship) at / }).evaluateAll(targets =>
+    targets.map(target => target.getAttribute("aria-label")!.replace(/^Build (road|ship) at /, "")),
   );
   expect(routeTargets.length).toBeGreaterThan(0);
-  expect(routeTargets.every(id => selection === "new fog" ? boundaryEdges.includes(id)
-    : board.edges.find(edge => edge.id === id)!.vertexIds.includes("vertex-9"))).toBe(true);
+  expect(routeTargets.every(id => board.edges.find(edge => edge.id === id)!.vertexIds.includes(placedVertexId))).toBe(true);
   await noPageOverflow(page);
   await screenshot(page, testInfo, `foggy-world-second-${selection.replaceAll(" ", "-")}`, false);
 });
@@ -2973,24 +2968,16 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await page.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
-  await expect(page.getByText("Choose Road or Ship first, then choose an edge of the selected cell beside your new settlement.", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
-  const chooseRoads = page.getByRole("button", { name: "Choose roads", exact: true });
-  const chooseShips = page.getByRole("button", { name: "Choose ships", exact: true });
-  await chooseShips.click();
-  await expect(chooseShips).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Build ship at edge-3", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Build ship at edge-2", exact: true })).toHaveCount(0);
-  await chooseRoads.click();
-  await expect(chooseRoads).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
+  await expect(page.getByText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Build road at edge-3", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
-  if (piece === "ship") await chooseShips.click();
   await screenshot(page, testInfo, `foggy-world-route-choice-${piece}`, false);
-  await page.getByRole("button", { name: `Build ${piece} at edge-3`, exact: true }).click();
-  await expect(page.getByText(piece === "ship" ? "Build a ship here?" : "Build a road here?", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.getByRole("button", { name: "Build road at edge-3", exact: true }).click();
+  const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+  await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+  await routeDialog.getByRole("button", { name: piece === "ship" ? "Build ship" : "Build road", exact: true }).click();
   await revealHand(page);
   await showView(page, "board");
   await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
@@ -3034,7 +3021,8 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await page.getByRole("button", { name: "Place settlement at vertex-8", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Build (road|ship) at / }).first()).toBeVisible();
   await chooseGameOption(page, "Help");
   await expect(page.getByRole("dialog", { name: "Help", exact: true }))
     .toContainText("All nine harbors keep their trade types and appear only on revealed land-sea coasts");

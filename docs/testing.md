@@ -102,8 +102,8 @@ Foggy World setup regressions cover cell-first discovery followed by legal nodes
 restricted to the selected land cell, repeated sea discoveries, rejection of
 cells without legal settlement nodes, direct second-settlement placement on
 revealed-land nodes alongside fog reveal targets, persistent sea attempts,
-discovery rewards and gold choices, explicit Road/Ship choices before setup edges
-appear, route placement restricted to the selected cell's boundary (or adjacent
+discovery rewards and gold choices, Road/Ship choices offered in the placement
+dialog after selecting a setup edge legal for both pieces, route placement restricted to the selected cell's boundary (or adjacent
 revealed land after direct placement), shared-board authority, hidden fixed terrain,
 discovery-order independence, and complete three- and four-player setups.
 Fog reveal regressions cover setup discoveries across private handoffs without

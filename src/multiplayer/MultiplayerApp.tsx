@@ -298,7 +298,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      {active && isSeafarers(game.variant) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
+      {active && isSeafarers(game.variant) && game.variant !== "foggy-world" && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
@@ -515,6 +515,9 @@ export function MultiplayerApp() {
       : { type: snapshot?.buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(currentSelection.id) ? "place-ship" : "place-road", edgeId: currentSelection.id })
     .with("vertex", () => ({ type: snapshot?.buildMode === "city" ? "place-city" as const : "place-settlement" as const, vertexId: currentSelection.id }))
     .exhaustive();
+  const routeChoicePending = currentSelection?.kind === "edge" && selectedAction?.type === "place-road" &&
+    game?.variant === "foggy-world" && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    legalShipEdges(game, game.activePlayerId).includes(currentSelection.id);
 
   return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
     <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
@@ -542,19 +545,19 @@ export function MultiplayerApp() {
           </svg>
         </button>}
         {view ? <GameMenu actions={[
-          { label: translateText("Help"), onSelect: () => setDialog("help") },
-          ...(host ? [{ label: translateText("Settings"), onSelect: () => setDialog("settings") }] : []),
-          ...(host && game ? [{ label: translateText("Reset game"), disabled, onSelect: () => setDialog("reset") }] : []),
-          ...(host && game ? [{ label: translateText("Return to lobby"), disabled, onSelect: () => setDialog("lobby") }] : []),
-        ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} /> : <GameMenu
+          { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
+          ...(host ? [{ label: translateText("Settings"), icon: "settings" as const, onSelect: () => setDialog("settings") }] : []),
+          ...(host && game ? [{ label: translateText("Reset game"), icon: "reset" as const, disabled, onSelect: () => setDialog("reset") }] : []),
+          ...(host && game ? [{ label: translateText("Return to lobby"), icon: "lobby" as const, disabled, onSelect: () => setDialog("lobby") }] : []),
+        ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
           profileName={invitation ? playerProfile?.name : undefined}
           actions={[
-            { label: translateText("Help"), onSelect: () => setDialog("help") },
-            ...(invitation ? [{ label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) }] : []),
+            { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
+            ...(invitation ? [{ label: translateText("Profile"), icon: "profile" as const, onSelect: () => setProfileGateOpen(true) }] : []),
           ]}
-          exitAction={{ label: translateText("Single-device play"), onSelect: () => { window.location.href = "/"; } }}
+          exitAction={{ label: translateText("Single-device play"), icon: "singleDevice", onSelect: () => { window.location.href = "/"; } }}
         />}
       </header>}
       {privateGame && <span className="sr-only" role="status" data-status={view?.status}>{translateText(view?.pending ? "Syncing" : view?.status === "connected" ? "Connected" : "Offline")}</span>}
@@ -698,7 +701,7 @@ export function MultiplayerApp() {
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                routeChoice={isSeafarers(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                routeChoice={isSeafarers(game.variant) && game.variant !== "foggy-world" && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
                   : undefined}
                 pirateIndicator={isSeafarers(game.variant) ? {
@@ -722,8 +725,15 @@ export function MultiplayerApp() {
                   : selectedAction.type === "move-robber" ? translateText("Move the robber here?")
                   : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
                   : selectedAction.type === "move-ship" ? translateText("Move the ship here?")
+                  : routeChoicePending ? translateText("Road or ship here?")
                   : translateText("Confirm {piece}?", { piece: pieceName(language, selectedAction.type === "place-ship" ? "ship" : selectedAction.type === "place-road" ? "road" : selectedAction.type === "place-city" ? "city" : "settlement") }),
                   player: activePlayer ? { name: activePlayer.name, color: activePlayer.color } : undefined,
+                  ...(routeChoicePending ? {
+                    choices: [
+                      { label: translateText("Build road"), icon: <PieceIcon piece="road" />, onConfirm: () => { session.current?.perform(selectedAction, currentSelection!.version); setSelected(null); setMovingShip(null); } },
+                      { label: translateText("Build ship"), icon: <PieceIcon piece="ship" />, onConfirm: () => { session.current?.perform({ ...selectedAction, type: "place-ship" }, currentSelection!.version); setSelected(null); setMovingShip(null); } },
+                    ],
+                  } : {}),
                   onConfirm: () => { session.current?.perform(selectedAction, currentSelection!.version); setSelected(null); setMovingShip(null); }, onCancel: () => setSelected(null) } : undefined}
               />
             </div>
@@ -754,9 +764,9 @@ export function MultiplayerApp() {
           )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
-            { label: translateText("Help"), onSelect: () => setDialog("help") },
-          ]} exitAction={{ label: translateText("Leave room"), onSelect: () => setDialog("leave") }} />} />
+          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget}           turnMenu={<GameMenu icon actions={[
+            { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
+          ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} />} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
           {victoryWinner && !victoryDismissed && (
             <VictoryDialog

@@ -43,6 +43,7 @@ import {
   DevelopmentCardIcon,
   Dialog,
   Logo,
+  PieceIcon,
   ResourceCard,
   ResourceInventory,
 } from "./components/GameUi";
@@ -585,7 +586,6 @@ export function App() {
           : movableShipEdges(game, viewer.id).filter(id => legalShipDestinations(game, viewer.id, id).length)
         : buildMode === "ship" ? legalShipEdges(game, viewer.id)
         : buildMode === "road" ? legalRoadEdges(game, viewer.id)
-        : game.variant === "foggy-world" && game.phase.type === "setup-road" ? []
         : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =
@@ -612,6 +612,12 @@ export function App() {
               type: buildMode === "city" ? "place-city" : "place-settlement",
               vertexId: selected.id,
             };
+  const routeChoicePending =
+    selected?.kind === "edge" &&
+    selectedAction?.type === "place-road" &&
+    game?.variant === "foggy-world" &&
+    (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    legalShipEdges(game, game.activePlayerId).includes(selected.id);
 
   function returnToTable() {
     setGame(null);
@@ -643,11 +649,11 @@ export function App() {
   }
 
   const gameMenu = <GameMenu icon={Boolean(viewer)} actions={[
-    { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
-    { label: translateText("Settings"), onSelect: () => setDialog("settings") },
-    ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
-    { label: translateText("Reset game"), onSelect: () => setDialog("reset") },
-  ]} exitAction={{ label: translateText("End game"), onSelect: () => setDialog("restart") }} />;
+    { label: translateText("Help"), icon: "help", onSelect: () => { setDialog("help"); setError(""); } },
+    { label: translateText("Settings"), icon: "settings", onSelect: () => setDialog("settings") },
+    ...(needsHandoff && viewer ? [{ label: translateText("Pass device"), icon: "pass" as const, disabled: rollBusy, onSelect: () => setDialog("players") }] : []),
+    { label: translateText("Reset game"), icon: "reset", onSelect: () => setDialog("reset") },
+  ]} exitAction={{ label: translateText("End game"), icon: "end", onSelect: () => setDialog("restart") }} />;
 
   const playerProfile = activeProfile(profileState);
   if ((!game || game.winnerId) && (!playerProfile || profileGateOpen)) {
@@ -717,11 +723,11 @@ export function App() {
                 groupLabel={translateText("Main menu")}
                 profileName={playerProfile?.name}
                 actions={[
-                  { label: translateText("Help"), onSelect: () => { setDialog("help"); setError(""); } },
-                  { label: translateText("Profile"), onSelect: () => setProfileGateOpen(true) },
-                  ...(game?.winnerId ? [{ label: translateText("Restart"), onSelect: restartGame }] : []),
+                  { label: translateText("Help"), icon: "help", onSelect: () => { setDialog("help"); setError(""); } },
+                  { label: translateText("Profile"), icon: "profile", onSelect: () => setProfileGateOpen(true) },
+                  ...(game?.winnerId ? [{ label: translateText("Restart"), icon: "restart" as const, onSelect: restartGame }] : []),
                 ]}
-                exitAction={game?.winnerId ? { label: translateText("Back to home"), onSelect: returnToTable } : undefined}
+                exitAction={game?.winnerId ? { label: translateText("Back to home"), icon: "home", onSelect: returnToTable } : undefined}
               />
             )}
           </div>
@@ -1094,7 +1100,7 @@ export function App() {
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
                   routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                  routeChoice={isActive && isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                  routeChoice={isActive && isSeafarers(game.variant) && game.variant !== "foggy-world" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                     ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
                     : undefined}
                   pirateIndicator={isSeafarers(game.variant) ? {
@@ -1121,13 +1127,19 @@ export function App() {
                     title: selected.kind === "tile"
                       ? translateText(selectedAction.type === "reveal-tile" ? "Choose this starting cell?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
                       : selected.kind === "edge"
-                        ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
+                        ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : routeChoicePending ? "Road or ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
                         : buildMode === "city"
                           ? translateText("Upgrade to a city?")
                           : translateText("Settle here?"),
                     player: { name: viewer.name, color: viewer.color },
                     onConfirm: () => perform(selectedAction),
                     onCancel: () => setSelected(null),
+                    ...(routeChoicePending ? {
+                      choices: [
+                        { label: translateText("Build road"), icon: <PieceIcon piece="road" />, onConfirm: () => perform(selectedAction) },
+                        { label: translateText("Build ship"), icon: <PieceIcon piece="ship" />, onConfirm: () => perform({ ...selectedAction, type: "place-ship" }) },
+                      ],
+                    } : {}),
                   } : undefined}
                   onSelect={(kind, id) => {
                     if (kind === "edge" && buildMode === "move-ship" && !movingShipId) {

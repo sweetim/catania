@@ -160,9 +160,8 @@ function legalRouteEdges(state: PlacementState, playerId: string, kind: "road" |
     if (kind === "road" ? isSeafarers(state.board.variant) && !tiles.some(tile => isLand(tile.terrain)) :
       !tiles.some(tile => tile.terrain === "sea" || tile.terrain === "fog") || tiles.some(tile => tile.id === state.pirateTileId)) return false;
     if (state.phase.type === "setup-road") {
-      const selectedTileId = state.phase.tileId;
       return edge.vertexIds.includes(state.phase.vertexId) &&
-        (state.board.variant !== "foggy-world" || tiles.some(tile => selectedTileId ? tile.id === selectedTileId : isLand(tile.terrain)));
+        (state.board.variant !== "foggy-world" || tiles.some(tile => isLand(tile.terrain)));
     }
     return edge.vertexIds.some(vertexId => {
       const vertex = state.board.vertices.find(vertex => vertex.id === vertexId)!;
@@ -387,8 +386,7 @@ function placeSettlement(state: GameState, player: Player, vertex: Vertex, setup
         player.resources[tile.terrain]++;
       }
     }
-    const tileId = state.phase.type === "setup-settlement" ? state.phase.tileId : undefined;
-    state.phase = { type: "setup-road", vertexId: vertex.id, ...(tileId ? { tileId } : {}) };
+    state.phase = { type: "setup-road", vertexId: vertex.id };
   }
   state.log.push({ key: "{player} builds a settlement.", parameters: { player: player.name } });
 }

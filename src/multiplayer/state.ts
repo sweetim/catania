@@ -31,7 +31,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
   const phase = match(game.phase)
     .with({ type: "setup-settlement" }, phase => ({ type: "setup-settlement", ...(phase.tileId ? { tileId: phase.tileId } : {}) } as const))
     .with({ type: "setup-reveal" }, () => ({ type: "setup-reveal" } as const))
-    .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId, ...(phase.tileId ? { tileId: phase.tileId } : {}) } as const))
+    .with({ type: "setup-road" }, phase => ({ type: "setup-road", vertexId: phase.vertexId } as const))
     .with({ type: "roll" }, () => ({ type: "roll" } as const))
     .with({ type: "actions" }, () => ({ type: "actions" } as const))
     .with({ type: "discard" }, phase => ({ type: "discard", required: { ...phase.required } } as const))
@@ -386,7 +386,6 @@ export class HostRoom {
     } else if (game.phase.type === "setup-road" || game.phase.type === "road-building") {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId)
         : this.buildMode === "road" ? legalRoadEdges(game, game.activePlayerId)
-      : game.variant === "foggy-world" && game.phase.type === "setup-road" ? []
       : [...legalRoadEdges(game, game.activePlayerId), ...legalShipEdges(game, game.activePlayerId)];
     } else if (game.phase.type === "actions" && (this.buildMode === "road" || this.buildMode === "ship")) {
       targets.edges = this.buildMode === "ship" ? legalShipEdges(game, game.activePlayerId) : legalRoadEdges(game, game.activePlayerId);

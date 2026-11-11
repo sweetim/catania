@@ -43,11 +43,10 @@ export function getPhaseInstructions({
         ? "Place your second settlement directly on a highlighted node on revealed land, or reveal a new cell. Sea? Choose again."
         : "Reveal one cell. Sea? Choose again. Land? Place a settlement on that cell."),
     }))
-    .with({ type: "setup-road" }, phase => ({
+    .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
-      description: variant === "foggy-world" ? translateText(phase.tileId
-        ? "Choose Road or Ship first, then choose an edge of the selected cell beside your new settlement."
-        : "Choose Road or Ship first, then choose an edge bordering revealed land beside your new settlement.")
+      description: variant === "foggy-world"
+        ? translateText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.")
         : isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
         : "Choose a highlighted edge connected to your new settlement, then confirm your road."),

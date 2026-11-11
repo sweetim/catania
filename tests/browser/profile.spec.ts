@@ -134,6 +134,29 @@ test("legacy profiles migrate without randomUUID", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test("menu dropdown items render leading icons", async ({ page }, testInfo) => {
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  const mainMenu = page.getByRole("group", { name: "Main menu", exact: true });
+  const mainMenuItems = mainMenu.getByRole("button");
+  await expect(mainMenuItems).toHaveCount(2);
+  for (const item of await mainMenuItems.all()) {
+    await expect(item.locator(":scope > svg")).toHaveCount(1);
+  }
+  await page.screenshot({ path: testInfo.outputPath("menu-icons-home.png") });
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await page.getByRole("button", { name: "Continue as Alex", exact: true }).click();
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await page.getByRole("button", { name: "Game", exact: true }).click();
+  const gameMenu = page.getByRole("group", { name: "Game menu", exact: true });
+  const gameMenuItems = gameMenu.getByRole("button");
+  await expect(gameMenuItems.first()).toBeVisible();
+  expect(await gameMenuItems.count()).toBeGreaterThanOrEqual(4);
+  for (const item of await gameMenuItems.all()) {
+    await expect(item.locator(":scope > svg")).toHaveCount(1);
+  }
+  await page.screenshot({ path: testInfo.outputPath("menu-icons-game.png") });
+});
+
 test("profile history survives reload and shows completed game results and stats", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();

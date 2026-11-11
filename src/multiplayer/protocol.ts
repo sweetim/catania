@@ -162,8 +162,7 @@ function phase(value: unknown): boolean {
   switch (value.type) {
     case "setup-reveal": case "roll": case "actions": case "finished": return fields(value, ["type"]);
     case "setup-settlement": return fields(value, ["type"], ["tileId"]) && (!Object.hasOwn(value, "tileId") || identifier(value.tileId, "tile"));
-    case "setup-road": return fields(value, ["type", "vertexId"], ["tileId"]) && identifier(value.vertexId, "vertex") &&
-      (!Object.hasOwn(value, "tileId") || identifier(value.tileId, "tile"));
+    case "setup-road": return fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex");
     case "discard": case "gold": return fields(value, ["type", "required"]) && record(value.required) && Object.entries(value.required).every(([key, count]) => identifier(key, "player") && integer(count, 47));
     case "robber": return fields(value, ["type", "returnPhase"]) && ["roll", "actions"].includes(value.returnPhase as string);
     case "steal": return fields(value, ["type", "victimIds", "returnPhase"]) && array(value.victimIds, 3, value => identifier(value, "player")) && ["roll", "actions"].includes(value.returnPhase as string);

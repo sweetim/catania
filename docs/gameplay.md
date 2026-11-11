@@ -210,11 +210,11 @@ settlement, choose an eligible revealed land cell instead, without a discovery r
 Each newly revealed resource hex grants one matching available
 bank card; each gold hex grants one available resource of choice; sea and desert
 grant nothing. Resolve gold choices before choosing the settlement node. After
-placing each starting settlement, explicitly choose **Road** or **Ship** before
-placement edges appear. The route must touch the new settlement and follow normal
-road/ship terrain rules. After revealing a cell, use one of that cell's six
-boundary edges. After placing directly on revealed land, use an edge bordering
-any revealed land cell touching the new settlement. Edges extending away from
+placing each starting settlement, eligible edges appear immediately. Selecting an
+edge legal for both pieces asks **Road** or **Ship** in the placement dialog; an
+edge legal for only one confirms directly. The route must touch the new settlement
+and border a revealed land cell, whichever cell was used for the settlement.
+Edges extending away from
 eligible land are not allowed during setup. Starting roads and ships also
 reveal adjacent fog with the same rewards.
 Each player places two settlements in forward then reverse order; the second

@@ -44,16 +44,12 @@ describe("translations", () => {
     });
     expect(secondSettlement.title).toBe(language === "en" ? "Place your second settlement." : "2つ目の開拓地を配置しましょう。");
     expect(secondSettlement.description).toContain(language === "en" ? "directly" : "直接");
-    for (const tileId of [undefined, "tile-1"]) {
-      const route = getPhaseInstructions({
-        phase: { type: "setup-road", vertexId: "vertex-1", ...(tileId ? { tileId } : {}) },
-        secondSettlement: true, variant: "foggy-world", language,
-      });
-      expect(route.description).toContain(language === "en" ? "Choose Road or Ship first" : "まず街道か船を選び");
-      expect(route.description).toContain(language === "en"
-        ? tileId ? "selected cell" : "revealed land"
-        : tileId ? "選んだタイル" : "公開済みの陸地");
-    }
+    const route = getPhaseInstructions({
+      phase: { type: "setup-road", vertexId: "vertex-1" },
+      secondSettlement: true, variant: "foggy-world", language,
+    });
+    expect(route.description).toContain(language === "en" ? "then choose Road or Ship" : "街道か船を選んでください");
+    expect(route.description).toContain(language === "en" ? "revealed land" : "公開済みの陸地");
   });
 
   test.each([3, 13])("custom %s-point games show the selected target in finished-turn instructions", points => {

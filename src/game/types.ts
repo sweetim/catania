@@ -69,14 +69,14 @@ export type Player = {
 export type ExplorationResumePhase =
   | { type: "setup-settlement"; tileId?: string }
   | { type: "setup-reveal" }
-  | { type: "setup-road"; vertexId: string; tileId?: string }
+  | { type: "setup-road"; vertexId: string }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" };
 export type GamePhase =
   | { type: "setup-settlement"; tileId?: string }
   | { type: "setup-reveal" }
-  | { type: "setup-road"; vertexId: string; tileId?: string }
+  | { type: "setup-road"; vertexId: string }
   | { type: "roll" }
   | { type: "actions" }
   | { type: "discard"; required: Record<string, number> }

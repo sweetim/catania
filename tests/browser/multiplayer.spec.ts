@@ -1572,18 +1572,13 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
   await host.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
   await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
   await expectPhase([host, ...phones.values()], "setup-road", activeName);
-  await expect(host.getByRole("button", { name: /^Build (road|ship) at / })).toHaveCount(0);
-  await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await expect(host.getByRole("button", { name: "Build ship at edge-3", exact: true })).toBeVisible();
-  await expect(host.getByRole("button", { name: "Build ship at edge-2", exact: true })).toHaveCount(0);
-  await expect(host.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
-  await phone.getByRole("button", { name: "Choose roads", exact: true }).click();
+  await expect(phone.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
   await expect(host.getByRole("button", { name: "Build road at edge-3", exact: true })).toBeVisible();
   await expect(host.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
-  await expect(host.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
-  await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await host.getByRole("button", { name: "Build ship at edge-3", exact: true }).click();
-  await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await host.getByRole("button", { name: "Build road at edge-3", exact: true }).click();
+  const routeDialog = host.getByRole("group", { name: "Placement confirmation" });
+  await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+  await routeDialog.getByRole("button", { name: "Build ship", exact: true }).click();
   for (const viewer of phones.values()) {
     await expect.poll(async () => (await latestSnapshot(viewer)).game!.board.edges.find(edge => edge.id === "edge-3")?.kind).toBe("ship");
     const snapshot = await latestSnapshot(viewer);
@@ -1601,9 +1596,13 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
     await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
     const snapshot = await latestSnapshot(phone);
     const currentPhone = phones.get(snapshot.game!.players.find(player => player.id === snapshot.game!.activePlayerId)!.name)!;
-    await currentPhone.getByRole("button", { name: "Choose roads", exact: true }).click();
+    await expect(currentPhone.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
     await host.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
-    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const routeDialog = host.getByRole("group", { name: "Placement confirmation" });
+    await expect(routeDialog).toBeVisible();
+    const roadChoice = routeDialog.getByRole("button", { name: "Build road", exact: true });
+    if (await roadChoice.isVisible()) await roadChoice.click();
+    else await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
     await expect.poll(async () => (await latestSnapshot(phone)).game!.phase.type).toBe("setup-reveal");
   }
   for (const viewer of phones.values()) {
@@ -1622,14 +1621,11 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
   expect(reused.game!.board.tiles).toEqual(before.game!.board.tiles);
   expect(reused.game!.bank.grain).toBe(before.game!.bank.grain - 1);
   expect(reused.boardTargets.vertices).toEqual([]);
-  expect(reused.boardTargets.edges).toEqual([]);
+  expect(reused.boardTargets.edges.length).toBeGreaterThan(0);
   const currentPhone = phones.get(reused.game!.players.find(player => player.id === reused.game!.activePlayerId)!.name)!;
-  await currentPhone.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await expect(host.getByRole("button", { name: /^Build ship at / }).first()).toBeVisible();
-  await expect(host.getByRole("button", { name: /^Build road at / })).toHaveCount(0);
-  await host.getByRole("button", { name: "Choose roads", exact: true }).click();
-  await expect(host.getByRole("button", { name: /^Build road at / }).first()).toBeVisible();
-  await expect(host.getByRole("button", { name: /^Build ship at / })).toHaveCount(0);
+  await expect(currentPhone.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+  await expect(host.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+  await expect(host.getByRole("button", { name: /^Build (road|ship) at / }).first()).toBeVisible();
   await noHorizontalOverflow(host);
   await privateScreenFits(phone);
   await screenshot(host, testInfo, "foggy-world-shared-nodes");
