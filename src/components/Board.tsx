@@ -94,6 +94,164 @@ export function useFogRevealHistory() {
   });
 }
 
+const VICTORY_TARGETS = Array.from({ length: 11 }, (_, index) => index + 3);
+
+const victoryTargetPillClassName = "inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[10px] font-bold uppercase tabular-nums tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814]";
+
+function VictoryTargetLabel({ victoryTarget }: { victoryTarget: number }) {
+  const translateText = useTranslation(boardTranslations);
+  return <>
+    <span className="whitespace-nowrap @max-[120px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
+    <span className="hidden whitespace-nowrap @max-[120px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
+  </>;
+}
+
+function VictoryTargetBadge({ victoryTarget, disabled = false, onChange }: {
+  victoryTarget: number;
+  disabled?: boolean;
+  onChange: (points: number) => void;
+}) {
+  const translateText = useTranslation(boardTranslations);
+  const listboxId = useId();
+  const wrapper = useRef<HTMLSpanElement>(null);
+  const badge = useRef<HTMLButtonElement>(null);
+  const listbox = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+
+  function toggleOpen() {
+    if (!open && badge.current && wrapper.current) {
+      const badgeRect = badge.current.getBoundingClientRect();
+      let clipTop = 0;
+      let clipBottom = window.innerHeight;
+      let node: HTMLElement | null = wrapper.current.parentElement;
+      while (node) {
+        const style = getComputedStyle(node);
+        if ([style.overflow, style.overflowY, style.overflowX].some(value => value === "hidden" || value === "clip")) {
+          const clipRect = node.getBoundingClientRect();
+          clipTop = clipRect.top;
+          clipBottom = clipRect.bottom;
+          break;
+        }
+        node = node.parentElement;
+      }
+      const popupHeight = 170;
+      setDropUp(clipBottom - badgeRect.bottom < popupHeight && badgeRect.top - clipTop > clipBottom - badgeRect.bottom);
+    }
+    setOpen(current => !current);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: Event) => {
+      if (!wrapper.current?.contains(event.target as Node | null)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    // Safari can blur a menu control before delivering a tapped item's click.
+    document.addEventListener("focusin", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("focusin", dismiss);
+    };
+  }, [open]);
+
+  function focusTargetOption(index: number) {
+    const options = listbox.current?.querySelectorAll<HTMLButtonElement>("[role='option']");
+    if (!options?.length) return;
+    options[Math.max(0, Math.min(options.length - 1, index))]?.focus();
+  }
+
+  function selectTarget(points: number) {
+    setOpen(false);
+    badge.current?.focus({ preventScroll: true });
+    if (points !== victoryTarget) onChange(points);
+  }
+
+  return (
+    <span ref={wrapper} className="pointer-events-auto relative inline-flex">
+      <button
+        ref={badge}
+        type="button"
+        aria-label={translateText("Victory points to win")}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        title={translateText("Victory points to win")}
+        disabled={disabled}
+        onClick={() => toggleOpen()}
+        onKeyDown={event => {
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+            return;
+          }
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          if (open) {
+            const options = Array.from(listbox.current?.querySelectorAll("[role='option']") ?? []);
+            focusTargetOption(options.findIndex(option => option.getAttribute("aria-selected") === "true"));
+            return;
+          }
+          const next = VICTORY_TARGETS[VICTORY_TARGETS.indexOf(victoryTarget) + (event.key === "ArrowDown" ? 1 : -1)];
+          if (next !== undefined) onChange(next);
+        }}
+        className={`${victoryTargetPillClassName} min-h-11 cursor-pointer @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]`}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+          <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
+        </svg>
+        <VictoryTargetLabel victoryTarget={victoryTarget} />
+        <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="hidden shrink-0 @min-[120px]:block">
+          <path d="m3 4.5 3 3 3-3" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          ref={listbox}
+          id={listboxId}
+          role="listbox"
+          aria-label={translateText("Victory points to win")}
+          className={`absolute left-1/2 z-50 grid w-52 -translate-x-1/2 grid-cols-4 gap-1 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
+          onKeyDown={event => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setOpen(false);
+              badge.current?.focus();
+              return;
+            }
+            const options = Array.from(listbox.current?.querySelectorAll<HTMLButtonElement>("[role='option']") ?? []);
+            const index = options.findIndex(option => option === document.activeElement);
+            const deltas = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 } as const;
+            if (event.key in deltas) {
+              event.preventDefault();
+              focusTargetOption(index + deltas[event.key as keyof typeof deltas]);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              focusTargetOption(0);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              focusTargetOption(options.length - 1);
+            }
+          }}
+        >
+          {VICTORY_TARGETS.map(points => (
+            <button
+              key={points}
+              type="button"
+              role="option"
+              aria-selected={points === victoryTarget}
+              className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg px-2 text-sm font-semibold tabular-nums hover:bg-moss aria-selected:bg-forest"
+              onClick={() => selectTarget(points)}
+            >
+              {points}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 export function Board({
   board,
   fogRevealHistory,
@@ -1653,30 +1811,16 @@ export function Board({
         )}
         {victoryTarget !== undefined && (
           <span className="@container pointer-events-none flex min-w-0 flex-1 items-center justify-center">
-            <span
-              className={`relative inline-flex items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-1 text-[10px] font-bold uppercase tabular-nums tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814] ${onChangeVictoryTarget ? "pointer-events-auto focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#886636] @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden" : ""}`}
-              title={onChangeVictoryTarget ? translateText("Victory points to win") : undefined}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-                <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
-              </svg>
-              <span className="whitespace-nowrap @max-[120px]:hidden">{translateText("{points} VP to win", { points: victoryTarget })}</span>
-              <span className="hidden whitespace-nowrap @max-[120px]:inline">{translateText("{points} VP", { points: victoryTarget })}</span>
-              {onChangeVictoryTarget && <>
-                <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="hidden shrink-0 @min-[120px]:block">
-                  <path d="m3 4.5 3 3 3-3" />
+            {onChangeVictoryTarget ? (
+              <VictoryTargetBadge victoryTarget={victoryTarget} disabled={victoryTargetDisabled} onChange={onChangeVictoryTarget} />
+            ) : (
+              <span className={victoryTargetPillClassName}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+                  <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
                 </svg>
-                <select
-                  aria-label={translateText("Victory points to win")}
-                  className="absolute inset-x-0 top-1/2 min-h-11 w-full -translate-y-1/2 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                  value={victoryTarget}
-                  disabled={victoryTargetDisabled}
-                  onChange={event => onChangeVictoryTarget(Number(event.target.value))}
-                >
-                  {Array.from({ length: 11 }, (_, index) => index + 3).map(points => <option key={points} value={points}>{points}</option>)}
-                </select>
-              </>}
-            </span>
+                <VictoryTargetLabel victoryTarget={victoryTarget} />
+              </span>
+            )}
           </span>
         )}
         <div

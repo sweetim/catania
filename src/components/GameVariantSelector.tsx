@@ -1,5 +1,4 @@
 import { isGameVariant, type GameVariant } from "../game/types";
-import { victoryTarget } from "../game/engine";
 import { useTranslation } from "../localization";
 import { seafarersTranslations } from "../translations/seafarers";
 
@@ -10,20 +9,6 @@ export const GAME_VARIANT_LABELS = {
   "fog-islands": "Fog Islands",
   "foggy-world": "Foggy World",
 } as const satisfies Record<GameVariant, keyof typeof seafarersTranslations>;
-
-const SCENARIO_DESCRIPTIONS = {
-  seafarers: "Main island setup. Discover three islands. First to {points} points wins.",
-  "four-islands": "Start on any of four islands. Earn 2 bonus points per island not occupied by your starting settlements. First to {points} points wins.",
-  "fog-islands": "Start on any revealed starting island. Explore fog with roads and ships and collect discovery resources. No island bonuses. First to {points} points wins.",
-  "foggy-world": "Every hex starts hidden under fog, with terrain and numbers fixed before play. Reveal a cell first: sea lets you choose again; land unlocks its settlement nodes. Place your second settlement directly on revealed land or reveal a new cell. Choose an eligible land boundary edge, then Road or Ship. First to {points} points wins.",
-} as const;
-
-export function GameVariantSummary({ variant, victoryPointsToWin = victoryTarget(variant) }: { variant: GameVariant; victoryPointsToWin?: number }) {
-  const translateText = useTranslation(seafarersTranslations);
-  if (variant === "original") return null;
-  return <><strong>{translateText(variant === "seafarers" ? "Heading for New Shores" : GAME_VARIANT_LABELS[variant])}</strong>{" "}
-    {translateText(SCENARIO_DESCRIPTIONS[variant], { points: victoryPointsToWin })}</>;
-}
 
 export function GameVariantSelector({ value, onChange, disabled = false }: {
   value: GameVariant;

@@ -134,7 +134,7 @@ test("legacy profiles migrate without randomUUID", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("menu dropdown items render leading icons", async ({ page }, testInfo) => {
+test("menu dropdown items render leading icons", async ({ page, isMobile }, testInfo) => {
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   const mainMenu = page.getByRole("group", { name: "Main menu", exact: true });
   const mainMenuItems = mainMenu.getByRole("button");
@@ -146,6 +146,13 @@ test("menu dropdown items render leading icons", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   await page.getByRole("button", { name: "Continue as Alex", exact: true }).click();
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  if (!isMobile) {
+    const turnControls = page.getByRole("region", { name: "Turn controls", exact: true });
+    for (const name of [/^Roll the dice/, /^End turn/]) {
+      const action = turnControls.getByRole("button", { name });
+      await expect(action.locator(":scope > svg")).toHaveCount(1);
+    }
+  }
   await page.getByRole("button", { name: "Game", exact: true }).click();
   const gameMenu = page.getByRole("group", { name: "Game menu", exact: true });
   const gameMenuItems = gameMenu.getByRole("button");

@@ -2492,7 +2492,6 @@ test("Seafarers selection changes the preview independently of themes and can re
   await expect(page.locator(".terrain-hex")).toHaveCount(19);
   await versions.selectOption("seafarers");
   await expect(page.locator(".terrain-hex")).toHaveCount(42);
-  await expect(page.getByText("Heading for New Shores", { exact: true })).toBeVisible();
   const island = page.getByRole("region", { name: "Island preview", exact: true, includeHidden: true });
   const geometry = await themeBoardGeometry(island);
   for (const theme of BOARD_THEMES) {
@@ -2907,7 +2906,6 @@ test(`Foggy World selects a cell first, retries sea, then chooses a settlement n
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
-  await expect(page.getByText("Every hex starts hidden under fog", { exact: false }).first()).toBeVisible();
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });

@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { match } from "ts-pattern";
+import { DiceIcon, EndTurnIcon } from "../components/ActionIcons";
 import { Board } from "../components/Board";
 import { MapSeedControls } from "../components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
-import { GameVariantSelector, GameVariantSummary } from "../components/GameVariantSelector";
+import { GameVariantSelector } from "../components/GameVariantSelector";
 import { FreeRouteChoice, GoldSelection } from "../components/SeafarersControls";
 import { BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
@@ -314,9 +315,9 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
           : active && game.phase.type === "steal" ? <button className="button-primary" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
           : trade ? <button className="button-primary" onClick={() => { setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
           : active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
-          : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}>{translateText("Roll the dice")}</button>}
+          : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}><DiceIcon />{translateText("Roll the dice")}</button>}
         {active && game.phase.type === "road-building" && snapshot.boardTargets.edges.length === 0 ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "skip-roads" })}>{translateText("Finish Road Building")}</button>
-          : <button className="button-secondary" disabled={disabled || !normalActions} onClick={() => send({ type: "end-turn" })}>{translateText("End turn")}</button>}
+          : <button className="button-secondary" disabled={disabled || !normalActions} onClick={() => send({ type: "end-turn" })}><EndTurnIcon />{translateText("End turn")}</button>}
       </div>
     </section>
 
@@ -614,7 +615,6 @@ export function MultiplayerApp() {
                   />}
                 />
               </div>
-              {isSeafarers(snapshot.variant) && <p className="mt-4 text-xs leading-5 text-muted"><GameVariantSummary variant={snapshot.variant} victoryPointsToWin={snapshot.victoryPointsToWin} /></p>}
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
           {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
@@ -651,9 +651,6 @@ export function MultiplayerApp() {
           <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
             <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
             {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
-            {!host && snapshot && <p className="my-4 text-xs leading-5 text-muted">
-              {snapshot.variant === "original" ? <>{translateText("Original")} / {translateText("First to {points} points wins.", { points: snapshot.victoryPointsToWin })}</> : <GameVariantSummary variant={snapshot.variant} victoryPointsToWin={snapshot.victoryPointsToWin} />}
-            </p>}
             {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
             {snapshot && <>
               <div id="lobby-readiness" role="status" className="my-4 rounded-xl bg-moss p-4">

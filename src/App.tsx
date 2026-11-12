@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
 import { match } from "ts-pattern";
+import { DiceIcon, EndTurnIcon } from "./components/ActionIcons";
 import { Board, useFogRevealHistory } from "./components/Board";
 import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
-import { GameVariantSelector, GameVariantSummary } from "./components/GameVariantSelector";
+import { GameVariantSelector } from "./components/GameVariantSelector";
 import { FreeRouteChoice, GoldSelection } from "./components/SeafarersControls";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
@@ -813,7 +814,6 @@ export function App() {
                   setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant) });
                 }} />
               </div>
-              {isSeafarers(variant) && <p className="text-xs leading-5 text-muted"><GameVariantSummary variant={variant} /></p>}
               <div className="grid grid-cols-2 gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                   <label
@@ -1468,6 +1468,7 @@ export function App() {
                     onClick={() => perform({ type: "roll" })}
                     disabled={game.phase.type !== "roll" || !isActive || rollBusy || handTaskOpen}
                   >
+                    <DiceIcon />
                     {translateText("Roll the dice")}
                   </button>
                   <button
@@ -1475,6 +1476,7 @@ export function App() {
                     onClick={() => perform({ type: "end-turn" })}
                     disabled={!normalActions || handTaskOpen}
                   >
+                    <EndTurnIcon />
                     {translateText(needsHandoff ? "End turn & pass device" : "End turn")}
                   </button>
                 </div>

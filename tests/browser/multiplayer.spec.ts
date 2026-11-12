@@ -335,32 +335,41 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const mapControls = host.locator(".board-controls");
-  const target = mapControls.getByRole("combobox", { name: "Victory points to win", exact: true });
-  await expect(host.getByRole("combobox", { name: "Victory points to win", exact: true })).toHaveCount(1);
-  await expect(target).toHaveValue("10");
-  await expect(target.locator("option")).toHaveText(Array.from({ length: 11 }, (_, index) => String(index + 3)));
+  const target = mapControls.getByRole("button", { name: "Victory points to win", exact: true });
+  const chooseVictoryTarget = async (points: number) => {
+    await target.click();
+    await host.getByRole("listbox", { name: "Victory points to win", exact: true }).getByRole("option", { name: String(points), exact: true }).click();
+  };
+  await expect(host.getByRole("button", { name: "Victory points to win", exact: true })).toHaveCount(1);
+  await expect(target).toContainText("10 VP to win");
+  await target.click();
+  const targetOptions = host.getByRole("listbox", { name: "Victory points to win", exact: true }).getByRole("option");
+  await expect(targetOptions).toHaveText(Array.from({ length: 11 }, (_, index) => String(index + 3)));
+  await expect(targetOptions.filter({ hasText: /^10$/ })).toHaveAttribute("aria-selected", "true");
+  for (const option of await targetOptions.all()) await expect(option).toHaveCSS("height", "44px");
+  await host.keyboard.press("Escape");
+  await expect(targetOptions).toHaveCount(0);
   await expect(target.locator("..")).toContainText("10 VP to win");
   const phone = await multiplayer.newPage("Alex", true);
   await requestSeat(phone, invitation, "Alex");
   await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
-  await expect(phone.getByRole("combobox", { name: "Victory points to win", exact: true })).toHaveCount(0);
+  await expect(phone.getByRole("button", { name: "Victory points to win", exact: true })).toHaveCount(0);
 
   await target.focus();
   await expect(target).toBeFocused();
   await target.press("ArrowDown");
-  await expect(target).toHaveValue("11");
-  await expect(phone.getByText("First to 11 points wins.", { exact: false })).toBeVisible();
+  await expect(target).toContainText("11 VP to win");
+  await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(11);
   await target.press("ArrowUp");
-  await expect(target).toHaveValue("10");
+  await expect(target).toContainText("10 VP to win");
 
   for (const [variant, defaultTarget] of [["original", 10], ["seafarers", 13], ["four-islands", 12], ["fog-islands", 12], ["foggy-world", 12]] as const) {
     await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
-    await expect(target).toHaveValue(String(defaultTarget));
+    await expect(target).toContainText(`${defaultTarget} VP`);
     const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
     for (const points of [3, 13, 7]) {
-      await target.selectOption(String(points));
+      await chooseVictoryTarget(points);
       await expect(host.locator(".board-controls").getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
-      await expect(phone.getByText(`First to ${points} points wins.`, { exact: false })).toBeVisible();
       await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(points);
       await expect(host.getByRole("textbox", { name: "Map code", exact: true })).toHaveValue(mapCode);
     }
@@ -375,18 +384,18 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   }
 
   await selectMenuLanguage(host, "en", "ja");
-  const japaneseTarget = host.getByRole("combobox", { name: "勝利に必要な勝利点", exact: true });
-  await japaneseTarget.selectOption("3");
-  await expect(host.getByText("先に3点に到達すると勝利です。", { exact: false })).toBeVisible();
-  await expect(phone.getByText("First to 3 points wins.", { exact: false })).toBeVisible();
+  const japaneseTarget = host.getByRole("button", { name: "勝利に必要な勝利点", exact: true });
+  await japaneseTarget.click();
+  await host.getByRole("listbox", { name: "勝利に必要な勝利点", exact: true }).getByRole("option", { name: "3", exact: true }).click();
+  await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(3);
   await host.getByRole("button", { name: "ゲーム", exact: true }).click();
   await host.getByRole("button", { name: "ヘルプ", exact: true }).click();
   await expect(host.getByRole("dialog")).toContainText("自分の手番に3点に到達すると勝利です。");
   await host.keyboard.press("Escape");
   await selectMenuLanguage(host, "ja", "en");
   await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("original");
-  await expect(target).toHaveValue("10");
-  await target.selectOption("7");
+  await expect(target).toContainText("10 VP");
+  await chooseVictoryTarget(7);
   await host.getByRole("button", { name: "Add computer", exact: true }).click();
   await host.getByRole("button", { name: "Add computer", exact: true }).click();
   await noHorizontalOverflow(host);
@@ -395,13 +404,13 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await host.setViewportSize({ width: 320, height: 568 });
   await target.scrollIntoViewIfNeeded();
   await expect(target).toBeInViewport({ ratio: 1 });
-  const controlsBounds = (await mapControls.boundingBox())!;
   const themeBounds = (await mapControls.getByRole("button", { name: "Change theme", exact: true }).boundingBox())!;
   const zoomBounds = (await mapControls.getByRole("button", { name: "Zoom out", exact: true }).boundingBox())!;
   for (const points of [3, 13, 7]) {
-    await target.selectOption(String(points));
-    await expect(target).toHaveValue(String(points));
+    await chooseVictoryTarget(points);
+    await expect(mapControls.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
     const targetBounds = (await target.boundingBox())!;
+    const controlsBounds = (await mapControls.boundingBox())!;
     expect(targetBounds.height).toBeGreaterThanOrEqual(44);
     expect(targetBounds.x).toBeGreaterThanOrEqual(themeBounds.x + themeBounds.width);
     expect(targetBounds.x + targetBounds.width).toBeLessThanOrEqual(zoomBounds.x);
@@ -410,6 +419,14 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   }
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "narrow-lobby-victory-target");
+  await host.setViewportSize(originalViewport);
+
+  await host.setViewportSize({ width: 1280, height: 720 });
+  for (const points of [3, 13, 7]) {
+    await chooseVictoryTarget(points);
+    await expect(mapControls.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
+  }
+  await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
   await host.setViewportSize(originalViewport);
 
   await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
@@ -424,8 +441,8 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await expect.poll(async () => (await latestSnapshot(phone)).game!.victoryPointsToWin).toBe(7);
   await chooseGameOption(host, "Return to lobby");
   await host.getByRole("dialog").getByRole("button", { name: "Return to lobby", exact: true }).click();
-  await expect(target).toHaveValue("7");
-  await expect(phone.getByText("First to 7 points wins.", { exact: false })).toBeVisible();
+  await expect(target).toContainText("7 VP");
+  await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
 });
 
 test("multiplayer admission, actions and reset work without randomUUID", async ({ multiplayer }) => {
