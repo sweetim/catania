@@ -3,6 +3,7 @@ import { createBoard, edgeTiles, seededRandom } from "../../src/game/board";
 import { resourceName } from "../../src/i18n";
 import { BOARD_THEMES, getTerrainName } from "../../src/themes";
 import type { PlayerProfile, ProfileGame } from "../../src/profile";
+import { GAME_VARIANT_LABELS } from "../../src/components/GameVariantSelector";
 
 const history: ProfileGame[] = [
   { gameId: "game-seafarers", mapCode: "8765432A", variant: "seafarers", won: false, points: 7, turnCount: 34, completedAt: "2026-11-06T00:00:00.000Z" },
@@ -199,7 +200,7 @@ for (const entry of history) {
     await expect(preview.getByRole("textbox", { name: "Map code", exact: true })).toHaveValue(entry.mapCode);
     await expectMap(preview, entry);
     if (isMobile) await page.getByRole("button", { name: "Setup", exact: true }).click();
-    await expect(page.getByRole("combobox", { name: "Game version", exact: true })).toHaveValue(entry.variant);
+    await expect(page.getByRole("button", { name: "Game version", exact: true })).toContainText(GAME_VARIANT_LABELS[entry.variant]);
     await expect(page.getByRole("button", { name: "Let's settle in", exact: true })).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("catania.profiles")!)[0].games)).toBe(2);
     await page.getByRole("button", { name: "Let's settle in", exact: true }).click();

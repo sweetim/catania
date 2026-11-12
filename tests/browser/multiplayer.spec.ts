@@ -5,7 +5,8 @@ import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
 import { createBoard } from "../../src/game/board";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
-import type { Resources } from "../../src/game/types";
+import type { GameVariant, Resources } from "../../src/game/types";
+import { GAME_VARIANT_LABELS } from "../../src/components/GameVariantSelector";
 import type { RoomSnapshot } from "../../src/multiplayer/types";
 
 const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
@@ -151,6 +152,11 @@ const test = base.extend<{ multiplayer: MultiplayerHarness }>({
 });
 
 const observations = new WeakMap<Page, { documentId: string; messages: WireMessage[]; chunks: Map<string, Uint8Array[]> }>();
+
+async function selectGameVersion(page: Page, variant: GameVariant) {
+  await page.getByRole("button", { name: "Game version", exact: true }).click();
+  await page.getByRole("listbox", { name: "Game version", exact: true }).getByRole("option", { name: GAME_VARIANT_LABELS[variant], exact: true }).click();
+}
 
 async function messages(page: Page) {
   const { documentId, frames } = await page.evaluate(() => ({
@@ -364,7 +370,7 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await expect(target).toContainText("10 VP to win");
 
   for (const [variant, defaultTarget] of [["original", 10], ["seafarers", 13], ["four-islands", 12], ["fog-islands", 12], ["foggy-world", 12]] as const) {
-    await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await selectGameVersion(host, variant);
     await expect(target).toContainText(`${defaultTarget} VP`);
     const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
     for (const points of [3, 13, 7]) {
@@ -393,7 +399,7 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await expect(host.getByRole("dialog")).toContainText("自分の手番に3点に到達すると勝利です。");
   await host.keyboard.press("Escape");
   await selectMenuLanguage(host, "ja", "en");
-  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("original");
+  await selectGameVersion(host, "original");
   await expect(target).toContainText("10 VP");
   await chooseVictoryTarget(7);
   await host.getByRole("button", { name: "Add computer", exact: true }).click();
@@ -594,7 +600,7 @@ for (const variant of ["original", "seafarers"] as const) {
   test(`host Reset game restores ${variant} setup on every phone without changing seats`, async ({ multiplayer }, testInfo) => {
     const host = await multiplayer.newPage("Host");
     const invitation = await hostGame(host);
-    await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await selectGameVersion(host, variant);
     const phones: Page[] = [];
     for (const name of ["Ada", "Grace", "Linus"]) {
       const phone = await multiplayer.newPage(name, true);
@@ -1483,7 +1489,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
 test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
-  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  await selectGameVersion(host, "seafarers");
   await expect(host.locator(".terrain-hex")).toHaveCount(42);
   const phone = await multiplayer.newPage("Alex", true);
   await requestSeat(phone, invitation, "Alex");
@@ -1534,7 +1540,7 @@ test("Seafarers lobby selection synchronizes phones and allows coastal ships and
 test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and phone route choices", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
-  await host.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
+  await selectGameVersion(host, "foggy-world");
   const mapCode = host.getByRole("textbox", { name: "Map code", exact: true });
   await mapCode.fill("77889999");
   await mapCode.press("Enter");

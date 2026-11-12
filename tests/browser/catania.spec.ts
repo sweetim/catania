@@ -6,6 +6,8 @@ import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import { BOARD_THEMES as ALL_THEMES } from "../../src/themes";
+import { GAME_VARIANT_LABELS } from "../../src/components/GameVariantSelector";
+import type { GameVariant } from "../../src/game/types";
 
 const test = base.extend({
   page: async ({ page }, use, testInfo) => {
@@ -36,6 +38,11 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string, fullPage
   const path = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path, fullPage });
   await testInfo.attach(name, { path, contentType: "image/png" });
+}
+
+async function selectGameVersion(page: Page, variant: GameVariant) {
+  await page.getByRole("button", { name: "Game version", exact: true }).click();
+  await page.getByRole("listbox", { name: "Game version", exact: true }).getByRole("option", { name: GAME_VARIANT_LABELS[variant], exact: true }).click();
 }
 
 async function noHorizontalOverflow(page: Page) {
@@ -696,7 +703,7 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
 for (const variant of ["original", "seafarers"] as const) {
   test(`${variant === "original" ? "Original" : "Seafarers"} harbor piers connect directly to the coastline`, async ({ page }, testInfo) => {
     await page.goto("/");
-    await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await selectGameVersion(page, variant);
     await showHomeView(page, "Island");
     const island = page.getByRole("region", { name: "Island preview", exact: true });
     await expect(island.locator(".board-surface")).toHaveAttribute("data-variant", variant);
@@ -1364,7 +1371,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
 for (const variant of ["original", "seafarers"] as const) {
   test(`Reset game restores the ${variant} island and original private setup`, async ({ page }, testInfo) => {
     await page.goto("/");
-    await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption(variant);
+    await selectGameVersion(page, variant);
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
     const firstPlayer = await revealHand(page);
@@ -2487,10 +2494,10 @@ test("game session blocks pull-to-refresh at the page root, home does not", asyn
 
 test("Seafarers selection changes the preview independently of themes and can return to Original", async ({ page }, testInfo) => {
   await page.goto("/");
-  const versions = page.getByRole("combobox", { name: "Game version", exact: true });
-  await expect(versions).toHaveValue("original");
+  const versionTrigger = page.getByRole("button", { name: "Game version", exact: true });
+  await expect(versionTrigger).toContainText("Original");
   await expect(page.locator(".terrain-hex")).toHaveCount(19);
-  await versions.selectOption("seafarers");
+  await selectGameVersion(page, "seafarers");
   await expect(page.locator(".terrain-hex")).toHaveCount(42);
   const island = page.getByRole("region", { name: "Island preview", exact: true, includeHidden: true });
   const geometry = await themeBoardGeometry(island);
@@ -2527,7 +2534,7 @@ test("Seafarers selection changes the preview independently of themes and can re
   }
   await screenshot(page, testInfo, "seafarers-preview", false);
   await showHomeView(page, "Setup");
-  await versions.selectOption("original");
+  await selectGameVersion(page, "original");
   await expect(page.locator(".terrain-hex")).toHaveCount(19);
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "original");
 });
@@ -2535,7 +2542,7 @@ test("Seafarers selection changes the preview independently of themes and can re
 test("Seafarers aligns diagonal ships and preserves vertical ships with variant-specific help", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  await selectGameVersion(page, "seafarers");
   const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
   await seedRandomness(page, 17);
   let seed = 17;
@@ -2622,7 +2629,7 @@ test("zoom bar pirate chip indicates the pirate and moves it off and back onto t
   if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("seafarers");
+  await selectGameVersion(page, "seafarers");
   const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
   await seedRandomness(page, 17);
   let seed = 17;
@@ -2704,7 +2711,7 @@ test("zoom bar pirate chip indicates the pirate and moves it off and back onto t
 
 test("Fog Islands varies the starting islands between map codes and conceals every surrounding tile", async ({ page }, testInfo) => {
   await page.goto("/");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  await selectGameVersion(page, "fog-islands");
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
@@ -2736,12 +2743,11 @@ test("Fog Islands varies the starting islands between map codes and conceals eve
 test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  const versionSelector = page.getByRole("combobox", { name: "Game version", exact: true });
-  await versionSelector.selectOption("fog-islands");
+  await selectGameVersion(page, "fog-islands");
   // Switching variants replaces the preview map; fog reveal veils must not play on it.
-  await versionSelector.selectOption("four-islands");
+  await selectGameVersion(page, "four-islands");
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await versionSelector.selectOption("fog-islands");
+  await selectGameVersion(page, "fog-islands");
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
   // On ABCD2345, a setup ship at edge-22 from vertex-18 reveals one wool hex (11).
   await showHomeView(page, "Island");
@@ -2777,7 +2783,7 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
 test("Fog Islands toggling reveals a number token covered by a harbor label", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("fog-islands");
+  await selectGameVersion(page, "fog-islands");
   // On ABCD2345, the setup ship at edge-22 from vertex-18 reveals wool hex tile-24 (11) under a harbor label.
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
@@ -2823,7 +2829,7 @@ for (const selection of ["revealed land", "new fog"] as const) {
 test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
+  await selectGameVersion(page, "foggy-world");
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
   await mapCode.fill("77889999");
@@ -2905,7 +2911,7 @@ for (const piece of ["road", "ship"] as const) {
 test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await page.getByRole("combobox", { name: "Game version", exact: true }).selectOption("foggy-world");
+  await selectGameVersion(page, "foggy-world");
   await showHomeView(page, "Island");
   const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });

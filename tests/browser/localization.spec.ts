@@ -67,9 +67,8 @@ test.describe("Japanese browser locale", () => {
 
   test("Seafarers selection and rules localize without changing the selected version", async ({ page }) => {
     await page.goto("/");
-    const versions = page.getByRole("combobox", { name: "ゲームの種類", exact: true });
-    await expect(versions).toHaveValue("original");
-    await versions.selectOption("seafarers");
+    await page.getByRole("button", { name: "ゲームの種類", exact: true }).click();
+    await page.getByRole("listbox", { name: "ゲームの種類", exact: true }).getByRole("option", { name: "航海者", exact: true }).click();
     await expect(page.locator(".terrain-hex")).toHaveCount(42);
     const goldFields = page.getByRole("img", { name: /^金、金、出目/, includeHidden: true });
     await expect(goldFields).toHaveCount(2);
@@ -81,7 +80,7 @@ test.describe("Japanese browser locale", () => {
     await expect(help.getByText("よき隣人、巧みな交易。目指すは13勝利点。", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await selectHomeLanguage(page, "ja", "en");
-    await expect(page.getByRole("combobox", { name: "Game version", exact: true })).toHaveValue("seafarers");
+    await expect(page.getByRole("button", { name: "Game version", exact: true })).toContainText("Seafarers");
     await expect(page.locator(".terrain-hex")).toHaveCount(42);
     await expect(page.getByRole("img", { name: /^Gold, gold, roll/, includeHidden: true }).locator(":scope > text")).toHaveText(["GOLD", "GOLD"]);
     await expectNoHorizontalOverflow(page);
