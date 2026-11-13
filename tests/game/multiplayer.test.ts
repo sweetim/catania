@@ -345,6 +345,71 @@ describe("multiplayer admission and reconnect identity", () => {
     expect(room.version).toBe(version);
     expect(send(room, "replacement", { type: "roll" }).error).toBeNull();
   });
+
+  function profiledStarted() {
+    const room = new HostRoom(secret);
+    const userIds = ["profile-ada", "profile-grace", "profile-linus"];
+    const credentials = userIds.map((userId, index) => {
+      room.join(`connection-${index + 1}`, { type: "join", name: names[index]!, secret, userId });
+      return room.admit(`connection-${index + 1}`);
+    });
+    room.start();
+    return { room, credentials };
+  }
+
+  test("a fresh device reclaims a disconnected mid-game seat by device profile id with fresh authorization", () => {
+    const { room, credentials } = profiledStarted();
+    room.disconnect("connection-2");
+    const reclaimed = room.join("fresh-grace", { type: "join", secret, name: "Grace's phone", userId: "profile-grace" });
+    expect(reclaimed.credential).toBeTruthy();
+    expect(reclaimed.credential).not.toBe(credentials[1]!);
+    expect(reclaimed.revokedConnectionId).toBeNull();
+    expect(room.snapshot("fresh-grace").playerId).toBe("player-2");
+    // The seat identity is preserved; the typed display name never renames the seat.
+    expect(room.snapshot("fresh-grace").privatePlayer!.name).toBe("Grace");
+    expect(() => room.join("stale", { type: "join", secret, name: "Grace", credential: credentials[1]! })).toThrow("credential");
+    expect(send(room, "connection-2", { type: "roll" }).error?.key).toContain("not bound");
+  });
+
+  test("a fresh device reclaims a disconnected mid-game seat by exact name alone", () => {
+    const { room, credentials } = started();
+    room.disconnect("connection-1");
+    const reclaimed = room.join("fresh-ada", { type: "join", secret, name: " ada " });
+    expect(reclaimed.credential).toBeTruthy();
+    expect(reclaimed.credential).not.toBe(credentials[0]!);
+    expect(room.snapshot("fresh-ada").playerId).toBe("player-1");
+    expect(room.snapshot("fresh-ada").privatePlayer!.name).toBe("Ada");
+  });
+
+  test("a profile id match takes precedence over a name match pointing at another disconnected seat", () => {
+    const { room } = profiledStarted();
+    room.disconnect("connection-1");
+    room.disconnect("connection-2");
+    room.join("mixed", { type: "join", secret, name: "Ada", userId: "profile-grace" });
+    expect(room.snapshot("mixed").playerId).toBe("player-2");
+  });
+
+  test("mid-game joins without a matching disconnected seat stay refused", () => {
+    const { room } = started();
+    expect(() => room.join("stranger", { type: "join", secret, name: "Eve" })).toThrow("rejoin their seat");
+    expect(() => room.join("stranger", { type: "join", secret, name: "Eve", userId: "profile-eve" })).toThrow("rejoin their seat");
+    // A connected seat cannot be claimed by name while its phone is still attached.
+    expect(() => room.join("twin", { type: "join", secret, name: "Ada" })).toThrow("rejoin their seat");
+    room.disconnect("connection-3");
+    expect(() => room.join("twin", { type: "join", secret, name: "Ada" })).toThrow("rejoin their seat");
+    room.join("fresh-linus", { type: "join", secret, name: "Linus" });
+    expect(room.snapshot("fresh-linus").playerId).toBe("player-3");
+  });
+
+  test("join messages accept an optional device profile id within token rules", () => {
+    expect(parseClientMessage({ type: "join", secret, name: "Ada", userId: "profile-1" }))
+      .toEqual({ type: "join", secret, name: "Ada", userId: "profile-1" });
+    expect(parseClientMessage({ type: "join", secret, name: "Ada", credential: "credential-1", userId: "profile-1" }))
+      .toEqual({ type: "join", secret, name: "Ada", credential: "credential-1", userId: "profile-1" });
+    for (const userId of ["", "bad id!", "x".repeat(81), 7]) {
+      expect(() => parseClientMessage({ type: "join", secret, name: "Ada", userId })).toThrow();
+    }
+  });
 });
 
 describe("multiplayer computer seats", () => {

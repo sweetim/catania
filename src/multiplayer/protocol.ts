@@ -6,7 +6,7 @@ import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
 
-export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string };
+export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string; userId?: string };
 export type ProfileStatsMessage = { type: "profile-stats"; stats: ProfileStats };
 /** Identifies the open trade a player is responding to, so responses survive unrelated version bumps. */
 export type TradeIdentity = { offeredBy: string; give: Resources | null; receive: Resources };
@@ -108,8 +108,9 @@ export function parseAction(value: unknown): GameAction {
 
 export function parseClientMessage(value: unknown): JoinMessage | Command | ProfileStatsMessage {
   const message = messageRecord(value, 8192);
-  if (message.type === "join" && fields(message, ["type", "secret", "name"], ["credential"]) && token(message.secret) && validName(message.name) &&
-    (!Object.hasOwn(message, "credential") || token(message.credential))) return message as JoinMessage;
+  if (message.type === "join" && fields(message, ["type", "secret", "name"], ["credential", "userId"]) && token(message.secret) && validName(message.name) &&
+    (!Object.hasOwn(message, "credential") || token(message.credential)) &&
+    (!Object.hasOwn(message, "userId") || token(message.userId))) return message as JoinMessage;
   if (message.type === "profile-stats" && fields(message, ["type", "stats"]) && profileStats(message.stats)) {
     return message as ProfileStatsMessage;
   }

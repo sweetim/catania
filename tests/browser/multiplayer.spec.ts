@@ -326,7 +326,7 @@ async function expectPhase(pages: Page[], phase: string, activePlayer: string) {
   }
 }
 
-async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Return to lobby" | "Leave room") {
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Return to lobby" | "Show invitation" | "Leave room") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -740,7 +740,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
 
   for (const [name, page, options] of [
-    ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Leave room"]],
+    ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Show invitation", "Leave room"]],
     ["phone", phone, ["Help", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
@@ -3156,4 +3156,58 @@ test("signaling and data-channel loss report failure and recover the reserved se
   expect((await latestSnapshot(phone)).playerId).toBe(originalSeat);
   await expect(host.getByRole("button", { name: /^Admit / })).toHaveCount(0);
   for (const page of [host, ...phones]) await expect(page.getByRole("list", { name: "Players", exact: true }).getByRole("listitem")).toHaveCount(3);
+});
+
+test("a lost phone rejoins mid-game from the host's invitation without host admission", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(phone.getByTestId("game-phase")).toBeVisible();
+  const original = await latestSnapshot(phone);
+
+  // The phone leaves the room entirely (ended up on the home page, PWA session gone,
+  // seat credential unavailable to any fresh device).
+  await chooseGameOption(phone, "Leave room");
+  await phone.getByRole("dialog", { name: "Leave this room?", exact: true }).getByRole("button", { name: "Leave room", exact: true }).click();
+  await expect(phone.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
+  await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toBeVisible();
+
+  // The host can show the room invitation again while the game keeps running.
+  await chooseGameOption(host, "Show invitation");
+  const invitationDialog = host.getByRole("dialog", { name: "Room invitation", exact: true });
+  await expect(invitationDialog).toBeVisible();
+  await expect(invitationDialog.getByRole("img", { name: "Scan to join this game", exact: true })).toBeVisible();
+  const reinvitation = await invitationDialog.getByLabel("Game invitation", { exact: true }).inputValue();
+  expect(reinvitation).toBe(invitation);
+  await host.keyboard.press("Escape");
+  await expect(invitationDialog).toHaveCount(0);
+
+  // A fresh phone with the same player profile reclaims the disconnected seat automatically.
+  const rejoin = await multiplayer.newPage("Rejoin phone", true);
+  await requestSeat(rejoin, reinvitation, "Alex");
+  await expect(rejoin.getByLabel("Your hand and actions", { exact: true })).toBeVisible();
+  await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toHaveCount(0);
+  const rejoined = await latestSnapshot(rejoin);
+  expect(rejoined.playerId).toBe(original.playerId);
+  expect(rejoined.game!.gameId).toBe(original.game!.gameId);
+  expect(rejoined.privatePlayer).toEqual(original.privatePlayer);
+  expect(await rejoin.evaluate(() => Object.entries(sessionStorage).some(([key, value]) => key.startsWith("catania:multiplayer:") && value))).toBe(true);
+
+  // An unrelated device with an unknown profile and name still cannot join the running game.
+  const stranger = await multiplayer.newPage("Stranger", true);
+  await stranger.context().addInitScript(() => {
+    localStorage.setItem("catania.profiles", JSON.stringify([{ id: "profile-2", name: "Sam", games: 0, wins: 0, totalPoints: 0, lastRecordedGameId: null }]));
+    localStorage.setItem("catania.profile.active", "profile-2");
+  });
+  await requestSeat(stranger, reinvitation, "Sam");
+  await expect(stranger.getByRole("alert")).toContainText("This game has started. Only a disconnected player's device can rejoin their seat.");
+  await expect(rejoin.getByTestId("game-phase")).toBeVisible();
+  await screenshot(host, testInfo, "midgame-invitation-rejoin");
 });

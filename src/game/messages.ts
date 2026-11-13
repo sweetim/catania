@@ -122,7 +122,7 @@ export const gameMessages = {
   "This invitation is not valid for this host.": "この招待はこのホストでは使用できません。",
   "This connection has already joined.": "この接続はすでに参加しています。",
   "This reconnect credential is not valid for this room.": "この再接続用の認証情報はこのルームでは使用できません。",
-  "This game has started. Only admitted players can reconnect.": "ゲームは開始済みです。承認済みのプレイヤーだけが再接続できます。",
+  "This game has started. Only a disconnected player's device can rejoin their seat.": "ゲームは開始済みです。切断されたプレイヤーの端末だけが自分の席に戻れます。",
   "The host has too many pending requests. Try again later.": "ホストへの参加申請が多すぎます。しばらくしてから再試行してください。",
   "Players cannot be admitted after the game starts.": "ゲーム開始後はプレイヤーを承認できません。",
   "That exact join request is no longer connected.": "その参加申請の接続はすでに切れています。",

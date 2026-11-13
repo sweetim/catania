@@ -107,6 +107,9 @@ lobby with the same island (including its map code and preview) and the same
 players, seats, and reconnect credentials, ready to admit changes and start
 again. All game progress is lost; player phones cannot return the room to the
 lobby. Cancelling leaves the current game unchanged.
+During play, the host can also choose **Show invitation** to reopen the room's
+QR code and invitation link in a dialog, so a lost phone can scan or open it
+and rejoin a disconnected seat (see [Reconnect A Phone](#reconnect-a-phone)).
 **Leave room** opens the existing confirmation: leaving as host ends the room for
 everyone, while leaving as a player keeps their seat reserved while the host stays
 open. Escape, clicking outside, or tabbing away dismisses the menu; closing its
@@ -226,10 +229,20 @@ room by entering the code before starting.
 
 A disconnected phone can use **Reconnect** or reload the invitation in the same
 tab. Its room-specific reconnect credential is kept in `sessionStorage`; clearing
-that storage, changing browsers, or opening a new tab can lose access to the seat.
-Reconnection never uses a player's name as authorization. Admitted phones can
-reclaim their existing seats while the original host remains open; there is no
-mid-game replacement player.
+that storage, changing browsers, or opening a new tab can lose access to the
+seat. A stored credential, not a name, authorizes this reconnection. Admitted
+phones can reclaim their existing seats while the original host remains open;
+there is no mid-game replacement player.
+
+A phone that lost its credential entirely (closed progressive-web-app session,
+cleared storage, a new tab, or a different device) can still rejoin a running
+game: the host opens **Game > Show invitation** on the shared board to display
+the room's QR code and invitation link again, and the phone joins with its name
+as usual. When the joining phone's device profile id or entered name matches a
+**disconnected** human seat, the host reclaims that seat for it automatically
+and issues a fresh seat credential; the previous credential stops working. An
+unrelated phone whose profile and name match no disconnected seat is refused
+until the host returns the room to the lobby.
 
 Removing a human from the lobby revokes their seat credential. Their phone receives
 a removal notice and stops retrying automatically; **Reconnect** requests fresh

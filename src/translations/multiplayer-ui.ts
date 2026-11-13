@@ -185,6 +185,8 @@ export const multiplayerUiTranslations = {
   "Revealed victory-point cards": "公開された勝利点カード",
   "{count} × {points} VP": "{count} × {points}勝利点",
   "Return to lobby": "ロビーに戻る",
+  "Show invitation": "招待を表示",
+  "Share this code or link to let a disconnected player rejoin their seat with the same profile or name.": "切断されたプレイヤーが同じプロフィールまたは同じ名前で自分の席に戻れるよう、このコードかリンクを共有してください。",
   "View the island": "島を確認する",
   "The host can return everyone to the lobby for a rematch.": "ホストが全員をロビーに戻すと、再戦を始められます。",
   "Player history: {games} games / {wins} wins / {points} total points": "プレイヤー履歴：{games}戦 / {wins}勝 / 合計{points}点",

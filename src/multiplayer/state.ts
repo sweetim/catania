@@ -70,6 +70,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
 type Seat = {
   player: Omit<RoomPlayer, "connected">;
   credential: string | null;
+  userId: string | null;
   connectionId: string | null;
   requests: Map<string, CommandResult>;
   profile: ProfileStats | null;
@@ -85,7 +86,7 @@ export class HostRoom {
   private gameId: string | null = null;
   private initialGame: GameState | null = null;
   private readonly seats: Seat[] = [];
-  private readonly waiting = new Map<string, string>();
+  private readonly waiting = new Map<string, { name: string; userId: string | null }>();
   private previewBoard = createBoard(seededRandom(this.mapSeed));
 
   constructor(private readonly secret: string) {}
@@ -127,11 +128,11 @@ export class HostRoom {
     this.version++;
   }
 
-  private addSeat(name: string, control: RoomPlayer["control"], connectionId: string | null = null): Seat {
+  private addSeat(name: string, control: RoomPlayer["control"], connectionId: string | null = null, userId: string | null = null): Seat {
     const index = PLAYER_COLORS.findIndex(color => !this.seats.some(seat => seat.player.color === color));
     const seat: Seat = {
       player: { id: `player-${index + 1}`, name, color: PLAYER_COLORS[index]!, control },
-      credential: control === "human" ? generateIdentifier() : null, connectionId, requests: new Map(),
+      credential: control === "human" ? generateIdentifier() : null, userId: control === "human" ? userId : null, connectionId, requests: new Map(),
       profile: null,
     };
     this.seats.push(seat);
@@ -142,7 +143,7 @@ export class HostRoom {
   addComputer(language: Language = "en"): void {
     requireRoom(!this.game, "Computers can only be added in the lobby.");
     requireRoom(this.seats.length < 4, "The room already has four players.");
-    const names = [...this.seats.map(seat => seat.player.name), ...this.waiting.values()];
+    const names = [...this.seats.map(seat => seat.player.name), ...[...this.waiting.values()].map(entry => entry.name)];
     let number = 1;
     while (names.some(name => name.toLowerCase() === defaultComputerName(language, number).toLowerCase())) number++;
     this.addSeat(defaultComputerName(language, number), "computer");
@@ -163,7 +164,7 @@ export class HostRoom {
     requireRoom(seat, "Choose a computer in this lobby to rename.");
     requireRoom(validName(value), "Choose a name with 1 to 20 characters and no control characters.");
     const name = value.trim().normalize("NFC");
-    const names = [...this.seats.filter(other => other !== seat).map(other => other.player.name), ...this.waiting.values()];
+    const names = [...this.seats.filter(other => other !== seat).map(other => other.player.name), ...[...this.waiting.values()].map(entry => entry.name)];
     requireRoom(!names.some(other => other.toLowerCase() === name.toLowerCase()), "Choose a different name; that name is already in the room.");
     if (name === seat.player.name) return;
     seat.player.name = name;
@@ -179,17 +180,31 @@ export class HostRoom {
       const revokedConnectionId = seat.connectionId;
       // Revoke the old connection synchronously, before any further action can be processed.
       seat.connectionId = connectionId;
+      if (message.userId) seat.userId = message.userId;
       this.version++;
       return { credential: seat.credential, revokedConnectionId };
     }
-    requireRoom(!this.game, "This game has started. Only admitted players can reconnect.");
-    requireRoom(this.seats.length < 4, "The room already has four players.");
-    requireRoom(this.waiting.size < 16, "The host has too many pending requests. Try again later.");
     requireRoom(validName(message.name), "Choose a name with 1 to 20 characters and no control characters.");
     const name = message.name.trim().normalize("NFC");
-    const names = [...this.seats.map(seat => seat.player.name), ...this.waiting.values()];
+    if (this.game) {
+      // The phone lost its seat credential (fresh PWA session, new tab, cleared storage).
+      // A matching device profile id, or the exact name of a disconnected human seat, reclaims
+      // that seat with a fresh credential; the host model stays the trust anchor.
+      const disconnected = this.seats.filter(seat => seat.player.control === "human" && seat.connectionId === null);
+      const seat = disconnected.find(seat => message.userId && seat.userId === message.userId)
+        ?? disconnected.find(seat => seat.player.name.toLowerCase() === name.toLowerCase());
+      requireRoom(seat, "This game has started. Only a disconnected player's device can rejoin their seat.");
+      seat.credential = generateIdentifier();
+      seat.userId = message.userId ?? seat.userId;
+      seat.connectionId = connectionId;
+      this.version++;
+      return { credential: seat.credential, revokedConnectionId: null };
+    }
+    requireRoom(this.seats.length < 4, "The room already has four players.");
+    requireRoom(this.waiting.size < 16, "The host has too many pending requests. Try again later.");
+    const names = [...this.seats.map(seat => seat.player.name), ...[...this.waiting.values()].map(entry => entry.name)];
     requireRoom(!names.some(other => other.toLowerCase() === name.toLowerCase()), "Choose a different name; that name is already in the room.");
-    this.waiting.set(connectionId, name);
+    this.waiting.set(connectionId, { name, userId: message.userId ?? null });
     this.version++;
     return { credential: null, revokedConnectionId: null };
   }
@@ -197,9 +212,9 @@ export class HostRoom {
   admit(connectionId: string): string {
     requireRoom(!this.game, "Players cannot be admitted after the game starts.");
     requireRoom(this.seats.length < 4, "The room already has four players.");
-    const name = this.waiting.get(connectionId);
-    requireRoom(name, "That exact join request is no longer connected.");
-    const seat = this.addSeat(name, "human", connectionId);
+    const pending = this.waiting.get(connectionId);
+    requireRoom(pending, "That exact join request is no longer connected.");
+    const seat = this.addSeat(pending.name, "human", connectionId, pending.userId);
     this.waiting.delete(connectionId);
     return seat.credential!;
   }
@@ -410,7 +425,7 @@ export class HostRoom {
       version: this.version, players, variant: this.variant, victoryPointsToWin: this.victoryPointsToWin,
       ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
-      ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, name]) => ({ connectionId, name })) } : {}),
+      ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, entry]) => ({ connectionId, name: entry.name })) } : {}),
       ...(host && !this.game ? { previewBoard: publicBoard(this.previewBoard) } : {}),
       game: game ? publicGame(game, players, this.gameId!) : null,
       playerId: seat?.player.id ?? null, privatePlayer,

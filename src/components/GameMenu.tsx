@@ -3,7 +3,7 @@ import { LanguageSelector, useTranslation } from "../localization";
 import { boardTranslations } from "../translations/board";
 import { ProfileAvatar } from "./ProfileAvatar";
 
-type MenuIcon = "help" | "settings" | "pass" | "reset" | "profile" | "restart" | "end" | "home" | "lobby" | "leave" | "singleDevice";
+type MenuIcon = "help" | "settings" | "pass" | "reset" | "profile" | "restart" | "end" | "home" | "lobby" | "leave" | "singleDevice" | "qr";
 
 const menuIconPaths: Record<MenuIcon, ReactNode> = {
   help: <><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.2-3 4" /><path d="M12 17.2h.01" /></>,
@@ -17,6 +17,7 @@ const menuIconPaths: Record<MenuIcon, ReactNode> = {
   lobby: <><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="m10 17 5-5-5-5" /><path d="M15 12H3" /></>,
   leave: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></>,
   singleDevice: <><rect width="14" height="20" x="5" y="2" rx="2" /><path d="M12 18h.01" /></>,
+  qr: <><rect width="5" height="5" x="3" y="3" rx="1" /><rect width="5" height="5" x="16" y="3" rx="1" /><rect width="5" height="5" x="3" y="16" rx="1" /><path d="M21 16h-3a2 2 0 0 0-2 2v3" /><path d="M21 21v.01" /><path d="M12 7v3a2 2 0 0 1-2 2H7" /><path d="M3 12h.01" /><path d="M12 3h.01" /><path d="M12 16v.01" /><path d="M16 12h.01" /><path d="M21 12v.01" /><path d="M12 21v.01" /></>,
 };
 
 function MenuActionIcon({ icon }: { icon: MenuIcon }) {

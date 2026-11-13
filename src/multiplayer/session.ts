@@ -257,7 +257,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   };
 }
 
-export function joinSession(invitation: Invitation, name: string, onChange: (view: SessionView) => void): MultiplayerSession {
+export function joinSession(invitation: Invitation, name: string, onChange: (view: SessionView) => void, userId: string | null = null): MultiplayerSession {
   const storageKey = `catania:multiplayer:${invitation.hostId}`;
   let credential: string | null = null;
   let storageError: GameMessage | null = null;
@@ -322,7 +322,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
     });
     current.on("open", () => {
       // Secrets and credentials travel only over the encrypted data channel, never signaling metadata.
-      send(current, { type: "join", secret: invitation.secret, name, ...(credential ? { credential } : {}) }, failed);
+      send(current, { type: "join", secret: invitation.secret, name, ...(credential ? { credential } : {}), ...(userId ? { userId } : {}) }, failed);
     });
     current.on("data", value => {
       if (closed || connection !== current) return;

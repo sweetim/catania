@@ -133,7 +133,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original",
             {multiplayer ? (
               <>
                 <strong className="text-ink">{translateText("One shared board, private phones.")}</strong>{" "}
-                {translateText("Use the shared board for placements and each player's phone for their private hand and choices. The host keeps the game in memory: refreshing or closing the host tab ends the game for everyone, with no host transfer or saved game. If a player leaves, their seat stays reserved while the host remains open. Open the invitation in the same tab to reconnect when browser session storage is available.")}
+                {translateText("Use the shared board for placements and each player's phone for their private hand and choices. The host keeps the game in memory: refreshing or closing the host tab ends the game for everyone, with no host transfer or saved game. If a player leaves, their seat stays reserved while the host remains open. Open the invitation in the same tab to reconnect when browser session storage is available, or have the host show the invitation again and rejoin with the same profile or name to reclaim a disconnected seat.")}
               </>
             ) : (
               <>

@@ -378,7 +378,7 @@ export function MultiplayerApp() {
   const [localError, setLocalError] = useState<keyof typeof multiplayerUiTranslations | "">("");
   const [qrCode, setQrCode] = useState("");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("illustrated");
-  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | "reset" | "lobby" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "leave" | "reset" | "lobby" | "invitation" | null>(null);
   const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [movingShip, setMovingShip] = useState<{ edgeId: string; version: number } | null>(null);
@@ -425,7 +425,7 @@ export function MultiplayerApp() {
     try {
       sessionStorage.setItem(`catania.multiplayer.name.${invitation.hostId}`, name.trim());
     } catch { /* The connection still works without persistent browser storage. */ }
-    session.current = joinSession(invitation, name.trim(), setView);
+    session.current = joinSession(invitation, name.trim(), setView, playerProfile?.id ?? null);
   }
 
   useEffect(() => {
@@ -461,6 +461,35 @@ export function MultiplayerApp() {
   }, [host, Boolean(snapshot), view?.status]);
 
   const playerProfile = activeProfile(profileState);
+  async function copyInvitationUrl() {
+    if (!view?.invitationUrl) return;
+    try {
+      await navigator.clipboard.writeText(view.invitationUrl);
+      window.clearTimeout(copyFeedbackTimer.current);
+      setCopied(true);
+      setLocalError("");
+      copyFeedbackTimer.current = window.setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      window.clearTimeout(copyFeedbackTimer.current);
+      setCopied(false);
+      setLocalError("Select and copy the invitation link to share it.");
+    }
+  }
+  const invitationQr = qrCode
+    ? <img src={qrCode} alt={translateText("Scan to join this game")} className="lobby-qr aspect-square w-full max-w-80 rounded-xl" width={320} height={320} />
+    : <p className="lobby-qr py-16 text-sm text-muted">{translateText("Preparing your invitation...")}</p>;
+  const invitationLink = view?.invitationUrl && <div className="lobby-invitation-link mt-4 w-full">
+    <label htmlFor="room-invitation-url" className="block text-xs text-muted">{translateText("Game invitation")}</label>
+    <div className="mt-1 flex min-w-0 items-stretch rounded-xl border border-line bg-white">
+      <input id="room-invitation-url" className="min-h-11 min-w-0 flex-1 rounded-l-xl bg-transparent px-3 text-xs" readOnly value={view.invitationUrl} onFocus={event => event.target.select()} />
+      <button className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-r-xl border-l border-line px-3 text-xs font-semibold hover:bg-moss" aria-label={translateText("Copy invitation")} title={translateText(copied ? "Invitation copied" : "Copy invitation")} onClick={copyInvitationUrl}>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {copied ? <path d="m5 12 4 4L19 6" /> : <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>}
+        </svg>
+        <span role="status" className={copied ? "" : "sr-only"}>{copied ? translateText("Copied") : ""}</span>
+      </button>
+    </div>
+  </div>;
   // Phones pick a player profile before joining; the shared board hosts no seat and never gates.
   if (invitation && !view && (!playerProfile || profileGateOpen)) {
     const selectProfile = (profile: PlayerProfile) => {
@@ -550,6 +579,7 @@ export function MultiplayerApp() {
           ...(host ? [{ label: translateText("Settings"), icon: "settings" as const, onSelect: () => setDialog("settings") }] : []),
           ...(host && game ? [{ label: translateText("Reset game"), icon: "reset" as const, disabled, onSelect: () => setDialog("reset") }] : []),
           ...(host && game ? [{ label: translateText("Return to lobby"), icon: "lobby" as const, disabled, onSelect: () => setDialog("lobby") }] : []),
+          ...(host && game ? [{ label: translateText("Show invitation"), icon: "qr" as const, onSelect: () => setDialog("invitation") }] : []),
         ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
@@ -622,31 +652,8 @@ export function MultiplayerApp() {
               <p className="eyebrow">{translateText("Welcome to the table")}</p>
               <h1 className="my-3 font-serif text-3xl">{translateText("Scan. Join. Settle in.")}</h1>
             </div>
-            {qrCode ? <img src={qrCode} alt={translateText("Scan to join this game")} className="lobby-qr aspect-square w-full max-w-80 rounded-xl" width={320} height={320} /> : <p className="lobby-qr py-16 text-sm text-muted">{translateText("Preparing your invitation...")}</p>}
-            {view.invitationUrl && <div className="lobby-invitation-link mt-4 w-full">
-              <label htmlFor="room-invitation-url" className="block text-xs text-muted">{translateText("Game invitation")}</label>
-              <div className="mt-1 flex min-w-0 items-stretch rounded-xl border border-line bg-white">
-                <input id="room-invitation-url" className="min-h-11 min-w-0 flex-1 rounded-l-xl bg-transparent px-3 text-xs" readOnly value={view.invitationUrl} onFocus={event => event.target.select()} />
-                <button className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-r-xl border-l border-line px-3 text-xs font-semibold hover:bg-moss" aria-label={translateText("Copy invitation")} title={translateText(copied ? "Invitation copied" : "Copy invitation")} onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(view.invitationUrl!);
-                    window.clearTimeout(copyFeedbackTimer.current);
-                    setCopied(true);
-                    setLocalError("");
-                    copyFeedbackTimer.current = window.setTimeout(() => setCopied(false), 2_000);
-                  } catch {
-                    window.clearTimeout(copyFeedbackTimer.current);
-                    setCopied(false);
-                    setLocalError("Select and copy the invitation link to share it.");
-                  }
-                }}>
-                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    {copied ? <path d="m5 12 4 4L19 6" /> : <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></>}
-                  </svg>
-                  <span role="status" className={copied ? "" : "sr-only"}>{copied ? translateText("Copied") : ""}</span>
-                </button>
-              </div>
-            </div>}
+            {invitationQr}
+            {invitationLink}
           </section>}
           <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
             <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
@@ -788,6 +795,13 @@ export function MultiplayerApp() {
       </main>
       {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices key={game.gameId} thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
       {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
+      {dialog === "invitation" && host && <Dialog title={translateText("Room invitation")} onClose={() => setDialog(null)}>
+        <p className="mb-5 text-sm leading-6">{translateText("Share this code or link to let a disconnected player rejoin their seat with the same profile or name.")}</p>
+        <div className="flex flex-col items-center">
+          {invitationQr}
+          {invitationLink}
+        </div>
+      </Dialog>}
       {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} victoryPointsToWin={game?.victoryPointsToWin ?? snapshot?.victoryPointsToWin} multiplayer onClose={() => setDialog(null)} />}
       {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "reset" && host && game && <Dialog title={translateText("Reset this game?")} onClose={() => setDialog(null)}>
