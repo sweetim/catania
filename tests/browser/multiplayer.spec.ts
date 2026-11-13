@@ -369,7 +369,7 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await target.press("ArrowUp");
   await expect(target).toContainText("10 VP to win");
 
-  for (const [variant, defaultTarget] of [["original", 10], ["seafarers", 13], ["four-islands", 12], ["fog-islands", 12], ["foggy-world", 12]] as const) {
+  for (const [variant, defaultTarget] of [["original", 10], ["seafarers", 13], ["four-islands", 12], ["fog-islands", 12], ["foggy-world", 12], ["mystery-world", 12]] as const) {
     await selectGameVersion(host, variant);
     await expect(target).toContainText(`${defaultTarget} VP`);
     const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
@@ -741,7 +741,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
 
   for (const [name, page, options] of [
     ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Show invitation", "Leave room"]],
-    ["phone", phone, ["Help", "Leave room"]],
+    ["phone", phone, ["Help", "Settings", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
     if (name === "phone") {
@@ -1730,6 +1730,72 @@ test("one private phone plays with two computers that complete setup automatical
   await noHorizontalOverflow(phone);
   await screenshot(host, testInfo, "computer-setup-complete");
   await screenshot(phone, testInfo, "human-private-hand-with-computers");
+});
+
+test("phone landing menu opens the settings dialog", async ({ multiplayer }) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("Phone", true);
+  await phone.goto(invitation);
+  await phone.getByRole("button", { name: "Menu", exact: true }).click();
+  await phone.getByRole("group", { name: "Main menu", exact: true }).getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = phone.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.getByRole("checkbox", { name: "Vibrate when your turn starts", exact: true })).toBeChecked();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(settings).toHaveCount(0);
+});
+
+test("private phone vibrates when its turn arrives and the settings toggle silences it", async ({ multiplayer }) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("Alex", true);
+  await phone.addInitScript(() => {
+    const vibrations: (number | number[])[] = [];
+    navigator.vibrate = ((pattern: VibratePattern) => {
+      vibrations.push(typeof pattern === "number" ? pattern : Array.from(pattern));
+      return true;
+    }) as typeof navigator.vibrate;
+    (window as Window & { vibrations?: (number | number[])[] }).vibrations = vibrations;
+  });
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(phone.getByTestId("game-phase")).toBeVisible();
+
+  const vibrations = () => phone.evaluate(() => (window as Window & { vibrations?: (number | number[])[] }).vibrations ?? []);
+  const snapshot = await latestSnapshot(phone);
+  const computer = snapshot.game!.players.find(player => player.control === "computer")!;
+  snapshot.version += 100;
+
+  // Presentation only: the host's engine stays untouched and rejects these fixture versions.
+  async function present(activePlayerId: string, activePlayerName: string) {
+    snapshot.version++;
+    snapshot.game!.activePlayerId = activePlayerId;
+    const frame = await pack({ type: "snapshot", snapshot });
+    await host.evaluate(bytes => {
+      const channel = (window as unknown as ObservedWindow).multiplayerProbe.channels.find(channel => channel.readyState === "open")!;
+      channel.send(Uint8Array.from(bytes).buffer);
+    }, Array.from(new Uint8Array(frame)));
+    await expect.poll(async () => (await latestSnapshot(phone)).version).toBe(snapshot.version);
+    await expect(phone.getByTestId("game-phase")).toHaveAttribute("data-active-player", activePlayerName);
+  }
+
+  // A computer's turn stays silent; the turn arriving at the phone vibrates once.
+  await present(computer.id, computer.name);
+  expect(await vibrations()).toEqual([]);
+  await present(snapshot.playerId!, "Alex");
+  expect(await vibrations()).toEqual([[80, 60, 80]]);
+
+  await chooseGameOption(phone, "Settings");
+  const settings = phone.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("checkbox", { name: "Vibrate when your turn starts", exact: true }).uncheck();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  expect.poll(() => phone.evaluate(() => localStorage.getItem("catania.vibrateOnYourTurn"))).toBe("false");
+
+  await present(computer.id, computer.name);
+  await present(snapshot.playerId!, "Alex");
+  expect(await vibrations()).toEqual([[80, 60, 80]]);
 });
 
 test("computer turns run without phones or shared-board input", async ({ multiplayer }, testInfo) => {

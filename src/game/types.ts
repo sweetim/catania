@@ -1,7 +1,7 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
-export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world"] as const;
+export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world", "mystery-world"] as const;
 export type GameVariant = typeof GAME_VARIANTS[number];
 export function isGameVariant(value: unknown): value is GameVariant {
   return GAME_VARIANTS.some(variant => variant === value);
@@ -11,6 +11,10 @@ export function isVictoryPointsToWin(value: unknown): value is number {
 }
 export function isSeafarers(variant: GameVariant | undefined): boolean {
   return variant !== undefined && variant !== "original";
+}
+/** Fog World variants hide the entire map under fog with fixed per-cell discoveries. */
+export function isFogWorld(variant: GameVariant | undefined): boolean {
+  return variant === "foggy-world" || variant === "mystery-world";
 }
 export type Resources = Record<Resource, number>;
 export type Terrain = Resource | "desert" | "sea" | "gold" | "fog";

@@ -106,6 +106,10 @@ discovery rewards and gold choices, Road/Ship choices offered in the placement
 dialog after selecting a setup edge legal for both pieces, route placement restricted to the selected cell's boundary (or adjacent
 revealed land after direct placement), shared-board authority, hidden fixed terrain,
 discovery-order independence, and complete three- and four-player setups.
+Mystery World regressions cover rolled terrain counts within their ranges, the
+random desert/sea split of the remaining cells, number tokens drawn from the
+shared pool, map-code determinism and discovery-order independence, complete
+three- and four-player setups, and full computer games on rolled maps.
 Fog reveal regressions cover setup discoveries across private handoffs without
 replaying completed veils. Menu checks include tabbing out of the document, and
 short desktop lobbies retain a map at least 400 pixels tall with inline version labels.

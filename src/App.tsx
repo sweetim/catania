@@ -27,6 +27,7 @@ import {
   TheftChoices,
 } from "./components/GameplayDialogs";
 import { BOARD_THEMES, BoardThemeContext, getThemeName, type BoardThemeId } from "./themes";
+import { useVibrateOnYourTurn } from "./vibration";
 import { defaultComputerName, resourceName, type Language, type TranslationParameters } from "./i18n";
 import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
@@ -68,7 +69,7 @@ import {
   resourceTotal,
   victoryTarget,
 } from "./game/engine";
-import { isGameVariant, isSeafarers } from "./game/types";
+import { isFogWorld, isGameVariant, isSeafarers } from "./game/types";
 import type {
   GameAction,
   GameState,
@@ -506,6 +507,7 @@ export function App() {
   // Without a revealed viewer there is no hand to keep mounted, so the win goes straight to results.
   const showVictoryScreen = Boolean(game?.winnerId && !viewer);
   const isActive = Boolean(viewer && viewer.id === activePlayer?.id);
+  useVibrateOnYourTurn(isActive, boardSettings.vibrateOnYourTurn);
   const normalActions = isActive && !rollBusy && game?.phase.type === "actions";
   const canCancelKnight = isActive && !rollBusy && game?.phase.type === "robber" && Boolean(game.phase.pendingKnight);
   const producingTileIds = rollPresentation && rollPresentation.stage !== "rolling"
@@ -616,7 +618,7 @@ export function App() {
   const routeChoicePending =
     selected?.kind === "edge" &&
     selectedAction?.type === "place-road" &&
-    game?.variant === "foggy-world" &&
+    game && isFogWorld(game.variant) &&
     (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(selected.id);
 
@@ -726,6 +728,7 @@ export function App() {
                 actions={[
                   { label: translateText("Help"), icon: "help", onSelect: () => { setDialog("help"); setError(""); } },
                   { label: translateText("Profile"), icon: "profile", onSelect: () => setProfileGateOpen(true) },
+                  { label: translateText("Settings"), icon: "settings", onSelect: () => setDialog("settings") },
                   ...(game?.winnerId ? [{ label: translateText("Restart"), icon: "restart" as const, onSelect: restartGame }] : []),
                 ]}
                 exitAction={game?.winnerId ? { label: translateText("Back to home"), icon: "home", onSelect: returnToTable } : undefined}
@@ -1100,7 +1103,7 @@ export function App() {
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
                   routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                  routeChoice={isActive && isSeafarers(game.variant) && game.variant !== "foggy-world" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                  routeChoice={isActive && isSeafarers(game.variant) && !isFogWorld(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                     ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
                     : undefined}
                   pirateIndicator={isSeafarers(game.variant) ? {

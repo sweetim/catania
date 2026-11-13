@@ -24,10 +24,11 @@ import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
+import { isFogWorld, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
+import { useVibrateOnYourTurn } from "../vibration";
 import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "../themes";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { hostSession, joinSession } from "./session";
@@ -115,7 +116,7 @@ function victoryBreakdownRows(
   ];
 }
 
-function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPrivateNoticeTarget, turnMenu }: {
+function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPrivateNoticeTarget, turnMenu, vibrateOnYourTurn }: {
   snapshot: RoomSnapshot;
   disabled: boolean;
   error: string;
@@ -123,12 +124,14 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   selectBuild: (piece: BuildMode) => void;
   onPrivateNoticeTarget: (target: HTMLDivElement | null) => void;
   turnMenu?: ReactNode;
+  vibrateOnYourTurn: boolean;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
   const active = player.id === game.activePlayerId;
+  useVibrateOnYourTurn(active, vibrateOnYourTurn);
   const activePlayer = game.players.find(other => other.id === game.activePlayerId)!;
   const ownStatistics = game.players.find(other => other.id === player.id)!;
   const highestPublicScore = Math.max(...game.players.map(other => other.score));
@@ -299,7 +302,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      {active && isSeafarers(game.variant) && game.variant !== "foggy-world" && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
+      {active && isSeafarers(game.variant) && !isFogWorld(game.variant) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
@@ -546,7 +549,7 @@ export function MultiplayerApp() {
     .with("vertex", () => ({ type: snapshot?.buildMode === "city" ? "place-city" as const : "place-settlement" as const, vertexId: currentSelection.id }))
     .exhaustive();
   const routeChoicePending = currentSelection?.kind === "edge" && selectedAction?.type === "place-road" &&
-    game?.variant === "foggy-world" && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    game && isFogWorld(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(currentSelection.id);
 
   return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
@@ -580,13 +583,14 @@ export function MultiplayerApp() {
           ...(host && game ? [{ label: translateText("Reset game"), icon: "reset" as const, disabled, onSelect: () => setDialog("reset") }] : []),
           ...(host && game ? [{ label: translateText("Return to lobby"), icon: "lobby" as const, disabled, onSelect: () => setDialog("lobby") }] : []),
           ...(host && game ? [{ label: translateText("Show invitation"), icon: "qr" as const, onSelect: () => setDialog("invitation") }] : []),
-        ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} /> : <GameMenu
+        ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }}         /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
           profileName={invitation ? playerProfile?.name : undefined}
           actions={[
             { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
             ...(invitation ? [{ label: translateText("Profile"), icon: "profile" as const, onSelect: () => setProfileGateOpen(true) }] : []),
+            { label: translateText("Settings"), icon: "settings", onSelect: () => setDialog("settings") },
           ]}
           exitAction={{ label: translateText("Single-device play"), icon: "singleDevice", onSelect: () => { window.location.href = "/"; } }}
         />}
@@ -705,7 +709,7 @@ export function MultiplayerApp() {
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                routeChoice={isSeafarers(game.variant) && game.variant !== "foggy-world" && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                routeChoice={isSeafarers(game.variant) && !isFogWorld(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
                   : undefined}
                 pirateIndicator={isSeafarers(game.variant) ? {
@@ -770,7 +774,8 @@ export function MultiplayerApp() {
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
           {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget}           turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
-          ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} />} />
+            { label: translateText("Settings"), icon: "settings", onSelect: () => setDialog("settings") },
+          ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} />} vibrateOnYourTurn={boardSettings.vibrateOnYourTurn} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
           {victoryWinner && !victoryDismissed && (
             <VictoryDialog
@@ -803,7 +808,7 @@ export function MultiplayerApp() {
         </div>
       </Dialog>}
       {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} victoryPointsToWin={game?.victoryPointsToWin ?? snapshot?.victoryPointsToWin} multiplayer onClose={() => setDialog(null)} />}
-      {dialog === "settings" && host && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
+      {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "reset" && host && game && <Dialog title={translateText("Reset this game?")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText("Restart from the first settlement on the same island with the same players. All current progress will be lost.")}</p>
         <div className="flex gap-3">

@@ -4,7 +4,7 @@ import {
   legalSetupRevealTiles, RESOURCES, resourceTotal,
 } from "./engine";
 import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
-import { isSeafarers } from "./types";
+import { isFogWorld, isSeafarers } from "./types";
 import type { GameAction, GameState, Resources } from "./types";
 
 export function getController(state: GameState): string {
@@ -71,7 +71,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         island && (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(island) : island !== "main") &&
         !state.board.vertices.some(vertex => vertex.building?.playerId === playerId &&
           vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2 : 0;
-  const explorationValue = (vertexId: string): number => state.variant === "fog-islands" || state.variant === "foggy-world"
+  const explorationValue = (vertexId: string): number => state.variant === "fog-islands" || isFogWorld(state.variant)
     ? vertices.get(vertexId)!.tileIds.filter(id => tiles.get(id)!.terrain === "fog").length * 8 : 0;
   const bestVertex = (locations: string[], balance = true): string | undefined =>
     locations.toSorted((first, second) => (vertexValue(second, balance) + islandBonus(second) * 10) -

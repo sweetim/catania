@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
 import { createBoard, edgeTiles, isLand, isPortRevealed, isResource, pirateStartTileId, randomInteger, relocateFoggyWorldPorts, secureRandom, shuffle } from "./board";
-import { isGameVariant, isSeafarers, isVictoryPointsToWin } from "./types";
+import { isFogWorld, isGameVariant, isSeafarers, isVictoryPointsToWin } from "./types";
 import { GameError } from "./messages";
 import type { GameMessage } from "./messages";
 import type { Board, DevelopmentKind, FogDiscovery, GameAction, GameState, GameVariant, Player, Resource, Resources, Tile, Vertex } from "./types";
@@ -72,7 +72,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
   ], random);
   return {
     variant, victoryPointsToWin, board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
-    activePlayerId: players[0]!.id, phase: variant === "foggy-world" ? { type: "setup-reveal" } : { type: "setup-settlement" }, setupIndex: 0,
+    activePlayerId: players[0]!.id, phase: isFogWorld(variant) ? { type: "setup-reveal" } : { type: "setup-settlement" }, setupIndex: 0,
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     ...(variant === "four-islands" ? { startingIslandIds: Object.fromEntries(players.map(player => [player.id, []])) } : {}),
     turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
@@ -104,7 +104,7 @@ export function blockedSettlementVertices(board: Board): string[] {
 }
 
 export function legalSettlementVertices(state: PlacementState, playerId: string): string[] {
-  const revealedSetup = state.board.variant === "foggy-world" && state.phase.type === "setup-reveal" &&
+  const revealedSetup = isFogWorld(state.board.variant) && state.phase.type === "setup-reveal" &&
     pieceCount(state, playerId, "settlement") > 0;
   if (state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
     (!revealedSetup && !["setup-settlement", "actions"].includes(state.phase.type)) || pieceCount(state, playerId, "settlement") >= 5) return [];
@@ -113,19 +113,19 @@ export function legalSettlementVertices(state: PlacementState, playerId: string)
   return state.board.vertices.filter(vertex => {
     if (vertex.building || blockedVertices.has(vertex.id)) return false;
     const land = state.board.tiles.filter(tile => vertex.tileIds.includes(tile.id) && isLand(tile.terrain));
-    if (state.board.variant === "foggy-world" && state.phase.type === "setup-settlement") {
+    if (isFogWorld(state.board.variant) && state.phase.type === "setup-settlement") {
       return land.some(tile => tile.id === selectedTileId);
     }
     if (revealedSetup) return land.length > 0;
     if (isSeafarers(state.board.variant) && (land.length === 0 || (state.phase.type === "setup-settlement" &&
-      state.board.variant !== "four-islands" && state.board.variant !== "foggy-world" && !land.some(tile => tile.islandId === "main")))) return false;
+      state.board.variant !== "four-islands" && !isFogWorld(state.board.variant) && !land.some(tile => tile.islandId === "main")))) return false;
     const adjacentEdges = state.board.edges.filter(edge => vertex.edgeIds.includes(edge.id));
     return state.phase.type === "setup-settlement" || adjacentEdges.some(edge => edge.playerId === playerId);
   }).map(vertex => vertex.id);
 }
 
 export function legalSetupRevealTiles(state: PlacementState, playerId: string): string[] {
-  if (state.board.variant !== "foggy-world" || state.phase.type !== "setup-reveal" ||
+  if (!isFogWorld(state.board.variant) || state.phase.type !== "setup-reveal" ||
     state.activePlayerId !== playerId || !state.players.some(player => player.id === playerId) ||
     pieceCount(state, playerId, "settlement") >= 5) return [];
   const blockedVertices = new Set(blockedSettlementVertices(state.board));
@@ -161,7 +161,7 @@ function legalRouteEdges(state: PlacementState, playerId: string, kind: "road" |
       !tiles.some(tile => tile.terrain === "sea" || tile.terrain === "fog") || tiles.some(tile => tile.id === state.pirateTileId)) return false;
     if (state.phase.type === "setup-road") {
       return edge.vertexIds.includes(state.phase.vertexId) &&
-        (state.board.variant !== "foggy-world" || tiles.some(tile => isLand(tile.terrain)));
+        (!isFogWorld(state.board.variant) || tiles.some(tile => isLand(tile.terrain)));
     }
     return edge.vertexIds.some(vertexId => {
       const vertex = state.board.vertices.find(vertex => vertex.id === vertexId)!;
@@ -325,11 +325,11 @@ function produce(state: GameState, number: number): Record<string, number> {
     .filter(player => gold[player.id]).map(player => [player.id, gold[player.id]!]));
 }
 
-/** Reveals a hex's fixed terrain in Foggy World, or the next discovery elsewhere, and grants its reward. */
+/** Reveals a hex's fixed terrain in fog world variants, or the next discovery elsewhere, and grants its reward. */
 function discoverFromFog(state: GameState, player: Player, tile: Tile): FogDiscovery["terrain"] {
-  const discovery = state.variant === "foggy-world"
+  const discovery = isFogWorld(state.variant)
     ? state.board.fogDiscoveriesByTileId?.[tile.id] : state.board.fogDiscoveryDeck?.shift();
-  requireRule(discovery, state.variant === "foggy-world" ? "The fog cell has no hidden terrain." : "The fog discovery deck is empty.");
+  requireRule(discovery, isFogWorld(state.variant) ? "The fog cell has no hidden terrain." : "The fog discovery deck is empty.");
   if (state.board.fogDiscoveriesByTileId) delete state.board.fogDiscoveriesByTileId[tile.id];
   tile.terrain = discovery.terrain;
   tile.number = discovery.number;
@@ -362,7 +362,7 @@ function resolveExplorationGold(state: GameState, playerId: string, gold: number
 }
 
 function exploreFog(state: GameState, playerId: string, edgeId: string): void {
-  if (state.variant !== "fog-islands" && state.variant !== "foggy-world") return;
+  if (state.variant !== "fog-islands" && !isFogWorld(state.variant)) return;
   const edge = state.board.edges.find(edge => edge.id === edgeId)!;
   const tiles = state.board.tiles.filter(tile => tile.terrain === "fog" && tile.vertexIds.some(id => edge.vertexIds.includes(id)));
   resolveExplorationGold(state, playerId, discoverFogTiles(state, playerFor(state, playerId), tiles));
@@ -456,7 +456,7 @@ export function applyAction(
           state.shipsBuiltThisTurn = [];
         } else {
           state.activePlayerId = state.setupOrder[state.setupIndex]!;
-          state.phase = state.variant === "foggy-world" ? { type: "setup-reveal" } : { type: "setup-settlement" };
+          state.phase = isFogWorld(state.variant) ? { type: "setup-reveal" } : { type: "setup-settlement" };
         }
       } else if (state.phase.type === "road-building") {
         state.phase.remaining--;

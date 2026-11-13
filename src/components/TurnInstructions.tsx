@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
 import { victoryTarget } from "../game/engine";
-import { isSeafarers, type GamePhase, type GameVariant } from "../game/types";
+import { isFogWorld, isSeafarers, type GamePhase, type GameVariant } from "../game/types";
 import { translate, type Language } from "../i18n";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
@@ -27,7 +27,7 @@ export function getPhaseInstructions({
   return match(phase)
     .with({ type: "setup-settlement" }, () => ({
       title: translateText("Find a place to call home."),
-      description: translateText(variant === "foggy-world"
+      description: translateText(isFogWorld(variant)
         ? "Choose a highlighted node on the selected land cell for your settlement."
         : sharedBoard
         ? secondSettlement
@@ -45,7 +45,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
-      description: variant === "foggy-world"
+      description: isFogWorld(variant)
         ? translateText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.")
         : isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."

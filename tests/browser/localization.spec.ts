@@ -166,7 +166,7 @@ test("home language selection and help live inside the Menu dropdown", async ({ 
   await menuButton.focus();
   await page.keyboard.press("Enter");
   await expect(menuButton).toHaveAttribute("aria-expanded", "true");
-  await expect(menu.getByRole("button")).toHaveText(["Help", "Profile"]);
+  await expect(menu.getByRole("button")).toHaveText(["Help", "Profile", "Settings"]);
   await expect(languageSelector).toBeVisible();
   await expect(languageSelector).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: testInfo.outputPath("home-menu-language-open.png"), fullPage: true });

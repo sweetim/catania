@@ -139,7 +139,7 @@ test("menu dropdown items render leading icons", async ({ page, isMobile }, test
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   const mainMenu = page.getByRole("group", { name: "Main menu", exact: true });
   const mainMenuItems = mainMenu.getByRole("button");
-  await expect(mainMenuItems).toHaveCount(2);
+  await expect(mainMenuItems).toHaveCount(3);
   for (const item of await mainMenuItems.all()) {
     await expect(item.locator(":scope > svg")).toHaveCount(1);
   }

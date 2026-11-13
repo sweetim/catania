@@ -1,5 +1,5 @@
 import { GameError } from "./messages";
-import { isSeafarers } from "./types";
+import { isFogWorld, isSeafarers } from "./types";
 import type { Board, Edge, FogDiscovery, GameVariant, Port, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function isResource(terrain: Terrain): terrain is Resource {
@@ -43,14 +43,14 @@ function isRevealedCoast(board: Board, edge: Edge): boolean {
     tiles.every(tile => tile.terrain !== "fog");
 }
 
-/** Foggy World harbors need a placed, revealed land-sea coast, including the outer map edge. */
+/** Fog World harbors need a placed, revealed land-sea coast, including the outer map edge. */
 export function isPortRevealed(board: Board, port: Port): boolean {
-  return board.variant !== "foggy-world" ||
+  return !isFogWorld(board.variant) ||
     (!port.awaitingCoast && isRevealedCoast(board, board.edges.find(edge => edge.id === port.edgeId)!));
 }
 
 export function relocateFoggyWorldPorts(board: Board): void {
-  if (board.variant !== "foggy-world") return;
+  if (!isFogWorld(board.variant)) return;
   const coastEdges = board.edges.filter(edge => isRevealedCoast(board, edge));
   const establishedPorts = new Set(board.ports.filter(port => isPortRevealed(board, port)));
   const occupiedVertices = new Set(board.ports.filter(port => establishedPorts.has(port))
@@ -244,6 +244,21 @@ export function seededRandom(seed: string): () => number {
   };
 }
 
+/** Mystery World rolls every terrain count within its range and randomly splits the remaining cells between desert and sea. */
+function mysteryWorldTerrainCounts(random: () => number): Record<FogDiscovery["terrain"], number> {
+  const resources = {
+    wood: 2 + randomInteger(5, random),
+    wool: 2 + randomInteger(5, random),
+    grain: 2 + randomInteger(5, random),
+    brick: 1 + randomInteger(4, random),
+    ore: 1 + randomInteger(4, random),
+    gold: randomInteger(3, random),
+  };
+  const remaining = 42 - Object.values(resources).reduce((total, count) => total + count, 0);
+  const desert = 1 + randomInteger(remaining - 13, random);
+  return { ...resources, desert, sea: remaining - desert };
+}
+
 export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original"): Board {
   const terrain = shuffle<Terrain>([
     "wood", "wood", "wood", "wood", "brick", "brick", "brick",
@@ -295,7 +310,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         "wood", "wood", "brick", "wool", "wool", "grain", "grain", "ore", "gold", "gold",
         ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
       ], random).map(terrain => ({ terrain, number: terrain === "sea" ? null : discoveryNumbers.pop()! }));
-    } else if (variant === "foggy-world") {
+    } else if (isFogWorld(variant)) {
       positions.length = 0;
       terrain.length = 0;
       // The hidden island only anchors the harbors; its hexes stay fog like the rest of the world.
@@ -305,17 +320,14 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       }
       const discoveryNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12, 6, 6, 8, 8,
         2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
-      fogDiscoveriesByTileId = Object.fromEntries(shuffle<FogDiscovery["terrain"]>([
-        "wood", "wood", "wood", "wood", "wood", "wood",
-        "brick", "brick", "brick", "brick",
-        "wool", "wool", "wool", "wool", "wool", "wool",
-        "grain", "grain", "grain", "grain", "grain", "grain",
-        "ore", "ore", "ore", "ore",
-        "gold", "gold", "desert",
-        ...Array<FogDiscovery["terrain"]>(13).fill("sea"),
-      ], random).map((terrain, index) => [`tile-${index}`, {
-        terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()!,
-      }]));
+      const terrainCounts = variant === "mystery-world" ? mysteryWorldTerrainCounts(random)
+        : { wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13 };
+      fogDiscoveriesByTileId = Object.fromEntries(shuffle<FogDiscovery["terrain"]>(
+        (Object.keys(terrainCounts) as FogDiscovery["terrain"][])
+          .flatMap(terrain => Array<FogDiscovery["terrain"]>(terrainCounts[terrain]).fill(terrain)),
+        random).map((terrain, index) => [`tile-${index}`, {
+          terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()!,
+        }]));
     } else {
       const islands = [
         [[1, -4], [2, -4]],
@@ -335,7 +347,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       for (let column = range[0]!; column <= range[1]!; column++) {
         if (positions.some(position => position.column === column && position.row === row)) continue;
         positions.push({ column, row });
-        terrain.push(variant === "fog-islands" || variant === "foggy-world" ? "fog" : "sea");
+        terrain.push(variant === "fog-islands" || isFogWorld(variant) ? "fog" : "sea");
       }
     }
   }
@@ -382,7 +394,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
   const redTileTarget = variant === "seafarers" ? 6
     : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23)
-    : variant === "foggy-world" ? 0 : 4;
+    : isFogWorld(variant) ? 0 : 4;
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
     if (redTiles.length === redTileTarget) return true;
@@ -430,7 +442,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   const portVertices = new Set<string>();
   const ports = portResources.map((resource, index) => {
     const start = (offset + Math.floor(index * boundary.length / 9)) % boundary.length;
-    const edge = variant === "four-islands" || variant === "fog-islands" || variant === "foggy-world"
+    const edge = variant === "four-islands" || variant === "fog-islands" || isFogWorld(variant)
       ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
       : boundary[start]!;
     edge.vertexIds.forEach(id => portVertices.add(id));

@@ -9,6 +9,7 @@ export const GAME_VARIANT_LABELS = {
   "four-islands": "Four Islands",
   "fog-islands": "Fog Islands",
   "foggy-world": "Foggy World",
+  "mystery-world": "Mystery World",
 } as const satisfies Record<GameVariant, keyof typeof seafarersTranslations>;
 
 export function GameVariantSelector({ value, onChange, disabled = false }: {

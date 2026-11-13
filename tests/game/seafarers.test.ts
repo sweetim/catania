@@ -861,6 +861,135 @@ describe("Foggy World", () => {
   }, 60000);
 });
 
+describe("Mystery World", () => {
+  function bankChoice(state: GameState, amount: number): Resources {
+    const choice = resources();
+    for (const resource of RESOURCES) {
+      choice[resource] = Math.min(amount, state.bank[resource]);
+      amount -= choice[resource];
+    }
+    return choice;
+  }
+
+  test("rolls terrain counts within their ranges and splits the remainder between desert and sea", () => {
+    const signatures = new Set<string>();
+    for (let seed = 0; seed < 50; seed++) {
+      const board = createBoard(randomFromSeed(seed), "mystery-world");
+      expect(board.variant).toBe("mystery-world");
+      expect(board.tiles).toHaveLength(42);
+      expect(board.tiles.every(tile => tile.terrain === "fog")).toBe(true);
+      expect(board.tiles.filter(tile => tile.islandId === "main")).toHaveLength(19);
+      expect(board.ports).toHaveLength(9);
+      expect(board.fogDiscoveryDeck).toBeUndefined();
+      expect(Object.keys(board.fogDiscoveriesByTileId!).toSorted()).toEqual(board.tiles.map(tile => tile.id).toSorted());
+      const deck = Object.values(board.fogDiscoveriesByTileId!);
+      expect(deck).toHaveLength(42);
+      const count = (terrain: string) => deck.filter(discovery => discovery.terrain === terrain).length;
+      for (const terrain of ["wood", "wool", "grain"] as const) {
+        expect(count(terrain)).toBeGreaterThanOrEqual(2);
+        expect(count(terrain)).toBeLessThanOrEqual(6);
+      }
+      for (const terrain of ["brick", "ore"] as const) {
+        expect(count(terrain)).toBeGreaterThanOrEqual(1);
+        expect(count(terrain)).toBeLessThanOrEqual(4);
+      }
+      expect(count("gold")).toBeLessThanOrEqual(2);
+      expect(count("desert")).toBeGreaterThanOrEqual(1);
+      expect(count("sea")).toBeGreaterThanOrEqual(13);
+      expect(["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"].reduce((total, terrain) => total + count(terrain), 0)).toBe(42);
+      expect(deck.filter(discovery => discovery.terrain === "sea" || discovery.terrain === "desert")
+        .every(discovery => discovery.number === null)).toBe(true);
+      const producing = ["wood", "brick", "wool", "grain", "ore", "gold"].reduce((total, terrain) => total + count(terrain), 0);
+      const numbers = deck.filter(discovery => discovery.number !== null)
+        .flatMap(discovery => discovery.number === null ? [] : [discovery.number]);
+      expect(numbers).toHaveLength(producing);
+      const pool: Record<number, number> = { 2: 2, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 2 };
+      const used: Record<number, number> = {};
+      for (const number of numbers) {
+        used[number] = (used[number] ?? 0) + 1;
+        expect(used[number]!, `${number} drawn too often`).toBeLessThanOrEqual(pool[number] ?? 0);
+      }
+      signatures.add(`${producing}:${count("desert")}:${count("sea")}`);
+      for (const port of board.ports) expect(portAnchor(board, port).portX).toBeDefined();
+    }
+    expect(signatures.size).toBeGreaterThan(1);
+    expect(createBoard(seededRandom("6SMHDES6"), "mystery-world")).toEqual(createBoard(seededRandom("6SMHDES6"), "mystery-world"));
+  });
+
+  test("the map code fixes every cell's terrain and number regardless of discovery order", () => {
+    const board = createBoard(seededRandom("6SMHDE26"), "mystery-world");
+    const expected = board.tiles.map(tile => ({ id: tile.id, ...board.fogDiscoveriesByTileId![tile.id]! }));
+    for (const tileIds of [board.tiles.map(tile => tile.id), board.tiles.map(tile => tile.id).reverse()]) {
+      let state = createGame(profiles.slice(0, 3), randomFromSeed(1), board);
+      for (const tileId of tileIds) {
+        state.phase = { type: "setup-reveal" };
+        state = applyAction(state, state.activePlayerId, { type: "reveal-tile", tileId });
+        if (state.phase.type === "gold") {
+          state = applyAction(state, state.activePlayerId, { type: "choose-gold", resources: resources({ ore: 1 }) });
+        }
+      }
+      expect(state.board.tiles.map(({ id, terrain, number }) => ({ id, terrain, number }))).toEqual(expected);
+      expect(state.board.fogDiscoveriesByTileId).toEqual({});
+      assertConservation(state);
+    }
+  });
+
+  test.each([3, 4])("varied terrain rolls support a complete %s-player setup", playerCount => {
+    for (let seed = 0; seed < 20; seed++) {
+      let state = createGame(profiles.slice(0, playerCount), randomFromSeed(seed), undefined, "mystery-world");
+      for (let placement = 0; placement < playerCount * 2; placement++) {
+        const playerId = state.activePlayerId;
+        let guard = 0;
+        while (state.phase.type === "setup-reveal" && guard++ < 42) {
+          const tileId = legalSetupRevealTiles(state, playerId)[0]!;
+          expect(tileId).toBeDefined();
+          state = applyAction(state, playerId, { type: "reveal-tile", tileId });
+          if (state.phase.type === "gold") {
+            state = applyAction(state, playerId, { type: "choose-gold", resources: bankChoice(state, state.phase.required[playerId]!) });
+          }
+        }
+        expect(state.phase.type).toBe("setup-settlement");
+        const vertexId = legalSettlementVertices(state, playerId)[0]!;
+        expect(vertexId).toBeDefined();
+        state = applyAction(state, playerId, { type: "place-settlement", vertexId });
+        const edgeId = [...legalRoadEdges(state, playerId), ...legalShipEdges(state, playerId)][0]!;
+        expect(edgeId).toBeDefined();
+        state = applyAction(state, playerId, legalRoadEdges(state, playerId).includes(edgeId)
+          ? { type: "place-road", edgeId } : { type: "place-ship", edgeId });
+        if (state.phase.type === "gold") {
+          state = applyAction(state, playerId, { type: "choose-gold", resources: bankChoice(state, state.phase.required[playerId]!) });
+        }
+      }
+      expect(state.phase.type).toBe("roll");
+      expect(state.board.vertices.filter(vertex => vertex.building)).toHaveLength(playerCount * 2);
+      assertConservation(state);
+    }
+  });
+
+  test("three computers finish a legal mystery world game at twelve points", () => {
+    const random = randomFromSeed(3);
+    let state = createGame(profiles.slice(0, 3).map(profile => ({ ...profile, control: "computer" })), random, undefined, "mystery-world");
+    let actions = 0;
+    let setupPlacements = 0;
+    while (!state.winnerId && actions < 10000) {
+      const decision = state.players.map(player => ({ playerId: player.id, action: chooseComputerAction(state, player.id) }))
+        .find(decision => decision.action);
+      const playerId = decision!.playerId;
+      const action = decision!.action;
+      expect(action).not.toBeNull();
+      if (!action) break;
+      if (action.type === "place-settlement" &&
+        (state.phase.type === "setup-settlement" || state.phase.type === "setup-reveal")) setupPlacements++;
+      state = applyAction(state, playerId, action, random);
+      assertConservation(state);
+      actions++;
+    }
+    expect(state.winnerId).not.toBeNull();
+    expect(setupPlacements).toBeGreaterThanOrEqual(6);
+    expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
+  }, 60000);
+});
+
 describe("ships and shipping routes", () => {
   test("coastal setup permits a free ship; sea-only edges reject roads and ship placement advances snake setup", () => {
     const { state, vertexId } = coastalGame();

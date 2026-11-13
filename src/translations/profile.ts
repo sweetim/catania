@@ -18,6 +18,7 @@ export const profileTranslations = {
   "Four Islands": "四つの島",
   "Fog Islands": "霧の島",
   "Foggy World": "霧の世界",
+  "Mystery World": "謎の世界",
   "VP": "勝利点",
   "{turns} turns": "{turns}ターン",
   "Replay map": "このマップを再現",

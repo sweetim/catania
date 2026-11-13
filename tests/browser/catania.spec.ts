@@ -1368,6 +1368,63 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await privateHandIsAbsent(page);
 });
 
+test("home menu opens the board settings dialog", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByRole("group", { name: "Main menu", exact: true }).getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.getByRole("checkbox", { name: "Vibrate when your turn starts", exact: true })).toBeChecked();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(settings).toHaveCount(0);
+});
+
+test("turn-start vibration follows pass-and-play handoffs and the settings toggle", async ({ page }) => {
+  await page.addInitScript(() => {
+    const vibrations: (number | number[])[] = [];
+    navigator.vibrate = ((pattern: VibratePattern) => {
+      vibrations.push(typeof pattern === "number" ? pattern : Array.from(pattern));
+      return true;
+    }) as typeof navigator.vibrate;
+    (window as Window & { vibrations?: (number | number[])[] }).vibrations = vibrations;
+  });
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+
+  const vibrations = () => page.evaluate(() => (window as Window & { vibrations?: (number | number[])[] }).vibrations ?? []);
+  const players: string[] = [];
+  const placeSettlementAndRoad = async () => {
+    await showView(page, "board");
+    await page.getByRole("button", { name: /^Place settlement at/ }).first().click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await page.getByRole("button", { name: /^Build road at/ }).first().click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  };
+
+  // Each of the first two turn arrivals vibrates once.
+  players.push(await revealHand(page));
+  expect(await vibrations()).toEqual([[80, 60, 80]]);
+  await placeSettlementAndRoad();
+  players.push(await revealHand(page));
+  expect(players[1]).not.toBe(players[0]);
+  expect(await vibrations()).toEqual([[80, 60, 80], [80, 60, 80]]);
+
+  // Disabling the setting keeps every later turn arrival silent.
+  await chooseGameOption(page, "Settings");
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  const vibrationToggle = settings.getByRole("checkbox", { name: "Vibrate when your turn starts", exact: true });
+  await expect(vibrationToggle).toBeChecked();
+  await expect(vibrationToggle).toHaveAccessibleDescription(/turn passes to you on this device/);
+  await vibrationToggle.uncheck();
+  await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
+  expect.poll(() => page.evaluate(() => localStorage.getItem("catania.vibrateOnYourTurn"))).toBe("false");
+
+  await placeSettlementAndRoad();
+  players.push(await revealHand(page));
+  expect(new Set(players).size).toBe(3);
+  expect(await vibrations()).toEqual([[80, 60, 80], [80, 60, 80]]);
+});
+
 for (const variant of ["original", "seafarers"] as const) {
   test(`Reset game restores the ${variant} island and original private setup`, async ({ page }, testInfo) => {
     await page.goto("/");

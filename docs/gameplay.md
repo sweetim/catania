@@ -19,8 +19,8 @@ Under **Separate multiplayer setup**, **Play across devices** immediately hosts 
 board for phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
-1. Choose **Original** (the default), **Seafarers**, **Four Islands**, **Fog Islands**, or
-   **Foggy World** under **Game version**,
+1. Choose **Original** (the default), **Seafarers**, **Four Islands**, **Fog Islands**,
+   **Foggy World**, or **Mystery World** under **Game version**,
    then three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
@@ -33,7 +33,7 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, 13 in Seafarers (Heading for New Shores),
-   or 12 in Four Islands, Fog Islands, or Foggy World, on your own turn. Inspect the revealed score breakdown
+    or 12 in Four Islands, Fog Islands, Foggy World, or Mystery World, on your own turn. Inspect the revealed score breakdown
    and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
    game's **map code**.
 
@@ -178,7 +178,7 @@ on your own turn. Computer opponents explore without inspecting the hidden deck.
 
 Map codes reproduce each scenario's initial board. In Fog Islands, they also reproduce
 the discovery deck; discoveries depend on which hexes are reached first. In Foggy
-World, each cell's terrain and number are fixed before play, independent of discovery
+World and Mystery World, each cell's terrain and number are fixed before play, independent of discovery
 order. Multiplayer sends only revealed tiles and fog placeholders, never hidden
 terrain assignments or discovery decks.
 
@@ -226,6 +226,19 @@ rewards; revealed land supports settlements and produces normally; neither
 robber nor pirate may enter fog. There are no island bonuses; win at 12 points
 on your own turn. Computer opponents select starting cells and settlement nodes without inspecting the
 hidden terrain.
+
+### Mystery World
+
+Mystery World plays exactly like Foggy World — the whole 42-hex map starts
+hidden under fog, harbors appear only on revealed coasts, and setup picks a
+cell first — but every map rolls its own terrain mix instead of using the fixed
+Foggy World counts. Wood, wool, and grain get 2-6 hexes each, brick and ore
+1-4 each, and gold 0-2; the remaining cells split randomly between at least
+one desert and at least 13 sea hexes. Number tokens are drawn randomly from the
+same 28-token pool for the map's producing hexes, so their count varies with
+the terrain roll. The seeded map fixes every cell's terrain and number before
+play, and map codes reproduce the exact roll. Win at 12 points on your own
+turn.
 
 ## Board And Controls
 
@@ -309,6 +322,16 @@ to the island preview and pass-device board, and is remembered across new games
 and reloads under `catania.fillBoardWithWater` when browser storage is available.
 Unknown values or unavailable storage default to round; storage failures do not
 prevent toggling for the current session. The board controls remain unchanged.
+
+**Settings > Vibrate when your turn starts** gives a short vibration
+whenever the turn arrives at this device's player, including setup placements and
+pass-and-play handoffs in single-device play and turn arrivals on private
+multiplayer phones. It is on by default; browsers without vibration support,
+such as iOS Safari, ignore it. The preference is remembered in this browser under
+`catania.vibrateOnYourTurn` when storage is available and does not save the game.
+
+The Settings dialog opens from the in-game **Game** menu and from the home page's
+**Menu** (also available on the victory screen), and applies to every setting above.
 
 ## Help And Rules
 

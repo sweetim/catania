@@ -92,9 +92,12 @@ The header uses the same
 **Game** dropdown as single-device play, in both the lobby and the game.
 **Language** changes this device's interface language.
 **Help** includes the rules, build costs, development-card reference, and
-shared-board/private-phone guidance. **Settings** on the shared
-screen controls blocked settlement markers and whether water fills the map;
-these preferences are saved in this browser and shared with single-device play.
+shared-board/private-phone guidance. **Settings** is available on the shared
+screen, on each private phone (including the landing page before connecting),
+and in the host menu; it controls blocked settlement markers, whether
+water fills the map, and a short vibration when the turn arrives at that device's
+player. These preferences are saved in this browser and shared with single-device
+play.
 During play, the host can choose **Reset game** and confirm to restore the
 original setup, island, players, and turn order on every connected screen.
 All pieces, hands, rolls, trades, and pending actions are cleared. The room,
