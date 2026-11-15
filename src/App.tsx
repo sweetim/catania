@@ -4,6 +4,7 @@ import { DiceIcon, EndTurnIcon } from "./components/ActionIcons";
 import { Board, useFogRevealHistory } from "./components/Board";
 import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
+import { CustomMapConfigPanel } from "./components/CustomMapConfigPanel";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
 import { GameVariantSelector } from "./components/GameVariantSelector";
@@ -69,8 +70,16 @@ import {
   resourceTotal,
   victoryTarget,
 } from "./game/engine";
-import { isFogWorld, isGameVariant, isSeafarers } from "./game/types";
+import {
+  CUSTOM_MAP_COUNT_FIELDS,
+  DEFAULT_CUSTOM_MAP_CONFIG,
+  isCustomMapConfig,
+  isFogBoard,
+  isGameVariant,
+  isSeafarers,
+} from "./game/types";
 import type {
+  CustomMapConfig,
   GameAction,
   GameState,
   GameVariant,
@@ -97,6 +106,7 @@ function phaseTitle(state: GameState, language: Language) {
     language,
     phase: state.phase,
     variant: state.variant,
+    fogWorld: state.board.fogWorld === true,
     secondSettlement: state.setupIndex >= state.players.length,
   }).title;
 }
@@ -106,8 +116,17 @@ function phaseDescription(state: GameState, language: Language) {
     language,
     phase: state.phase,
     variant: state.variant,
+    fogWorld: state.board.fogWorld === true,
     secondSettlement: state.setupIndex >= state.players.length,
   }).description;
+}
+
+function customMapConfigFromParameters(parameters: URLSearchParams): CustomMapConfig | null {
+  const candidate = {
+    ...Object.fromEntries(CUSTOM_MAP_COUNT_FIELDS.map(field => [field, Number(parameters.get(field))])),
+    fog: parameters.get("fog") === "1",
+  };
+  return isCustomMapConfig(candidate) ? candidate : null;
 }
 
 export function App() {
@@ -122,16 +141,25 @@ export function App() {
     }
   });
   const boardTheme = BOARD_THEMES[boardThemeId];
-  const [savedMap] = useState<{ seed: string; variant: GameVariant } | null>(() => {
+  const [savedMap] = useState<{ seed: string; variant: GameVariant; customMapConfig?: CustomMapConfig } | null>(() => {
     const parameters = new URLSearchParams(window.location.search);
     const seed = normalizeMapSeed(parameters.get("map") ?? "");
     const variant = parameters.get("variant") ?? "original";
-    return seed && isGameVariant(variant) ? { seed, variant } : null;
+    if (!seed || !isGameVariant(variant)) return null;
+    if (variant === "custom-world") {
+      const customMapConfig = customMapConfigFromParameters(parameters);
+      return customMapConfig ? { seed, variant, customMapConfig } : null;
+    }
+    return { seed, variant };
   });
   const [variant, setVariant] = useState<GameVariant>(savedMap?.variant ?? "original");
+  const [customMapConfig, setCustomMapConfig] = useState<CustomMapConfig>(savedMap?.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG);
+  const lastValidCustomMapConfig = useRef<CustomMapConfig>(savedMap?.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG);
+  const [gameCustomMapConfig, setGameCustomMapConfig] = useState<CustomMapConfig | null>(null);
+  const playableCustomMapConfig = () => isCustomMapConfig(customMapConfig) ? customMapConfig : lastValidCustomMapConfig.current;
   const [preview, setPreview] = useState(() => {
     const seed = savedMap?.seed ?? generateMapSeed();
-    return { seed, board: createBoard(seededRandom(seed), savedMap?.variant ?? "original") };
+    return { seed, board: createBoard(seededRandom(seed), savedMap?.variant ?? "original", savedMap?.customMapConfig) };
   });
   const [mapCode, setMapCode] = useState("");
   const [mapCodeInvalid, setMapCodeInvalid] = useState(false);
@@ -317,6 +345,7 @@ export function App() {
       gameId: gameInstanceId,
       mapCode: gameMapSeed,
       variant: game.variant,
+      ...(game.variant === "custom-world" && gameCustomMapConfig ? { customMapConfig: gameCustomMapConfig } : {}),
       won: game.winnerId === human.id,
       points: getScore(game, human.id).total,
       turnCount: game.turnNumber,
@@ -349,8 +378,11 @@ export function App() {
       }
       // Every game's island comes from a map code so it can be replayed later.
       const mapSeed = selectedSeed ?? generateMapSeed();
-      const board = selectedBoard ?? createBoard(seededRandom(mapSeed), variant);
-      const next = createGame(profiles, undefined, board, variant);
+      const config = variant === "custom-world" ? customMapConfig : undefined;
+      const board = selectedBoard ?? createBoard(seededRandom(mapSeed), variant,
+        variant === "custom-world" ? playableCustomMapConfig() : undefined);
+      const next = createGame(profiles, undefined, board, variant, undefined, config);
+      setGameCustomMapConfig(isCustomMapConfig(config) ? config : null);
       initializeGame(next, mapSeed);
     } catch (failure) {
       setHomeView("setup");
@@ -618,7 +650,7 @@ export function App() {
   const routeChoicePending =
     selected?.kind === "edge" &&
     selectedAction?.type === "place-road" &&
-    game && isFogWorld(game.variant) &&
+    game && isFogBoard(game.board) &&
     (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(selected.id);
 
@@ -701,7 +733,11 @@ export function App() {
               setHandoffTarget(null);
               setDialog(null);
               setVariant(previousGame.variant);
-              setPreview({ seed: previousGame.mapCode, board: createBoard(seededRandom(previousGame.mapCode), previousGame.variant) });
+              const replayConfig = previousGame.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG;
+              setCustomMapConfig(replayConfig);
+              lastValidCustomMapConfig.current = replayConfig;
+              setPreview({ seed: previousGame.mapCode, board: createBoard(seededRandom(previousGame.mapCode), previousGame.variant,
+                previousGame.variant === "custom-world" ? replayConfig : undefined) });
               setHomeView("island");
               setError("");
             }}
@@ -814,9 +850,22 @@ export function App() {
                 <GameVariantSelector value={variant} onChange={nextVariant => {
                   setVariant(nextVariant);
                   const seed = generateMapSeed();
-                  setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant) });
+                  setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant,
+                    nextVariant === "custom-world" ? playableCustomMapConfig() : undefined) });
                 }} />
               </div>
+              {variant === "custom-world" && (
+                <CustomMapConfigPanel
+                  value={customMapConfig}
+                  onChange={nextConfig => {
+                    setCustomMapConfig(nextConfig);
+                    if (isCustomMapConfig(nextConfig)) {
+                      lastValidCustomMapConfig.current = nextConfig;
+                      setPreview(current => ({ seed: current.seed, board: createBoard(seededRandom(current.seed), "custom-world", nextConfig) }));
+                    }
+                  }}
+                />
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                   <label
@@ -939,11 +988,13 @@ export function App() {
                       return;
                     }
                     setMapCodeInvalid(false);
-                    setPreview({ seed: normalized, board: createBoard(seededRandom(normalized), variant) });
+                    setPreview({ seed: normalized, board: createBoard(seededRandom(normalized), variant,
+                      variant === "custom-world" ? playableCustomMapConfig() : undefined) });
                   }}
                   onShuffle={() => {
                     const seed = generateMapSeed();
-                    setPreview({ seed, board: createBoard(seededRandom(seed), variant) });
+                    setPreview({ seed, board: createBoard(seededRandom(seed), variant,
+                      variant === "custom-world" ? playableCustomMapConfig() : undefined) });
                   }}
                 />}
               />
@@ -1103,7 +1154,7 @@ export function App() {
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
                   routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                  routeChoice={isActive && isSeafarers(game.variant) && !isFogWorld(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                  routeChoice={isActive && isSeafarers(game.variant) && !isFogBoard(game.board) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                     ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
                     : undefined}
                   pirateIndicator={isSeafarers(game.variant) ? {

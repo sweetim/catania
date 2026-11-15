@@ -1,6 +1,6 @@
 import { GameError } from "./messages";
-import { isFogWorld, isSeafarers } from "./types";
-import type { Board, Edge, FogDiscovery, GameVariant, Port, Resource, Terrain, Tile, Vertex } from "./types";
+import { CUSTOM_MAP_COUNT_FIELDS, isCustomMapConfig, isFogBoard, isFogWorld, isSeafarers } from "./types";
+import type { Board, CustomMapConfig, Edge, FogDiscovery, GameVariant, Port, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function isResource(terrain: Terrain): terrain is Resource {
   return terrain !== "desert" && terrain !== "sea" && terrain !== "gold" && terrain !== "fog";
@@ -51,12 +51,12 @@ function isRevealedCoast(board: Board, edge: Edge): boolean {
 
 /** Fog World harbors need a placed, revealed land-sea coast, including the outer map edge. */
 export function isPortRevealed(board: Board, port: Port): boolean {
-  return !isFogWorld(board.variant) ||
+  return !isFogBoard(board) ||
     (!port.awaitingCoast && isRevealedCoast(board, board.edges.find(edge => edge.id === port.edgeId)!));
 }
 
 export function relocateFoggyWorldPorts(board: Board): void {
-  if (!isFogWorld(board.variant)) return;
+  if (!isFogBoard(board)) return;
   const coastEdges = board.edges.filter(edge => isRevealedCoast(board, edge));
   const establishedPorts = new Set(board.ports.filter(port => isPortRevealed(board, port)));
   const labelAnchors = board.ports.filter(port => establishedPorts.has(port)).map(port => portAnchor(board, port));
@@ -229,6 +229,33 @@ function fourIslandsOtherNumbers(needed: number): number[] {
   return numbers;
 }
 
+const CUSTOM_OTHER_NUMBERS = [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12];
+
+/** Cycles the standard token mix when a Custom World map has more producing hexes than tokens. */
+function customOtherNumbers(needed: number): number[] {
+  return Array.from({ length: needed }, (_, index) => CUSTOM_OTHER_NUMBERS[index % CUSTOM_OTHER_NUMBERS.length]!);
+}
+
+function seafarersFrameCells(): [number, number][] {
+  return SEAFARERS_ROW_RANGES.flatMap(([firstColumn, lastColumn], index) =>
+    Array.from({ length: lastColumn - firstColumn + 1 }, (_, offset): [number, number] => [firstColumn + offset, index - 4]));
+}
+
+/** Grows one connected island of the requested size inside the Seafarers frame. */
+function customIslandLayout(size: number, random: () => number): [number, number][] {
+  const frame = seafarersFrameCells();
+  const island = [frame[randomInteger(frame.length, random)]!];
+  while (island.length < size) {
+    const frontier = frame.filter(position => !island.includes(position) && island.some(([column, row]) =>
+      HEX_NEIGHBOR_OFFSETS.some(([offsetColumn, offsetRow]) =>
+        position[0] === column + offsetColumn && position[1] === row + offsetRow)));
+    island.push(frontier[randomInteger(frontier.length, random)]!);
+  }
+  return island;
+}
+
+const CUSTOM_DISCOVERY_NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+
 const MAP_SEED_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 const MAP_SEED_PATTERN = new RegExp(`^[${MAP_SEED_ALPHABET}]{8}$`);
 
@@ -280,7 +307,11 @@ function mysteryWorldTerrainCounts(random: () => number): Record<FogDiscovery["t
   return { ...resources, desert, sea: remaining - desert };
 }
 
-export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original"): Board {
+export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original", customMapConfig?: CustomMapConfig): Board {
+  if (variant === "custom-world" && !isCustomMapConfig(customMapConfig)) {
+    throw new GameError("Set up the Custom World map before starting the game.");
+  }
+  const customConfig = variant === "custom-world" ? customMapConfig as CustomMapConfig : undefined;
   const terrain = shuffle<Terrain>([
     "wood", "wood", "wood", "wood", "brick", "brick", "brick",
     "wool", "wool", "wool", "wool", "grain", "grain", "grain", "grain",
@@ -349,6 +380,34 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
         random).map((terrain, index) => [`tile-${index}`, {
           terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()!,
         }]));
+    } else if (variant === "custom-world" && customConfig!.fog) {
+      positions.length = 0;
+      terrain.length = 0;
+      for (const [column, row] of fogIslandLayout(random)) {
+        positions.push({ column, row, islandId: "main" });
+        terrain.push("fog");
+      }
+      const producingFields = CUSTOM_MAP_COUNT_FIELDS.filter(field => field !== "sea" && field !== "desert");
+      const producingCount = producingFields.reduce((total, field) => total + customConfig![field], 0);
+      const discoveryNumbers = shuffle(Array.from({ length: producingCount }, (_, index) =>
+        CUSTOM_DISCOVERY_NUMBERS[index % CUSTOM_DISCOVERY_NUMBERS.length]!), random);
+      fogDiscoveriesByTileId = Object.fromEntries(shuffle<FogDiscovery["terrain"]>(
+        CUSTOM_MAP_COUNT_FIELDS.flatMap(field =>
+          Array<FogDiscovery["terrain"]>(customConfig![field]).fill(field)),
+        random).map((terrain, index) => [`tile-${index}`, {
+          terrain, number: terrain === "sea" || terrain === "desert" ? null : discoveryNumbers.pop()!,
+        }]));
+    } else if (variant === "custom-world") {
+      positions.length = 0;
+      terrain.length = 0;
+      const landFields = CUSTOM_MAP_COUNT_FIELDS.filter(field => field !== "sea");
+      const landCount = landFields.reduce((total, field) => total + customConfig![field], 0);
+      const landTerrain = shuffle<Terrain>(landFields
+        .flatMap(field => Array<Terrain>(customConfig![field]).fill(field)), random);
+      for (const [column, row] of customIslandLayout(landCount, random)) {
+        positions.push({ column, row, islandId: "main" });
+        terrain.push(landTerrain.shift()!);
+      }
     } else {
       const islands = [
         [[1, -4], [2, -4]],
@@ -368,7 +427,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       for (let column = range[0]!; column <= range[1]!; column++) {
         if (positions.some(position => position.column === column && position.row === row)) continue;
         positions.push({ column, row });
-        terrain.push(variant === "fog-islands" || isFogWorld(variant) ? "fog" : "sea");
+        terrain.push(variant === "fog-islands" || isFogWorld(variant) || (variant === "custom-world" && customConfig!.fog) ? "fog" : "sea");
       }
     }
   }
@@ -413,8 +472,9 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
 
   const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
-  const redTileTarget = variant === "seafarers" ? 6
+  let redTileTarget = variant === "seafarers" ? 6
     : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23)
+    : variant === "custom-world" ? Math.min(4, producingTiles.length)
     : isFogWorld(variant) ? 0 : 4;
   const redTiles: Tile[] = [];
   function selectRedTiles(start: number): boolean {
@@ -430,12 +490,17 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     }
     return false;
   }
-  if (!selectRedTiles(0)) throw new GameError("Unable to arrange nonadjacent red number tokens.");
-  const redNumbers = shuffle(variant === "four-islands"
+  while (!selectRedTiles(0)) {
+    if (redTileTarget === 0) throw new GameError("Unable to arrange nonadjacent red number tokens.");
+    redTileTarget--;
+    redTiles.length = 0;
+  }
+  const redNumbers = shuffle(variant === "four-islands" || variant === "custom-world"
     ? [...Array<number>(Math.ceil(redTileTarget / 2)).fill(6), ...Array<number>(Math.floor(redTileTarget / 2)).fill(8)]
     : [6, 6, 8, 8], random);
   const otherNumbers = shuffle(variant === "four-islands"
     ? fourIslandsOtherNumbers(producingTiles.length - redTileTarget)
+    : variant === "custom-world" ? customOtherNumbers(producingTiles.length - redTileTarget)
     : [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
   const islandRedNumbers = variant === "seafarers" ? shuffle([6, 8], random) : [];
   const islandOtherNumbers = variant === "seafarers" ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
@@ -461,15 +526,17 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
   ], random);
   const offset = randomInteger(boundary.length, random);
   const portVertices = new Set<string>();
+  const customFog = variant === "custom-world" && customConfig!.fog;
   const ports = portResources.map((resource, index) => {
     const start = (offset + Math.floor(index * boundary.length / 9)) % boundary.length;
-    const edge = variant === "four-islands" || variant === "fog-islands" || isFogWorld(variant)
+    const edge = variant === "four-islands" || variant === "fog-islands" || isFogWorld(variant) || customFog
       ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
       : boundary[start]!;
     edge.vertexIds.forEach(id => portVertices.add(id));
-    return { edgeId: edge.id, resource, ...(isFogWorld(variant) ? { awaitingCoast: true } : {}) };
+    return { edgeId: edge.id, resource, ...(isFogWorld(variant) || customFog ? { awaitingCoast: true } : {}) };
   });
   return { tiles, vertices, edges, ports, ...(isSeafarers(variant) ? { variant } : {}),
+    ...(isFogWorld(variant) || customFog ? { fogWorld: true } : {}),
     ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}),
     ...(fogDiscoveriesByTileId ? { fogDiscoveriesByTileId } : {}) };
 }

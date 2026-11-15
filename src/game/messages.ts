@@ -107,6 +107,8 @@ export const gameMessages = {
   "Random source must return a number from 0 (inclusive) to 1 (exclusive).": "乱数生成元は0以上1未満の数値を返す必要があります。",
   "Unable to arrange nonadjacent red number tokens.": "赤い数字トークンを隣接しないように配置できませんでした。",
   "The board can only be shuffled in the lobby.": "盤面をシャッフルできるのはロビー内だけです。",
+  "The map can only be customized in the lobby.": "マップをカスタマイズできるのはロビー内だけです。",
+  "Set up the Custom World map before starting the game.": "ゲームを始める前に、カスタム世界のマップを設定してください。",
   "The victory target can only be changed in the lobby.": "勝利に必要な点数はロビーでのみ変更できます。",
   "Choose a whole number from 3 to 13 victory points.": "勝利に必要な点数を3〜13の整数で選んでください。",
   "Enter a valid 8-character map code.": "8文字の有効なマップコードを入力してください。",

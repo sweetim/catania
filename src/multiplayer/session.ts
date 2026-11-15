@@ -1,6 +1,7 @@
 import Peer from "peerjs";
 import type { DataConnection } from "peerjs";
 import type { GameAction } from "../game/types";
+import { isCustomMapConfig } from "../game/types";
 import { getComputerActionDelay } from "../game/computer";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
@@ -220,6 +221,7 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
   return {
     setVariant: variant => perform(() => room.setVariant(variant)),
     setVictoryPointsToWin: points => perform(() => room.setVictoryPointsToWin(points)),
+    setCustomMapConfig: config => perform(() => room.setCustomMapConfig(config)),
     shuffleBoard: () => perform(() => room.shuffleBoard()),
     useMapSeed: seed => perform(() => room.useMapSeed(seed)),
     startGame: () => perform(() => {
@@ -353,6 +355,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
               gameId: finished.gameId,
               mapCode: snapshot.mapSeed,
               variant: finished.variant,
+              ...(finished.variant === "custom-world" && isCustomMapConfig(snapshot.customMapConfig) ? { customMapConfig: snapshot.customMapConfig } : {}),
               won: finished.winnerId === own.id,
               points: own.score,
               turnCount: finished.turnNumber,
@@ -421,7 +424,7 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
   const hostOnly = () => { if (!closed) { view = { ...view, error: { key: "Only the shared host can manage the lobby or start the game." } }; publish(); } };
   publish();
   return {
-    setVariant: hostOnly, setVictoryPointsToWin: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
+    setVariant: hostOnly, setVictoryPointsToWin: hostOnly, setCustomMapConfig: hostOnly, startGame: hostOnly, resetGame: hostOnly, shuffleBoard: hostOnly, useMapSeed: hostOnly, admit: hostOnly, reject: hostOnly, addComputer: hostOnly, removePlayer: hostOnly, renameComputer: hostOnly, endGame: hostOnly,
     perform: (action, expectedVersion, trade) => command({ type: "action", action, ...(trade ? { trade } : {}) }, expectedVersion),
     selectBuild: (piece, expectedVersion) => command({ type: "select-build", piece }, expectedVersion),
     reconnect: () => {

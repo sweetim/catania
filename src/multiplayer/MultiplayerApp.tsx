@@ -22,9 +22,10 @@ import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
+import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
 import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { isFogWorld, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isFogBoard, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -206,6 +207,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     language,
     phase: game.phase,
     variant: game.variant,
+    fogWorld: game.board.fogWorld === true,
     victoryPointsToWin: game.victoryPointsToWin,
     secondSettlement: game.board.vertices.filter(vertex => vertex.building).length >= game.players.length,
     pendingKnight: game.canCancelKnight,
@@ -302,7 +304,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      {active && isSeafarers(game.variant) && !isFogWorld(game.variant) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
+      {active && isSeafarers(game.variant) && !isFogBoard(game.board) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
@@ -549,7 +551,7 @@ export function MultiplayerApp() {
     .with("vertex", () => ({ type: snapshot?.buildMode === "city" ? "place-city" as const : "place-settlement" as const, vertexId: currentSelection.id }))
     .exhaustive();
   const routeChoicePending = currentSelection?.kind === "edge" && selectedAction?.type === "place-road" &&
-    game && isFogWorld(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    game && isFogBoard(game.board) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(currentSelection.id);
 
   return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
@@ -626,6 +628,13 @@ export function MultiplayerApp() {
                   <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
                 </div>
               </div>
+              {snapshot.variant === "custom-world" && <div className="mb-4">
+                <CustomMapConfigPanel
+                  value={snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG}
+                  disabled={disabled}
+                  onChange={config => session.current?.setCustomMapConfig(config)}
+                />
+              </div>}
               <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
                 <Board
                   board={snapshot.previewBoard}
@@ -709,7 +718,7 @@ export function MultiplayerApp() {
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                routeChoice={isSeafarers(game.variant) && !isFogWorld(game.variant) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
+                routeChoice={isSeafarers(game.variant) && !isFogBoard(game.board) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
                   ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
                   : undefined}
                 pirateIndicator={isSeafarers(game.variant) ? {

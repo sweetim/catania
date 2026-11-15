@@ -1,7 +1,7 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
-export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world", "mystery-world"] as const;
+export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world", "mystery-world", "custom-world"] as const;
 export type GameVariant = typeof GAME_VARIANTS[number];
 export function isGameVariant(value: unknown): value is GameVariant {
   return GAME_VARIANTS.some(variant => variant === value);
@@ -15,6 +15,47 @@ export function isSeafarers(variant: GameVariant | undefined): boolean {
 /** Fog World variants hide the entire map under fog with fixed per-cell discoveries. */
 export function isFogWorld(variant: GameVariant | undefined): boolean {
   return variant === "foggy-world" || variant === "mystery-world";
+}
+export const CUSTOM_MAP_TILES = 42;
+export const CUSTOM_LAND_MINIMUM = 8;
+export const CUSTOM_MAP_COUNT_FIELDS = ["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"] as const;
+export type CustomMapCountField = typeof CUSTOM_MAP_COUNT_FIELDS[number];
+export type CustomMapConfig = Record<CustomMapCountField, number> & { fog: boolean };
+export const DEFAULT_CUSTOM_MAP_CONFIG: CustomMapConfig = {
+  wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13, fog: false,
+};
+
+function customMapCounts(value: unknown): Record<CustomMapCountField, number> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype) return null;
+  const candidate = value as Record<string, unknown>;
+  if (Object.keys(candidate).length !== CUSTOM_MAP_COUNT_FIELDS.length + 1 || typeof candidate.fog !== "boolean") return null;
+  const counts = {} as Record<CustomMapCountField, number>;
+  for (const field of CUSTOM_MAP_COUNT_FIELDS) {
+    const count = candidate[field];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > CUSTOM_MAP_TILES) return null;
+    counts[field] = count;
+  }
+  return counts;
+}
+
+/** Accepts in-progress Custom World setups whose counts have not filled all 42 hexes yet. */
+export function isCustomMapConfigDraft(value: unknown): value is CustomMapConfig {
+  const counts = customMapCounts(value);
+  return counts !== null &&
+    CUSTOM_MAP_COUNT_FIELDS.reduce((total, field) => total + counts[field], 0) <= CUSTOM_MAP_TILES;
+}
+
+export function customMapConfigLandCount(config: CustomMapConfig): number {
+  return CUSTOM_MAP_COUNT_FIELDS.reduce((total, field) => total + config[field], 0) - config.sea;
+}
+
+/** A playable Custom World setup fills exactly 42 hexes with enough land for the starting settlements. */
+export function isCustomMapConfig(value: unknown): value is CustomMapConfig {
+  const counts = customMapCounts(value);
+  if (counts === null) return false;
+  const assigned = CUSTOM_MAP_COUNT_FIELDS.reduce((total, field) => total + counts[field], 0);
+  return assigned === CUSTOM_MAP_TILES && assigned - counts.sea >= CUSTOM_LAND_MINIMUM;
 }
 export type Resources = Record<Resource, number>;
 export type Terrain = Resource | "desert" | "sea" | "gold" | "fog";
@@ -57,9 +98,15 @@ export type Board = {
   edges: Edge[];
   ports: Port[];
   variant?: GameVariant;
+  fogWorld?: boolean;
   fogDiscoveryDeck?: FogDiscovery[];
   fogDiscoveriesByTileId?: Record<string, FogDiscovery>;
 };
+
+/** True when the board plays the full-map fog rules (Foggy/Mystery World, or Custom World with fog enabled). */
+export function isFogBoard(board: Pick<Board, "variant" | "fogWorld"> | undefined): boolean {
+  return board !== undefined && (isFogWorld(board.variant) || board.fogWorld === true);
+}
 
 export type Player = {
   id: string;

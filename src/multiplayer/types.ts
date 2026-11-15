@@ -1,4 +1,4 @@
-import type { Board, GameAction, GamePhase, GameState, GameVariant, MonopolyEvent, Player, TheftEvent } from "../game/types";
+import type { Board, CustomMapConfig, GameAction, GamePhase, GameState, GameVariant, MonopolyEvent, Player, TheftEvent } from "../game/types";
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
 import type { ProfileStats } from "../profile";
@@ -55,6 +55,7 @@ export type RoomSnapshot = {
   victoryPointsToWin: number;
   version: number;
   players: RoomPlayer[];
+  customMapConfig?: CustomMapConfig;
   pendingPlayers?: { connectionId: string; name: string }[];
   previewBoard?: Omit<Board, "fogDiscoveryDeck" | "fogDiscoveriesByTileId">;
   mapSeed?: string;
@@ -83,6 +84,7 @@ export type SessionView = {
 export type MultiplayerSession = {
   setVariant: (variant: GameVariant) => void;
   setVictoryPointsToWin: (points: number) => void;
+  setCustomMapConfig: (config: CustomMapConfig) => void;
   startGame: () => void;
   resetGame: () => void;
   endGame: () => void;

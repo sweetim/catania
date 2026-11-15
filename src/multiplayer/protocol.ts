@@ -1,7 +1,7 @@
 import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import { isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
+import { isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import type { BuildMode, RoomSnapshot } from "./types";
@@ -173,8 +173,9 @@ function phase(value: unknown): boolean {
 }
 function board(value: unknown): boolean {
   const position = (value: RecordValue) => typeof value.x === "number" && Number.isFinite(value.x) && typeof value.y === "number" && Number.isFinite(value.y);
-  return record(value) && fields(value, ["tiles", "vertices", "edges", "ports"], ["variant"]) &&
+  return record(value) && fields(value, ["tiles", "vertices", "edges", "ports"], ["variant", "fogWorld"]) &&
     (!Object.hasOwn(value, "variant") || isGameVariant(value.variant)) &&
+    (!Object.hasOwn(value, "fogWorld") || typeof value.fogWorld === "boolean") &&
     array(value.tiles, 42, tile => record(tile) && fields(tile, ["id", "x", "y", "terrain", "number", "vertexIds"], ["islandId"]) && identifier(tile.id, "tile") && position(tile) &&
       (!Object.hasOwn(tile, "islandId") || (typeof tile.islandId === "string" && /^(main|island-[1-9][0-9]{0,2})$/.test(tile.islandId))) &&
       (resource(tile.terrain) || ["desert", "sea", "gold", "fog"].includes(tile.terrain as string)) && (tile.number === null || integer(tile.number, 12)) && array(tile.vertexIds, 6, value => identifier(value, "vertex"))) &&
@@ -195,7 +196,7 @@ function publicGame(value: unknown): boolean {
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
-    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || isFogWorld(value.variant)) && value.robberTileId === "")) &&
+    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || value.variant === "custom-world" || isFogWorld(value.variant)) && value.robberTileId === "")) &&
     record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"], ["expiresAt"]) &&
@@ -205,10 +206,11 @@ function publicGame(value: unknown): boolean {
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
-  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed"])) return false;
+  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed", "customMapConfig"])) return false;
   let previousTheftId = 0;
   let previousMonopolyId = 0;
   return (!Object.hasOwn(value, "mapSeed") || (typeof value.mapSeed === "string" && normalizeMapSeed(value.mapSeed) === value.mapSeed)) &&
+    (!Object.hasOwn(value, "customMapConfig") || isCustomMapConfigDraft(value.customMapConfig)) &&
     isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) &&
     (value.game === null || (record(value.game) && value.game.victoryPointsToWin === value.victoryPointsToWin)) &&
     integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&

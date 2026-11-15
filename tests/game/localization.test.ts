@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { detectLanguage, pieceName, resourceName, translate } from "../../src/i18n";
 import { appTranslations } from "../../src/translations/app";
 import { boardTranslations, themeTranslations } from "../../src/translations/board";
+import { customMapTranslations } from "../../src/translations/customMap";
 import { gameplayTranslations } from "../../src/translations/gameplay";
 import { helpTranslations } from "../../src/translations/help";
 import { multiplayerUiTranslations } from "../../src/translations/multiplayer-ui";
@@ -85,7 +86,7 @@ describe("translations", () => {
   });
 
   test("every Japanese UI catalog entry retains all template parameters", () => {
-    for (const catalog of [appTranslations, boardTranslations, themeTranslations, gameplayTranslations, helpTranslations, multiplayerUiTranslations]) {
+    for (const catalog of [appTranslations, boardTranslations, themeTranslations, customMapTranslations, gameplayTranslations, helpTranslations, multiplayerUiTranslations]) {
       for (const [english, japanese] of Object.entries(catalog)) {
         const parameters = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].sort();
         expect(japanese.trim(), english).not.toBe("");

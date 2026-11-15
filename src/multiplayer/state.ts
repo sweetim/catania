@@ -5,7 +5,10 @@ import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
   legalRoadEdges, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
 } from "../game/engine";
-import { isGameVariant, isSeafarers, isVictoryPointsToWin, type Board, type GameAction, type GameState, type GameVariant } from "../game/types";
+import {
+  DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig, isCustomMapConfigDraft, isGameVariant, isSeafarers, isVictoryPointsToWin,
+  type Board, type CustomMapConfig, type GameAction, type GameState, type GameVariant,
+} from "../game/types";
 import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
@@ -79,6 +82,7 @@ type Seat = {
 export class HostRoom {
   variant: GameVariant = "original";
   victoryPointsToWin = victoryTarget(this.variant);
+  customMapConfig: CustomMapConfig = { ...DEFAULT_CUSTOM_MAP_CONFIG };
   version = 0;
   game: GameState | null = null;
   buildMode: BuildMode = null;
@@ -87,18 +91,35 @@ export class HostRoom {
   private initialGame: GameState | null = null;
   private readonly seats: Seat[] = [];
   private readonly waiting = new Map<string, { name: string; userId: string | null }>();
+  private lastValidCustomMapConfig: CustomMapConfig = { ...DEFAULT_CUSTOM_MAP_CONFIG };
   private previewBoard = createBoard(seededRandom(this.mapSeed));
 
   constructor(private readonly secret: string) {}
+
+  private playableCustomMapConfig(): CustomMapConfig {
+    return isCustomMapConfig(this.customMapConfig) ? this.customMapConfig : this.lastValidCustomMapConfig;
+  }
 
   setVariant(variant: GameVariant): void {
     requireRoom(!this.game, "The game version can only be changed in the lobby.");
     requireRoom(isGameVariant(variant), "Choose a supported game version.");
     if (variant === this.variant) return;
     this.mapSeed = generateMapSeed();
-    this.previewBoard = createBoard(seededRandom(this.mapSeed), variant);
+    this.previewBoard = createBoard(seededRandom(this.mapSeed), variant,
+      variant === "custom-world" ? this.playableCustomMapConfig() : undefined);
     this.variant = variant;
     this.victoryPointsToWin = victoryTarget(variant);
+    this.version++;
+  }
+
+  setCustomMapConfig(config: CustomMapConfig): void {
+    requireRoom(!this.game, "The map can only be customized in the lobby.");
+    requireRoom(isCustomMapConfigDraft(config), "Set up the Custom World map before starting the game.");
+    this.customMapConfig = config;
+    if (isCustomMapConfig(config)) {
+      this.lastValidCustomMapConfig = config;
+      this.previewBoard = createBoard(seededRandom(this.mapSeed), this.variant, config);
+    }
     this.version++;
   }
 
@@ -113,7 +134,8 @@ export class HostRoom {
   shuffleBoard(): void {
     requireRoom(!this.game, "The board can only be shuffled in the lobby.");
     this.mapSeed = generateMapSeed();
-    this.previewBoard = createBoard(seededRandom(this.mapSeed), this.variant);
+    this.previewBoard = createBoard(seededRandom(this.mapSeed), this.variant,
+      this.variant === "custom-world" ? this.playableCustomMapConfig() : undefined);
     this.version++;
   }
 
@@ -124,7 +146,8 @@ export class HostRoom {
     requireRoom(normalized, "Enter a valid 8-character map code.");
     if (normalized === this.mapSeed) return;
     this.mapSeed = normalized;
-    this.previewBoard = createBoard(seededRandom(normalized), this.variant);
+    this.previewBoard = createBoard(seededRandom(normalized), this.variant,
+      this.variant === "custom-world" ? this.playableCustomMapConfig() : undefined);
     this.version++;
   }
 
@@ -235,7 +258,9 @@ export class HostRoom {
     requireRoom(!this.game, "The game has already started.");
     requireRoom(this.seats.length >= 3 && this.seats.length <= 4, "Add three or four players before starting.");
     requireRoom(this.seats.every(seat => seat.player.control === "computer" || seat.connectionId), "All admitted human players must be connected before starting.");
-    this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard, this.variant, this.victoryPointsToWin);
+    requireRoom(this.variant !== "custom-world" || isCustomMapConfig(this.customMapConfig), "Set up the Custom World map before starting the game.");
+    this.game = createGame(this.seats.map(seat => seat.player), undefined, this.previewBoard, this.variant, this.victoryPointsToWin,
+      this.variant === "custom-world" ? this.playableCustomMapConfig() : undefined);
     // Each game gets a stable identity for player-profile recording, and per-game profile stats start fresh.
     this.gameId = generateIdentifier();
     for (const seat of this.seats) seat.profile = null;
@@ -423,6 +448,7 @@ export class HostRoom {
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
       version: this.version, players, variant: this.variant, victoryPointsToWin: this.victoryPointsToWin,
+      ...(this.variant === "custom-world" ? { customMapConfig: this.customMapConfig } : {}),
       ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),
       ...(host ? { pendingPlayers: [...this.waiting].map(([connectionId, entry]) => ({ connectionId, name: entry.name })) } : {}),

@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
 import { createBoard } from "../../src/game/board";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
+import { DEFAULT_CUSTOM_MAP_CONFIG } from "../../src/game/types";
 import type { GameVariant, Resources } from "../../src/game/types";
 import { GAME_VARIANT_LABELS } from "../../src/components/GameVariantSelector";
 import type { RoomSnapshot } from "../../src/multiplayer/types";

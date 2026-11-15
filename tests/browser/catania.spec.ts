@@ -7,7 +7,7 @@ import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import { BOARD_THEMES as ALL_THEMES } from "../../src/themes";
 import { GAME_VARIANT_LABELS } from "../../src/components/GameVariantSelector";
-import type { GameVariant } from "../../src/game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, type GameVariant } from "../../src/game/types";
 
 const test = base.extend({
   page: async ({ page }, use, testInfo) => {
@@ -2594,6 +2594,38 @@ test("Seafarers selection changes the preview independently of themes and can re
   await selectGameVersion(page, "original");
   await expect(page.locator(".terrain-hex")).toHaveCount(19);
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "original");
+});
+
+test("Custom World shapes the island from configured tile counts and fog", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await selectGameVersion(page, "custom-world");
+  const panel = page.getByRole("region", { name: "Customize the map", exact: true });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("group", { name: "Wood", exact: true })).toContainText("6");
+  await expect(page.locator(".terrain-hex")).toHaveCount(42);
+  await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "custom-world");
+  const island = page.getByRole("region", { name: "Island preview", exact: true, includeHidden: true });
+  await expect(island.getByRole("img", { name: /, wood,/, includeHidden: true })).toHaveCount(6);
+  await panel.getByRole("button", { name: "Decrease Wood tiles", exact: true }).click();
+  await expect(panel.getByText("1 tile left to assign.", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Increase Sea tiles", exact: true }).click();
+  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await expect(island.getByRole("img", { name: /, wood,/, includeHidden: true })).toHaveCount(5);
+  await expect(island.getByRole("img", { name: /, sea,/, includeHidden: true })).toHaveCount(14);
+  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  expect(createBoard(seededRandom(mapCode), "custom-world", { ...DEFAULT_CUSTOM_MAP_CONFIG, wood: 5, sea: 14 })
+    .tiles.filter(tile => tile.terrain === "wood")).toHaveLength(5);
+  await panel.getByLabel("Fog", { exact: true }).check();
+  await expect(island.getByRole("img", { name: "Unexplored fog; terrain and number concealed", includeHidden: true })).toHaveCount(42);
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  await expect(page.getByRole("heading", { name: "Choose a starting cell.", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Choose starting cell at / }).first()).toBeVisible();
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "custom-world-fog-setup", false);
 });
 
 test("Seafarers aligns diagonal ships and preserves vertical ships with variant-specific help", async ({ page }, testInfo) => {

@@ -13,6 +13,7 @@ export function getPhaseInstructions({
   language = "en",
   variant = "original",
   victoryPointsToWin = victoryTarget(variant),
+  fogWorld = false,
 }: {
   phase: GamePhase;
   secondSettlement: boolean;
@@ -21,13 +22,15 @@ export function getPhaseInstructions({
   language?: Language;
   variant?: GameVariant;
   victoryPointsToWin?: number;
+  fogWorld?: boolean;
 }) {
   const translateText = (message: keyof typeof gameplayTranslations, parameters?: Record<string, string | number>) =>
     translate(language, gameplayTranslations, message, parameters);
+  const fogGame = isFogWorld(variant) || fogWorld;
   return match(phase)
     .with({ type: "setup-settlement" }, () => ({
       title: translateText("Find a place to call home."),
-      description: translateText(isFogWorld(variant)
+      description: translateText(fogGame
         ? "Choose a highlighted node on the selected land cell for your settlement."
         : sharedBoard
         ? secondSettlement
@@ -45,7 +48,7 @@ export function getPhaseInstructions({
     }))
     .with({ type: "setup-road" }, () => ({
       title: translateText("Every journey starts here."),
-      description: isFogWorld(variant)
+      description: fogGame
         ? translateText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.")
         : isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
         ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."

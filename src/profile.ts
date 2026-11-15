@@ -1,6 +1,6 @@
 import { normalizeMapSeed } from "./game/board";
 import { GameError } from "./game/messages";
-import { isGameVariant, type GameVariant } from "./game/types";
+import { isCustomMapConfig, isGameVariant, type CustomMapConfig, type GameVariant } from "./game/types";
 import { generateIdentifier } from "./identity";
 
 export type ProfileStats = { games: number; wins: number; totalPoints: number };
@@ -8,6 +8,7 @@ export type ProfileGameResult = {
   gameId: string;
   mapCode: string;
   variant: GameVariant;
+  customMapConfig?: CustomMapConfig;
   won: boolean;
   points: number;
   turnCount: number;
@@ -40,12 +41,14 @@ function historyFrom(value: unknown): ProfileGame | null {
   if (typeof candidate.gameId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(candidate.gameId) ||
     typeof candidate.mapCode !== "string" || !normalizeMapSeed(candidate.mapCode) ||
     !isGameVariant(candidate.variant) ||
+    (Object.hasOwn(candidate, "customMapConfig") && !isCustomMapConfig(candidate.customMapConfig)) ||
     typeof candidate.won !== "boolean" || !count(candidate.points) || !count(candidate.turnCount) ||
     typeof candidate.completedAt !== "string" || !Number.isFinite(Date.parse(candidate.completedAt))) return null;
   return {
     gameId: candidate.gameId,
     mapCode: normalizeMapSeed(candidate.mapCode)!,
     variant: candidate.variant,
+    ...(isCustomMapConfig(candidate.customMapConfig) ? { customMapConfig: candidate.customMapConfig } : {}),
     won: candidate.won,
     points: candidate.points,
     turnCount: candidate.turnCount,
