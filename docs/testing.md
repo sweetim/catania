@@ -110,6 +110,12 @@ Mystery World regressions cover rolled terrain counts within their ranges, the
 random desert/sea split of the remaining cells, number tokens drawn from the
 shared pool, map-code determinism and discovery-order independence, complete
 three- and four-player setups, and full computer games on rolled maps.
+Custom World regressions cover configuration validation (draft mixes, overflows,
+land-poor setups), the connected visible island with exact configured terrain,
+edge mixes from minimum land to a full-land frame, cycled number tokens for
+dense maps, per-cell fog discoveries matching the configuration, the fog setup
+flow, map-code-and-configuration determinism, full computer games in both fog
+modes, and host-lobby configuration including draft rejection.
 Fog reveal regressions cover setup discoveries across private handoffs without
 replaying completed veils. Menu checks include tabbing out of the document, and
 short desktop lobbies retain a map at least 400 pixels tall with inline version labels.

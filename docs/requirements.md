@@ -13,13 +13,18 @@ maritime trades, robber/discard sequences, development cards, awards, and a
 10-point victory with results and rematch.
 
 Local setup and the multiplayer host lobby offer **Original** (default),
-**Seafarers** (Heading for New Shores), **Four Islands**, and **Fog Islands**.
+**Seafarers** (Heading for New Shores), **Four Islands**, **Fog Islands**,
+**Foggy World**, **Mystery World**, and **Custom World**.
 Seafarers scenarios share ships with independent supplies, open-ended movement,
 the pirate, gold choices, and mixed Longest Route. Heading for New Shores keeps
 its 13-point target and small-island bonuses. Four Islands awards two points for
 each settled island outside the player's starting islands and targets 12 points.
 Fog Islands reveals hidden terrain through route exploration, grants discovery
-resources, has no island bonuses, and targets 12 points. All use randomized
+resources, has no island bonuses, and targets 12 points. Foggy World and
+Mystery World hide the entire map under fixed per-cell discoveries and target
+12 points; Mystery World rolls its terrain mix per map. Custom World lets the
+players configure every terrain count (42 tiles, at least 8 land) with an
+optional whole-map fog mode and targets 12 points. All use randomized
 42-hex scenario layouts shared by three- and four-player tables; Fog Islands
 starts on 19 revealed land hexes across one to four varied islands, with every
 other tile concealed by fog. Human and computer players use the same

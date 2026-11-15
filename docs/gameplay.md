@@ -20,7 +20,7 @@ board for phones. It does not carry over these names, player counts, or the isla
 preview; multiplayer players and a new island are set up independently.
 
 1. Choose **Original** (the default), **Seafarers**, **Four Islands**, **Fog Islands**,
-   **Foggy World**, or **Mystery World** under **Game version**,
+   **Foggy World**, **Mystery World**, or **Custom World** under **Game version**,
    then three or four total players and how many are human (one by default).
    AI fills the remaining seats. Enter distinct names and optionally **Shuffle**
    the island preview. **Let's settle in** starts on the island currently shown,
@@ -33,7 +33,7 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, 13 in Seafarers (Heading for New Shores),
-    or 12 in Four Islands, Fog Islands, Foggy World, or Mystery World, on your own turn. Inspect the revealed score breakdown
+    or 12 in Four Islands, Fog Islands, Foggy World, Mystery World, or Custom World, on your own turn. Inspect the revealed score breakdown
    and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
    game's **map code**.
 
@@ -239,6 +239,30 @@ same 28-token pool for the map's producing hexes, so their count varies with
 the terrain roll. The seeded map fixes every cell's terrain and number before
 play, and map codes reproduce the exact roll. Win at 12 points on your own
 turn.
+
+### Custom World
+
+Custom World hands the map design to the players. Selecting it adds a
+**Customize the map** panel to setup (and to the multiplayer host lobby) with a
+stepper for every terrain type — wood, brick, wool, grain, ore, gold, desert,
+and sea — plus a fog toggle. Assign exactly 42 tiles with at least 8 land
+hexes; the panel tracks the tiles left, and the game cannot start until the
+mix is complete.
+
+- **Fog off:** the map grows one connected island from the configured land
+  hexes, ringed by the configured sea. All land is open for starting
+  settlements, nine harbors line the coasts, and producing hexes receive number
+  tokens (red 6/8 tokens kept non-adjacent, with the standard token mix cycled
+  if there are more producing hexes than tokens).
+- **Fog on:** the whole 42-hex map hides under fog and plays exactly like
+  Foggy World — fixed per-cell discoveries, cell-first setup, discovery
+  rewards, relocating harbors, and no island bonuses — but with your terrain
+  counts instead of the fixed mix.
+
+The map code together with the configuration rebuilds the identical island:
+deep links carry both (`?map=…&variant=custom-world&wood=…&fog=1`), and
+finished games record the configuration in the winner's profile history so
+**Replay map** restores it. Win at 12 points on your own turn.
 
 ## Board And Controls
 

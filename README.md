@@ -20,10 +20,13 @@ assets are local.
 - Every island has a map code; enter it to replay the exact same island later.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Choose **Original** (default), **Seafarers** (Heading for New Shores),
-  **Four Islands**, or **Fog Islands** before starting, locally or in the host lobby.
+  **Four Islands**, **Fog Islands**, **Foggy World**, **Mystery World**, or
+  **Custom World** before starting, locally or in the host lobby.
   Seafarers scenarios include ships and movement, the pirate, and computer opponents.
   Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
-  terrain and discovery resources. Victory targets are 13 for New Shores and 12 for the new scenarios.
+  terrain and discovery resources; the fog worlds hide the entire map under fog; and
+  Custom World lets you set every terrain count yourself, with an optional whole-map
+  fog. Victory targets are 13 for New Shores and 12 for the other scenarios.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - Installable as a progressive web app: add Catania to a home screen and launch it
   offline; single-device play keeps working without a network.
@@ -109,10 +112,11 @@ See the [testing guide](docs/testing.md) for test ports and manual checks.
 
 - Games live in memory. Refreshing or closing the single-device game or multiplayer
   host loses the game; there is no saved-game recovery.
-- Seafarers supports Heading for New Shores, Four Islands, and Fog Islands.
-  Each uses the same randomized scenario layout for three- and four-player tables;
-  Fog Islands starts with 19 revealed land hexes across one to four varied islands,
-  with all 23 remaining hexes hidden by fog. Other scenarios are not included.
+- Seafarers supports Heading for New Shores, Four Islands, Fog Islands, the fog
+  worlds, and Custom World. Each uses the same randomized 42-hex scenario layout
+  for three- and four-player tables. Custom World fills that frame with the terrain
+  counts you configure (42 tiles total, at least 8 land), either as one visible
+  connected island or fully hidden under fog. Other scenarios are not included.
 - Multiplayer targets devices on the same local network, including Ethernet and
   Wi-Fi together. It uses PeerJS Cloud signaling and Google STUN address discovery,
   requires internet access, and has no relay fallback.

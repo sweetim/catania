@@ -179,7 +179,7 @@ describe("Custom World fog board", () => {
     const tileId = legalSetupRevealTiles(state, playerId)[0]!;
     expect(tileId).toBeDefined();
     state = applyAction(state, playerId, { type: "reveal-tile", tileId });
-    const discoveryTerrains = ["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"] as const;
+    const discoveryTerrains: readonly string[] = ["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"];
     const revealed = state.board.tiles.find(tile => tile.id === tileId)!;
     expect(discoveryTerrains).toContain(revealed.terrain);
     if (revealed.terrain === "sea") {

@@ -25,7 +25,8 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/components/GameplayDialogs.tsx` | Shared development cards, discard selection, public theft choices, and action confirmations. |
 | `src/components/PlayerSeat.tsx` | Shared player identity, card counts, public score, turn/leader styling, and award indicators. |
 | `src/components/TurnInstructions.tsx` | Shared phase headings, guidance, and instruction-panel presentation. |
-| `src/components/GameVariantSelector.tsx` | Shared Original, New Shores, Four Islands, and Fog Islands setup choices and scenario summaries. |
+| `src/components/GameVariantSelector.tsx` | Shared setup choices for every game version, including Custom World. |
+| `src/components/CustomMapConfigPanel.tsx` | Custom World terrain-count steppers and fog toggle, shared by local setup and the host lobby. |
 | `src/components/SeafarersControls.tsx` | Shared free road/ship choices and finite-bank gold-resource selection. |
 | `src/components/DevelopmentHand.tsx` | Shared grouped development-card list and eligible-copy selection. |
 | `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |
@@ -37,7 +38,8 @@ CSS v4 foundation without a database or runtime external assets.
 
 `createGame` accepts profiles, an optional random source, an optional preview board,
 and an optional game variant (Original by default, or inferred from a supplied
-Seafarers board). `applyAction` takes
+Seafarers board), plus an optional Custom World map configuration that
+`createBoard` requires for that variant. `applyAction` takes
 state, a player identity, an action, and an optional random source; it returns a
 new state or throws a validation error without changing the input. Production
 randomness uses `crypto.getRandomValues`; tests inject repeatable outcomes.

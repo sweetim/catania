@@ -34,9 +34,13 @@ The shared screen hosts the game without occupying a player seat.
    humans are named in the readiness message. Turn order is randomized.
    The host's island preview shows the map that will be used.
    The host chooses **Original**, **Seafarers** (Heading for New Shores),
-   **Four Islands**, or **Fog Islands** under **Game version**; Original is the default.
+   **Four Islands**, **Fog Islands**, **Foggy World**, **Mystery World**, or
+   **Custom World** under **Game version**; Original is the default.
    Changing the version regenerates the preview and synchronizes the choice to all
-   phones without changing the roster. Select the gold **VP** badge in the map's
+   phones without changing the roster. With **Custom World** selected, the host
+   also edits the terrain-count panel and fog toggle beneath the version
+   selector; phones receive the configuration with the snapshot but cannot
+   change it. Select the gold **VP** badge in the map's
    zoom bar to choose **Victory points to win** from **3 to 13**. The map, phone lobby summaries,
    help, and victory checks use this target. It stays fixed during play and is
    preserved when resetting the game or returning to the lobby for a rematch.

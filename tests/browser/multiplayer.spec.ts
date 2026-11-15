@@ -3,7 +3,7 @@ import { expect, seedProfile, test as base } from "./fixtures";
 import { pack, unpack } from "peerjs-js-binarypack";
 import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
-import { createBoard } from "../../src/game/board";
+import { createBoard, seededRandom } from "../../src/game/board";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
 import { DEFAULT_CUSTOM_MAP_CONFIG } from "../../src/game/types";
 import type { GameVariant, Resources } from "../../src/game/types";
@@ -450,6 +450,40 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await host.getByRole("dialog").getByRole("button", { name: "Return to lobby", exact: true }).click();
   await expect(target).toContainText("7 VP");
   await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
+});
+
+test("Custom World lobby lets the host shape the island and share it with phones", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("Alex", true);
+  await requestSeat(phone, invitation, "Alex");
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await selectGameVersion(host, "custom-world");
+  const panel = host.getByRole("region", { name: "Customize the map", exact: true });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await expect.poll(async () => (await latestSnapshot(phone)).variant).toBe("custom-world");
+  await expect.poll(async () => (await latestSnapshot(phone)).customMapConfig).toEqual(DEFAULT_CUSTOM_MAP_CONFIG);
+  await panel.getByRole("button", { name: "Decrease Sea tiles", exact: true }).click();
+  await panel.getByRole("button", { name: "Increase Gold tiles", exact: true }).click();
+  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
+  const configured = { ...DEFAULT_CUSTOM_MAP_CONFIG, gold: 3, sea: 12 };
+  await expect.poll(async () => (await latestSnapshot(phone)).customMapConfig).toEqual(configured);
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  await expect(host.locator(".board-surface")).toHaveAttribute("data-variant", "custom-world");
+  await expect(host.getByRole("img", { name: /, gold,/ })).toHaveCount(3);
+  await expect(host.getByRole("img", { name: /, sea,/ })).toHaveCount(12);
+  await expect(phone.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  const snapshot = await latestSnapshot(phone);
+  expect(snapshot.mapSeed).toBeUndefined();
+  expect(snapshot.customMapConfig).toEqual(configured);
+  expect(createBoard(seededRandom(mapCode), "custom-world", configured)
+    .tiles.filter(tile => tile.terrain === "gold")).toHaveLength(3);
+  await noHorizontalOverflow(host);
+  await screenshot(host, testInfo, "custom-world-lobby");
 });
 
 test("multiplayer admission, actions and reset work without randomUUID", async ({ multiplayer }) => {
