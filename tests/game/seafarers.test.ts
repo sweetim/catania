@@ -717,6 +717,54 @@ describe("Foggy World", () => {
     }
   });
 
+  test("exploration never stacks two harbors on the same sea hex", () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const board = createBoard(randomFromSeed(seed), "foggy-world");
+      for (const tile of board.tiles) revealHarborTile(board, tile.id);
+      const revealed = board.ports.filter(port => isPortRevealed(board, port));
+      expect(revealed, `seed ${seed}`).toHaveLength(9);
+      const seaTileIds = revealed.map(port =>
+        edgeTiles(board, board.edges.find(edge => edge.id === port.edgeId)!).find(tile => tile.terrain === "sea")?.id);
+      const definedSeaTileIds = seaTileIds.filter(id => id !== undefined);
+      expect(new Set(definedSeaTileIds).size, `seed ${seed}`).toBe(definedSeaTileIds.length);
+      const anchors = revealed.map(port => portAnchor(board, port));
+      for (let first = 0; first < anchors.length; first++) {
+        for (let second = first + 1; second < anchors.length; second++) {
+          expect(Math.abs(anchors[first]!.portX - anchors[second]!.portX) >= 54 ||
+            Math.abs(anchors[first]!.portY - anchors[second]!.portY) >= 33, `seed ${seed}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  test("a harbor on an enclosed lake hugs its own shore while open-sea harbors reach open water", () => {
+    let board: Board | undefined;
+    let lake: Board["tiles"][number] | undefined;
+    for (let seed = 0; seed < 10 && lake === undefined; seed++) {
+      const candidate = createBoard(randomFromSeed(seed), "foggy-world");
+      for (const tile of candidate.tiles) revealHarborTile(candidate, tile.id);
+      const neighborsOf = (tile: Board["tiles"][number]) => candidate.tiles
+        .filter(other => other !== tile && other.vertexIds.filter(id => tile.vertexIds.includes(id)).length >= 2);
+      lake = candidate.tiles.find(tile => tile.terrain === "sea" && neighborsOf(tile).length === 6 &&
+        neighborsOf(tile).every(other => other.terrain !== "sea"));
+      if (lake !== undefined) board = candidate;
+    }
+    expect(board).toBeDefined();
+    const lakeEdge = board!.edges.find(edge => edgeTiles(board!, edge).length === 2 && edgeTiles(board!, edge).includes(lake!))!;
+    board!.ports = [{ edgeId: lakeEdge.id, resource: "wood" }];
+    const lakeAnchor = portAnchor(board!, board!.ports[0]!);
+    expect(Math.hypot(lakeAnchor.portX - lakeAnchor.x, lakeAnchor.portY - lakeAnchor.y)).toBeLessThan(40);
+    expect(Math.hypot(lakeAnchor.portX - lake!.x, lakeAnchor.portY - lake!.y)).toBeGreaterThan(20);
+    const openSea = board!.tiles.find(tile => tile.terrain === "sea" && board!.tiles
+      .some(other => other.terrain === "sea" && other.vertexIds.filter(id => tile.vertexIds.includes(id)).length >= 2))!;
+    const openEdge = board!.edges.find(edge => edgeTiles(board!, edge).length === 2 && edgeTiles(board!, edge).includes(openSea) &&
+      edgeTiles(board!, edge).some(tile => tile.terrain !== "sea"))!;
+    board!.ports = [{ edgeId: openEdge.id, resource: "wood" }];
+    const openAnchor = portAnchor(board!, board!.ports[0]!);
+    expect(Math.hypot(openAnchor.portX - openAnchor.x, openAnchor.portY - openAnchor.y)).toBeGreaterThan(50);
+    expect(Math.hypot(openAnchor.portX - openSea.x, openAnchor.portY - openSea.y)).toBeLessThan(2);
+  });
+
   test("robber and pirate start off board and may enter only revealed hexes", () => {
     const state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "foggy-world");
     state.phase = { type: "robber", returnPhase: "actions" };

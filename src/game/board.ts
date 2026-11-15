@@ -22,12 +22,18 @@ export function portAnchor(board: Board, port: Port): { x: number; y: number; po
   const x = (first.x + second.x) / 2;
   const y = (first.y + second.y) / 2;
   const distance = Math.hypot(x, y);
-  const land = edgeTiles(board, edge).find(tile => tile.terrain !== "sea" && tile.terrain !== "fog");
+  const tiles = edgeTiles(board, edge);
+  const sea = tiles.find(tile => tile.terrain === "sea");
+  const land = tiles.find(tile => tile.terrain !== "sea" && tile.terrain !== "fog");
+  const neighbors = sea === undefined ? [] : board.tiles.filter(tile => tile !== sea &&
+    tile.vertexIds.filter(id => sea.vertexIds.includes(id)).length >= 2);
+  const lake = neighbors.length === 6 && neighbors.every(tile => tile.terrain !== "sea");
   // A Foggy World harbor may sit beside unrevealed fog; point its label away from the board center instead.
   const coastDistance = land === undefined ? distance : Math.hypot(x - land.x, y - land.y);
   const directionX = land !== undefined && isSeafarers(board.variant) ? (x - land.x) / coastDistance : x / distance;
   const directionY = land !== undefined && isSeafarers(board.variant) ? (y - land.y) / coastDistance : y / distance;
-  return { x, y, portX: x + directionX * 51, portY: y + directionY * 51 };
+  const walkway = lake ? 30 : 51;
+  return { x, y, portX: x + directionX * walkway, portY: y + directionY * walkway };
 }
 
 /** The land-side hex a harbor sits on, or its initial fog anchor before placement. */
@@ -53,6 +59,10 @@ export function relocateFoggyWorldPorts(board: Board): void {
   if (!isFogWorld(board.variant)) return;
   const coastEdges = board.edges.filter(edge => isRevealedCoast(board, edge));
   const establishedPorts = new Set(board.ports.filter(port => isPortRevealed(board, port)));
+  const labelAnchors = board.ports.filter(port => establishedPorts.has(port)).map(port => portAnchor(board, port));
+  const occupiedSeaTiles = new Set(board.ports.filter(port => establishedPorts.has(port))
+    .flatMap(port => edgeTiles(board, board.edges.find(edge => edge.id === port.edgeId)!))
+    .filter(tile => tile.terrain === "sea").map(tile => tile.id));
   const occupiedVertices = new Set(board.ports.filter(port => establishedPorts.has(port))
     .flatMap(port => board.edges.find(edge => edge.id === port.edgeId)!.vertexIds));
   const verticesById = new Map(board.vertices.map(vertex => [vertex.id, vertex]));
@@ -61,6 +71,11 @@ export function relocateFoggyWorldPorts(board: Board): void {
     const second = verticesById.get(edge.vertexIds[1])!;
     return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
   };
+  const overlapsLabel = (port: Port, edge: Edge) => {
+    const candidate = portAnchor(board, { ...port, edgeId: edge.id });
+    return labelAnchors.some(anchor =>
+      Math.abs(anchor.portX - candidate.portX) < 54 && Math.abs(anchor.portY - candidate.portY) < 33);
+  };
   for (const port of board.ports) {
     if (establishedPorts.has(port)) continue;
     const origin = midpoint(board.edges.find(edge => edge.id === port.edgeId)!);
@@ -68,7 +83,9 @@ export function relocateFoggyWorldPorts(board: Board): void {
       const position = midpoint(edge);
       return Math.hypot(position.x - origin.x, position.y - origin.y);
     };
-    const destination = coastEdges.filter(edge => edge.vertexIds.every(id => !occupiedVertices.has(id)))
+    const destination = coastEdges.filter(edge => edge.vertexIds.every(id => !occupiedVertices.has(id)) &&
+      !edgeTiles(board, edge).some(tile => tile.terrain === "sea" && occupiedSeaTiles.has(tile.id)) &&
+      !overlapsLabel(port, edge))
       .sort((first, second) => distance(first) - distance(second))[0];
     if (destination === undefined) {
       // Retain the old edge only as a deterministic relocation origin, never as an active harbor.
@@ -78,6 +95,10 @@ export function relocateFoggyWorldPorts(board: Board): void {
     port.edgeId = destination.id;
     delete port.awaitingCoast;
     destination.vertexIds.forEach(id => occupiedVertices.add(id));
+    edgeTiles(board, destination).forEach(tile => {
+      if (tile.terrain === "sea") occupiedSeaTiles.add(tile.id);
+    });
+    labelAnchors.push(portAnchor(board, port));
   }
 }
 
@@ -446,7 +467,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       ? [...boundary.slice(start), ...boundary.slice(0, start)].find(edge => edge.vertexIds.every(id => !portVertices.has(id)))!
       : boundary[start]!;
     edge.vertexIds.forEach(id => portVertices.add(id));
-    return { edgeId: edge.id, resource };
+    return { edgeId: edge.id, resource, ...(isFogWorld(variant) ? { awaitingCoast: true } : {}) };
   });
   return { tiles, vertices, edges, ports, ...(isSeafarers(variant) ? { variant } : {}),
     ...(fogDiscoveryDeck ? { fogDiscoveryDeck } : {}),
