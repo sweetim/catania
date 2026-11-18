@@ -21,6 +21,15 @@ export function resourceTotal(resources: Resources): number {
   return RESOURCES.reduce((total, resource) => total + resources[resource], 0);
 }
 
+export function diceRollCounts(log: readonly GameMessage[]): number[] {
+  const counts = Array.from({ length: 11 }, () => 0);
+  for (const message of log) {
+    const total = message.key === "{player} rolls {first} + {second} = {total}." ? message.parameters?.total : undefined;
+    if (typeof total === "number" && total >= 2 && total <= 12) counts[total - 2]!++;
+  }
+  return counts;
+}
+
 function requireRule(condition: unknown, key: GameMessage["key"], parameters?: GameMessage["parameters"]): asserts condition {
   if (!condition) throw new GameError(key, parameters);
 }

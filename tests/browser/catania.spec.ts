@@ -1,7 +1,7 @@
 import { type Locator, type Page, type TestInfo } from "@playwright/test";
 import { expect, test as base } from "./fixtures";
 import { createBoard, seededRandom } from "../../src/game/board";
-import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
+import { applyAction, COSTS, createGame, diceRollCounts, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
 import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
@@ -4154,6 +4154,16 @@ test("a won game pops the winner up over the board with the point breakdown and 
   if (score.cities > 0) await expect(victory).toContainText(`${score.cities / 2} × 2 VP`);
   if (score.hidden > 0) await expect(victory).toContainText(`${score.hidden} × 1 VP`);
   await expect(victory).not.toContainText("0 ×");
+  // The dice chart counts how often each total appeared over the whole game.
+  const expectedDiceCounts = diceRollCounts(state.log);
+  expect(expectedDiceCounts.reduce((total, count) => total + count, 0)).toBeGreaterThan(0);
+  const diceChart = victory.getByRole("figure", { name: "Dice rolls", exact: true });
+  await expect(diceChart).toBeVisible();
+  const diceColumns = diceChart.locator(".victory-die-column");
+  await expect(diceColumns).toHaveCount(11);
+  for (let total = 2; total <= 12; total++) {
+    await expect(diceColumns.nth(total - 2)).toHaveAttribute("aria-label", `${total} appeared ${expectedDiceCounts[total - 2]} times`);
+  }
   // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
   await expect(victory.locator(".confetti-piece")).toHaveCount(28);
   // The replayable map code badge sits inline in the eyebrow sentence behind a map icon, without the how-to sentence.

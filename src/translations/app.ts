@@ -80,6 +80,8 @@ export const appTranslations = {
   "Largest Army": "最大騎士力",
   "Revealed victory-point cards": "公開された勝利点カード",
   "{count} × {points} VP": "{count} × {points}勝利点",
+  "Dice rolls": "サイコロの出目",
+  "{number} appeared {count} times": "出目{number}は{count}回",
   "Back to home": "ホームに戻る",
   "Restart": "再スタート",
   "points": "点",

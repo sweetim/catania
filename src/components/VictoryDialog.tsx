@@ -54,6 +54,30 @@ function Confetti() {
   );
 }
 
+function DiceChart({ diceCounts }: { diceCounts: readonly number[] }) {
+  const translateText = useTranslation(appTranslations);
+  const highest = Math.max(...diceCounts);
+  return (
+    <figure className="mt-5 rounded-xl bg-moss/60 p-3.5" aria-label={translateText("Dice rolls")}>
+      <figcaption className="text-xs font-semibold uppercase tracking-[.08em] text-muted">{translateText("Dice rolls")}</figcaption>
+      <div className="victory-dice mt-2.5">
+        {diceCounts.map((count, index) => (
+          <div
+            key={index}
+            className="victory-die-column"
+            role="img"
+            aria-label={translateText("{number} appeared {count} times", { number: index + 2, count })}
+          >
+            <span className="victory-die-count tabular-nums">{count}</span>
+            <span className="victory-die-track">{count > 0 && <span className="victory-die-fill" style={{ height: `${(count / highest) * 100}%` }} />}</span>
+            <span className="victory-die-number tabular-nums">{index + 2}</span>
+          </div>
+        ))}
+      </div>
+    </figure>
+  );
+}
+
 function BreakdownIcon({ kind }: { kind: VictoryBreakdownKind }) {
   return match(kind)
     .with("settlements", () => (
@@ -91,6 +115,7 @@ export function VictoryDialog({
   pointsUnit,
   summary,
   breakdown,
+  diceCounts,
   profileNote,
   mapCode,
   children,
@@ -103,6 +128,7 @@ export function VictoryDialog({
   pointsUnit: string;
   summary?: string;
   breakdown: readonly VictoryBreakdownRow[];
+  diceCounts?: readonly number[];
   profileNote?: string;
   mapCode?: string;
   children: ReactNode;
@@ -182,6 +208,7 @@ export function VictoryDialog({
               ))}
             </dl>
           )}
+          {diceCounts != null && diceCounts.some(count => count > 0) && <DiceChart diceCounts={diceCounts} />}
           {summary && <p className="mt-4 text-sm leading-6 text-muted">{summary}</p>}
           {profileNote && (
             <div className="mt-2 space-y-1 text-xs leading-5 text-muted">

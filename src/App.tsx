@@ -56,6 +56,7 @@ import {
   applyAction,
   COSTS,
   createGame,
+  diceRollCounts,
   emptyResources,
   getLongestRoadLength,
   getScore,
@@ -1556,6 +1557,7 @@ export function App() {
                 ...(game.variant === "seafarers" || game.variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
                 { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
               ]}
+              diceCounts={diceRollCounts(game.log)}
               profileNote={humanCount === 1 && playerProfile && winner.control === "human"
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", profileStats(playerProfile))
                 : undefined}

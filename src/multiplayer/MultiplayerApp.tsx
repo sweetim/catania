@@ -23,7 +23,7 @@ import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices } from "../components/PrivateNotices";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
-import { COSTS, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
+import { COSTS, diceRollCounts, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
 import { DEFAULT_CUSTOM_MAP_CONFIG, isFogBoard, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
@@ -766,6 +766,7 @@ export function MultiplayerApp() {
               totalPoints={victoryWinner.score}
               pointsUnit={translateText("points")}
               breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText, game.variant)}
+              diceCounts={diceRollCounts(game.log)}
               profileNote={snapshot.profiles?.[victoryWinner.id]
                 ? translateText("Player history: {games} games / {wins} wins / {points} total points", snapshot.profiles[victoryWinner.id])
                 : undefined}
@@ -796,6 +797,7 @@ export function MultiplayerApp() {
               pointsUnit={translateText("points")}
               summary={translateText("The host can return everyone to the lobby for a rematch.")}
               breakdown={victoryBreakdownRows(victoryWinner.scoreBreakdown, translateText, game.variant)}
+              diceCounts={diceRollCounts(game.log)}
             >
               <button className="button-primary" onClick={() => setDialog("leave")}>
                 {translateText("Leave room")}

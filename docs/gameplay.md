@@ -33,9 +33,9 @@ preview; multiplayer players and a new island are set up independently.
    **Help** and on-screen costs explain the rules.
 5. Trade with the bank or other players using the [trading controls](#trading).
 6. Reach 10 victory points in Original, 13 in Seafarers (Heading for New Shores),
-    or 12 in Four Islands, Fog Islands, Foggy World, Mystery World, or Custom World, on your own turn. Inspect the revealed score breakdown
-   and restart on the same island, keep viewing the island, or return home. The victory panel also shows the
-   game's **map code**.
+   or 12 in Four Islands, Fog Islands, Foggy World, Mystery World, or Custom World, on your own turn. Inspect the revealed score breakdown
+   and a dice-roll chart counting how often each number appeared, and restart on the same island, keep viewing the island, or return
+   home. The victory panel also shows the game's **map code**.
 
 ## Player Profiles
 
