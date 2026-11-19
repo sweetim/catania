@@ -2914,6 +2914,93 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await expect(page.locator(".number-peek")).toHaveCount(0);
 });
 
+test("a won Fog Islands game reveals every fog cell when viewing the island", async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  const browserErrors: string[] = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("requestfailed", request => browserErrors.push(`${request.failure()?.errorText}: ${request.url()}`));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await selectGameVersion(page, "fog-islands");
+  await showHomeView(page, "Island");
+  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+  await mapCode.fill("ABCD2345");
+  await mapCode.press("Enter");
+  await showHomeView(page, "Setup");
+  await seedRandomness(page, 17);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+  await expect(fogLabels).toHaveCount(23);
+
+  // The solo player only sets up; the computers take every other turn automatically.
+  for (let placement = 0; placement < 2; placement++) {
+    await showView(page, "board");
+    await page.getByRole("button", { name: /^Place settlement at/ }).first().click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await page.getByRole("button", { name: /^Build (road|ship) at/ }).first().click();
+    const roadChoice = page.getByRole("group", { name: "Placement confirmation" }).getByRole("button", { name: "Build road", exact: true });
+    if (await roadChoice.isVisible()) await roadChoice.click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+  }
+
+  // Frozen clock plus a dice sequence that never totals seven: the computers act only
+  // through runFor steps, and no robber, pirate move, or discard ever interrupts them.
+  await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
+  await page.evaluate(dieValues => {
+    let index = 0;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true,
+      value: (target: Uint32Array) => {
+        for (let position = 0; position < target.length; position++) {
+          target[position] = Math.floor(((dieValues[index++ % dieValues.length]! - 0.5) / 6) * 0x100000000);
+        }
+        return target;
+      },
+    });
+  }, [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6]);
+
+  const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
+  const endTurn = page.getByRole("button", { name: /^End turn\b/ }).first();
+  const victory = page.getByRole("dialog", { name: /takes the island\./ });
+  let steps = 0;
+  while (!(await victory.isVisible().catch(() => false))) {
+    expect(steps++, "The solo fog game reaches a victory").toBeLessThan(4000);
+    await showView(page, "hand");
+    const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
+    if (await dismissCollection.isVisible().catch(() => false)) {
+      await dismissCollection.click();
+      continue;
+    }
+    if (await roll.isEnabled()) {
+      await roll.click();
+      continue;
+    }
+    if (await endTurn.isEnabled().catch(() => false)) {
+      await endTurn.click();
+      continue;
+    }
+    await page.clock.runFor(45_000);
+  }
+
+  // Winning the game reveals the whole island: no fog cell remains, before and after dismissing the popup.
+  await expect(victory).toBeVisible();
+  await expect(fogLabels).toHaveCount(0);
+  await expect(page.locator("g.number-token").first()).toBeVisible();
+  await victory.getByRole("button", { name: "View the island", exact: true }).click();
+  await expect(victory).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
+  await expect(fogLabels).toHaveCount(0);
+  await noPageOverflow(page);
+  await screenshot(page, testInfo, "fog-victory-revealed", false);
+  expect(browserErrors).toEqual([]);
+});
+
 for (const selection of ["revealed land", "new fog"] as const) {
 test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
   await page.goto("/");
