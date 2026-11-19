@@ -290,12 +290,28 @@ function updateAwards(state: GameState): void {
   }
 }
 
+/** The game is over: uncover every remaining fog cell from its hidden source, without discovery rewards. */
+function revealRemainingFog(state: GameState): void {
+  if (!state.board.tiles.some(tile => tile.terrain === "fog")) return;
+  for (const tile of state.board.tiles) {
+    if (tile.terrain !== "fog") continue;
+    const discovery = state.board.fogDiscoveriesByTileId?.[tile.id] ?? state.board.fogDiscoveryDeck?.shift();
+    if (state.board.fogDiscoveriesByTileId) delete state.board.fogDiscoveriesByTileId[tile.id];
+    if (!discovery) continue;
+    tile.terrain = discovery.terrain;
+    tile.number = discovery.number;
+  }
+  state.board.fogDiscoveryDeck = [];
+  relocateFoggyWorldPorts(state.board);
+}
+
 function checkVictory(state: GameState): void {
   if (state.phase.type.startsWith("setup") || (state.phase.type === "gold" && state.phase.resumePhase) || state.winnerId) return;
   if (getScore(state, state.activePlayerId).total >= state.victoryPointsToWin) {
     state.winnerId = state.activePlayerId;
     state.phase = { type: "finished" };
     state.trade = null;
+    revealRemainingFog(state);
     state.log.push({ key: "{player} wins with {points} points.", parameters: { player: playerFor(state, state.activePlayerId).name, points: getScore(state, state.activePlayerId).total } });
   }
 }

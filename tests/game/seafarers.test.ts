@@ -145,6 +145,35 @@ describe("Fog Islands exploration", () => {
     }
   });
 
+  test("winning reveals every remaining fog cell without discovery rewards", () => {
+    let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "fog-islands", 3);
+    for (let placement = 0; placement < 6; placement++) {
+      const playerId = state.activePlayerId;
+      state = applyAction(state, playerId, { type: "place-settlement", vertexId: legalSettlementVertices(state, playerId)[0]! });
+      state = applyAction(state, playerId, { type: "place-road", edgeId: legalRoadEdges(state, playerId)[0]! });
+      if (state.phase.type === "gold") {
+        const amount = state.phase.required[playerId]!;
+        const resource = RESOURCES.find(resource => state.bank[resource] >= amount)!;
+        state = applyAction(state, playerId, { type: "choose-gold", resources: resources({ [resource]: amount }) });
+      }
+    }
+    expect(state.phase.type).toBe("roll");
+    state.phase = { type: "actions" };
+    const winnerId = state.activePlayerId;
+    state.players.find(player => player.id === winnerId)!.developmentCards.push({ id: "victory-point", kind: "victory-point", purchasedTurn: 0 });
+    const bankBefore = { ...state.bank };
+    const handsBefore = state.players.map(player => ({ ...player.resources }));
+    expect(state.board.tiles.filter(tile => tile.terrain === "fog").length).toBeGreaterThan(0);
+    state = applyAction(state, winnerId, { type: "end-turn" });
+    expect(state.winnerId).toBe(winnerId);
+    expect(state.phase).toEqual({ type: "finished" });
+    expect(state.board.tiles.some(tile => tile.terrain === "fog")).toBe(false);
+    expect(state.board.fogDiscoveryDeck).toEqual([]);
+    expect(state.bank).toEqual(bankBefore);
+    expect(state.players.map(player => ({ ...player.resources }))).toEqual(handsBefore);
+    assertConservation(state);
+  });
+
   test.each(["sea", "wood", "gold"] as const)("setup exploration reveals %s and resumes the next player's setup", terrain => {
     let state = createGame(profiles.slice(0, 3), randomFromSeed(1), undefined, "fog-islands");
     expect(state.pirateTileId).toBeNull();
@@ -906,6 +935,9 @@ describe("Foggy World", () => {
     expect(state.winnerId).not.toBeNull();
     expect(setupPlacements).toBeGreaterThanOrEqual(6);
     expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
+    expect(state.board.tiles.some(tile => tile.terrain === "fog")).toBe(false);
+    expect(state.board.fogDiscoveriesByTileId).toEqual({});
+    expect(state.board.fogDiscoveryDeck).toEqual([]);
   }, 60000);
 });
 
@@ -1035,6 +1067,9 @@ describe("Mystery World", () => {
     expect(state.winnerId).not.toBeNull();
     expect(setupPlacements).toBeGreaterThanOrEqual(6);
     expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
+    expect(state.board.tiles.some(tile => tile.terrain === "fog")).toBe(false);
+    expect(state.board.fogDiscoveriesByTileId).toEqual({});
+    expect(state.board.fogDiscoveryDeck).toEqual([]);
   }, 60000);
 });
 

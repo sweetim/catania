@@ -220,6 +220,9 @@ describe("Custom World computer games", () => {
     expect(state.winnerId).not.toBeNull();
     expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
     expect(state.board.tiles.some(tile => tile.terrain !== "fog")).toBe(true);
+    expect(state.board.tiles.some(tile => tile.terrain === "fog")).toBe(false);
+    expect(state.board.fogDiscoveriesByTileId).toEqual({});
+    expect(state.board.fogDiscoveryDeck).toEqual([]);
   }, 30000);
 });
 

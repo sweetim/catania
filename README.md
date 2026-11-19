@@ -26,7 +26,8 @@ assets are local.
   Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
   terrain and discovery resources; the fog worlds hide the entire map under fog; and
   Custom World lets you set every terrain count yourself, with an optional whole-map
-  fog. Victory targets are 13 for New Shores and 12 for the other scenarios.
+  fog. Victory targets are 13 for New Shores and 12 for the other scenarios. When a
+  fog game is won, the whole map is revealed so everyone can view the full island.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - Installable as a progressive web app: add Catania to a home screen and launch it
   offline; single-device play keeps working without a network.
