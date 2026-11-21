@@ -521,19 +521,25 @@ per turn, accept affordable prices that improve their build plan, and wait up to
 15 seconds for unanswered players. If no suitable price arrives, they withdraw
 the request and continue playing. In pass-and-play, use **Pass device** to reveal
 a human hand and respond. Computers never inspect opponents' hands to set prices.
-Their strategy balances resource production and dice coverage during setup, then
-compares settlement, city, route, and development purchases by value, affordability,
-and estimated production wait. Trades, discards, and gold choices support that
-plan instead of a fixed build order. They can claim Longest Route even when it
-opens no settlement site, and prioritize immediately winning builds.
+Their strategy balances resource production, board scarcity, port synergy, and dice
+coverage during setup, then compares settlement, city, route, and development
+purchases by value, affordability, port trade cost, and estimated production wait.
+Trades, discards, and gold choices support both primary and secondary plans instead
+of a fixed build order, and computers reduce seven-card discard exposure with safe
+secondary builds or efficient port trades. They can claim or defend Longest Route
+(including two-road takeovers near victory), move open-ended ships in Seafarers
+scenarios to explore fog or advance sea lanes, and prioritize immediately winning
+builds.
 
 Computers save resource and route development cards until after rolling. They
-use Year of Plenty to finish a build, save Road Building when no useful expansion
-or route award is available, and estimate Monopoly returns from public production
-and hand sizes. Knights can unblock production or claim Largest Army before a
-roll. Robber and theft choices favor public leaders while avoiding empty theft
-victims and damage to their own production. These are local heuristics, not an
-external AI service or an adjustable difficulty system.
+use Year of Plenty to finish a build (including paired with bank trades), evaluate
+two-step Road Building routes and save the card when no useful expansion or route
+award is available, and estimate Monopoly returns from public production, recent
+public rolls, and hand sizes. Knights can unblock production, claim Largest Army,
+or pressure leaders before a roll. Robber, pirate, and theft choices favor public
+leaders and bottleneck hexes while avoiding empty theft victims and damage to their
+own production. These are local heuristics, not an external AI service or an
+adjustable difficulty system.
 
 ## Privacy And Limits
 

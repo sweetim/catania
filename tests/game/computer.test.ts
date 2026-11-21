@@ -281,6 +281,102 @@ describe("computer strategic planning", () => {
     setResources(state, leader!.id, resources());
     expect(chooseComputerAction(state, state.activePlayerId)).toEqual({ type: "steal", playerId: other!.id });
   });
+
+  test("maritime trade prefers the cheapest 2:1 port ratio over a larger 4:1 surplus", () => {
+    const state = strategicGame();
+    state.board.ports = [{ edgeId: "first", resource: "wood" }];
+    setResources(state, state.activePlayerId, resources({ wood: 3, brick: 4, grain: 2, ore: 2 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "bank-trade", give: "wood", receive: "ore" });
+  });
+
+  test("spends non-conflicting or port-efficient cards when ending turn would exceed 7 cards", () => {
+    const state = strategicGame();
+    state.board.ports = [{ edgeId: "first", resource: "wood" }];
+    // Holding 8 cards while 2 ore away from a city: trading 2 wood at a 2:1 port reduces hand size and closes the deficit.
+    setResources(state, state.activePlayerId, resources({ wood: 5, grain: 2, ore: 1 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "bank-trade", give: "wood", receive: "ore" });
+  });
+
+  test("defends Longest Road when an opponent threatens to tie or take it", () => {
+    const state = strategicGame();
+    const playerId = state.activePlayerId;
+    const opponentId = state.players.find(other => other.id !== playerId)!.id;
+    state.board.vertices = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        id: `player-vertex-${index}`, x: 0, y: 0, tileIds: ["wool"],
+        edgeIds: [index > 0 ? `player-edge-${index - 1}` : null, index < 6 ? `player-edge-${index}` : null]
+          .filter((id): id is string => id !== null),
+        building: index === 0 ? { playerId, kind: "settlement" as const } : null,
+      })),
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `opponent-vertex-${index}`, x: 0, y: 0, tileIds: ["wool"],
+        edgeIds: [index > 0 ? `opponent-edge-${index - 1}` : null, index < 5 ? `opponent-edge-${index}` : null]
+          .filter((id): id is string => id !== null),
+        building: index === 0 ? { playerId: opponentId, kind: "settlement" as const } : null,
+      })),
+    ];
+    state.board.edges = [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `player-edge-${index}`, vertexIds: [`player-vertex-${index}`, `player-vertex-${index + 1}`] as [string, string],
+        playerId: index < 5 ? playerId : null,
+      })),
+      ...Array.from({ length: 5 }, (_, index) => ({
+        id: `opponent-edge-${index}`, vertexIds: [`opponent-vertex-${index}`, `opponent-vertex-${index + 1}`] as [string, string],
+        playerId: opponentId,
+      })),
+    ];
+    state.board.tiles = [{
+      id: "wool", x: 0, y: 0, terrain: "wool", number: 2,
+      vertexIds: state.board.vertices.map(vertex => vertex.id),
+    }];
+    state.awards.longestRoad = playerId;
+    setResources(state, playerId, resources({ wood: 1, brick: 1 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "place-road", edgeId: "player-edge-5" });
+  });
+
+  test("plays Road Building for a two-road winning Longest Road even without settlement sites", () => {
+    const state = strategicGame();
+    const playerId = state.activePlayerId;
+    state.board.vertices = Array.from({ length: 6 }, (_, index) => ({
+      id: `vertex-${index}`, x: 0, y: 0, tileIds: ["wool"],
+      edgeIds: [index > 0 ? `edge-${index - 1}` : null, index < 5 ? `edge-${index}` : null]
+        .filter((id): id is string => id !== null),
+      building: index % 2 === 0 ? { playerId, kind: "settlement" as const } : null,
+    }));
+    state.board.edges = Array.from({ length: 5 }, (_, index) => ({
+      id: `edge-${index}`, vertexIds: [`vertex-${index}`, `vertex-${index + 1}`] as [string, string],
+      playerId: index < 3 ? playerId : null,
+    }));
+    state.board.tiles = [{ id: "wool", x: 0, y: 0, terrain: "wool", number: 2, vertexIds: state.board.vertices.map(vertex => vertex.id) }];
+    state.players.find(player => player.id === playerId)!.developmentCards = [
+      ...Array.from({ length: 5 }, (_, index) => ({ id: `point-${index}`, kind: "victory-point" as const, purchasedTurn: 0 })),
+      { id: "roads", kind: "road-building" as const, purchasedTurn: 0 },
+    ];
+    expect(chooseAndApply(state).action).toEqual({ type: "play-development", cardId: "roads" });
+  });
+
+  test("moves an open-ended ship for free to explore adjacent fog in Seafarers", () => {
+    const state = strategicGame();
+    state.variant = "fog-islands";
+    state.board.variant = "fog-islands";
+    state.board.fogDiscoveryDeck = [{ terrain: "gold", number: 6 }];
+    const playerId = state.activePlayerId;
+    state.board.vertices = [
+      { id: "harbor", x: 0, y: 0, tileIds: ["land", "sea"], edgeIds: ["ship-old", "ship-fog"], building: { playerId, kind: "settlement" } },
+      { id: "empty-sea", x: 0, y: 0, tileIds: ["sea"], edgeIds: ["ship-old"], building: null },
+      { id: "fog-edge", x: 0, y: 0, tileIds: ["sea", "fog"], edgeIds: ["ship-fog"], building: null },
+    ];
+    state.board.edges = [
+      { id: "ship-old", vertexIds: ["harbor", "empty-sea"], playerId, kind: "ship" },
+      { id: "ship-fog", vertexIds: ["harbor", "fog-edge"], playerId: null },
+    ];
+    state.board.tiles = [
+      { id: "land", x: 0, y: 0, terrain: "wood", number: 6, vertexIds: ["harbor"] },
+      { id: "sea", x: 0, y: 0, terrain: "sea", number: null, vertexIds: ["harbor", "empty-sea", "fog-edge"] },
+      { id: "fog", x: 0, y: 0, terrain: "fog", number: null, vertexIds: ["fog-edge"] },
+    ];
+    expect(chooseAndApply(state).action).toEqual({ type: "move-ship", edgeId: "ship-old", destinationEdgeId: "ship-fog" });
+  });
 });
 
 describe("computer identity and authority", () => {
@@ -726,7 +822,7 @@ describe("computer-initiated player trades", () => {
   test.each([
     { inventory: resources({ wood: 1, grain: 2, ore: 2 }), receive: resources({ ore: 1 }) },
     { inventory: resources({ wood: 5 }), receive: resources({ brick: 1 }) },
-    { inventory: resources({ wool: 4, grain: 4 }), receive: resources({ brick: 1 }) },
+    { inventory: resources({ wool: 4, grain: 4 }), receive: resources({ wood: 1 }) },
     { inventory: resources({ wool: 3, grain: 3 }), receive: resources({ ore: 1 }) },
   ])("requests exactly one missing card for the selected build when surplus can pay", ({ inventory, receive }) => {
     const state = requestingGame(inventory);
