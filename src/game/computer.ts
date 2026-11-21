@@ -76,8 +76,27 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
   const bestVertex = (locations: string[], balance = true): string | undefined =>
     locations.toSorted((first, second) => (vertexValue(second, balance) + islandBonus(second) * 10) -
       (vertexValue(first, balance) + islandBonus(first) * 10))[0];
+  const coverageValue = (vertexId: string): number => {
+    const spot = emptyResources();
+    for (const tileId of vertices.get(vertexId)!.tileIds) {
+      const tile = tiles.get(tileId)!;
+      if (tile.number === null) continue;
+      if (isResource(tile.terrain)) spot[tile.terrain] += 6 - Math.abs(tile.number - 7);
+      if (tile.terrain === "gold") for (const resource of RESOURCES) spot[resource] += (6 - Math.abs(tile.number - 7)) * 0.48;
+    }
+    const combined = RESOURCES.map(resource => production[resource] + spot[resource]);
+    const total = combined.reduce((sum, dots) => sum + dots, 0);
+    if (total === 0) return 0;
+    const breadth = combined.reduce((sum, dots) => sum + Math.min(dots, 3), 0);
+    const concentration = Math.max(...combined) / total;
+    return breadth - Math.max(0, concentration - 0.55) * total * 2;
+  };
+  const bestSetupVertex = (locations: string[]): string | undefined =>
+    locations.toSorted((first, second) => (vertexValue(second) + islandBonus(second) * 10 + coverageValue(second)) -
+      (vertexValue(first) + islandBonus(first) * 10 + coverageValue(first)))[0];
   const planningState: GameState = { ...state, activePlayerId: playerId, phase: { type: "actions" } };
   const publicScores = new Map(state.players.map(other => [other.id, getPublicScore(state, other.id).public]));
+  const knightsPlayed = player.knightsPlayed;
   const score = getScore(state, playerId).total;
   const winsWith = (points: number) => score + points >= state.victoryPointsToWin;
 
@@ -179,16 +198,19 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     });
     if (city) targets.push({
       action: { type: "place-city", vertexId: city }, cost: COSTS.city,
-      value: winsWith(1) ? 10000 : 18 + vertexValue(city, false) / 3,
+      value: winsWith(1) ? 10000 : 20 + vertexValue(city, false) / 3,
     });
     if (road && ((road.expansion && !settlement) || road.points > 0)) targets.push({
       action: { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId }, cost: COSTS[road.kind],
       value: road.points > 0 && winsWith(road.points) ? 10000 : 8 + road.value + road.points * 4,
     });
-    if (state.developmentDeck.length > 0) targets.push({
-      action: { type: "buy-development" }, cost: COSTS.development,
-      value: 3 + 3 * state.developmentDeck.length / 25,
-    });
+    if (state.developmentDeck.length > 0) {
+      const urgency = Math.max(0, 1 - (state.victoryPointsToWin - score) / 6);
+      targets.push({
+        action: { type: "buy-development" }, cost: COSTS.development,
+        value: 3 + 3 * state.developmentDeck.length / 25 + 5 * urgency + (knightsPlayed >= 2 ? 2 : 0),
+      });
+    }
     return targets.toSorted((first, second) => priority(second) - priority(first));
   }
 
@@ -199,7 +221,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         const building = vertices.get(vertexId)!.building;
         if (!building) return total;
         if (building.playerId !== playerId) owners.add(building.playerId);
-        return total + (building.playerId === playerId ? -4 : 1 + publicScores.get(building.playerId)! / 3) *
+        const contender = building.playerId !== playerId && publicScores.get(building.playerId)! >= state.victoryPointsToWin - 2;
+        return total + (building.playerId === playerId ? -4 : (1 + publicScores.get(building.playerId)! / 3) * (contender ? 2 : 1)) *
           (building.kind === "city" ? 2 : 1) * (tile.number === null ? 0 : 6 - Math.abs(tile.number - 7));
       }, 0);
       const stealable = tile.number === null ? 0 : [...owners].reduce((total, owner) =>
@@ -271,11 +294,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     .with({ type: "setup-reveal" }, (): GameAction | null => {
       const tileId = legalSetupRevealTiles(state, playerId)[0];
       if (tileId) return { type: "reveal-tile", tileId };
-      const vertexId = bestVertex(legalSettlementVertices(state, playerId));
+      const vertexId = bestSetupVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;
     })
     .with({ type: "setup-settlement" }, (): GameAction | null => {
-      const vertexId = bestVertex(legalSettlementVertices(state, playerId));
+      const vertexId = bestSetupVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;
     })
     .with({ type: "setup-road" }, (): GameAction | null => {
@@ -422,7 +445,9 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       }
       if (target && maritimeAffordable(target.cost)) {
         const receive = RESOURCES.find(resource => player.resources[resource] < target.cost[resource]);
-        const give = RESOURCES.find(resource => player.resources[resource] - target.cost[resource] >= getTradeRatio(state, playerId, resource));
+        const give = RESOURCES.filter(resource => player.resources[resource] - target.cost[resource] >= getTradeRatio(state, playerId, resource))
+          .toSorted((first, second) => (player.resources[second] - target.cost[second]) -
+            (player.resources[first] - target.cost[first]))[0];
         // Preserve the selected cost: each trade reduces its deficit, and only trade toward an attainable purchase.
         if (give && receive) return { type: "bank-trade", give, receive };
       }

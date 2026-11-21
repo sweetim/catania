@@ -726,7 +726,7 @@ describe("computer-initiated player trades", () => {
   test.each([
     { inventory: resources({ wood: 1, grain: 2, ore: 2 }), receive: resources({ ore: 1 }) },
     { inventory: resources({ wood: 5 }), receive: resources({ brick: 1 }) },
-    { inventory: resources({ wool: 4, grain: 4 }), receive: resources({ wood: 1 }) },
+    { inventory: resources({ wool: 4, grain: 4 }), receive: resources({ brick: 1 }) },
     { inventory: resources({ wool: 3, grain: 3 }), receive: resources({ ore: 1 }) },
   ])("requests exactly one missing card for the selected build when surplus can pay", ({ inventory, receive }) => {
     const state = requestingGame(inventory);

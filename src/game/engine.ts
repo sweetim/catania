@@ -292,7 +292,9 @@ function updateAwards(state: GameState): void {
 
 /** The game is over: uncover every remaining fog cell from its hidden source, without discovery rewards. */
 function revealRemainingFog(state: GameState): void {
-  if (!state.board.tiles.some(tile => tile.terrain === "fog")) return;
+  const fogBoard = state.board.fogDiscoveryDeck !== undefined || state.board.fogDiscoveriesByTileId !== undefined ||
+    state.board.tiles.some(tile => tile.terrain === "fog");
+  if (!fogBoard) return;
   for (const tile of state.board.tiles) {
     if (tile.terrain !== "fog") continue;
     const discovery = state.board.fogDiscoveriesByTileId?.[tile.id] ?? state.board.fogDiscoveryDeck?.shift();
@@ -301,6 +303,7 @@ function revealRemainingFog(state: GameState): void {
     tile.terrain = discovery.terrain;
     tile.number = discovery.number;
   }
+  if (state.board.fogDiscoveriesByTileId) state.board.fogDiscoveriesByTileId = {};
   state.board.fogDiscoveryDeck = [];
   relocateFoggyWorldPorts(state.board);
 }
