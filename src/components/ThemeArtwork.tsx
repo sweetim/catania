@@ -65,17 +65,82 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
   );
 }
 
-export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: BoardTheme }) {
+export const HEX_ARTWORK_CLIP_PATH = "M0-56.5 48.9-28.25v56.5L0 56.5-48.9 28.25v-56.5Z";
+
+function IllustratedConifer({ horizontal, vertical, scale }: { horizontal: number; vertical: number; scale: number }) {
+  return (
+    <g transform={`translate(${horizontal} ${vertical}) scale(${scale})`} strokeLinejoin="round">
+      <path d="M0 10V20" stroke="#4d3d2e" strokeWidth="2.4" />
+      <path d="M0-21 9-8H4.5L12 2H6.5L14 11H-14L-6.5 2H-12L-4.5-8H-9Z" fill="#3a614b" stroke="#28493a" strokeWidth="1.25" />
+      <path d="M0-21V11H-14L-6.5 2H-12L-4.5-8H-9Z" fill="#547f60" stroke="none" />
+    </g>
+  );
+}
+
+function IllustratedSheep({ horizontal, vertical, scale, mirror = false }: {
+  horizontal: number;
+  vertical: number;
+  scale: number;
+  mirror?: boolean;
+}) {
+  const horizontalScale = mirror ? -scale : scale;
+  return (
+    <g transform={`translate(${horizontal} ${vertical}) scale(${horizontalScale} ${scale})`} stroke="#58693f" strokeWidth="1.35" strokeLinejoin="round">
+      <ellipse cx="0" cy="11" rx="11" ry="2.6" fill="#637841" fillOpacity=".3" stroke="none" />
+      <path d="M-6 5V10.5M5 5V10.5" fill="none" strokeWidth="2.1" />
+      <path d="M-11 0C-15-6-9-11-4-9C-2-14 5-13 7-9C13-10 16-3 11 1C14 7 7 10 3 6C-2 10-9 8-9 4C-14 5-15 1-11 0Z" fill="#fbf7e6" />
+      <path d="M-9-2C-6-7 2-8 7-5" fill="none" stroke="#ffffff" strokeOpacity=".6" strokeWidth="1.1" />
+      <ellipse cx="10.5" cy="1" rx="4.2" ry="5" fill="#596647" />
+      <path d="M8.5-3.5 6-6.2M13-2.8 16-4.5" strokeWidth="1.3" />
+      <circle cx="11.6" cy="0" r=".8" fill="#fbf7e6" stroke="none" />
+    </g>
+  );
+}
+
+function IllustratedWheatCluster({ horizontal, vertical, mirror = false }: {
+  horizontal: number;
+  vertical: number;
+  mirror?: boolean;
+}) {
+  return (
+    <g transform={`translate(${horizontal} ${vertical}) scale(${mirror ? -1 : 1} 1)`} stroke="#876120" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M0 4Q-7-14-3-34M3 5Q-1-12 7-28M-3 5Q-12-9-11-24" fill="none" strokeWidth="1.5" />
+      {[
+        { originX: -4, originY: -12, tilt: -22 },
+        { originX: -5, originY: -20, tilt: -16 },
+        { originX: -4, originY: -28, tilt: -8 },
+        { originX: 3, originY: -14, tilt: 16 },
+        { originX: 6, originY: -22, tilt: 22 },
+        { originX: -10, originY: -16, tilt: -30 },
+      ].map((grain, index) => (
+        <g key={index} transform={`translate(${grain.originX} ${grain.originY}) rotate(${grain.tilt})`}>
+          <path d="M0 0Q-4.5-2.5-3.5-7Q1-5.5 0 0Z" fill="#f7e09b" />
+          <path d="M0-1Q4.5-3.5 3.5-8Q-1-6.5 0-1Z" fill="#d9aa43" />
+        </g>
+      ))}
+    </g>
+  );
+}
+
+export function TerrainArtwork({ terrain, theme, clipPathId }: {
+  terrain: Terrain;
+  theme: BoardTheme;
+  clipPathId?: string;
+}) {
   const ink = theme.terrain[terrain].ink;
+  const clipPath = clipPathId ? `url(#${clipPathId})` : undefined;
   if (terrain === "fog") {
     const cloud = "M-38 12 A13 13 0 0 1 -36 -12 A15 15 0 0 1 -8 -22 A15 15 0 0 1 20 -14 A13 13 0 0 1 34 2 A10 10 0 0 1 26 12 Z";
-    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    return <g aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       {match(theme.id)
         .with("illustrated", () => <>
-          <path d={cloud} transform="translate(22 -13) scale(.42)" fill="#f4f7f5" fillOpacity=".55" stroke="none" />
-          <path d={cloud} fill="#f4f7f5" fillOpacity=".8" stroke={ink} strokeOpacity=".45" strokeWidth="1.5" />
-          <path d="M-24 7q11-6 22-1" strokeOpacity=".35" />
-          <path d="M-41 17h7M-32 20h4" strokeOpacity=".6" />
+          <path d="M-52-58H52V-8Q0-18-52-8Z" fill="#e5edf0" fillOpacity=".5" stroke="none" />
+          <path d="M-52 8Q-34-12-10-6Q12-22 36-10Q46-4 52-10V58H-52Z" fill="#dde7ea" fillOpacity=".62" stroke="none" />
+          <path d={cloud} transform="translate(20 -15) scale(.46)" fill="#f7faf9" fillOpacity=".62" stroke="none" />
+          <path d={cloud} transform="translate(-22 10) scale(.52)" fill="#f7faf9" fillOpacity=".52" stroke="none" />
+          <path d={cloud} fill="#f7faf9" fillOpacity=".86" stroke={ink} strokeOpacity=".38" strokeWidth="1.4" />
+          <path d="M-24 6Q-8 0 8 6T32 4M-36 22Q-12 15 12 22T42 20" strokeOpacity=".34" strokeWidth="1.4" />
+          <path d="M0-39v7M-3.5-35.5h7M26-30v5M23.5-27.5h5" stroke="#f8fbfa" strokeOpacity=".85" strokeWidth="1.3" />
         </>)
         .with("ceramic", () => <>
           <path d={cloud} transform="translate(-24 -6) scale(.38)" strokeWidth="2" opacity=".65" />
@@ -109,8 +174,13 @@ export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: Bo
     </g>;
   }
   if (terrain === "gold") {
-    return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cy="25" rx="35" ry="7" fill={ink} fillOpacity=".14" stroke="none" />
+    return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M-52-58H52V-12Q0-4-52-14Z" fill="#fae299" fillOpacity=".45" stroke="none" />
+      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#d1982e" strokeWidth="17" strokeOpacity=".55" />
+      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#6aa5a0" strokeWidth="11.5" />
+      <path d="M-46 15Q-20-2 3 10Q24 21 47 0" stroke="#bee5df" strokeWidth="2.4" strokeOpacity=".72" />
+      <path d="M-52 35Q0 29 52 35V58H-52Z" fill="#f0c869" fillOpacity=".88" stroke="none" />
+      <ellipse cy="25" rx="34" ry="6.5" fill={ink} fillOpacity=".14" stroke="none" />
       <g className="gold-ingots">
         <g>
           <path d="m-19-28 29-8 13 9-30 8Z" fill="#fff0a6" />
@@ -133,28 +203,143 @@ export function TerrainArtwork({ terrain, theme }: { terrain: Terrain; theme: Bo
   }
   if (terrain === "sea") {
     const illustrated = theme.id === "illustrated";
-    return <g aria-hidden="true" pointerEvents="none" fill="none" stroke={illustrated ? "#6e9c91" : ink} strokeWidth={illustrated ? "1.5" : "2"} strokeLinecap="round">
+    if (illustrated) {
+      return <g aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" strokeLinecap="round">
+        <path d="M-34-20q8-5 16 0t16 0M6-14q8-5 16 0t16 0M-38 2q9-6 18 0t18 0M4 10q8-5 16 0t16 0M-24 24q9-6 18 0t18 0" stroke="#eff8f5" strokeOpacity=".42" strokeWidth="2" />
+        <path d="M-32-18q8-5 16 0t16 0M8-12q8-5 16 0t16 0M-36 4q9-6 18 0t18 0M6 12q8-5 16 0t16 0M-22 26q9-6 18 0t18 0" stroke="#5f9185" strokeOpacity=".72" strokeWidth="1.45" />
+      </g>;
+    }
+    return <g aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round">
       <path d="M-36-14q9-8 18 0t18 0t18 0t18 0M-36 4q9-8 18 0t18 0t18 0t18 0M-26 22q9-8 18 0t18 0t18 0" />
     </g>;
   }
   return (
-    <g aria-hidden="true" pointerEvents="none" color={ink} fill="none" stroke={ink} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <g aria-hidden="true" pointerEvents="none" clipPath={clipPath} color={ink} fill="none" stroke={ink} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
       {match(theme.id)
         .with("illustrated", () => (
           <>
             {match(terrain)
-              .with("wood", () => <path d="M-45 24Q-22 12 0 24T45 23M-36 31Q-12 23 9 32" opacity=".6" />)
-              .with("brick", () => <><path d="M-46 6-32-20-16-12 2-36 20-18 30-22 46 8 30 23H-31Z" fill={ink} opacity=".25" stroke="none" /><path d="M-33-20-20 2M2-36 8-17 20-18" opacity=".5" /></>)
-              .with("wool", () => <><path d="M-46 10Q-25-14-4 0Q19-14 46 5L42 25Q17 9-1 22Q-24 10-42 30Z" fill={ink} opacity=".18" stroke="none" /><path d="m-36-22 2-5 3 4m58 2 3-5 3 4" /></>)
-              .with("grain", () => <path d="M-44 21Q0 5 44 23M-36 29Q0 15 36 31M-24 36Q0 26 24 37" opacity=".6" />)
-              .with("ore", () => <><path d="M-46 19-26-24-11-7 7-38 45 18Z" fill={ink} opacity=".35" /><path d="m7-38-10 19 8-4 7 6 5-7m-43 0-7 14 7-4 7 5" stroke="#e1e5d6" strokeWidth="3" /></>)
-              .with("desert", () => <><circle cx="23" cy="-23" r="9" fill="#eddbaf" /><path d="M-46 13Q-25-11-1 9Q24 25 46 3L43 25Q17 12-2 29Q-23 9-42 30Z" fill={ink} fillOpacity=".3" stroke="none" /><path d="M-43 23Q-22 3 1 20M8 31Q27 17 38 25m-69-43 8-3" /></>)
+              .with("wood", () => <>
+                <path d="M-52-58H52V-12Q0-22-52-12Z" fill="#b4cdb2" fillOpacity=".44" stroke="none" />
+                <path d="M-52 10V-11L-43-23-35-12-26-27-17-13-8-31 1-17 11-30 20-13 30-25 39-10 47-21 52-11V10Z" fill="#5b7d63" fillOpacity=".46" stroke="none" />
+                <path d="M-52 10Q-24 2 0 14Q24 2 52 10V58H-52Z" fill="#6b8b6d" stroke="none" />
+                <path d="M-52 33Q-18 25 0 32Q20 38 52 30V58H-52Z" fill="#98b48e" fillOpacity=".88" stroke="none" />
+                <path d="M-45 33Q-18 26 0 32Q20 37 45 31" stroke="#44664f" strokeOpacity=".42" strokeWidth="1.2" />
+                <g stroke="#28493a" strokeWidth="1.15">
+                  <path d="M-21-15v6M21-14v6" stroke="#4d3d2e" strokeWidth="2" />
+                  <circle cx="-21" cy="-24" r="8.5" fill="#61875d" />
+                  <path d="M-27-26A7 7 0 0 1-19-31" stroke="#90b484" strokeWidth="1.8" />
+                  <circle cx="21" cy="-23" r="8.2" fill="#5d845a" />
+                  <path d="M15-25A6.5 6.5 0 0 1 23-30" stroke="#8cb080" strokeWidth="1.8" />
+                </g>
+                <IllustratedConifer horizontal={-2} vertical={-36} scale={0.62} />
+                <IllustratedConifer horizontal={-33} vertical={-3} scale={0.94} />
+                <IllustratedConifer horizontal={33} vertical={-2} scale={0.96} />
+                <IllustratedConifer horizontal={-42} vertical={12} scale={0.56} />
+                <IllustratedConifer horizontal={42} vertical={13} scale={0.54} />
+                <g transform="translate(-26 24)" stroke="#4c3929" strokeWidth="1.1">
+                  <path d="M-7 1h12a2.5 2.5 0 0 1 0 5H-7Z" fill="#73533b" />
+                  <circle cx="-7" cy="3.5" r="2.5" fill="#dfc99f" />
+                  <path d="M-4-3h11a2.2 2.2 0 0 1 0 4.4H-4Z" fill="#826045" />
+                  <circle cx="-4" cy="-0.8" r="2.2" fill="#e6d3ad" />
+                </g>
+              </>)
+              .with("brick", () => <>
+                <path d="M-52-58H52V-14Q0-4-52-16Z" fill="#f0cbb0" fillOpacity=".48" stroke="none" />
+                <path d="M-52 10V-14Q-42-31-24-30Q-11-30-2-18V10Z" fill="#b76e53" stroke="#7c3f2e" strokeWidth="1.15" />
+                <path d="M-6 10V-17Q10-35 28-33Q43-31 52-15V10Z" fill="#a85f46" stroke="#7c3f2e" strokeWidth="1.15" />
+                <path d="M-44-21Q-33-30-20-28M7-25Q20-33 36-28" stroke="#ebb895" strokeWidth="1.8" />
+                <path d="M-45-8Q-30-13-14-9M10-12Q25-17 44-11M-42-1Q-28-5-16-2" stroke="#e7b695" strokeOpacity=".55" strokeWidth="1.15" />
+                <path d="M-52 12Q-22 3 0 13Q22 4 52 11V58H-52Z" fill="#c27d60" stroke="none" />
+                <path d="M-52 34Q0 28 52 34V58H-52Z" fill="#dfb095" fillOpacity=".88" stroke="none" />
+                <path d="M-46 34Q0 28 46 34" stroke="#8a4b38" strokeOpacity=".42" strokeWidth="1.2" />
+                <g stroke="#7c3f2e" strokeWidth="1.15">
+                  <ellipse cx="-30.5" cy="28" rx="11.5" ry="2.6" fill="#7c3f2e" fillOpacity=".26" stroke="none" />
+                  <path d="M-41 19h10.5v7.5H-41ZM-30.5 19H-20v7.5h-10.5ZM-36 12h11v7h-11Z" fill="#b85e43" />
+                  <path d="M-40 20.6h8.5M-29.5 20.6h8.5M-35 13.6h9" stroke="#e8b897" strokeWidth="1.3" />
+                  <ellipse cx="31" cy="24.5" rx="10" ry="2.4" fill="#7c3f2e" fillOpacity=".26" stroke="none" />
+                  <path d="M22 24V13A9 10 0 0 1 40 13V24Z" fill="#b65d42" />
+                  <path d="M22 24V13A9 10 0 0 1 31 3V24Z" fill="#cf7f62" stroke="none" />
+                  <path d="M22 24V13A9 10 0 0 1 40 13V24Z" fill="none" />
+                  <path d="M27.5 3.5h7" strokeWidth="2.2" />
+                  <path d="M28 24V17A3 3.5 0 0 1 34 17V24Z" fill="#54271d" />
+                  <path d="M29.4 24V20A1.6 1.8 0 0 1 32.6 20V24Z" fill="#f2b86d" stroke="none" />
+                  <path d="M31 0Q34-7 29-13Q26-19 32-25" stroke="#fbf1e1" strokeOpacity=".75" strokeWidth="1.6" />
+                </g>
+              </>)
+              .with("wool", () => <>
+                <path d="M-52-58H52V-18Q0-8-52-20Z" fill="#e7f0c9" fillOpacity=".54" stroke="none" />
+                <path d="M-52 6Q-22-24 10-8Q30 2 52-15V58H-52Z" fill="#b2c57e" stroke="none" />
+                <path d="M-48-11Q-20-23 10-8Q30 2 48-13" stroke="#e3ecc0" strokeOpacity=".78" strokeWidth="1.6" />
+                <path d="M-52 17Q-18 3 14 15Q34 22 52 11V58H-52Z" fill="#9bb267" stroke="none" />
+                <path d="M-52 35Q0 28 52 35V58H-52Z" fill="#c8d797" fillOpacity=".9" stroke="none" />
+                <path d="M-45 34Q0 28 45 34" stroke="#677c40" strokeOpacity=".38" strokeWidth="1.2" />
+                <path d="M-36-18v-8m8 5v-8m8 7v-8M-38-24q10-2 20 3M-38-20q10-2 20 3" stroke="#856e49" strokeWidth="1.3" />
+                <path d="M-15 24l1.5-3.5 1.5 3.5M14 26l1.5-3.5 1.5 3.5M-37-4l1.4-3.2 1.4 3.2M9-22l1.4-3.2 1.4 3.2" stroke="#62783d" strokeWidth="1.2" />
+                <circle cx="-18" cy="25" r="1.4" fill="#fbf7e6" stroke="none" />
+                <circle cx="21" cy="24" r="1.3" fill="#f5e18a" stroke="none" />
+                <circle cx="-24" cy="-9" r="1.2" fill="#fbf7e6" stroke="none" />
+                <circle cx="15" cy="-19" r="1.3" fill="#f5e18a" stroke="none" />
+                <IllustratedSheep horizontal={-33} vertical={12} scale={0.76} mirror />
+                <IllustratedSheep horizontal={33} vertical={-11} scale={0.78} mirror />
+              </>)
+              .with("grain", () => <>
+                <path d="M-52-58H52V-18Q0-10-52-20Z" fill="#f7e6ad" fillOpacity=".56" stroke="none" />
+                <path d="M-52-4Q-12-23 52-8V58H-52Z" fill="#ddb755" stroke="none" />
+                <path d="M-52 8Q-10-4 28 14L52 24V58H-52Z" fill="#cfa03e" fillOpacity=".58" stroke="none" />
+                <path d="M-52 22Q0 8 52 19V58H-52Z" fill="#ebd078" fillOpacity=".75" stroke="none" />
+                <path d="M-46 11Q-4-2 46 14M-44 22Q0 10 44 23M-36 30Q0 22 36 31" stroke="#a57c2a" strokeOpacity=".48" strokeWidth="1.25" />
+                <path d="M-52 35Q0 29 52 35V58H-52Z" fill="#edd380" fillOpacity=".92" stroke="none" />
+                <g stroke="#876120" strokeWidth="1.15">
+                  <path d="M-4.2-23L-2.6-35H2.6L4.2-23Z" fill="#fbf3d7" />
+                  <path d="M-3.5-35Q0-39.5 3.5-35Z" fill="#b8763b" />
+                  <path d="M-7-41.5L7-28.5M-7-28.5L7-41.5" stroke="#7c571c" strokeWidth="1.35" />
+                  <circle cx="0" cy="-35" r="1.4" fill="#7c571c" stroke="none" />
+                </g>
+                <IllustratedWheatCluster horizontal={-31} vertical={22} />
+                <IllustratedWheatCluster horizontal={31} vertical={22} mirror />
+              </>)
+              .with("ore", () => <>
+                <path d="M-52-58H52V-10Q0-18-52-10Z" fill="#d2e0e3" fillOpacity=".56" stroke="none" />
+                <path d="M-44 12L-10-20 4-10 16-22 44 12Z" fill="#7c949c" fillOpacity=".5" stroke="none" />
+                <g strokeLinejoin="round">
+                  <path d="M-52 19L-23-37 2 18Z" fill="#59727b" stroke="#3f5860" strokeWidth="1.25" />
+                  <path d="M-23-37-19 18H2Z" fill="#789199" stroke="none" />
+                  <path d="M-23-37-32-19-25-22-19-16-14-21Z" fill="#eff3ea" stroke="none" />
+                  <path d="M-23-37-32-19-25-22-22-26Z" fill="#d3dede" stroke="none" />
+                  <path d="M-4 18L24-33 52 19Z" fill="#536c75" stroke="#3f5860" strokeWidth="1.25" />
+                  <path d="M24-33 27 18H52Z" fill="#758f97" stroke="none" />
+                  <path d="M24-33 15-16 21-20 27-14 33-19Z" fill="#eff3ea" stroke="none" />
+                  <path d="M24-33 15-16 21-20 24-24Z" fill="#d3dede" stroke="none" />
+                </g>
+                <path d="M-52 16L-32 12-14 19 0 15 16 19 33 12 52 17V58H-52Z" fill="#6b838b" stroke="none" />
+                <path d="M-52 35Q0 30 52 35V58H-52Z" fill="#b7c7cb" fillOpacity=".92" stroke="none" />
+                <path d="M-46 35Q0 30 46 35" stroke="#486169" strokeOpacity=".4" strokeWidth="1.2" />
+                <g stroke="#395159" strokeWidth="1.15" strokeLinejoin="round">
+                  <path d="M-39 27L-35 18-28 21-25 28Z" fill="#465e67" />
+                  <path d="M-35 18L-32 27-25 28" fill="none" stroke="#dce6e2" strokeWidth="1.2" />
+                  <path d="M25 28L29 20 36 18 39 27Z" fill="#465e67" />
+                  <path d="M36 18L33 27 25 28" fill="none" stroke="#dce6e2" strokeWidth="1.2" />
+                </g>
+              </>)
+              .with("desert", () => <>
+                <path d="M-52-58H52V-8Q0-16-52-8Z" fill="#f7efda" fillOpacity=".72" stroke="none" />
+                <circle cx="24" cy="-27" r="14.5" fill="#f9e9bd" fillOpacity=".46" stroke="none" />
+                <circle cx="24" cy="-27" r="8.5" fill="#f3d489" stroke="none" />
+                <path d="M-52-4Q-18-20 14-6Q34 3 52-10V58H-52Z" fill="#dfc597" stroke="none" />
+                <path d="M-52 9Q-18-7 10 11Q32 24 52 9V58H-52Z" fill="#c9a570" stroke="none" />
+                <path d="M-52 9Q-18-7 10 11Q32 24 52 9L52 15Q31 28 9 15Q-18 0-52 15Z" fill="#ecd8b1" fillOpacity=".74" stroke="none" />
+                <path d="M-52 29Q-14 20 16 30Q35 36 52 29V58H-52Z" fill="#e7d3ab" stroke="none" />
+                <path d="M-42 23Q-22 14 2 22M14 28Q30 22 44 26" stroke="#b48d57" strokeOpacity=".48" strokeWidth="1.25" />
+                <g>
+                  <ellipse cx="-25" cy="13.5" rx="7" ry="2" fill="#a6814e" fillOpacity=".34" stroke="none" />
+                  <path d="M-25 13V-9" stroke="#5c724b" strokeWidth="4.6" />
+                  <path d="M-25 3H-31V-3M-25-1H-19V-6" stroke="#5c724b" strokeWidth="3.2" />
+                  <path d="M-26.1 11V-8.5M-31.6-2.5V2.2M-19.6-5.5V-1.8" stroke="#8da574" strokeWidth="1.1" />
+                  <path d="M-19 14Q-16 11-13 14Z" fill="#b7915c" stroke="none" />
+                </g>
+              </>)
               .exhaustive()}
-            {terrain !== "desert" && terrain !== "ore" && <>
-              <g transform="translate(-44 -25) scale(.9)"><ResourceArtwork resource={terrain} theme={theme} /></g>
-              <g transform="translate(16 -20) scale(.85)"><ResourceArtwork resource={terrain} theme={theme} /></g>
-              <g transform="translate(-10 -39) scale(.6)"><ResourceArtwork resource={terrain} theme={theme} /></g>
-            </>}
           </>
         ))
         .with("ceramic", () => (

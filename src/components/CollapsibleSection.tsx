@@ -1,6 +1,6 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
-// Phone layouts collapse busy sections by default; larger screens start expanded.
+// Phone layouts omit the collapsible header and keep controls visible; larger screens can collapse the section.
 export const COLLAPSIBLE_EXPANDED_MEDIA = "(min-width: 700px)";
 
 export function CollapsibleSection({ title, className, inert = false, defaultOpen, open, onToggle, children }: {
@@ -12,37 +12,46 @@ export function CollapsibleSection({ title, className, inert = false, defaultOpe
   onToggle?: (open: boolean) => void;
   children: ReactNode;
 }) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(() =>
-    defaultOpen ?? window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
+  const [collapsible, setCollapsible] = useState(() =>
+    window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA).matches,
   );
-  const expanded = open ?? uncontrolledOpen;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(() => defaultOpen ?? true);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(COLLAPSIBLE_EXPANDED_MEDIA);
+    const update = () => setCollapsible(mediaQuery.matches);
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+  const expanded = !collapsible || (open ?? uncontrolledOpen);
   const contentId = useId();
   return (
     <section className={className} aria-label={title} inert={inert}>
-      <h2 className="eyebrow mb-2">
-        <button
-          type="button"
-          className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-moss"
-          aria-expanded={expanded}
-          aria-controls={contentId}
-          onClick={() => {
-            if (onToggle) onToggle(!expanded);
-            else setUncontrolledOpen(!expanded);
-          }}
-        >
-          <span className="min-w-0 flex-1 truncate">{title}</span>
-          <svg
-            aria-hidden="true"
-            className={`h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
+      {collapsible && (
+        <h2 className="eyebrow mb-2">
+          <button
+            type="button"
+            className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-moss"
+            aria-expanded={expanded}
+            aria-controls={contentId}
+            onClick={() => {
+              if (onToggle) onToggle(!expanded);
+              else setUncontrolledOpen(!expanded);
+            }}
           >
-            <path d="m3 4.5 3 3 3-3" />
-          </svg>
-        </button>
-      </h2>
+            <span className="min-w-0 flex-1 truncate">{title}</span>
+            <svg
+              aria-hidden="true"
+              className={`h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="m3 4.5 3 3 3-3" />
+            </svg>
+          </button>
+        </h2>
+      )}
       <div id={contentId} hidden={!expanded}>
         {children}
       </div>

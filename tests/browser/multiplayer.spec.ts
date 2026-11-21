@@ -2882,22 +2882,26 @@ test("a computer trade request stays answerable after the phone chose a price an
   })]);
 });
 
-test("dismissed mandatory private dialogs stay reachable while builds are collapsed", async ({ multiplayer }, testInfo) => {
+test("dismissed mandatory private dialogs stay reachable on phones and while builds are collapsed", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
   const opponent = game.players.find(other => other.id !== player.id)!;
   const buildDisclosure = phone.getByRole("button", { name: "Build a little bigger", exact: true });
-  // Cross-device hands start with the build section expanded; collapse it to
-  // verify the mandatory-dialog reentry buttons while builds are hidden.
-  await expect(buildDisclosure).toHaveAttribute("aria-expanded", "true");
-  await buildDisclosure.click();
 
-  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 400 }]) {
     await phone.setViewportSize(viewport);
-    await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
-    await expect(phone.getByRole("button", { name: "Buy a card", exact: true })).toHaveCount(0);
-    await expect(phone.getByRole("button", { name: "Make a trade", exact: true })).toHaveCount(0);
+    if (viewport.width < 700) {
+      await expect(buildDisclosure).toHaveCount(0);
+      await expect(phone.getByRole("button", { name: "Buy a card", exact: true })).toBeVisible();
+      await expect(phone.getByRole("button", { name: "Make a trade", exact: true })).toBeVisible();
+    } else {
+      await expect(buildDisclosure).toHaveAttribute("aria-expanded", "true");
+      await buildDisclosure.click();
+      await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
+      await expect(phone.getByRole("button", { name: "Buy a card", exact: true })).toHaveCount(0);
+      await expect(phone.getByRole("button", { name: "Make a trade", exact: true })).toHaveCount(0);
+    }
 
     game.phase = { type: "discard", required: { [player.id]: 2 } };
     game.trade = null;
@@ -2933,7 +2937,11 @@ test("dismissed mandatory private dialogs stay reachable while builds are collap
     await tradeReentry.click();
     await expect(offer).toBeVisible();
     await offer.getByRole("button", { name: "Close dialog", exact: true }).click();
-    await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
+    if (viewport.width < 700) {
+      await expect(buildDisclosure).toHaveCount(0);
+    } else {
+      await expect(buildDisclosure).toHaveAttribute("aria-expanded", "false");
+    }
     await screenshot(phone, testInfo, `private-mandatory-reentry-${viewport.width}`);
     await noHorizontalOverflow(phone);
   }
@@ -3134,7 +3142,7 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
   expect(beforeBank.privatePlayer!.resources[give]).toBeGreaterThanOrEqual(ratio);
   const receive = RESOURCES.find(resource => resource !== give && beforeBank.game!.bank[resource] > 0)!;
   const buildToggle = activePhone.getByRole("button", { name: "Build a little bigger", exact: true });
-  if (await buildToggle.getAttribute("aria-expanded") === "false") await buildToggle.click();
+  if (await buildToggle.count() > 0 && await buildToggle.getAttribute("aria-expanded") === "false") await buildToggle.click();
   await activePhone.getByRole("button", { name: "Make a trade", exact: true }).click();
   const editor = activePhone.getByRole("dialog", { name: "A fair exchange", exact: true });
   await editor.getByRole("button", { name: `Give ${RESOURCE_NAMES[give]}`, exact: true }).click();

@@ -16,7 +16,7 @@ import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
 import { getPlayerLabel } from "./GameUi";
-import { ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
+import { HEX_ARTWORK_CLIP_PATH, ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
 
@@ -410,8 +410,8 @@ export function Board({
   });
   const selectedPoint = selectedId
     ? verticesById.get(selectedId) ??
-      edgeGeometry.find(({ edge }) => edge.id === selectedId) ??
-      board.tiles.find((tile) => tile.id === selectedId)
+    edgeGeometry.find(({ edge }) => edge.id === selectedId) ??
+    board.tiles.find((tile) => tile.id === selectedId)
     : undefined;
   const hasConfirmation = Boolean(confirmation && selectedPoint && canSelect);
 
@@ -702,7 +702,7 @@ export function Board({
               {translateText(canSelect
                 ? "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Highlighted locations can be selected with Enter or Space."
                 : "{tiles} terrain hexes and {ports} coastal harbors. Numbers show dice rolls; dots show their probability. Pieces carry their player's number. Read-only board.",
-              { tiles: board.tiles.length, ports: visiblePorts.length })}
+                { tiles: board.tiles.length, ports: visiblePorts.length })}
             </desc>
             <defs>
               <radialGradient
@@ -774,184 +774,9 @@ export function Board({
                   floodOpacity="0.2"
                 />
               </filter>
-              <g
-                id={`${illustrationId}-tree`}
-                stroke="#375947"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              >
-                <path d="M0 12V24" strokeWidth="2.4" />
-                <path d="M0-22 12-3H7L16 12H-16L-7-3H-12Z" fill="#4d7155" />
-                <path d="M0-22V12H-16L-7-3H-12Z" fill="#608363" stroke="none" />
-              </g>
-              <g
-                id={`${illustrationId}-wheat`}
-                fill="none"
-                stroke="#9b793b"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              >
-                <path d="M0 21V-18M0 9Q-10 5-8-2Q0 0 0 9M0 1Q10-3 8-10Q0-8 0 1M0-7Q-9-11-6-17Q0-16 0-7M0-14Q6-18 4-23Q0-21 0-14" />
-              </g>
-              <g
-                id={`${illustrationId}-sheep`}
-                stroke="#68734f"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-              >
-                <path d="M-7 5V11M6 5V11" fill="none" strokeWidth="2" />
-                <path
-                  d="M-12 0C-17-8-10-13-5-10C-3-16 5-14 7-10C15-12 18-4 13 0C17 8 8 11 4 7C-2 12-10 9-10 5C-16 6-18 1-12 0Z"
-                  fill="#faf5df"
-                />
-                <ellipse cx="12" cy="1" rx="5" ry="6" fill="#647052" />
-                <path d="M10-5 7-8M15-4 19-6" />
-                <circle cx="13" cy="0" r="0.8" fill="#faf5df" stroke="none" />
-              </g>
-              <g id={`${illustrationId}-wood`}>
-                <path
-                  d="M-46 26Q-20 11 1 23T46 23M-38 32Q-14 22 9 32"
-                  fill="none"
-                  stroke="#577755"
-                  strokeWidth="1.5"
-                  opacity="0.6"
-                />
-                <use
-                  href={`#${illustrationId}-tree`}
-                  transform="translate(-27 -10) scale(.85)"
-                />
-                <use
-                  href={`#${illustrationId}-tree`}
-                  transform="translate(1 -24) scale(.8)"
-                />
-                <use
-                  href={`#${illustrationId}-tree`}
-                  transform="translate(29 -8) scale(.95)"
-                />
-                <use
-                  href={`#${illustrationId}-tree`}
-                  transform="translate(-26 16) scale(.62)"
-                />
-                <use
-                  href={`#${illustrationId}-tree`}
-                  transform="translate(25 20) scale(.55)"
-                />
-              </g>
-              <g
-                id={`${illustrationId}-brick`}
-                stroke="#945c47"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-              >
-                <path
-                  d="M-47 5-33-21-16-12 2-37 20-18 30-22 48 8 30 23H-31Z"
-                  fill="#b97860"
-                  stroke="none"
-                />
-                <path
-                  d="M-33-21-19 3-8-12M2-37 8-17 20-18M30-22 38 1"
-                  fill="none"
-                  stroke="#e1ac8c"
-                />
-                <path
-                  d="M-41 12H-18V23H-41ZM-33 24H-10V34H-33ZM19 10H41V21H19ZM13 23H35V33H13Z"
-                  fill="#c38c6b"
-                />
-                <path d="M-30 12V23M30 10V21M24 23V33" />
-                <path d="M-40 14H-20M21 12H39" stroke="#e6b899" />
-              </g>
-              <g id={`${illustrationId}-wool`}>
-                <path
-                  d="M-47 10Q-26-15-4 0Q19-15 47 5L43 25Q17 9-1 22Q-24 10-43 30Z"
-                  fill="#9eaf78"
-                />
-                <path
-                  d="M-42 30Q-20 14 0 26Q22 14 42 27M-36-21l2-6 3 5M29-20l3-6 3 5M-12-33l3-5 3 4"
-                  fill="none"
-                  stroke="#819460"
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                />
-                <use
-                  href={`#${illustrationId}-sheep`}
-                  transform="translate(-28 7) scale(.78)"
-                />
-                <use
-                  href={`#${illustrationId}-sheep`}
-                  transform="translate(27 -10) scale(.8)"
-                />
-              </g>
-              <g id={`${illustrationId}-grain`}>
-                <path
-                  d="M-45 21Q0 5 44 23M-37 29Q0 15 37 31M-25 37Q0 26 25 38"
-                  fill="none"
-                  stroke="#b18c43"
-                  strokeWidth="1.4"
-                  opacity="0.7"
-                />
-                <use
-                  href={`#${illustrationId}-wheat`}
-                  transform="translate(-28 -3) rotate(-12)"
-                />
-                <use
-                  href={`#${illustrationId}-wheat`}
-                  transform="translate(27 -4) rotate(12)"
-                />
-                <use
-                  href={`#${illustrationId}-wheat`}
-                  transform="translate(-4 -25) scale(.6)"
-                />
-                <use
-                  href={`#${illustrationId}-wheat`}
-                  transform="translate(39 9) scale(.55)"
-                />
-              </g>
-              <g id={`${illustrationId}-ore`} strokeLinejoin="round">
-                <path
-                  d="M-49 19-26-25-11-7 7-43 46 18Z"
-                  fill="#6b8183"
-                  stroke="#576f74"
-                  strokeWidth="1.4"
-                />
-                <path d="M7-43 7 18H46ZM-26-25-26 19H-3Z" fill="#809597" />
-                <path
-                  d="M7-43-4-21 5-25 12-19 19-25ZM-26-25-34-10-26-14-19-9Z"
-                  fill="#e1e5d6"
-                />
-                <path
-                  d="M-44 27-35 18-25 26-30 34ZM23 28 32 18 42 24 36 34Z"
-                  fill="#819496"
-                  stroke="#596f72"
-                  strokeWidth="1.3"
-                />
-                <path
-                  d="M-35 18-35 28-30 34M32 18 32 27 42 24"
-                  fill="none"
-                  stroke="#bccac1"
-                  strokeWidth="1.2"
-                />
-              </g>
-              <g id={`${illustrationId}-desert`}>
-                <circle
-                  cx="23"
-                  cy="-22"
-                  r="10"
-                  fill="#eddbaf"
-                  stroke="#bc945f"
-                  strokeWidth="1.2"
-                />
-                <path
-                  d="M-48 13Q-25-11-1 9Q24 25 47 3L44 25Q17 12-2 29Q-23 9-43 30Z"
-                  fill="#c5a374"
-                />
-                <path
-                  d="M-44 23Q-22 3 1 20M8 31Q27 17 39 25M-31-18l8-3M-17-29l7-2"
-                  fill="none"
-                  stroke="#ae8b5b"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </g>
+              <clipPath id={`${illustrationId}-hex-clip`}>
+                <path d={HEX_ARTWORK_CLIP_PATH} />
+              </clipPath>
             </defs>
 
             <g aria-hidden="true">
@@ -1063,16 +888,16 @@ export function Board({
                   return `${vertex.x},${vertex.y}`;
                 })
                 .join(" ");
-               const number = tile.terrain === "fog" ? null : tile.number;
-               const matchesRoll = number !== null && number === rolledNumber;
-               const blocked = matchesRoll && robberTileId === tile.id;
-               const raised = raisedTileIds.has(tile.id);
-               const peekingThisTile = peekedTileId === tile.id && hiddenNumberIds.has(tile.id);
-               const fogRevealGeneration = fogReveals.generations.get(tile.id);
-               const fogRevealVeilKey = fogRevealGeneration === undefined
-                 ? null
-                 : `${fogReveals.version}:${tile.id}:${fogRevealGeneration}`;
-               const description = tileDescription(tile);
+              const number = tile.terrain === "fog" ? null : tile.number;
+              const matchesRoll = number !== null && number === rolledNumber;
+              const blocked = matchesRoll && robberTileId === tile.id;
+              const raised = raisedTileIds.has(tile.id);
+              const peekingThisTile = peekedTileId === tile.id && hiddenNumberIds.has(tile.id);
+              const fogRevealGeneration = fogReveals.generations.get(tile.id);
+              const fogRevealVeilKey = fogRevealGeneration === undefined
+                ? null
+                : `${fogReveals.version}:${tile.id}:${fogRevealGeneration}`;
+              const description = tileDescription(tile);
               return (
                 <g
                   key={tile.id}
@@ -1109,27 +934,24 @@ export function Board({
                     fill={`url(#${illustrationId}-${tile.terrain === "sea" ? "sea-light" : "hex-light"})`}
                     pointerEvents="none"
                   />
+                  <g transform={`translate(${tile.x} ${tile.y})`}>
+                    <TerrainArtwork
+                      terrain={tile.terrain}
+                      theme={theme}
+                      clipPathId={`${illustrationId}-hex-clip`}
+                    />
+                  </g>
                   {tile.terrain !== "sea" && tile.terrain !== "fog" && (
                     <polygon
                       points={points}
                       transform={`translate(${tile.x} ${tile.y}) scale(0.935) translate(${-tile.x} ${-tile.y})`}
                       fill="none"
                       stroke="#fffdf6"
-                      strokeOpacity="0.34"
+                      strokeOpacity="0.38"
                       strokeWidth="1.2"
                       strokeLinejoin="round"
                       pointerEvents="none"
                     />
-                  )}
-                  {theme.id === "illustrated" && tile.terrain !== "sea" && tile.terrain !== "fog" && tile.terrain !== "gold" ? (
-                    <use
-                      href={`#${illustrationId}-${tile.terrain}`}
-                      transform={`translate(${tile.x} ${tile.y})`}
-                    />
-                  ) : (
-                    <g transform={`translate(${tile.x} ${tile.y})`}>
-                      <TerrainArtwork terrain={tile.terrain} theme={theme} />
-                    </g>
                   )}
                   {tile.terrain !== "fog" && robberTileId === tile.id && (
                     <polygon
@@ -1145,7 +967,7 @@ export function Board({
                       y={tile.y + 42.5}
                       textAnchor="middle"
                       fill={terrain.ink}
-                      fillOpacity="0.78"
+                      fillOpacity="0.9"
                       fontSize="6.8"
                       fontWeight="700"
                       letterSpacing="1.6"
@@ -1186,7 +1008,7 @@ export function Board({
                       />
                       <polygon points={points} fill={`url(#${illustrationId}-texture)`} />
                       <g transform={`translate(${tile.x} ${tile.y})`}>
-                        <TerrainArtwork terrain="fog" theme={theme} />
+                        <TerrainArtwork terrain="fog" theme={theme} clipPathId={`${illustrationId}-hex-clip`} />
                       </g>
                     </g>
                   )}
@@ -1337,12 +1159,12 @@ export function Board({
                         >
                           {resourceName(language, port.resource).toUpperCase()}
                         </text>
-                       </>
-                     )}
-                   </g>
-                 </g>
-               );
-             })}
+                      </>
+                    )}
+                  </g>
+                </g>
+              );
+            })}
 
             {peekedTile && hiddenNumberIds.has(peekedTile.id) && peekedTile.number !== null && (
               <g

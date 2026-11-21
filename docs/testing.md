@@ -140,7 +140,7 @@ containment, horizontally scrolling phone seats, and confirmed placements at des
 and 320-pixel widths. Responsive checks cover all seats fitting on tablets, narrow
 two-level player cards, identical compact player-list/table-seat markup, counts
 fitting one row without overflow at 320-pixel phone and short-landscape widths,
-persistent mobile turn controls across tabs, and collapsible build controls.
+persistent mobile turn controls across tabs, and responsive build controls (no mobile toggle, collapsible on larger screens).
 Shared-board checks also verify that bank/build/turn panels, tabs,
 and private hands or actions do not appear on the shared screen.
 Unfolded-layout checks hide the single-device page header while keeping the

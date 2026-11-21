@@ -167,7 +167,13 @@ async function showView(page: Page, view: "board" | "hand" | "players") {
 }
 
 async function revealBuildSection(page: Page) {
-  const toggle = page.getByRole("button", { name: "Build a little bigger", exact: true });
+  const building = page.getByRole("region", { name: "Build a little bigger", exact: true });
+  await expect(building).toBeVisible();
+  const toggle = building.getByRole("button", { name: "Build a little bigger", exact: true });
+  if (await toggle.count() === 0) {
+    await expect(building.locator(".build-options")).toBeVisible();
+    return;
+  }
   if ((await toggle.getAttribute("aria-expanded")) === "false") {
     await toggle.click();
   }
@@ -373,6 +379,46 @@ for (const theme of BOARD_THEMES) {
     await expect(choices.getByRole("radio", { name: theme.name, exact: true })).toBeChecked();
   });
 }
+
+test("illustrated tile artwork clips cleanly inside every hex across core and fog terrains", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await showHomeView(page, "Island");
+  const island = page.getByRole("region", { name: "Island preview", exact: true });
+  await expect(island.locator(".terrain-hex")).toHaveCount(19);
+  const coreTileChecks = await island.locator(".terrain-hex").evaluateAll(tiles => tiles.map(tile => {
+    const label = tile.querySelector(":scope > text")?.textContent ?? "";
+    const artwork = tile.querySelector("g[clip-path]");
+    const clipPath = artwork?.getAttribute("clip-path") ?? "";
+    const clipId = clipPath.match(/^url\(#([^)]+)\)$/)?.[1] ?? null;
+    const clipExists = clipId !== null && tile.closest("svg")?.querySelector(`clipPath[id="${clipId}"]`) !== null;
+    const tileBounds = tile.querySelectorAll(":scope > polygon")[1]!.getBoundingClientRect();
+    const labelBounds = tile.querySelector(":scope > text")!.getBoundingClientRect();
+    return {
+      label,
+      clipExists,
+      artworkMarkup: artwork?.innerHTML ?? "",
+      labelInsideTile: labelBounds.left >= tileBounds.left && labelBounds.right <= tileBounds.right && labelBounds.bottom <= tileBounds.bottom,
+    };
+  }));
+  const artworksByLabel = new Map<string, string>();
+  for (const check of coreTileChecks) {
+    expect(check.clipExists, `${check.label} hex clips its terrain artwork`).toBe(true);
+    expect(check.artworkMarkup.length, `${check.label} hex renders artwork`).toBeGreaterThan(0);
+    expect(check.labelInsideTile, `${check.label} label stays inside its hex`).toBe(true);
+    artworksByLabel.set(check.label, check.artworkMarkup);
+  }
+  expect(new Set(artworksByLabel.values()).size).toBe(6);
+
+  await showHomeView(page, "Setup");
+  await selectGameVersion(page, "fog-islands");
+  await showHomeView(page, "Island");
+  const fogTiles = island.getByRole("img", { name: "Unexplored fog; terrain and number concealed", exact: true });
+  expect(await fogTiles.count()).toBeGreaterThan(0);
+  for (const fogTile of await fogTiles.all()) {
+    await expect(fogTile.locator("g[clip-path]").first()).toHaveAttribute("clip-path", /^url\(#.+-hex-clip\)$/);
+  }
+  await screenshot(page, testInfo, "fog-islands-illustrated", false);
+});
 
 for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
   test(`board theme falls back safely with ${storage} storage`, async ({ page }) => {
@@ -2272,9 +2318,9 @@ test("turn controls stay visible and stable on every phone and tablet game view"
   }
 });
 
-test("build section collapses on phones and starts expanded on larger screens", async ({ page, isMobile }, testInfo) => {
+test("build section omits its toggle on phones and stays collapsible on larger screens", async ({ page, isMobile }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  // Mount the game at a tablet width so the disclosure default follows the viewport.
+  // Mount the game at a tablet width on desktop runs so the disclosure follows the viewport.
   if (!isMobile) await page.setViewportSize({ width: 820, height: 1180 });
   await prepareRollGame(page);
   await showView(page, "hand");
@@ -2282,26 +2328,24 @@ test("build section collapses on phones and starts expanded on larger screens", 
   const toggle = page.getByRole("button", { name: "Build a little bigger", exact: true });
   const buildOptions = building.locator(".build-options");
   const buildRoad = building.getByRole("button", { name: /^Build road\b/ });
-  const defaultExpanded = !isMobile;
-  expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
-  if (!defaultExpanded) {
-    await expect(buildRoad).toBeHidden();
-    await screenshot(page, testInfo, "build-collapsed-phone", false);
-  }
-  await toggle.focus();
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "false" : "true");
-  if (defaultExpanded) {
-    await expect(buildRoad).toBeHidden();
-  } else {
+  if (isMobile) {
+    await expect(toggle).toHaveCount(0);
     await expect(buildOptions).toBeVisible();
     await expect(buildRoad).toBeVisible();
+    await screenshot(page, testInfo, "build-open-phone", false);
+    return;
   }
+  expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(buildRoad).toBeVisible();
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(buildRoad).toBeHidden();
   await screenshot(page, testInfo, "build-toggled", false);
   await page.keyboard.press("Space");
-  await expect(toggle).toHaveAttribute("aria-expanded", defaultExpanded ? "true" : "false");
-  if (!defaultExpanded) await expect(buildRoad).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(buildRoad).toBeVisible();
 });
 
 test("player list reuses compact table seats across phone and landscape widths", async ({ page }, testInfo) => {
@@ -2474,7 +2518,11 @@ for (const displayScale of [1.25, 1.5625]) {
         await page.setViewportSize(viewport);
         await showView(page, "hand");
         const toggle = building.getByRole("button", { name: "Build a little bigger", exact: true });
-        if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+        if (viewport.width >= 700) {
+          if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+        } else {
+          await expect(toggle).toHaveCount(0);
+        }
         const rows = building.locator(".build-options > button");
         await expect(rows).toHaveCount(4);
         for (const row of await rows.all()) {

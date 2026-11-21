@@ -147,9 +147,10 @@ count, illustrated resources (with zero-count resources dimmed so owned cards st
 and a single score combining public and hidden points.
 The hidden score stays on your device only. **Build a little bigger** presents
 build and card-purchase tiles in a compact two-column grid with icons and
-affordability-aware resource costs, followed by **Make a trade**. This section is
-collapsible and starts open on every device, unlike single-device play where phones
-start it closed. On portrait phones, your hand scrolls above the pinned turn/dice
+affordability-aware resource costs, followed by **Make a trade**. On screens
+700 pixels wide or larger, this section is collapsible and starts open; on
+narrower mobile screens, the heading and toggle are omitted so the controls stay
+directly visible. On portrait phones, your hand scrolls above the pinned turn/dice
 panel; on landscape phones, tablets, and wider screens (`min-width: 700px`), the
 player summary spans the top while the hand and turn controls sit side by side in
 two columns without page scrolling. Active turns highlight the turn panel with your

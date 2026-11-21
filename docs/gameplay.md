@@ -440,8 +440,9 @@ resource-card count when it exceeds seven.
 
 ## Building And Development Cards
 
-**Build a little bigger** expands or collapses the build and trade controls. It
-starts collapsed on phones and expanded on larger screens.
+**Build a little bigger** expands or collapses the build and trade controls on
+screens 700 pixels wide or larger (starting expanded). On narrower mobile
+screens, the heading and toggle are omitted and the controls stay visible.
 Build controls are vertical rows with road, settlement, city, and
 development-card icons alongside their costs. Buying a development card costs
 one wool, one grain, and one ore; the trade button sits below the stack.

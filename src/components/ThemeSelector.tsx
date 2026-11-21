@@ -3,12 +3,12 @@ import type { Terrain } from "../game/types";
 import { useLanguage, useTranslation } from "../localization";
 import { BOARD_THEMES, getThemeName, getThemeDescription, type BoardThemeId } from "../themes";
 import { boardTranslations } from "../translations/board";
-import { TerrainArtwork } from "./ThemeArtwork";
+import { HEX_ARTWORK_CLIP_PATH, TerrainArtwork } from "./ThemeArtwork";
 
 export function ThemeSelector({ value, onChange }: { value: BoardThemeId; onChange: (value: BoardThemeId) => void }) {
   const { language } = useLanguage();
   const translateText = useTranslation(boardTranslations);
-  const selectorId = useId();
+  const selectorId = useId().replace(/:/g, "");
   return (
     <fieldset className="@container min-w-0">
       <legend className="mb-3 text-sm font-semibold">{translateText("Board theme")}</legend>
@@ -30,12 +30,17 @@ export function ThemeSelector({ value, onChange }: { value: BoardThemeId; onChan
                 <span className="text-[9px] font-semibold uppercase tracking-[.08em] text-muted">{translateText(theme.id === "illustrated" ? "Original" : "Artwork")}</span>
               </span>
               <svg aria-hidden="true" focusable="false" viewBox="0 0 176 92" className="mb-2 block w-full rounded-lg">
+                <defs>
+                  <clipPath id={`${selectorId}-${theme.id}-hex-clip`}>
+                    <path d={HEX_ARTWORK_CLIP_PATH} />
+                  </clipPath>
+                </defs>
                 <rect width="176" height="92" rx="8" fill={theme.sea[1]} />
                 <path d="M0 76Q46 56 91 76t85-8V92H0Z" fill={theme.sea[2]} opacity=".4" />
                 {(["wood", "grain", "ore"] satisfies Terrain[]).map((terrain, index) => (
                   <g key={terrain} transform={`translate(${39 + index * 49} ${index === 1 ? 38 : 53}) scale(.44)`}>
                     <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill={theme.terrain[terrain].fill} stroke={theme.border} strokeWidth="5" strokeLinejoin="round" />
-                    <TerrainArtwork terrain={terrain} theme={theme} />
+                    <TerrainArtwork terrain={terrain} theme={theme} clipPathId={`${selectorId}-${theme.id}-hex-clip`} />
                   </g>
                 ))}
               </svg>
