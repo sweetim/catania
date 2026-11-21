@@ -2909,7 +2909,22 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory).toContainText("2 × 1 VP");
   await expect(victory).toContainText("2 × 2 VP");
   await expect(victory).toContainText("1 × 1 VP");
-  await expect(victory.locator(".confetti-piece")).toHaveCount(28);
+  const confetti = victory.locator("canvas.confetti-layer");
+  await expect(confetti).toBeVisible();
+  await expect(confetti).toHaveAttribute("aria-hidden", "true");
+  await expect(confetti).toHaveCSS("pointer-events", "none");
+  await expect.poll(async () => confetti.evaluate(element => {
+    const canvas = element as HTMLCanvasElement;
+    if (canvas.width === 0 || canvas.height === 0) return 0;
+    const context = canvas.getContext("2d");
+    if (!context) return 0;
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let visiblePixels = 0;
+    for (let index = 3; index < data.length; index += 16) {
+      if (data[index]! > 0) visiblePixels++;
+    }
+    return visiblePixels;
+  })).toBeGreaterThan(20);
   await expect(victory.getByRole("button", { name: "Leave room", exact: true })).toBeVisible();
   // The gold exit leads as a full-width bar and the lone quiet exit spans its own full-width row below.
   const victoryActions = victory.locator(".victory-actions");
@@ -2925,6 +2940,24 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory).toHaveCount(0);
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
   await privateScreenFits(phone);
+});
+
+test("victory confetti skips particle animation when reduced motion is preferred", async ({ multiplayer }) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  await phone.emulateMedia({ reducedMotion: "reduce" });
+  const game = snapshot.game!;
+  const opponent = game.players.find(other => other.id !== snapshot.playerId)!;
+  game.phase = { type: "finished" };
+  game.winnerId = opponent.id;
+  opponent.score = 10;
+  opponent.scoreBreakdown = { public: 10, total: 10, settlements: 4, cities: 4, longestRoad: 2, largestArmy: 0, islands: 0, hidden: 0 };
+  await present();
+
+  const victory = phone.getByRole("dialog", { name: `${opponent.name} takes the island.`, exact: true });
+  await expect(victory).toBeVisible();
+  const confetti = victory.locator("canvas.confetti-layer");
+  await expect(confetti).toHaveAttribute("data-confetti-state", "reduced");
+  await expect(confetti).toBeHidden();
 });
 
 test("declining a computer trade request identifies the open trade and survives newer same-trade snapshots", async ({ multiplayer }, testInfo) => {

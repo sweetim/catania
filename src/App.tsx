@@ -777,262 +777,291 @@ export function App() {
 
         {!game ? (
           <main className="home-main" data-view={homeView}>
-            <div className="home-introduction">
-              <p className="eyebrow mb-3 flex items-center gap-3">
-                <span className="h-px w-8 bg-clay" />
-                {translateText("Your next gathering starts here")}
-              </p>
-              <h1 className="font-serif leading-[1.08] tracking-[-.045em]">
-                {translateText("A little island.")}
-                {language === "en" && " "}
-                <br className="hidden lg:inline" />
-                {language === "en"
-                  ? <>Endless <span className="italic text-ink">possibility.</span></>
-                  : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
-              </h1>
-            </div>
-            <nav className="home-navigation" aria-label={translateText("Home views")}>
-              {(["setup", "island"] as const).map(view => (
-                <button
-                  key={view}
-                  aria-pressed={homeView === view}
-                  aria-controls={`home-${view}`}
-                  onClick={() => setHomeView(view)}
-                >
-                  <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    {view === "setup" ? (
-                      <>
-                        <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
-                        <path d="M14 2v4M8 10v4M16 18v4" />
-                      </>
-                    ) : (
-                      <>
-                        <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
-                        <path d="m7.5 14.5 3.5-6 3 4 2-2.5 2.5 4.5H7.5Z" />
-                      </>
-                    )}
-                  </svg>
-                  {translateText(view === "setup" ? "Setup" : "Island")}
-                </button>
-              ))}
-            </nav>
-            <section
-              id="home-setup"
-              className="home-setup panel"
-              aria-label={translateText("Set up your table")}
-            >
-              <div className="home-setup-content">
-                <div>
-                  <p className="eyebrow">{translateText("On this device")}</p>
-                  <h2 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
-                    {translateText("Make room at the table.")}
-                  </h2>
-                </div>
-                <div className="home-table-options">
-                  <div className="flex items-center gap-1 rounded-xl bg-moss p-0.5" role="group" aria-label={translateText("Number of players")}>
-                    <span className="flex shrink-0 items-center pl-1.5 text-muted sm:pl-2" aria-hidden="true" title={translateText("Table size")}>
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                    </span>
-                    {[3, 4].map((count) => (
-                      <button
-                        key={count}
-                        onClick={() => {
-                          setPlayerCount(count);
-                          setHumanCount((current) => Math.min(current, count));
-                        }}
-                        aria-label={translateText("{count} players", { count })}
-                        aria-pressed={playerCount === count}
-                        className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
-                      >
-                        {count}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="min-w-0 text-[11px] font-semibold text-muted">
-                    <span className="sr-only">{translateText("Human players")}</span>
-                    <span className="relative flex items-center">
-                      <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
-                      </svg>
-                      <select
-                        className="field !min-h-12 !pl-7 !pr-1 !text-base font-medium text-ink sm:!pl-8 sm:!pr-2 sm:!text-sm"
-                        value={humanCount}
-                        onChange={(event) => setHumanCount(Number(event.target.value))}
-                      >
-                        {Array.from({ length: playerCount }, (_, index) => index + 1)
-                          .map((count) => (
-                            <option key={count} value={count}>
-                              {translateText(count === 1 ? "{count} human" : "{count} humans", { count })}
-                            </option>
-                          ))}
-                      </select>
-                    </span>
-                  </label>
-                  <GameVariantSelector className="home-variant-selector" value={variant} onChange={nextVariant => {
-                    setVariant(nextVariant);
-                    const seed = generateMapSeed();
-                    setPreview({
-                      seed, board: createBoard(seededRandom(seed), nextVariant,
-                        nextVariant === "custom-world" ? playableCustomMapConfig() : undefined)
-                    });
-                  }} />
-                </div>
-                {variant === "custom-world" && (
-                  <CustomMapConfigPanel
-                    value={customMapConfig}
-                    onChange={nextConfig => {
-                      setCustomMapConfig(nextConfig);
-                      if (isCustomMapConfig(nextConfig)) {
-                        lastValidCustomMapConfig.current = nextConfig;
-                        setPreview(current => ({ seed: current.seed, board: createBoard(seededRandom(current.seed), "custom-world", nextConfig) }));
-                      }
-                    }}
-                  />
-                )}
-                <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-                  {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
-                    <label
-                      key={index}
-                      className="flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2 sm:gap-2 sm:px-3"
-                    >
-                      <span
-                        className="player-number flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                        style={{ background: PLAYER_COLORS[index] }}
-                      >
-                        {Array.from(name.trim())[0]?.toUpperCase() ?? index + 1}
-                      </span>
-                      <span className="sr-only">{translateText("Player {number} name", { number: index + 1 })}</span>
-                      <input
-                        aria-label={translateText("Player {number} name", { number: index + 1 })}
-                        maxLength={20}
-                        value={name}
-                        onChange={(event) =>
-                          setNames((current) =>
-                            current.map((value, position) =>
-                              position === index ? event.target.value : value,
-                            ),
-                          )
-                        }
-                        className="min-h-11 w-full min-w-0 bg-transparent text-base outline-offset-0 sm:text-sm"
-                      />
-                    </label>
-                  ) : (
-                    <div
-                      key={index}
-                      className="flex min-h-11 min-w-0 items-center gap-1.5 rounded-lg border border-line bg-moss/60 px-2 text-sm sm:gap-2 sm:px-3"
-                    >
-                      <span
-                        className="h-5 w-5 shrink-0 rounded-full"
-                        style={{ background: PLAYER_COLORS[index] }}
-                      />
-                      <span className="min-w-0 flex-1 truncate">
-                        {defaultComputerName(language, index - humanCount + 1)}
-                      </span>
-                      <svg
-                        role="img"
-                        aria-label={translateText("AI")}
-                        className="h-4 w-4 shrink-0 text-muted"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <title>{translateText("AI")}</title>
-                        <path d="M12 3v4M3 12v4M21 12v4" />
-                        <rect x="5" y="7" width="14" height="13" rx="4" />
-                        <path d="M9 16h6" />
-                        <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" />
-                        <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
-                      </svg>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  className="home-theme"
-                  aria-label={translateText("Change theme")}
-                  aria-haspopup="dialog"
-                  onClick={() => setDialog("theme")}
-                >
-                  <svg className="home-theme-preview" data-theme={boardThemeId} viewBox="0 0 176 76" aria-hidden="true" focusable="false">
-                    <defs>
-                      <clipPath id={homePreviewClipId}>
-                        <path d={HEX_ARTWORK_CLIP_PATH} />
-                      </clipPath>
-                    </defs>
-                    {(["wood", "grain", "ore"] as const).map((terrain, index) => (
-                      <g key={terrain} transform={`translate(${30 + index * 58} ${index === 1 ? 32 : 44}) scale(.5)`}>
-                        <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill={boardTheme.terrain[terrain].fill} stroke={boardTheme.border} strokeWidth="3" strokeLinejoin="round" />
-                        <TerrainArtwork terrain={terrain} theme={boardTheme} clipPathId={homePreviewClipId} />
-                      </g>
-                    ))}
-                  </svg>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
-                    <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
-                  </span>
-                  <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </button>
+            <div className="home-left">
+              <div className="home-introduction">
+                <p className="eyebrow mb-3 flex items-center gap-3">
+                  <span className="h-px w-8 bg-clay" />
+                  {translateText("Your next gathering starts here")}
+                </p>
+                <h1 className="font-serif leading-[1.08] tracking-[-.045em]">
+                  {translateText("A little island.")}
+                  {language === "en" && " "}
+                  <br className="hidden lg:inline" />
+                  {language === "en"
+                    ? <>Endless <span className="italic text-ink">possibility.</span></>
+                    : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
+                </h1>
               </div>
-              <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
-                {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{errorText}</p>}
-                <button
-                  className="button-primary w-full justify-between"
-                  onClick={() => startGame(preview.board, preview.seed)}
-                >
-                  {translateText("Let's settle in")} <Arrow />
-                </button>
-              </div>
-            </section>
-            <section className="home-multiplayer" aria-label={translateText("Cross-device play")}>
-              <h2 className="eyebrow mb-1.5 lg:mb-2">{translateText("Separate multiplayer setup")}</h2>
-              <div className="home-multiplayer-actions">
-                <a className="button-primary min-w-0 flex-1 justify-between" href="/?multiplayer=1">
-                  <span className="truncate">{translateText("Play across devices")}</span> <Arrow className="h-4 w-4 shrink-0" />
-                </a>
-                <button
-                  type="button"
-                  className="button-secondary home-scan-button"
-                  aria-label={translateText("Scan to join a board")}
-                  title={translateText("Scan to join a board")}
-                  onClick={() => setDialog("scan")}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <svg aria-hidden="true" className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="5" height="5" x="3" y="3" rx="1" />
-                      <rect width="5" height="5" x="16" y="3" rx="1" />
-                      <rect width="5" height="5" x="3" y="16" rx="1" />
-                      <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
-                      <path d="M21 21v.01" />
-                      <path d="M12 7v3a2 2 0 0 1-2 2H7" />
-                      <path d="M3 12h.01" />
-                      <path d="M12 3h.01" />
-                      <path d="M12 16v.01" />
-                      <path d="M16 12h.01" />
-                      <path d="M21 12v.01" />
-                      <path d="M12 21v.01" />
+              <nav className="home-navigation" aria-label={translateText("Home views")}>
+                {(["setup", "island"] as const).map(view => (
+                  <button
+                    key={view}
+                    aria-pressed={homeView === view}
+                    aria-controls={`home-${view}`}
+                    onClick={() => setHomeView(view)}
+                  >
+                    <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      {view === "setup" ? (
+                        <>
+                          <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
+                          <path d="M14 2v4M8 10v4M16 18v4" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
+                          <path d="m7.5 14.5 3.5-6 3 4 2-2.5 2.5 4.5H7.5Z" />
+                        </>
+                      )}
                     </svg>
-                    <span className="home-scan-label">{translateText("Scan to join a board")}</span>
-                  </span>
-                  <Arrow className="home-scan-arrow h-4 w-4 shrink-0" />
-                </button>
-              </div>
-            </section>
+                    {translateText(view === "setup" ? "Setup" : "Island")}
+                  </button>
+                ))}
+              </nav>
+              <section
+                id="home-setup"
+                className="home-setup panel"
+                aria-label={translateText("Set up your table")}
+              >
+                <div className="home-setup-content">
+                  <div>
+                    <p className="eyebrow">{translateText("On this device")}</p>
+                    <h2 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
+                      {translateText("Make room at the table.")}
+                    </h2>
+                  </div>
+                  <div className="home-table-options">
+                    <div className="flex min-h-11 items-center gap-1 rounded-xl border border-line/80 bg-moss/75 p-1" role="group" aria-label={translateText("Number of players")}>
+                      <span className="flex shrink-0 items-center pl-1.5 text-muted sm:pl-2" aria-hidden="true" title={translateText("Table size")}>
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                          <circle cx="9" cy="7" r="4" />
+                          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                      </span>
+                      {[3, 4].map((count) => (
+                        <button
+                          key={count}
+                          onClick={() => {
+                            setPlayerCount(count);
+                            setHumanCount((current) => Math.min(current, count));
+                          }}
+                          aria-label={translateText("{count} players", { count })}
+                          aria-pressed={playerCount === count}
+                          className={`min-h-9 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors ${playerCount === count ? "bg-white text-ink shadow-[0_1px_2px_rgba(37,59,54,0.12)]" : "text-muted hover:text-ink"}`}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="min-w-0 text-[11px] font-semibold text-muted">
+                      <span className="sr-only">{translateText("Human players")}</span>
+                      <span className="relative flex items-center">
+                        <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="8" r="4" />
+                          <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+                        </svg>
+                        <select
+                          className="field !min-h-11 appearance-none !pl-7 !pr-6 !text-base font-medium text-ink transition-colors hover:border-ink/30 sm:!pl-8 sm:!pr-8 sm:!text-sm sm:font-semibold"
+                          value={humanCount}
+                          onChange={(event) => setHumanCount(Number(event.target.value))}
+                        >
+                          {Array.from({ length: playerCount }, (_, index) => index + 1)
+                            .map((count) => (
+                              <option key={count} value={count}>
+                                {translateText(count === 1 ? "{count} human" : "{count} humans", { count })}
+                              </option>
+                            ))}
+                        </select>
+                        <svg aria-hidden="true" className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted sm:right-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m3 4.5 3 3 3-3" />
+                        </svg>
+                      </span>
+                    </label>
+                    <GameVariantSelector className="home-variant-selector" value={variant} onChange={nextVariant => {
+                      setVariant(nextVariant);
+                      const seed = generateMapSeed();
+                      setPreview({
+                        seed, board: createBoard(seededRandom(seed), nextVariant,
+                          nextVariant === "custom-world" ? playableCustomMapConfig() : undefined)
+                      });
+                    }} />
+                  </div>
+                  {variant === "custom-world" && (
+                    <CustomMapConfigPanel
+                      value={customMapConfig}
+                      onChange={nextConfig => {
+                        setCustomMapConfig(nextConfig);
+                        if (isCustomMapConfig(nextConfig)) {
+                          lastValidCustomMapConfig.current = nextConfig;
+                          setPreview(current => ({ seed: current.seed, board: createBoard(seededRandom(current.seed), "custom-world", nextConfig) }));
+                        }
+                      }}
+                    />
+                  )}
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
+                      <label
+                        key={index}
+                        className="group flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-white px-2.5 transition-colors hover:border-ink/30 focus-within:border-ink/45 focus-within:ring-2 focus-within:ring-forest/50 sm:gap-2"
+                      >
+                        <span
+                          className="player-number flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white shadow-xs"
+                          style={{ background: PLAYER_COLORS[index] }}
+                        >
+                          {Array.from(name.trim())[0]?.toUpperCase() ?? index + 1}
+                        </span>
+                        <span className="sr-only">{translateText("Player {number} name", { number: index + 1 })}</span>
+                        <input
+                          aria-label={translateText("Player {number} name", { number: index + 1 })}
+                          maxLength={20}
+                          value={name}
+                          onChange={(event) =>
+                            setNames((current) =>
+                              current.map((value, position) =>
+                                position === index ? event.target.value : value,
+                              ),
+                            )
+                          }
+                          className="min-h-11 w-full min-w-0 bg-transparent text-base font-medium text-ink focus-visible:outline-none sm:text-sm"
+                        />
+                        <svg aria-hidden="true" className="hidden h-3.5 w-3.5 shrink-0 text-muted/45 transition-colors group-hover:text-muted group-focus-within:text-ink/70 sm:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </label>
+                    ) : (
+                      <div
+                        key={index}
+                        className="flex min-h-11 min-w-0 items-center gap-1.5 rounded-xl border border-line/80 bg-moss/55 px-2.5 text-sm text-ink/85 sm:gap-2"
+                      >
+                        <span
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white"
+                          style={{ background: PLAYER_COLORS[index] }}
+                        >
+                          <svg
+                            role="img"
+                            aria-label={translateText("AI")}
+                            className="h-3 w-3"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <title>{translateText("AI")}</title>
+                            <path d="M12 3v4" />
+                            <rect x="5" y="7" width="14" height="13" rx="4" />
+                            <circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none" />
+                            <circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {defaultComputerName(language, index - humanCount + 1)}
+                        </span>
+                      </div>
+                    ))}
+                    {playerCount === 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setPlayerCount(4)}
+                        className="flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-paper/45 px-2.5 text-xs font-semibold text-muted transition-colors hover:border-ink/35 hover:bg-moss/45 hover:text-ink"
+                      >
+                        <svg aria-hidden="true" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                        <span className="truncate">{translateText("Add 4th player")}</span>
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="home-theme"
+                    aria-label={translateText("Change theme")}
+                    aria-haspopup="dialog"
+                    onClick={() => setDialog("theme")}
+                  >
+                    <svg className="home-theme-preview" data-theme={boardThemeId} viewBox="0 0 176 76" aria-hidden="true" focusable="false">
+                      <defs>
+                        <clipPath id={homePreviewClipId}>
+                          <path d={HEX_ARTWORK_CLIP_PATH} />
+                        </clipPath>
+                      </defs>
+                      {(["wood", "grain", "ore"] as const).map((terrain, index) => (
+                        <g key={terrain} transform={`translate(${30 + index * 58} ${index === 1 ? 32 : 44}) scale(.5)`}>
+                          <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill={boardTheme.terrain[terrain].fill} stroke={boardTheme.border} strokeWidth="3" strokeLinejoin="round" />
+                          <TerrainArtwork terrain={terrain} theme={boardTheme} clipPathId={homePreviewClipId} />
+                        </g>
+                      ))}
+                    </svg>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
+                      <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
+                    </span>
+                    <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
+                  {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{errorText}</p>}
+                  <button
+                    className="button-primary w-full justify-between"
+                    onClick={() => startGame(preview.board, preview.seed)}
+                  >
+                    {translateText("Let's settle in")} <Arrow />
+                  </button>
+                </div>
+              </section>
+              <section className="home-multiplayer" aria-label={translateText("Cross-device play")}>
+                <h2 className="eyebrow mb-2">{translateText("Or play across devices")}</h2>
+                <div className="home-multiplayer-actions">
+                  <a className="button-secondary home-multiplayer-link min-w-0 flex-1 justify-between" href="/?multiplayer=1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="12" height="16" x="2" y="4" rx="2" />
+                        <rect width="8" height="12" x="14" y="8" rx="1.5" />
+                        <path d="M8 17h.01M18 17h.01" />
+                      </svg>
+                      <span className="truncate">{translateText("Play across devices")}</span>
+                    </span>
+                    <Arrow className="h-4 w-4 shrink-0 text-muted" />
+                  </a>
+                  <button
+                    type="button"
+                    className="button-secondary home-scan-button"
+                    aria-label={translateText("Scan to join a board")}
+                    title={translateText("Scan to join a board")}
+                    onClick={() => setDialog("scan")}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1" />
+                        <rect width="5" height="5" x="16" y="3" rx="1" />
+                        <rect width="5" height="5" x="3" y="16" rx="1" />
+                        <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+                        <path d="M21 21v.01" />
+                        <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+                        <path d="M3 12h.01" />
+                        <path d="M12 3h.01" />
+                        <path d="M12 16v.01" />
+                        <path d="M16 12h.01" />
+                        <path d="M21 12v.01" />
+                        <path d="M12 21v.01" />
+                      </svg>
+                      <span className="home-scan-label truncate">{translateText("Scan to join a board")}</span>
+                    </span>
+                    <Arrow className="home-scan-arrow h-4 w-4 shrink-0 text-muted" />
+                  </button>
+                </div>
+              </section>
+            </div>
             <section
               id="home-island"
               className="home-island"
               aria-label={translateText("Island preview")}
             >
-              <div className="shrink-0">
+              <div className="home-island-heading shrink-0">
                 <p className="eyebrow">{translateText("A place to begin")}</p>
                 <h2 className="mt-0.5 font-serif text-lg lg:mt-1 lg:text-2xl">{translateText("Your island awaits.")}</h2>
               </div>
@@ -1052,6 +1081,7 @@ export function App() {
                   onChangeTheme={() => setDialog("theme")}
                   headerControls={<MapSeedControls
                     value={mapCode}
+                    showCopy
                     error={mapCodeInvalid ? translateText("Enter a valid 8-character map code.") : undefined}
                     onChange={value => {
                       setMapCode(value);

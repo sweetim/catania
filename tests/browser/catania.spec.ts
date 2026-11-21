@@ -518,6 +518,7 @@ for (const viewport of [
     await expect(localStart.getByRole("link")).toHaveCount(0);
     await expect(crossDevice.getByRole("link", { name: "Play across devices", exact: true })).toHaveCount(1);
     await expect(crossDevice.getByRole("heading", { name: "Separate multiplayer setup", exact: true })).toBeVisible();
+    await expect(crossDevice.getByRole("heading", { name: "Or play across devices", exact: true })).toBeVisible();
     await expect(start).not.toHaveAttribute("aria-describedby");
     await expect(multiplayer).not.toHaveAttribute("aria-describedby");
     await expect(page.locator("#local-start-note, #multiplayer-start-note")).toHaveCount(0);
@@ -528,12 +529,19 @@ for (const viewport of [
     }));
     expect(buttonStyles).toHaveLength(2);
     expect(buttonStyles[0]).toEqual(buttonStyles[1]);
+    await expect(page.locator(".home-main .button-primary")).toHaveCount(1);
+    await expect(multiplayer).toHaveClass(/\bbutton-secondary\b/);
     expect(await crossDevice.evaluate(element => getComputedStyle(element).borderTopStyle)).toBe("solid");
     await expect(start).toBeInViewport({ ratio: 1 });
     await expect(multiplayer).toBeInViewport({ ratio: 1 });
     await expect(multiplayer).toHaveAttribute("href", "/?multiplayer=1");
     await noPageOverflow(page);
     await page.getByRole("button", { name: "4 players", exact: true }).click();
+    const addFourthPlayer = setup.getByRole("button", { name: "Add 4th player", exact: true });
+    await expect(addFourthPlayer).toBeVisible();
+    await addFourthPlayer.click();
+    await expect(addFourthPlayer).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "4 players", exact: true })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
     for (const [index, name] of ["Alex", "Sam", "Jordan", "Robin"].entries()) {
       const input = setup.getByRole("textbox", { name: `Player ${index + 1} name`, exact: true });
@@ -592,6 +600,14 @@ for (const viewport of [
     await expect(dialog.getByRole("radio", { name: "Carved Wooden Tabletop", exact: true })).toBeChecked();
     await page.keyboard.press("Escape");
     await expect(island.getByRole("button", { name: "Change theme", exact: true })).toBeFocused();
+    if (viewport.width < 1024) {
+      await island.getByRole("button", { name: "Change theme", exact: true }).click();
+      await expect(dialog.getByRole("radio", { name: "Carved Wooden Tabletop", exact: true })).toBeChecked();
+      await page.keyboard.press("Escape");
+      await expect(island.getByRole("button", { name: "Change theme", exact: true })).toBeFocused();
+    } else {
+      await expect(island.getByRole("button", { name: "Change theme", exact: true })).toBeHidden();
+    }
 
     await showHomeView(page, "Setup");
     await setup.getByRole("textbox", { name: "Player 2 name", exact: true }).fill("Alex");
@@ -674,9 +690,12 @@ for (const language of ["en", "ja"] as const) {
     const labels = language === "ja"
       ? { island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", shuffle: "島の配置をシャッフル" }
       : { island: "Island", preview: "Island preview", code: "Map code", replay: "Replay map", shuffle: "Shuffle island preview" };
+      ?{ island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", copy: "マップコードをコピー", copied: "マップコードをコピーしました", shuffle: "島の配置をシャッフル" }
+      : { island: "Island", preview: "Island preview", code: "Map code", replay: "Replay map", copy: "Copy map code", copied: "Map code copied", shuffle: "Shuffle island preview" };
     const island = page.getByRole("region", { name: labels.preview, exact: true });
     const toolbar = island.locator(".board-surface > .board-header-controls").getByRole("form", { name: labels.code, exact: true });
     const input = toolbar.getByRole("textbox", { name: labels.code, exact: true });
+    const copy = toolbar.getByRole("button", { name: labels.copy, exact: true });
     const shuffle = toolbar.getByRole("button", { name: labels.shuffle, exact: true });
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
       await page.setViewportSize(viewport);
@@ -685,6 +704,8 @@ for (const language of ["en", "ja"] as const) {
       await expect(toolbar).toBeInViewport({ ratio: 1 });
       await expect(toolbar.getByRole("button", { name: labels.replay, exact: true })).toHaveCount(0);
       await expect(toolbar.getByRole("button")).toHaveCount(1);
+      await expect(toolbar.getByRole("button")).toHaveCount(2);
+      await expect(copy).toBeInViewport({ ratio: 1 });
       await expect(input).toHaveAttribute("maxlength", "8");
       await expect(toolbar.locator("label > span")).toBeVisible();
       expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -709,6 +730,16 @@ for (const language of ["en", "ja"] as const) {
       await input.press("Enter");
       expect(await themeBoardGeometry(island)).toEqual(selectedIsland);
       await input.press("Tab");
+      await expect(copy).toBeFocused();
+      await page.evaluate(() => {
+        const copiedMapCodes: string[] = [];
+        Object.assign(window, { copiedMapCodes });
+        Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { copiedMapCodes.push(text); } } });
+      });
+      await copy.click();
+      await expect(toolbar.getByRole("button", { name: labels.copied, exact: true })).toBeVisible();
+      expect(await page.evaluate(() => (window as unknown as { copiedMapCodes: string[] }).copiedMapCodes)).toEqual(["TESTMAP2"]);
+      await toolbar.getByRole("button", { name: labels.copied, exact: true }).press("Tab");
       await expect(shuffle).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(input).not.toHaveValue("TESTMAP2");
@@ -741,7 +772,7 @@ for (const language of ["en", "ja"] as const) {
 }
 
 test("cross-device play opens its own setup without using local player settings", async ({ page }) => {
-  await page.routeWebSocket(/\/peerjs\?/, () => {});
+  await page.routeWebSocket(/\/peerjs\?/, () => { });
   await page.goto("/");
   await page.getByRole("button", { name: "4 players", exact: true }).click();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
@@ -2216,8 +2247,10 @@ test("short and narrow tabletops contain zoom, controls and placement previews",
       const icon = content.firstElementChild!.getBoundingClientRect();
       const label = content.lastElementChild!.getBoundingClientRect();
       const cost = element.querySelector(".build-cost")!.getBoundingClientRect();
-      return { x, y, width, height, parentWidth: element.parentElement!.getBoundingClientRect().width,
-        iconWidth: icon.width, iconHeight: icon.height, labelLeft: label.left, labelRight: label.right, costLeft: cost.left, costRight: cost.right };
+      return {
+        x, y, width, height, parentWidth: element.parentElement!.getBoundingClientRect().width,
+        iconWidth: icon.width, iconHeight: icon.height, labelLeft: label.left, labelRight: label.right, costLeft: cost.left, costRight: cost.right
+      };
     }));
     for (const [index, piece] of (["road", "settlement", "city", "development"] as const).entries()) {
       const row = buildRows.nth(index);
@@ -3119,211 +3152,211 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
 });
 
 for (const selection of ["revealed land", "new fog"] as const) {
-test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
-  await page.goto("/");
-  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await selectGameVersion(page, "foggy-world");
-  await showHomeView(page, "Island");
-  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
-  await mapCode.fill("77889999");
-  await mapCode.press("Enter");
-  await showHomeView(page, "Setup");
-  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
-  const collection = page.getByRole("region", { name: "Resource collection" });
-  async function dismissCollection() {
-    await showView(page, "hand");
-    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-    await showView(page, "board");
-  }
-  for (const [tileId, vertexId, edgeId] of [
-    ["tile-1", "vertex-3", "edge-3"],
-    ["tile-2", "vertex-7", "edge-7"],
-    ["tile-13", "vertex-39", "edge-46"],
-  ]) {
-    await revealHand(page);
-    await showView(page, "board");
-    await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await selectGameVersion(page, "foggy-world");
+    await showHomeView(page, "Island");
+    const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+    await mapCode.fill("77889999");
+    await mapCode.press("Enter");
+    await showHomeView(page, "Setup");
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    async function dismissCollection() {
+      await showView(page, "hand");
+      if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+      await showView(page, "board");
+    }
+    for (const [tileId, vertexId, edgeId] of [
+      ["tile-1", "vertex-3", "edge-3"],
+      ["tile-2", "vertex-7", "edge-7"],
+      ["tile-13", "vertex-39", "edge-46"],
+    ]) {
+      await revealHand(page);
+      await showView(page, "board");
+      await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+      await dismissCollection();
+      await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+      await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+      const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+      await expect(routeDialog).toBeVisible();
+      const roadChoice = routeDialog.getByRole("button", { name: "Build road", exact: true });
+      if (await roadChoice.isVisible()) await roadChoice.click();
+      else await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
     await dismissCollection();
-    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Place your second settlement.", exact: true })).toBeVisible();
+    await expect(page.getByText("Place your second settlement directly on a highlighted node on revealed land, or reveal a new cell. Sea? Choose again.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Choose starting cell at tile-12", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Place settlement at vertex-9", exact: true })).toBeVisible();
+    const fog = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+    const fogCount = await fog.count();
+    expect(fogCount).toBeGreaterThan(0);
+    const tileId = selection === "revealed land" ? "tile-1" : "tile-12";
+    let placedVertexId = "vertex-9";
+    await screenshot(page, testInfo, "foggy-world-second-settlement-choices", false);
+    if (selection === "revealed land") {
+      const node = page.getByRole("button", { name: "Place settlement at vertex-9", exact: true });
+      await node.click();
+      await expect(page.getByText("Settle here?", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(fog).toHaveCount(fogCount);
+      await node.click();
+    } else {
+      await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+      await expect(fog).toHaveCount(fogCount - 1);
+      await showView(page, "hand");
+      await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
+      await dismissCollection();
+      const node = page.getByRole("button", { name: /^Place settlement at / }).first();
+      placedVertexId = ((await node.getAttribute("aria-label"))!).replace("Place settlement at ", "");
+      await node.click();
+    }
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
-    const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
-    await expect(routeDialog).toBeVisible();
-    const roadChoice = routeDialog.getByRole("button", { name: "Build road", exact: true });
-    if (await roadChoice.isVisible()) await roadChoice.click();
-    else await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  }
-  await dismissCollection();
-  await expect(page.getByRole("heading", { name: "Place your second settlement.", exact: true })).toBeVisible();
-  await expect(page.getByText("Place your second settlement directly on a highlighted node on revealed land, or reveal a new cell. Sea? Choose again.", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Choose starting cell at tile-12", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Place settlement at vertex-9", exact: true })).toBeVisible();
-  const fog = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
-  const fogCount = await fog.count();
-  expect(fogCount).toBeGreaterThan(0);
-  const tileId = selection === "revealed land" ? "tile-1" : "tile-12";
-  let placedVertexId = "vertex-9";
-  await screenshot(page, testInfo, "foggy-world-second-settlement-choices", false);
-  if (selection === "revealed land") {
-    const node = page.getByRole("button", { name: "Place settlement at vertex-9", exact: true });
-    await node.click();
-    await expect(page.getByText("Settle here?", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(fog).toHaveCount(fogCount);
-    await node.click();
-  } else {
-    await page.getByRole("button", { name: `Choose starting cell at ${tileId}`, exact: true }).click();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-    await expect(fog).toHaveCount(fogCount - 1);
-    await showView(page, "hand");
-    await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
+    await expect(fog).toHaveCount(fogCount - (selection === "new fog" ? 1 : 0));
     await dismissCollection();
-    const node = page.getByRole("button", { name: /^Place settlement at / }).first();
-    placedVertexId = ((await node.getAttribute("aria-label"))!).replace("Place settlement at ", "");
-    await node.click();
-  }
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(fog).toHaveCount(fogCount - (selection === "new fog" ? 1 : 0));
-  await dismissCollection();
-  await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
-  const board = createBoard(seededRandom("77889999"), "foggy-world");
-  const routeTargets = await page.getByRole("button", { name: /^Build (road|ship) at / }).evaluateAll(targets =>
-    targets.map(target => target.getAttribute("aria-label")!.replace(/^Build (road|ship) at /, "")),
-  );
-  expect(routeTargets.length).toBeGreaterThan(0);
-  expect(routeTargets.every(id => board.edges.find(edge => edge.id === id)!.vertexIds.includes(placedVertexId))).toBe(true);
-  await noPageOverflow(page);
-  await screenshot(page, testInfo, `foggy-world-second-${selection.replaceAll(" ", "-")}`, false);
-});
+    await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    const board = createBoard(seededRandom("77889999"), "foggy-world");
+    const routeTargets = await page.getByRole("button", { name: /^Build (road|ship) at / }).evaluateAll(targets =>
+      targets.map(target => target.getAttribute("aria-label")!.replace(/^Build (road|ship) at /, "")),
+    );
+    expect(routeTargets.length).toBeGreaterThan(0);
+    expect(routeTargets.every(id => board.edges.find(edge => edge.id === id)!.vertexIds.includes(placedVertexId))).toBe(true);
+    await noPageOverflow(page);
+    await screenshot(page, testInfo, `foggy-world-second-${selection.replaceAll(" ", "-")}`, false);
+  });
 }
 
 for (const piece of ["road", "ship"] as const) {
-test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, async ({ page }, testInfo) => {
-  await page.goto("/");
-  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
-  await selectGameVersion(page, "foggy-world");
-  await showHomeView(page, "Island");
-  const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
-  const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
-  const harbors = page.getByRole("img", { name: /harbor, trade/ });
-  await expect(fogLabels).toHaveCount(42);
-  await expect(harbors).toHaveCount(0);
-  await expect(page.getByRole("img", { name: /^Pirate;/ })).toHaveCount(0);
-  await mapCode.fill("77889999");
-  await mapCode.press("Enter");
-  await expect(fogLabels).toHaveCount(42);
-  await showHomeView(page, "Setup");
-  await seedRandomness(page, 1);
-  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
-  await revealHand(page);
-  await showView(page, "board");
-  await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
-  await expect(fogLabels).toHaveCount(42);
-  const revealTargets = page.getByRole("button", { name: /^Choose starting cell at / });
-  await expect(revealTargets).toHaveCount(42);
-  await screenshot(page, testInfo, "foggy-world-starting-cell", false);
-  await page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
-  await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
-  await expect(fogLabels).toHaveCount(42);
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(fogLabels).toHaveCount(41);
-  await expect(page.getByRole("img", { name: "Sea, sea, no production", exact: true })).toBeVisible();
-  await expect(harbors).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
-  await expect(revealTargets).toHaveCount(41);
-  await expect(page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
-  await expect(fogLabels).toHaveCount(41);
-  await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
-  await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(fogLabels).toHaveCount(41);
-  await expect(revealTargets).toHaveCount(41);
-  await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(fogLabels).toHaveCount(40);
-  await expect(revealTargets).toHaveCount(0);
-  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await expect(page.getByRole("img", { name: /^Fields, grain, roll 11/ })).toBeVisible();
-  await expect(harbors).toHaveCount(1);
-  const collection = page.getByRole("region", { name: "Resource collection" });
-  await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
-  await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-  await showView(page, "board");
-  await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
-  const selectedCell = createBoard(seededRandom("77889999"), "foggy-world").tiles.find(tile => tile.id === "tile-1")!;
-  await expect.poll(() => page.getByRole("button", { name: /^Place settlement at / }).evaluateAll(targets =>
-    targets.map(target => target.getAttribute("aria-label")).sort(),
-  )).toEqual(selectedCell.vertexIds.map(id => `Place settlement at ${id}`).sort());
-  await expect(page.getByRole("img", { name: /'s settlement at / })).toHaveCount(0);
-  await screenshot(page, testInfo, "foggy-world-cell-first-nodes", false);
-  await page.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
-  await expect(page.getByText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Build road at edge-3", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
-  await screenshot(page, testInfo, `foggy-world-route-choice-${piece}`, false);
-  await page.getByRole("button", { name: "Build road at edge-3", exact: true }).click();
-  const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
-  await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
-  await routeDialog.getByRole("button", { name: piece === "ship" ? "Build ship" : "Build road", exact: true }).click();
-  await revealHand(page);
-  await showView(page, "board");
-  await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
-  await expect(revealTargets.first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
-  await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
-  await expect(page.getByRole("img", { name: /^Hills, brick, roll 10/ })).toBeVisible();
-  await expect(fogLabels).toHaveCount(38);
-  await expect(harbors).toHaveCount(1);
-  await expect(page.getByRole("img", { name: new RegExp(`'s ${piece} at edge-3$`) })).toHaveCount(1);
-  const coastMidpoints = await page.locator('.board-map g[stroke="#b8a777"] > line').evaluateAll(lines => lines.map(element => {
-    const line = element as SVGLineElement;
-    return { x: (line.x1.baseVal.value + line.x2.baseVal.value) / 2, y: (line.y1.baseVal.value + line.y2.baseVal.value) / 2 };
-  }));
-  const connections = await harbors.evaluateAll((groups, midpoints) => groups.map(group =>
-    Array.from(group.querySelectorAll<SVGPathElement>(":scope > path"), path => {
-      const start = path.getPointAtLength(0);
-      return Math.min(...midpoints.map(midpoint => Math.hypot(start.x - midpoint.x, start.y - midpoint.y)));
-    }),
-  ), coastMidpoints);
-  for (const strokes of connections) {
-    expect(strokes).toHaveLength(2);
-    for (const gap of strokes) expect(gap, "Harbor pier connects to revealed land").toBeCloseTo(0, 4);
-  }
-  await noPageOverflow(page);
-  await screenshot(page, testInfo, `foggy-world-node-${piece}`, false);
-  await expect(fogLabels).toHaveCount(38);
-  await page.getByRole("button", { name: "Choose starting cell at tile-38", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await showView(page, "hand");
-  if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-  const gold = page.getByRole("region", { name: "Choose your gold resources", exact: true });
-  await expect(gold).toBeVisible();
-  await gold.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
-  await gold.getByRole("button", { name: "Collect resources", exact: true }).click();
-  if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-  await showView(page, "board");
-  await expect(fogLabels).toHaveCount(37);
-  await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
-  await expect(revealTargets).toHaveCount(0);
-  await page.getByRole("button", { name: "Place settlement at vertex-8", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Build (road|ship) at / }).first()).toBeVisible();
-  await chooseGameOption(page, "Help");
-  await expect(page.getByRole("dialog", { name: "Help", exact: true }))
-    .toContainText("All nine harbors keep their trade types and appear only on revealed land-sea coasts");
-});
+  test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+    await selectGameVersion(page, "foggy-world");
+    await showHomeView(page, "Island");
+    const mapCode = page.getByRole("textbox", { name: "Map code", exact: true });
+    const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
+    const harbors = page.getByRole("img", { name: /harbor, trade/ });
+    await expect(fogLabels).toHaveCount(42);
+    await expect(harbors).toHaveCount(0);
+    await expect(page.getByRole("img", { name: /^Pirate;/ })).toHaveCount(0);
+    await mapCode.fill("77889999");
+    await mapCode.press("Enter");
+    await expect(fogLabels).toHaveCount(42);
+    await showHomeView(page, "Setup");
+    await seedRandomness(page, 1);
+    await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+    await revealHand(page);
+    await showView(page, "board");
+    await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
+    await expect(fogLabels).toHaveCount(42);
+    const revealTargets = page.getByRole("button", { name: /^Choose starting cell at / });
+    await expect(revealTargets).toHaveCount(42);
+    await screenshot(page, testInfo, "foggy-world-starting-cell", false);
+    await page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true }).click();
+    await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
+    await expect(fogLabels).toHaveCount(42);
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(fogLabels).toHaveCount(41);
+    await expect(page.getByRole("img", { name: "Sea, sea, no production", exact: true })).toBeVisible();
+    await expect(harbors).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
+    await expect(revealTargets).toHaveCount(41);
+    await expect(page.getByRole("button", { name: "Choose starting cell at tile-0", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    await expect(fogLabels).toHaveCount(41);
+    await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
+    await expect(page.getByText("Choose this starting cell?", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(fogLabels).toHaveCount(41);
+    await expect(revealTargets).toHaveCount(41);
+    await page.getByRole("button", { name: "Choose starting cell at tile-1", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(fogLabels).toHaveCount(40);
+    await expect(revealTargets).toHaveCount(0);
+    await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
+    await expect(page.getByRole("img", { name: /^Fields, grain, roll 11/ })).toBeVisible();
+    await expect(harbors).toHaveCount(1);
+    const collection = page.getByRole("region", { name: "Resource collection" });
+    await expect(collection.getByRole("listitem", { name: "Grain +1", exact: true })).toBeVisible();
+    await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    await showView(page, "board");
+    await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
+    const selectedCell = createBoard(seededRandom("77889999"), "foggy-world").tiles.find(tile => tile.id === "tile-1")!;
+    await expect.poll(() => page.getByRole("button", { name: /^Place settlement at / }).evaluateAll(targets =>
+      targets.map(target => target.getAttribute("aria-label")).sort(),
+    )).toEqual(selectedCell.vertexIds.map(id => `Place settlement at ${id}`).sort());
+    await expect(page.getByRole("img", { name: /'s settlement at / })).toHaveCount(0);
+    await screenshot(page, testInfo, "foggy-world-cell-first-nodes", false);
+    await page.getByRole("button", { name: "Place settlement at vertex-3", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
+    await expect(page.getByText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Build road at edge-3", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Build road at edge-2", exact: true })).toHaveCount(0);
+    await screenshot(page, testInfo, `foggy-world-route-choice-${piece}`, false);
+    await page.getByRole("button", { name: "Build road at edge-3", exact: true }).click();
+    const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+    await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+    await routeDialog.getByRole("button", { name: piece === "ship" ? "Build ship" : "Build road", exact: true }).click();
+    await revealHand(page);
+    await showView(page, "board");
+    await expect(page.getByRole("heading", { name: "Choose a starting cell." })).toBeVisible();
+    await expect(revealTargets.first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Place settlement at / })).toHaveCount(0);
+    await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
+    await expect(page.getByRole("img", { name: /^Hills, brick, roll 10/ })).toBeVisible();
+    await expect(fogLabels).toHaveCount(38);
+    await expect(harbors).toHaveCount(1);
+    await expect(page.getByRole("img", { name: new RegExp(`'s ${piece} at edge-3$`) })).toHaveCount(1);
+    const coastMidpoints = await page.locator('.board-map g[stroke="#b8a777"] > line').evaluateAll(lines => lines.map(element => {
+      const line = element as SVGLineElement;
+      return { x: (line.x1.baseVal.value + line.x2.baseVal.value) / 2, y: (line.y1.baseVal.value + line.y2.baseVal.value) / 2 };
+    }));
+    const connections = await harbors.evaluateAll((groups, midpoints) => groups.map(group =>
+      Array.from(group.querySelectorAll<SVGPathElement>(":scope > path"), path => {
+        const start = path.getPointAtLength(0);
+        return Math.min(...midpoints.map(midpoint => Math.hypot(start.x - midpoint.x, start.y - midpoint.y)));
+      }),
+    ), coastMidpoints);
+    for (const strokes of connections) {
+      expect(strokes).toHaveLength(2);
+      for (const gap of strokes) expect(gap, "Harbor pier connects to revealed land").toBeCloseTo(0, 4);
+    }
+    await noPageOverflow(page);
+    await screenshot(page, testInfo, `foggy-world-node-${piece}`, false);
+    await expect(fogLabels).toHaveCount(38);
+    await page.getByRole("button", { name: "Choose starting cell at tile-38", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await showView(page, "hand");
+    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    const gold = page.getByRole("region", { name: "Choose your gold resources", exact: true });
+    await expect(gold).toBeVisible();
+    await gold.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
+    await gold.getByRole("button", { name: "Collect resources", exact: true }).click();
+    if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+    await showView(page, "board");
+    await expect(fogLabels).toHaveCount(37);
+    await expect(page.getByRole("heading", { name: "Find a place to call home." })).toBeVisible();
+    await expect(revealTargets).toHaveCount(0);
+    await page.getByRole("button", { name: "Place settlement at vertex-8", exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Every journey starts here." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Build (road|ship) at / }).first()).toBeVisible();
+    await chooseGameOption(page, "Help");
+    await expect(page.getByRole("dialog", { name: "Help", exact: true }))
+      .toContainText("All nine harbors keep their trade types and appear only on revealed land-sea coasts");
+  });
 }
 
 async function seedRandomness(page: Page, initialSeed: number, initialValues: number[] = []) {
@@ -4368,8 +4401,23 @@ test("a won game pops the winner up over the board with the point breakdown and 
   for (let total = 2; total <= 12; total++) {
     await expect(diceColumns.nth(total - 2)).toHaveAttribute("aria-label", `${total} appeared ${expectedDiceCounts[total - 2]} times`);
   }
-  // Celebratory confetti drizzles behind the card without joining the dialog's semantics.
-  await expect(victory.locator(".confetti-piece")).toHaveCount(28);
+  // Celebratory confetti bursts on a non-blocking canvas without joining the dialog's semantics.
+  const confetti = victory.locator("canvas.confetti-layer");
+  await expect(confetti).toBeVisible();
+  await expect(confetti).toHaveAttribute("aria-hidden", "true");
+  await expect(confetti).toHaveCSS("pointer-events", "none");
+  await expect.poll(async () => confetti.evaluate(element => {
+    const canvas = element as HTMLCanvasElement;
+    if (canvas.width === 0 || canvas.height === 0) return 0;
+    const context = canvas.getContext("2d");
+    if (!context) return 0;
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let visiblePixels = 0;
+    for (let index = 3; index < data.length; index += 16) {
+      if (data[index]! > 0) visiblePixels++;
+    }
+    return visiblePixels;
+  })).toBeGreaterThan(20);
   // The replayable map code badge sits inline in the eyebrow sentence behind a map icon, without the how-to sentence.
   const eyebrowLine = victory.locator(".eyebrow");
   await expect(eyebrowLine).toContainText(/the island/i);
@@ -5592,9 +5640,9 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
     const action = responder?.control === "human"
       ? { type: "respond-trade" as const, accept: false }
       : playerId !== requesterId ? chooseComputerAction(state, playerId)
-      : state.phase.type === "setup-settlement"
-        ? { type: "place-settlement" as const, vertexId: legalSettlementVertices(state, requesterId)[0]! }
-        : { type: "place-road" as const, edgeId: legalRoadEdges(state, requesterId)[0]! };
+        : state.phase.type === "setup-settlement"
+          ? { type: "place-settlement" as const, vertexId: legalSettlementVertices(state, requesterId)[0]! }
+          : { type: "place-road" as const, edgeId: legalRoadEdges(state, requesterId)[0]! };
     expect(action).not.toBeNull();
     state = applyAction(state, playerId, action!, random);
   }

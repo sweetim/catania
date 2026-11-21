@@ -1931,75 +1931,75 @@ export function Board({
                         role="img"
                         aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
                       >
-                      <ellipse
-                        cy="10"
-                        rx={city ? "19" : "15"}
-                        ry="6"
-                        fill="#35483c"
-                        opacity="0.23"
-                      />
-                      {selectedId === vertex.id && (
-                        <circle
-                          r="24"
-                          fill="none"
-                          stroke="#805e2c"
-                          strokeWidth="3"
-                          strokeDasharray="4 3"
+                        <ellipse
+                          cy="10"
+                          rx={city ? "19" : "15"}
+                          ry="6"
+                          fill="#35483c"
+                          opacity="0.23"
                         />
-                      )}
-                      <path
-                        d={
-                          city
-                            ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                            : "M-13 11V-5L0-17 13-5V11Z"
-                        }
-                        fill={player.color}
-                        stroke="#fff7df"
-                        strokeWidth="5"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d={
-                          city
-                            ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                            : "M-13 11V-5L0-17 13-5V11Z"
-                        }
-                        fill={player.color}
-                        stroke="#39483e"
-                        strokeWidth="1.5"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d={
-                          city
-                            ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
-                            : "M-13-5 0-17 13-5"
-                        }
-                        fill="none"
-                        stroke="#fff6da"
-                        strokeOpacity="0.5"
-                        strokeWidth="1.5"
-                      />
-                      <rect
-                        x="-5.5"
-                        y="-2"
-                        width="11"
-                        height="12"
-                        rx="2"
-                        fill="#fff5dc"
-                      />
-                      <text
-                        y="7"
-                        textAnchor="middle"
-                        fill="#35483d"
-                        fontSize="9"
-                        fontWeight="800"
-                      >
-                        {getPlayerLabel(player, players.findIndex(
-                          (candidate) => candidate.id === player.id,
-                        ) + 1)}
-                      </text>
-                      {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
+                        {selectedId === vertex.id && (
+                          <circle
+                            r="24"
+                            fill="none"
+                            stroke="#805e2c"
+                            strokeWidth="3"
+                            strokeDasharray="4 3"
+                          />
+                        )}
+                        <path
+                          d={
+                            city
+                              ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                              : "M-13 11V-5L0-17 13-5V11Z"
+                          }
+                          fill={player.color}
+                          stroke="#fff7df"
+                          strokeWidth="5"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d={
+                            city
+                              ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                              : "M-13 11V-5L0-17 13-5V11Z"
+                          }
+                          fill={player.color}
+                          stroke="#39483e"
+                          strokeWidth="1.5"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d={
+                            city
+                              ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
+                              : "M-13-5 0-17 13-5"
+                          }
+                          fill="none"
+                          stroke="#fff6da"
+                          strokeOpacity="0.5"
+                          strokeWidth="1.5"
+                        />
+                        <rect
+                          x="-5.5"
+                          y="-2"
+                          width="11"
+                          height="12"
+                          rx="2"
+                          fill="#fff5dc"
+                        />
+                        <text
+                          y="7"
+                          textAnchor="middle"
+                          fill="#35483d"
+                          fontSize="9"
+                          fontWeight="800"
+                        >
+                          {getPlayerLabel(player, players.findIndex(
+                            (candidate) => candidate.id === player.id,
+                          ) + 1)}
+                        </text>
+                        {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
                       </g>
                     </g>
                   </g>
@@ -2375,6 +2375,7 @@ export function Board({
             disabled={zoom === 1}
             onClick={() => changeZoom(zoom - 0.25)}
             className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
           >
             -
           </button>
@@ -2391,6 +2392,7 @@ export function Board({
             disabled={zoom === 2.5}
             onClick={() => changeZoom(zoom + 0.25)}
             className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
           >
             +
           </button>

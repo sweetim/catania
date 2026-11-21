@@ -128,16 +128,16 @@ export function GameVariantSelector({ value, onChange, disabled = false, classNa
             const next = variants[variants.indexOf(value) + (event.key === "ArrowDown" ? 1 : -1)];
             if (next !== undefined) onChange(next);
           }}
-          className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] py-1 pl-3.5 pr-3 text-left text-xs font-bold uppercase tracking-[.08em] text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed sm:min-h-[52px]"
+          className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-[#dfcfab] bg-gradient-to-b from-[#fdf8e7] to-[#f6ecd0] px-3.5 py-2 text-left text-sm font-semibold text-[#6e4f1d] shadow-[inset_0_1px_0_#fffdf6,0_1px_2px_#423d2810] transition-colors hover:border-[#cfb986] hover:from-[#fbf3da] hover:to-[#f1e2ba] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed"
         >
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 opacity-80">
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-[#9c732d]">
               <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
               <path d="M12 22V12m0 0 8-4.5M12 12 4 7.5" />
             </svg>
             <span className="min-w-0 flex-1 truncate">{translateText(GAME_VARIANT_LABELS[value])}</span>
           </span>
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#8b6425" strokeWidth="1.5" aria-hidden="true" className="shrink-0">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#8b6425" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
             <path d="m3 4.5 3 3 3-3" />
           </svg>
         </button>
