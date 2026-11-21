@@ -1032,6 +1032,7 @@
   background: #fffaf0;
   box-shadow: 0 5px 20px #253b3633;
   overflow: auto;
+  animation: board-confirmation-fade 140ms ease-out both;
 }
 
 .placement-confirmation p {
@@ -1935,6 +1936,307 @@
   filter: drop-shadow(0 6px 4px #253b3659);
 }
 
+.terrain-hex.terrain-hex-raised {
+  animation: board-hex-lift 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes board-hex-lift {
+  0% {
+    transform: translateY(8px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.board-settlement-enter {
+  animation: board-settlement-drop 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-settlement-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.75);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translateY(1.5px) scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.board-city-upgrade {
+  animation: board-city-upgrade 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-city-upgrade {
+  0% {
+    transform: translateY(4px) scale(0.82);
+  }
+
+  45% {
+    transform: translateY(-5px) scale(1.16);
+    filter: drop-shadow(0 0 6px #e7ba43);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    filter: none;
+  }
+}
+
+.board-placement-ring,
+.board-upgrade-ring {
+  pointer-events: none;
+  animation: board-ring-expand 560ms ease-out both;
+}
+
+@keyframes board-ring-expand {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.8);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+.board-road-stroke {
+  animation: board-road-draw 340ms ease-out both;
+}
+
+@keyframes board-road-draw {
+  0% {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+
+  100% {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+.board-road-badge {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: board-badge-pop 240ms 120ms ease-out both;
+}
+
+@keyframes board-badge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.board-ship-enter {
+  animation: board-ship-drop 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-ship-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.8);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.06);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.board-ship-sail {
+  animation: board-ship-sail 520ms cubic-bezier(0.25, 0.85, 0.3, 1) both;
+}
+
+@keyframes board-ship-sail {
+  0% {
+    transform: translate(var(--ship-from-x, 0px), var(--ship-from-y, 0px));
+  }
+
+  50% {
+    transform: translate(calc(var(--ship-from-x, 0px) * 0.5), calc(var(--ship-from-y, 0px) * 0.5 - 6px)) scale(1.06);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.board-ship-turn {
+  animation: board-ship-turn 520ms cubic-bezier(0.25, 0.85, 0.3, 1) both;
+}
+
+@keyframes board-ship-turn {
+  0% {
+    transform: rotate(var(--ship-from-rotation, 0deg));
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.board-water-ripple {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  pointer-events: none;
+  animation: board-water-ripple 620ms ease-out both;
+}
+
+@keyframes board-water-ripple {
+  0% {
+    opacity: 0.78;
+    transform: scale(0.65);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.15);
+  }
+}
+
+.board-piece-travel {
+  animation: board-piece-travel 520ms cubic-bezier(0.25, 0.85, 0.3, 1) both;
+}
+
+@keyframes board-piece-travel {
+  0% {
+    transform: translate(var(--travel-from-x, 0px), var(--travel-from-y, 0px)) scale(1);
+  }
+
+  50% {
+    transform: translate(calc(var(--travel-from-x, 0px) * 0.5), calc(var(--travel-from-y, 0px) * 0.5 - 20px)) scale(1.12);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.board-blocked-shake {
+  animation: board-blocked-shake 420ms ease-in-out both;
+}
+
+@keyframes board-blocked-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-5px);
+  }
+
+  40% {
+    transform: translateX(5px);
+  }
+
+  60% {
+    transform: translateX(-3.5px);
+  }
+
+  80% {
+    transform: translateX(3.5px);
+  }
+}
+
+.board-harvest-chip {
+  pointer-events: none;
+  animation: board-harvest-rise 1150ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes board-harvest-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.75);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.06);
+  }
+
+  75% {
+    opacity: 1;
+    transform: translateY(-22px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.94);
+  }
+}
+
+.board-harbor-reveal {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: board-harbor-reveal 420ms 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-harbor-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.board-number-peek-pop {
+  animation: board-number-peek-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes board-number-peek-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.76);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes board-confirmation-fade {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
 .fog-reveal-veil {
   opacity: 0;
   animation: fog-lift 900ms ease-in both;
@@ -2727,7 +3029,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .resource-dealt-card {
+  .resource-dealt-card,
+  .board-placement-ring,
+  .board-upgrade-ring,
+  .board-water-ripple,
+  .board-harvest-chip {
     display: none;
   }
 

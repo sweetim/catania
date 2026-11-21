@@ -32,7 +32,7 @@ export const BOARD_THEMES: Record<BoardThemeId, BoardTheme> = {
       wool: { fill: "#c7d496", ink: "#516438", label: "Pasture" },
       grain: { fill: "#e6c76d", ink: "#876120", label: "Fields" },
       ore: { fill: "#9eb2b7", ink: "#3f5860", label: "Mountains" },
-      desert: { fill: "#ead9bc", ink: "#76542d", label: "Desert" },
+      desert: { fill: "#eab97a", ink: "#663b14", label: "Desert" },
       sea: { fill: "#a8c8bc", ink: "#365747", label: "Sea" },
       fog: { fill: "#c6d1d5", ink: "#475e6b", label: "Fog" },
       gold: { fill: "#e8b64e", ink: "#724912", label: "Gold" },

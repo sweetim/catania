@@ -323,20 +323,21 @@ export function TerrainArtwork({ terrain, theme, clipPathId }: {
                 </g>
               </>)
               .with("desert", () => <>
-                <path d="M-52-58H52V-8Q0-16-52-8Z" fill="#f7efda" fillOpacity=".72" stroke="none" />
-                <circle cx="24" cy="-27" r="14.5" fill="#f9e9bd" fillOpacity=".46" stroke="none" />
-                <circle cx="24" cy="-27" r="8.5" fill="#f3d489" stroke="none" />
-                <path d="M-52-4Q-18-20 14-6Q34 3 52-10V58H-52Z" fill="#dfc597" stroke="none" />
-                <path d="M-52 9Q-18-7 10 11Q32 24 52 9V58H-52Z" fill="#c9a570" stroke="none" />
-                <path d="M-52 9Q-18-7 10 11Q32 24 52 9L52 15Q31 28 9 15Q-18 0-52 15Z" fill="#ecd8b1" fillOpacity=".74" stroke="none" />
-                <path d="M-52 29Q-14 20 16 30Q35 36 52 29V58H-52Z" fill="#e7d3ab" stroke="none" />
-                <path d="M-42 23Q-22 14 2 22M14 28Q30 22 44 26" stroke="#b48d57" strokeOpacity=".48" strokeWidth="1.25" />
+                <path d="M-52-58H52V-8Q0-16-52-8Z" fill="#f8d8a2" fillOpacity=".76" stroke="none" />
+                <circle cx="24" cy="-27" r="14.5" fill="#fae09e" fillOpacity=".58" stroke="none" />
+                <circle cx="24" cy="-27" r="8.5" fill="#f6bc4f" stroke="none" />
+                <path d="M-52-4Q-18-20 14-6Q34 3 52-10V58H-52Z" fill="#e1a85e" stroke="none" />
+                <path d="M-50-5Q-18-19 14-6Q34 2 50-9" stroke="#f7d598" strokeOpacity=".65" strokeWidth="1.5" />
+                <path d="M-52 9Q-18-7 10 11Q32 24 52 9V58H-52Z" fill="#c47c37" stroke="none" />
+                <path d="M-52 9Q-18-7 10 11Q32 24 52 9L52 15Q31 28 9 15Q-18 0-52 15Z" fill="#f5cf8b" fillOpacity=".82" stroke="none" />
+                <path d="M-52 29Q-14 20 16 30Q35 36 52 29V58H-52Z" fill="#e8b974" stroke="none" />
+                <path d="M-42 23Q-22 14 2 22M14 28Q30 22 44 26" stroke="#9e5d24" strokeOpacity=".55" strokeWidth="1.3" />
                 <g>
-                  <ellipse cx="-25" cy="13.5" rx="7" ry="2" fill="#a6814e" fillOpacity=".34" stroke="none" />
-                  <path d="M-25 13V-9" stroke="#5c724b" strokeWidth="4.6" />
-                  <path d="M-25 3H-31V-3M-25-1H-19V-6" stroke="#5c724b" strokeWidth="3.2" />
-                  <path d="M-26.1 11V-8.5M-31.6-2.5V2.2M-19.6-5.5V-1.8" stroke="#8da574" strokeWidth="1.1" />
-                  <path d="M-19 14Q-16 11-13 14Z" fill="#b7915c" stroke="none" />
+                  <ellipse cx="-25" cy="13.5" rx="7" ry="2" fill="#8c501c" fillOpacity=".36" stroke="none" />
+                  <path d="M-25 13V-9" stroke="#4f6c40" strokeWidth="4.6" />
+                  <path d="M-25 3H-31V-3M-25-1H-19V-6" stroke="#4f6c40" strokeWidth="3.2" />
+                  <path d="M-26.1 11V-8.5M-31.6-2.5V2.2M-19.6-5.5V-1.8" stroke="#87a66c" strokeWidth="1.1" />
+                  <path d="M-19 14Q-16 11-13 14Z" fill="#a9672a" stroke="none" />
                 </g>
               </>)
               .exhaustive()}

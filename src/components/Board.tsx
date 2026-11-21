@@ -5,12 +5,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { blockedSettlementVertices } from "../game/engine";
 import { edgeTiles, hiddenNumberTileIds, isPortRevealed, isResource, portAnchor } from "../game/board";
-import { type Board as BoardState, type Player, type Terrain, type Tile } from "../game/types";
+import { type Board as BoardState, type Player, type Resource, type Terrain, type Tile } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
@@ -20,69 +21,177 @@ import { HEX_ARTWORK_CLIP_PATH, ResourceArtwork, TerrainArtwork } from "./ThemeA
 
 const tileElevation = 8;
 
-function NumberToken({ x, y, number, matchesRoll, blocked, illustrationId }: {
+type CoordinateOffset = {
+  horizontal: number;
+  vertical: number;
+  generation: number;
+};
+
+type ShipTravel = {
+  horizontal: number;
+  vertical: number;
+  rotationDelta: number;
+  generation: number;
+};
+
+type HarvestBurst = {
+  key: string;
+  horizontal: number;
+  vertical: number;
+  terrain: Resource | "gold";
+  amount: 1 | 2;
+  index: number;
+};
+
+type EdgeSnapshot = {
+  playerId: string;
+  kind: "road" | "ship";
+  horizontal: number;
+  vertical: number;
+  rotation: number;
+};
+
+type BoardMotionTracker = {
+  initialized: boolean;
+  lastBoard: BoardState | null;
+  lastRobberTileId: string | undefined;
+  lastPirateTileId: string | null | undefined;
+  lastRolledNumber: number | undefined;
+  lastProducingKey: string;
+  version: number;
+  generation: number;
+  buildings: Map<string, "settlement" | "city">;
+  edges: Map<string, EdgeSnapshot>;
+  visiblePortEdgeIds: Set<string>;
+  tileCoordinates: Map<string, { horizontal: number; vertical: number }>;
+  tileTerrains: Map<string, Terrain>;
+  newSettlements: Map<string, number>;
+  upgradedCities: Map<string, number>;
+  newRoads: Map<string, number>;
+  newShips: Map<string, number>;
+  movedShips: Map<string, ShipTravel>;
+  newPorts: Map<string, number>;
+  robberTravel: CoordinateOffset | null;
+  pirateTravel: CoordinateOffset | null;
+  pirateEnterGeneration: number | null;
+  blockedRollGeneration: number | null;
+  harvestBursts: HarvestBurst[];
+  completedKeys: Set<string>;
+};
+
+function edgeRotation(start: { x: number; y: number }, end: { x: number; y: number }) {
+  const angle = start.x === end.x ? 0 : (Math.atan2(end.y - start.y, end.x - start.x) * 180) / Math.PI;
+  return angle > 90 ? angle - 180 : angle < -90 ? angle + 180 : angle;
+}
+
+function normalizeHalfTurn(degrees: number) {
+  let normalized = degrees;
+  while (normalized > 90) normalized -= 180;
+  while (normalized < -90) normalized += 180;
+  return normalized;
+}
+
+function createBoardMotionTracker(): BoardMotionTracker {
+  return {
+    initialized: false,
+    lastBoard: null,
+    lastRobberTileId: undefined,
+    lastPirateTileId: undefined,
+    lastRolledNumber: undefined,
+    lastProducingKey: "",
+    version: 0,
+    generation: 0,
+    buildings: new Map(),
+    edges: new Map(),
+    visiblePortEdgeIds: new Set(),
+    tileCoordinates: new Map(),
+    tileTerrains: new Map(),
+    newSettlements: new Map(),
+    upgradedCities: new Map(),
+    newRoads: new Map(),
+    newShips: new Map(),
+    movedShips: new Map(),
+    newPorts: new Map(),
+    robberTravel: null,
+    pirateTravel: null,
+    pirateEnterGeneration: null,
+    blockedRollGeneration: null,
+    harvestBursts: [],
+    completedKeys: new Set(),
+  };
+}
+
+function NumberToken({ x, y, number, matchesRoll, blocked, blockedShake = false, popIn = false, illustrationId }: {
   x: number;
   y: number;
   number: number;
   matchesRoll: boolean;
   blocked: boolean;
+  blockedShake?: boolean;
+  popIn?: boolean;
   illustrationId: string;
 }) {
   const probability = 6 - Math.abs(7 - number);
   const frequent = number === 6 || number === 8;
+  const bodyClassName = [
+    blockedShake ? "board-blocked-shake" : "",
+    popIn ? "board-number-peek-pop" : "",
+  ].filter(Boolean).join(" ") || undefined;
   return (
     <g
       className={`number-token${matchesRoll ? " number-token-highlight" : ""}${blocked ? " number-token-blocked" : ""}`}
       transform={`translate(${x} ${y + 2})`}
     >
-      {matchesRoll && (
+      <g className={bodyClassName}>
+        {matchesRoll && (
+          <circle
+            className="number-token-halo"
+            r="25.5"
+            fill={blocked ? "none" : "#f4cf75"}
+            fillOpacity="0.34"
+            stroke={blocked ? "#817d71" : "#ae772c"}
+            strokeWidth={blocked ? "1.5" : "2.2"}
+            strokeDasharray={blocked ? "3 4" : undefined}
+            opacity={blocked ? "0.7" : "1"}
+            pointerEvents="none"
+          />
+        )}
+        <circle cy="3.5" r="19.5" fill="#233329" opacity="0.26" />
+        <circle cy="1.8" r="19" fill="#ae9872" />
         <circle
-          className="number-token-halo"
-          r="25.5"
-          fill={blocked ? "none" : "#f4cf75"}
-          fillOpacity="0.34"
-          stroke={blocked ? "#817d71" : "#ae772c"}
-          strokeWidth={blocked ? "1.5" : "2.2"}
-          strokeDasharray={blocked ? "3 4" : undefined}
-          opacity={blocked ? "0.7" : "1"}
-          pointerEvents="none"
+          className="number-token-face"
+          r="19"
+          fill={blocked ? "#e4dfd2" : matchesRoll ? `url(#${illustrationId}-token-hot)` : `url(#${illustrationId}-token)`}
+          stroke={blocked ? "#887f6c" : matchesRoll ? "#a5631e" : frequent ? "#c9856e" : "#c8b998"}
+          strokeWidth={matchesRoll ? "2.2" : frequent ? "1.5" : "1.2"}
         />
-      )}
-      <circle cy="3.5" r="19.5" fill="#233329" opacity="0.26" />
-      <circle cy="1.8" r="19" fill="#ae9872" />
-      <circle
-        className="number-token-face"
-        r="19"
-        fill={blocked ? "#e4dfd2" : matchesRoll ? `url(#${illustrationId}-token-hot)` : `url(#${illustrationId}-token)`}
-        stroke={blocked ? "#887f6c" : matchesRoll ? "#a5631e" : frequent ? "#c9856e" : "#c8b998"}
-        strokeWidth={matchesRoll ? "2.2" : frequent ? "1.5" : "1.2"}
-      />
-      <circle
-        r="16.1"
-        fill="none"
-        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : frequent ? "#d88a71" : "#e7ddc5"}
-        strokeOpacity={frequent && !blocked && !matchesRoll ? "0.55" : "0.9"}
-        strokeWidth={frequent ? "0.95" : "0.7"}
-      />
-      <text
-        y="4.5"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize={frequent ? "24" : "22.5"}
-        fontWeight="700"
-        fill={frequent ? "#b2432e" : "#32453c"}
-      >
-        {number}
-      </text>
-      {Array.from({ length: probability }, (_, index) => (
         <circle
-          key={index}
-          cx={(index - (probability - 1) / 2) * 4.3}
-          cy="11.2"
-          r={frequent ? "1.45" : "1.3"}
-          fill={frequent ? "#b2432e" : "#55624d"}
+          r="16.1"
+          fill="none"
+          stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : frequent ? "#d88a71" : "#e7ddc5"}
+          strokeOpacity={frequent && !blocked && !matchesRoll ? "0.55" : "0.9"}
+          strokeWidth={frequent ? "0.95" : "0.7"}
         />
-      ))}
+        <text
+          y="4.5"
+          textAnchor="middle"
+          fontFamily="Georgia, 'Times New Roman', serif"
+          fontSize={frequent ? "24" : "22.5"}
+          fontWeight="700"
+          fill={frequent ? "#b2432e" : "#32453c"}
+        >
+          {number}
+        </text>
+        {Array.from({ length: probability }, (_, index) => (
+          <circle
+            key={index}
+            cx={(index - (probability - 1) / 2) * 4.3}
+            cy="11.2"
+            r={frequent ? "1.45" : "1.3"}
+            fill={frequent ? "#b2432e" : "#55624d"}
+          />
+        ))}
+      </g>
     </g>
   );
 }
@@ -405,9 +514,253 @@ export function Board({
       end,
       x: (start.x + end.x) / 2,
       y: (start.y + end.y) / 2,
+      rotation: edgeRotation(start, end),
       coastal: edgeTiles(board, edge).filter(tile => tile.terrain !== "sea" && tile.terrain !== "fog").length === 1,
     };
   });
+  const motionReference = useRef<BoardMotionTracker | null>(null);
+  if (motionReference.current === null) motionReference.current = createBoardMotionTracker();
+  const [, setMotionRevision] = useState(0);
+  const producingKey = producingTileIds.join(",");
+  const completeMotionKey = (key: string) => {
+    const tracker = motionReference.current!;
+    if (tracker.completedKeys.has(key)) return;
+    tracker.completedKeys.add(key);
+    setMotionRevision(current => current + 1);
+  };
+  const boardMotion = useMemo(() => {
+    const tracker = motionReference.current!;
+    const sameInput = tracker.initialized &&
+      tracker.lastBoard === board &&
+      tracker.lastRobberTileId === robberTileId &&
+      tracker.lastPirateTileId === pirateTileId &&
+      tracker.lastRolledNumber === rolledNumber &&
+      tracker.lastProducingKey === producingKey;
+
+    if (!sameInput) {
+      const currentBuildings = new Map<string, "settlement" | "city">();
+      for (const vertex of board.vertices) {
+        if (vertex.building) currentBuildings.set(vertex.id, vertex.building.kind);
+      }
+      const currentEdges = new Map<string, EdgeSnapshot>();
+      for (const item of edgeGeometry) {
+        if (item.edge.playerId) {
+          currentEdges.set(item.edge.id, {
+            playerId: item.edge.playerId,
+            kind: item.edge.kind === "ship" ? "ship" : "road",
+            horizontal: item.x,
+            vertical: item.y,
+            rotation: item.rotation,
+          });
+        }
+      }
+      const currentVisiblePortEdgeIds = new Set(visiblePorts.map(port => port.edgeId));
+      const currentTileCoordinates = new Map(
+        board.tiles.map(tile => [tile.id, { horizontal: tile.x, vertical: tile.y }]),
+      );
+      const currentTileTerrains = new Map(board.tiles.map(tile => [tile.id, tile.terrain]));
+
+      const removedShips: { edgeId: string; snapshot: EdgeSnapshot }[] = [];
+      const addedShips: { edgeId: string; snapshot: EdgeSnapshot }[] = [];
+      const addedRoads: string[] = [];
+      let disappearedPiece = false;
+
+      if (tracker.initialized) {
+        for (const [vertexId] of tracker.buildings) {
+          if (!currentBuildings.has(vertexId)) disappearedPiece = true;
+        }
+        for (const [edgeId, previousEdge] of tracker.edges) {
+          const nextEdge = currentEdges.get(edgeId);
+          if (!nextEdge) {
+            if (previousEdge.kind === "ship") removedShips.push({ edgeId, snapshot: previousEdge });
+            else disappearedPiece = true;
+          }
+        }
+        for (const [edgeId, nextEdge] of currentEdges) {
+          if (!tracker.edges.has(edgeId)) {
+            if (nextEdge.kind === "ship") addedShips.push({ edgeId, snapshot: nextEdge });
+            else addedRoads.push(edgeId);
+          }
+        }
+      }
+
+      const validSingleShipMove = removedShips.length === 1 &&
+        addedShips.length === 1 &&
+        removedShips[0]!.snapshot.playerId === addedShips[0]!.snapshot.playerId;
+
+      const replacedBoard = !tracker.initialized ||
+        board.tiles.length !== tracker.tileTerrains.size ||
+        board.tiles.some(tile => {
+          const previousTerrain = tracker.tileTerrains.get(tile.id);
+          return previousTerrain !== undefined &&
+            previousTerrain !== tile.terrain &&
+            !(previousTerrain === "fog" && tile.terrain !== "fog");
+        }) ||
+        disappearedPiece ||
+        (removedShips.length > 0 && !validSingleShipMove);
+
+      if (replacedBoard) {
+        tracker.version++;
+        tracker.newSettlements.clear();
+        tracker.upgradedCities.clear();
+        tracker.newRoads.clear();
+        tracker.newShips.clear();
+        tracker.movedShips.clear();
+        tracker.newPorts.clear();
+        tracker.robberTravel = null;
+        tracker.pirateTravel = null;
+        tracker.pirateEnterGeneration = null;
+        tracker.blockedRollGeneration = null;
+        tracker.harvestBursts = [];
+        tracker.completedKeys.clear();
+      } else {
+        for (const [vertexId, kind] of currentBuildings) {
+          const previousKind = tracker.buildings.get(vertexId);
+          if (!previousKind && kind === "settlement") {
+            tracker.newSettlements.set(vertexId, ++tracker.generation);
+          } else if (previousKind !== "city" && kind === "city") {
+            tracker.newSettlements.delete(vertexId);
+            tracker.upgradedCities.set(vertexId, ++tracker.generation);
+          }
+        }
+
+        for (const edgeId of addedRoads) {
+          tracker.newRoads.set(edgeId, ++tracker.generation);
+        }
+
+        if (validSingleShipMove) {
+          const from = removedShips[0]!;
+          const to = addedShips[0]!;
+          tracker.newShips.delete(from.edgeId);
+          tracker.movedShips.delete(from.edgeId);
+          tracker.movedShips.set(to.edgeId, {
+            horizontal: from.snapshot.horizontal - to.snapshot.horizontal,
+            vertical: from.snapshot.vertical - to.snapshot.vertical,
+            rotationDelta: normalizeHalfTurn(from.snapshot.rotation - to.snapshot.rotation),
+            generation: ++tracker.generation,
+          });
+        } else {
+          for (const added of addedShips) {
+            tracker.newShips.set(added.edgeId, ++tracker.generation);
+          }
+        }
+
+        for (const edgeId of currentVisiblePortEdgeIds) {
+          if (!tracker.visiblePortEdgeIds.has(edgeId)) {
+            tracker.newPorts.set(edgeId, ++tracker.generation);
+          }
+        }
+
+        if (robberTileId && tracker.lastRobberTileId && robberTileId !== tracker.lastRobberTileId) {
+          const previousCoordinate = tracker.tileCoordinates.get(tracker.lastRobberTileId);
+          const nextCoordinate = currentTileCoordinates.get(robberTileId);
+          if (previousCoordinate && nextCoordinate) {
+            tracker.robberTravel = {
+              horizontal: previousCoordinate.horizontal - nextCoordinate.horizontal,
+              vertical: previousCoordinate.vertical - nextCoordinate.vertical,
+              generation: ++tracker.generation,
+            };
+          }
+        }
+
+        if (pirateTileId && pirateTileId !== tracker.lastPirateTileId) {
+          const previousCoordinate = tracker.lastPirateTileId
+            ? tracker.tileCoordinates.get(tracker.lastPirateTileId)
+            : undefined;
+          const nextCoordinate = currentTileCoordinates.get(pirateTileId);
+          if (previousCoordinate && nextCoordinate) {
+            tracker.pirateTravel = {
+              horizontal: previousCoordinate.horizontal - nextCoordinate.horizontal,
+              vertical: previousCoordinate.vertical - nextCoordinate.vertical,
+              generation: ++tracker.generation,
+            };
+            tracker.pirateEnterGeneration = null;
+          } else {
+            tracker.pirateTravel = null;
+            tracker.pirateEnterGeneration = ++tracker.generation;
+          }
+        } else if (!pirateTileId) {
+          tracker.pirateTravel = null;
+          tracker.pirateEnterGeneration = null;
+        }
+
+        const rollActivated = rolledNumber !== undefined &&
+          (tracker.lastRolledNumber !== rolledNumber || (producingKey !== "" && tracker.lastProducingKey !== producingKey));
+
+        if (rolledNumber === undefined) {
+          tracker.harvestBursts = [];
+          tracker.blockedRollGeneration = null;
+        } else if (rollActivated) {
+          const blockedRobberTile = board.tiles.find(tile =>
+            tile.id === robberTileId && tile.terrain !== "fog" && tile.number !== null && tile.number === rolledNumber,
+          );
+          tracker.blockedRollGeneration = blockedRobberTile ? ++tracker.generation : null;
+
+          const activeProducingTiles = rolledNumber === 7
+            ? []
+            : producingTileIds.length > 0
+              ? board.tiles.filter(tile => producingTileIds.includes(tile.id) && (isResource(tile.terrain) || tile.terrain === "gold"))
+              : board.tiles.filter(tile =>
+                tile.id !== robberTileId &&
+                tile.number === rolledNumber &&
+                (isResource(tile.terrain) || tile.terrain === "gold"),
+              );
+
+          const gainsByVertex = new Map<string, { terrain: Resource | "gold"; amount: 1 | 2 }[]>();
+          for (const tile of activeProducingTiles) {
+            const terrain = tile.terrain as Resource | "gold";
+            for (const vertexId of tile.vertexIds) {
+              const vertex = verticesById.get(vertexId);
+              if (!vertex?.building) continue;
+              const entries = gainsByVertex.get(vertexId) ?? [];
+              entries.push({ terrain, amount: vertex.building.kind === "city" ? 2 : 1 });
+              gainsByVertex.set(vertexId, entries);
+            }
+          }
+
+          const rollGeneration = ++tracker.generation;
+          const bursts: HarvestBurst[] = [];
+          let burstIndex = 0;
+          for (const [vertexId, entries] of gainsByVertex) {
+            const vertex = verticesById.get(vertexId)!;
+            entries.forEach((entry, indexOnVertex) => {
+              const horizontalOffset = (indexOnVertex - (entries.length - 1) / 2) * 30;
+              bursts.push({
+                key: `${tracker.version}:harvest:${rollGeneration}:${vertexId}:${indexOnVertex}`,
+                horizontal: vertex.x + horizontalOffset,
+                vertical: vertex.y,
+                terrain: entry.terrain,
+                amount: entry.amount,
+                index: burstIndex++,
+              });
+            });
+          }
+          tracker.harvestBursts = bursts;
+        }
+      }
+
+      tracker.initialized = true;
+      tracker.lastBoard = board;
+      tracker.lastRobberTileId = robberTileId;
+      tracker.lastPirateTileId = pirateTileId;
+      tracker.lastRolledNumber = rolledNumber;
+      tracker.lastProducingKey = producingKey;
+      tracker.buildings = currentBuildings;
+      tracker.edges = currentEdges;
+      tracker.visiblePortEdgeIds = currentVisiblePortEdgeIds;
+      tracker.tileCoordinates = currentTileCoordinates;
+      tracker.tileTerrains = currentTileTerrains;
+    }
+
+    return tracker;
+  }, [board, robberTileId, pirateTileId, rolledNumber, producingKey]);
+  const isMotionActive = (key: string | null): key is string =>
+    key !== null && !boardMotion.completedKeys.has(key);
+  const blockedRollKey = boardMotion.blockedRollGeneration === null
+    ? null
+    : `${boardMotion.version}:blocked-roll:${boardMotion.blockedRollGeneration}`;
+  const blockedRollActive = isMotionActive(blockedRollKey);
+  const activeHarvestBursts = boardMotion.harvestBursts.filter(burst => isMotionActive(burst.key));
   const selectedPoint = selectedId
     ? verticesById.get(selectedId) ??
     edgeGeometry.find(({ edge }) => edge.id === selectedId) ??
@@ -901,12 +1254,14 @@ export function Board({
               return (
                 <g
                   key={tile.id}
-                  className={`terrain-hex${raised ? " terrain-hex-raised" : ""}`}
                   transform={raised ? `translate(0 ${-tileElevation})` : undefined}
                   pointerEvents="none"
-                  role="img"
-                  aria-label={description}
                 >
+                  <g
+                    className={`terrain-hex${raised ? " terrain-hex-raised" : ""}`}
+                    role="img"
+                    aria-label={description}
+                  >
                   {tile.terrain !== "fog" && tile.terrain !== "sea" && <polygon
                     points={points}
                     transform={`translate(0 ${3 + (raised ? tileElevation : 0)})`}
@@ -982,6 +1337,7 @@ export function Board({
                       number={number}
                       matchesRoll={matchesRoll}
                       blocked={blocked}
+                      blockedShake={blocked && blockedRollActive}
                       illustrationId={illustrationId}
                     />
                   )}
@@ -1021,6 +1377,7 @@ export function Board({
                       strokeLinejoin="round"
                     />
                   )}
+                  </g>
                 </g>
               );
             })}
@@ -1048,13 +1405,22 @@ export function Board({
             {visiblePorts.map((port) => {
               const { x, y, portX, portY } = portAnchor(board, port);
               const ratio = port.resource === "any" ? "3:1" : "2:1";
+              const portGeneration = boardMotion.newPorts.get(port.edgeId);
+              const portRevealKey = portGeneration === undefined
+                ? null
+                : `${boardMotion.version}:port:${port.edgeId}:${portGeneration}`;
+              const portRevealing = isMotionActive(portRevealKey);
               return (
                 <g
                   key={port.edgeId}
+                  className={portRevealing ? "board-harbor-reveal" : undefined}
                   role="img"
                   aria-label={port.resource === "any"
                     ? translateText("Any resource harbor, trade {ratio}", { ratio })
                     : translateText("{resource} harbor, trade {ratio}", { resource: resourceName(language, port.resource).toLowerCase(), ratio })}
+                  onAnimationEnd={event => {
+                    if (portRevealKey && event.animationName === "board-harbor-reveal") completeMotionKey(portRevealKey);
+                  }}
                 >
                   <path
                     d={`M${x} ${y}L${portX} ${portY}`}
@@ -1179,6 +1545,8 @@ export function Board({
                   number={peekedTile.number}
                   matchesRoll={peekedTile.number === rolledNumber}
                   blocked={peekedTile.number === rolledNumber && robberTileId === peekedTile.id}
+                  blockedShake={peekedTile.number === rolledNumber && robberTileId === peekedTile.id && blockedRollActive}
+                  popIn
                   illustrationId={illustrationId}
                 />
               </g>
@@ -1235,29 +1603,89 @@ export function Board({
 
             {edgeGeometry
               .filter(({ edge }) => edge.playerId)
-              .map(({ edge, start, end, x, y }) => {
+              .map(({ edge, start, end, x, y, rotation }) => {
                 const player = playersById.get(edge.playerId!)!;
                 if (edge.kind === "ship") {
-                  const angle = start.x === end.x ? 0 : Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
-                  const rotation = angle > 90 ? angle - 180 : angle < -90 ? angle + 180 : angle;
-                  return <g key={edge.id} role="img"
-                    aria-label={translateText("{player}'s ship at {location}", { player: player.name, location: edge.id })}
-                    transform={rotation === 0 ? `translate(${x} ${y}) scale(0.65)`
-                      : `translate(${x} ${y}) rotate(${rotation}) scale(0.65) translate(0 -12)`} pointerEvents="none">
-                    {selectedId === edge.id && <ellipse rx="23" ry="27" fill="none" stroke="#8c672e" strokeWidth="3" />}
-                    <path d="M-19 6h38l-7 12H-12Z" fill={player.color} stroke="#fff5dc" strokeWidth="2" />
-                    <path d="M0-22V6M3-20 18 2H3ZM-4-15-16 2h12Z" fill={player.color} stroke="#fff5dc" strokeWidth="1.5" />
-                    <text y="15" transform={`rotate(${-rotation} 0 12)`} textAnchor="middle" fill="#fff5dc" fontSize="10" fontWeight="800">
-                      {players.findIndex(candidate => candidate.id === player.id) + 1}
-                    </text>
-                  </g>;
+                  const shipEnterGeneration = boardMotion.newShips.get(edge.id);
+                  const shipEnterKey = shipEnterGeneration === undefined
+                    ? null
+                    : `${boardMotion.version}:ship:${edge.id}:${shipEnterGeneration}`;
+                  const shipEnterActive = isMotionActive(shipEnterKey);
+                  const movedShip = boardMotion.movedShips.get(edge.id);
+                  const shipSailKey = movedShip === undefined
+                    ? null
+                    : `${boardMotion.version}:ship-move:${edge.id}:${movedShip.generation}`;
+                  const shipSailActive = isMotionActive(shipSailKey);
+                  const rippleGeneration = shipSailActive
+                    ? movedShip!.generation
+                    : shipEnterActive ? shipEnterGeneration! : null;
+                  const shipRippleKey = rippleGeneration === null
+                    ? null
+                    : `${boardMotion.version}:ship-ripple:${edge.id}:${rippleGeneration}`;
+                  const shipRippleActive = isMotionActive(shipRippleKey);
+                  return (
+                    <g key={edge.id} transform={`translate(${x} ${y})`} pointerEvents="none">
+                      {shipRippleActive && (
+                        <circle
+                          key={shipRippleKey}
+                          className="board-water-ripple"
+                          r="15"
+                          aria-hidden="true"
+                          onAnimationEnd={event => {
+                            if (event.animationName === "board-water-ripple") completeMotionKey(shipRippleKey);
+                          }}
+                        />
+                      )}
+                      <g
+                        key={shipSailActive ? shipSailKey : shipEnterActive ? shipEnterKey : "ship-still"}
+                        className={shipSailActive ? "board-ship-sail" : shipEnterActive ? "board-ship-enter" : undefined}
+                        style={shipSailActive ? ({
+                          "--ship-from-x": `${movedShip!.horizontal}px`,
+                          "--ship-from-y": `${movedShip!.vertical}px`,
+                        } as CSSProperties) : undefined}
+                        onAnimationEnd={event => {
+                          if (shipSailKey && event.animationName === "board-ship-sail") completeMotionKey(shipSailKey);
+                          if (shipEnterKey && event.animationName === "board-ship-drop") completeMotionKey(shipEnterKey);
+                        }}
+                      >
+                        <g
+                          className={shipSailActive && movedShip!.rotationDelta !== 0 ? "board-ship-turn" : undefined}
+                          style={shipSailActive && movedShip!.rotationDelta !== 0 ? ({
+                            "--ship-from-rotation": `${movedShip!.rotationDelta}deg`,
+                          } as CSSProperties) : undefined}
+                        >
+                          <g
+                            role="img"
+                            aria-label={translateText("{player}'s ship at {location}", { player: player.name, location: edge.id })}
+                            transform={rotation === 0 ? "scale(0.65)" : `rotate(${rotation}) scale(0.65) translate(0 -12)`}
+                          >
+                            {selectedId === edge.id && <ellipse rx="23" ry="27" fill="none" stroke="#8c672e" strokeWidth="3" />}
+                            <path d="M-19 6h38l-7 12H-12Z" fill={player.color} stroke="#fff5dc" strokeWidth="2" />
+                            <path d="M0-22V6M3-20 18 2H3ZM-4-15-16 2h12Z" fill={player.color} stroke="#fff5dc" strokeWidth="1.5" />
+                            <text y="15" transform={`rotate(${-rotation} 0 12)`} textAnchor="middle" fill="#fff5dc" fontSize="10" fontWeight="800">
+                              {players.findIndex(candidate => candidate.id === player.id) + 1}
+                            </text>
+                          </g>
+                        </g>
+                      </g>
+                    </g>
+                  );
                 }
+                const roadGeneration = boardMotion.newRoads.get(edge.id);
+                const roadEnterKey = roadGeneration === undefined
+                  ? null
+                  : `${boardMotion.version}:road:${edge.id}:${roadGeneration}`;
+                const roadEnterActive = isMotionActive(roadEnterKey);
                 return (
                   <g
                     key={edge.id}
+                    className={roadEnterActive ? "board-road-enter" : undefined}
                     role="img"
                     aria-label={translateText("{player}'s road at {location}", { player: player.name, location: edge.id })}
                     pointerEvents="none"
+                    onAnimationEnd={event => {
+                      if (roadEnterKey && event.animationName === "board-road-draw") completeMotionKey(roadEnterKey);
+                    }}
                   >
                     {selectedId === edge.id && (
                       <line
@@ -1275,6 +1703,8 @@ export function Board({
                       y1={start.y + 2}
                       x2={end.x}
                       y2={end.y + 2}
+                      pathLength={roadEnterActive ? 1 : undefined}
+                      className={roadEnterActive ? "board-road-stroke" : undefined}
                       stroke="#364b3a"
                       strokeOpacity="0.3"
                       strokeWidth="13"
@@ -1285,6 +1715,8 @@ export function Board({
                       y1={start.y}
                       x2={end.x}
                       y2={end.y}
+                      pathLength={roadEnterActive ? 1 : undefined}
+                      className={roadEnterActive ? "board-road-stroke" : undefined}
                       stroke="#fff5dc"
                       strokeWidth="13"
                       strokeLinecap="round"
@@ -1294,6 +1726,8 @@ export function Board({
                       y1={start.y}
                       x2={end.x}
                       y2={end.y}
+                      pathLength={roadEnterActive ? 1 : undefined}
+                      className={roadEnterActive ? "board-road-stroke" : undefined}
                       stroke={player.color}
                       strokeWidth="9"
                       strokeLinecap="round"
@@ -1303,6 +1737,8 @@ export function Board({
                       y1={start.y - 1}
                       x2={end.x}
                       y2={end.y - 1}
+                      pathLength={roadEnterActive ? 1 : undefined}
+                      className={roadEnterActive ? "board-road-stroke" : undefined}
                       stroke="#fffdf6"
                       strokeOpacity="0.28"
                       strokeWidth="2"
@@ -1312,6 +1748,7 @@ export function Board({
                       cx={x}
                       cy={y}
                       r="6"
+                      className={roadEnterActive ? "board-road-badge" : undefined}
                       fill="#fff7e2"
                       stroke={player.color}
                       strokeWidth="1.4"
@@ -1319,6 +1756,7 @@ export function Board({
                     <text
                       x={x}
                       y={y + 2.6}
+                      className={roadEnterActive ? "board-road-badge" : undefined}
                       textAnchor="middle"
                       fill="#33483d"
                       fontSize="7.5"
@@ -1423,130 +1861,255 @@ export function Board({
                 const building = vertex.building!;
                 const player = playersById.get(building.playerId)!;
                 const city = building.kind === "city";
+                const settlementGeneration = boardMotion.newSettlements.get(vertex.id);
+                const settlementEnterKey = !city && settlementGeneration !== undefined
+                  ? `${boardMotion.version}:settlement:${vertex.id}:${settlementGeneration}`
+                  : null;
+                const settlementEnterActive = isMotionActive(settlementEnterKey);
+                const settlementRingKey = !city && settlementGeneration !== undefined
+                  ? `${boardMotion.version}:settlement-ring:${vertex.id}:${settlementGeneration}`
+                  : null;
+                const settlementRingActive = isMotionActive(settlementRingKey);
+                const cityGeneration = boardMotion.upgradedCities.get(vertex.id);
+                const cityUpgradeKey = city && cityGeneration !== undefined
+                  ? `${boardMotion.version}:city:${vertex.id}:${cityGeneration}`
+                  : null;
+                const cityUpgradeActive = isMotionActive(cityUpgradeKey);
+                const cityRingKey = city && cityGeneration !== undefined
+                  ? `${boardMotion.version}:city-ring:${vertex.id}:${cityGeneration}`
+                  : null;
+                const cityRingActive = isMotionActive(cityRingKey);
                 return (
                   <g
                     key={vertex.id}
                     transform={`translate(${vertex.x} ${vertex.y})`}
-                    role="img"
-                    aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
                     pointerEvents="none"
                   >
-                    <ellipse
-                      cy="10"
-                      rx={city ? "19" : "15"}
-                      ry="6"
-                      fill="#35483c"
-                      opacity="0.23"
-                    />
-                    {selectedId === vertex.id && (
+                    {settlementRingActive && (
                       <circle
-                        r="24"
+                        key={settlementRingKey}
+                        className="board-placement-ring"
+                        r="14"
                         fill="none"
-                        stroke="#805e2c"
-                        strokeWidth="3"
-                        strokeDasharray="4 3"
+                        stroke={player.color}
+                        strokeWidth="2.6"
+                        aria-hidden="true"
+                        onAnimationEnd={event => {
+                          if (event.animationName === "board-ring-expand") completeMotionKey(settlementRingKey);
+                        }}
                       />
                     )}
-                    <path
-                      d={
-                        city
-                          ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                          : "M-13 11V-5L0-17 13-5V11Z"
-                      }
-                      fill={player.color}
-                      stroke="#fff7df"
-                      strokeWidth="5"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d={
-                        city
-                          ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                          : "M-13 11V-5L0-17 13-5V11Z"
-                      }
-                      fill={player.color}
-                      stroke="#39483e"
-                      strokeWidth="1.5"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d={
-                        city
-                          ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
-                          : "M-13-5 0-17 13-5"
-                      }
-                      fill="none"
-                      stroke="#fff6da"
-                      strokeOpacity="0.5"
-                      strokeWidth="1.5"
-                    />
-                    <rect
-                      x="-5.5"
-                      y="-2"
-                      width="11"
-                      height="12"
-                      rx="2"
-                      fill="#fff5dc"
-                    />
-                    <text
-                      y="7"
-                      textAnchor="middle"
-                      fill="#35483d"
-                      fontSize="9"
-                      fontWeight="800"
+                    {cityRingActive && (
+                      <circle
+                        key={cityRingKey}
+                        className="board-upgrade-ring"
+                        r="16"
+                        fill="none"
+                        stroke="#e7ba43"
+                        strokeWidth="3"
+                        aria-hidden="true"
+                        onAnimationEnd={event => {
+                          if (event.animationName === "board-ring-expand") completeMotionKey(cityRingKey);
+                        }}
+                      />
+                    )}
+                    <g
+                      className={cityUpgradeActive ? "board-city-upgrade" : settlementEnterActive ? "board-settlement-enter" : undefined}
+                      role="img"
+                      aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
+                      onAnimationEnd={event => {
+                        if (settlementEnterKey && event.animationName === "board-settlement-drop") completeMotionKey(settlementEnterKey);
+                        if (cityUpgradeKey && event.animationName === "board-city-upgrade") completeMotionKey(cityUpgradeKey);
+                      }}
                     >
-                      {getPlayerLabel(player, players.findIndex(
-                        (candidate) => candidate.id === player.id,
-                      ) + 1)}
-                    </text>
-                    {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
+                      <ellipse
+                        cy="10"
+                        rx={city ? "19" : "15"}
+                        ry="6"
+                        fill="#35483c"
+                        opacity="0.23"
+                      />
+                      {selectedId === vertex.id && (
+                        <circle
+                          r="24"
+                          fill="none"
+                          stroke="#805e2c"
+                          strokeWidth="3"
+                          strokeDasharray="4 3"
+                        />
+                      )}
+                      <path
+                        d={
+                          city
+                            ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                            : "M-13 11V-5L0-17 13-5V11Z"
+                        }
+                        fill={player.color}
+                        stroke="#fff7df"
+                        strokeWidth="5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d={
+                          city
+                            ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
+                            : "M-13 11V-5L0-17 13-5V11Z"
+                        }
+                        fill={player.color}
+                        stroke="#39483e"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d={
+                          city
+                            ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
+                            : "M-13-5 0-17 13-5"
+                        }
+                        fill="none"
+                        stroke="#fff6da"
+                        strokeOpacity="0.5"
+                        strokeWidth="1.5"
+                      />
+                      <rect
+                        x="-5.5"
+                        y="-2"
+                        width="11"
+                        height="12"
+                        rx="2"
+                        fill="#fff5dc"
+                      />
+                      <text
+                        y="7"
+                        textAnchor="middle"
+                        fill="#35483d"
+                        fontSize="9"
+                        fontWeight="800"
+                      >
+                        {getPlayerLabel(player, players.findIndex(
+                          (candidate) => candidate.id === player.id,
+                        ) + 1)}
+                      </text>
+                      {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
+                    </g>
                   </g>
                 );
               })}
 
-            {board.tiles.filter(tile => tile.id === pirateTileId && tile.terrain === "sea").map(tile => <g key={`pirate-${tile.id}`}
-              transform={`translate(${tile.x} ${tile.y - 6})`} role="img"
-              aria-label={translateText("Pirate; adjacent ships cannot be built or moved")} pointerEvents="none">
-              <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
-              <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
-            </g>)}
-            {board.tiles
-              .filter((tile) => tile.id === robberTileId && tile.terrain !== "sea" && tile.terrain !== "fog")
-              .map((tile) => (
+            {board.tiles.filter(tile => tile.id === pirateTileId && tile.terrain === "sea").map(tile => {
+              const pirateTravel = boardMotion.pirateTravel;
+              const pirateTravelKey = pirateTravel === null
+                ? null
+                : `${boardMotion.version}:pirate-travel:${pirateTravel.generation}`;
+              const pirateTravelActive = isMotionActive(pirateTravelKey);
+              const pirateEnterKey = boardMotion.pirateEnterGeneration === null
+                ? null
+                : `${boardMotion.version}:pirate-enter:${boardMotion.pirateEnterGeneration}`;
+              const pirateEnterActive = isMotionActive(pirateEnterKey);
+              const pirateRippleKey = pirateTravelActive
+                ? `${boardMotion.version}:pirate-ripple:${pirateTravel!.generation}`
+                : pirateEnterActive
+                  ? `${boardMotion.version}:pirate-ripple:${boardMotion.pirateEnterGeneration!}`
+                  : null;
+              const pirateRippleActive = isMotionActive(pirateRippleKey);
+              return (
                 <g
-                  key={tile.id}
-                  transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
-                  role="img"
-                  aria-label={translateText(tile.number === null ? "Robber on {resource}; production blocked" : "Robber on {resource} {number}; production blocked", {
-                    resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
-                  })}
+                  key="pirate"
+                  transform={`translate(${tile.x} ${tile.y - 6})`}
                   pointerEvents="none"
                 >
-                  <ellipse
-                    cy="13"
-                    rx="13.5"
-                    ry="4.5"
-                    fill="#1a2c26"
-                    opacity="0.32"
-                  />
-                  <path
-                    d="M-10 11Q-12 8-8 3L-5-4Q-11-12-5-17Q0-21 5-17Q11-12 5-4L8 3Q12 8 10 11Z"
-                    fill={`url(#${illustrationId}-robber)`}
-                    stroke="#fff6dd"
-                    strokeWidth="2.1"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M-3-15Q-6-12-3-9M-5 5-3-1"
-                    fill="none"
-                    stroke="#a4b4aa"
-                    strokeOpacity="0.85"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path d="M-8 8H8" stroke="#18241f" strokeWidth="2" />
+                  {pirateRippleActive && (
+                    <circle
+                      key={pirateRippleKey}
+                      className="board-water-ripple"
+                      r="18"
+                      aria-hidden="true"
+                      onAnimationEnd={event => {
+                        if (event.animationName === "board-water-ripple") completeMotionKey(pirateRippleKey);
+                      }}
+                    />
+                  )}
+                  <g
+                    key={pirateTravelActive ? pirateTravelKey : pirateEnterActive ? pirateEnterKey : "pirate-still"}
+                    className={pirateTravelActive ? "board-piece-travel" : pirateEnterActive ? "board-ship-enter" : undefined}
+                    style={pirateTravelActive ? ({
+                      "--travel-from-x": `${pirateTravel!.horizontal}px`,
+                      "--travel-from-y": `${pirateTravel!.vertical}px`,
+                    } as CSSProperties) : undefined}
+                    role="img"
+                    aria-label={translateText("Pirate; adjacent ships cannot be built or moved")}
+                    onAnimationEnd={event => {
+                      if (pirateTravelKey && event.animationName === "board-piece-travel") completeMotionKey(pirateTravelKey);
+                      if (pirateEnterKey && event.animationName === "board-ship-drop") completeMotionKey(pirateEnterKey);
+                    }}
+                  >
+                    <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
+                    <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
+                  </g>
                 </g>
-              ))}
+              );
+            })}
+            {board.tiles
+              .filter((tile) => tile.id === robberTileId && tile.terrain !== "sea" && tile.terrain !== "fog")
+              .map((tile) => {
+                const robberTravel = boardMotion.robberTravel;
+                const robberTravelKey = robberTravel === null
+                  ? null
+                  : `${boardMotion.version}:robber-travel:${robberTravel.generation}`;
+                const robberTravelActive = isMotionActive(robberTravelKey);
+                const robberBlockedShake = !robberTravelActive &&
+                  blockedRollActive &&
+                  tile.number !== null &&
+                  tile.number === rolledNumber;
+                return (
+                  <g
+                    key="robber"
+                    transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
+                    pointerEvents="none"
+                  >
+                    <g
+                      key={robberTravelActive ? robberTravelKey : robberBlockedShake ? blockedRollKey : "robber-still"}
+                      className={robberTravelActive ? "board-piece-travel" : robberBlockedShake ? "board-blocked-shake" : undefined}
+                      style={robberTravelActive ? ({
+                        "--travel-from-x": `${robberTravel!.horizontal}px`,
+                        "--travel-from-y": `${robberTravel!.vertical}px`,
+                      } as CSSProperties) : undefined}
+                      role="img"
+                      aria-label={translateText(tile.number === null ? "Robber on {resource}; production blocked" : "Robber on {resource} {number}; production blocked", {
+                        resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
+                      })}
+                      onAnimationEnd={event => {
+                        if (robberTravelKey && event.animationName === "board-piece-travel") completeMotionKey(robberTravelKey);
+                        if (blockedRollKey && event.animationName === "board-blocked-shake") completeMotionKey(blockedRollKey);
+                      }}
+                    >
+                      <ellipse
+                        cy="13"
+                        rx="13.5"
+                        ry="4.5"
+                        fill="#1a2c26"
+                        opacity="0.32"
+                      />
+                      <path
+                        d="M-10 11Q-12 8-8 3L-5-4Q-11-12-5-17Q0-21 5-17Q11-12 5-4L8 3Q12 8 10 11Z"
+                        fill={`url(#${illustrationId}-robber)`}
+                        stroke="#fff6dd"
+                        strokeWidth="2.1"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M-3-15Q-6-12-3-9M-5 5-3-1"
+                        fill="none"
+                        stroke="#a4b4aa"
+                        strokeOpacity="0.85"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path d="M-8 8H8" stroke="#18241f" strokeWidth="2" />
+                    </g>
+                  </g>
+                );
+              })}
 
             {board.vertices
               .filter((vertex) => legalVertices.has(vertex.id))
@@ -1641,6 +2204,56 @@ export function Board({
                   }}
                 />
               ))}
+            {activeHarvestBursts.map((burst) => {
+              const accent = burst.terrain === "gold" ? "#c9982c" : theme.resources[burst.terrain];
+              return (
+                <g
+                  key={burst.key}
+                  transform={`translate(${burst.horizontal} ${burst.vertical - 24})`}
+                  pointerEvents="none"
+                  aria-hidden="true"
+                >
+                  <g
+                    className="board-harvest-chip"
+                    style={{ animationDelay: `${Math.min(burst.index, 6) * 45}ms` }}
+                    onAnimationEnd={event => {
+                      if (event.animationName === "board-harvest-rise") completeMotionKey(burst.key);
+                    }}
+                  >
+                    <rect
+                      x="-19"
+                      y="-10.5"
+                      width="38"
+                      height="21"
+                      rx="10.5"
+                      fill="#fffdf6"
+                      stroke={accent}
+                      strokeWidth="1.8"
+                    />
+                    {burst.terrain === "gold" ? (
+                      <g transform="translate(-8 0)">
+                        <circle r="6" fill="#f7dc7a" stroke="#b5831d" strokeWidth="1.2" />
+                        <circle r="3.4" fill="none" stroke="#c9982c" strokeWidth="0.9" />
+                      </g>
+                    ) : (
+                      <g transform="translate(-15 -6.5) scale(0.42)" color={accent}>
+                        <ResourceArtwork resource={burst.terrain} theme={theme} />
+                      </g>
+                    )}
+                    <text
+                      x="7.5"
+                      y="3.5"
+                      textAnchor="middle"
+                      fill="#2f4239"
+                      fontSize="10.5"
+                      fontWeight="800"
+                    >
+                      +{burst.amount}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
           </svg>
         </div>
       </div>
