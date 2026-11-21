@@ -10,8 +10,10 @@ For a shared board and private phones, see the [multiplayer guide](multiplayer.m
 The home screen fits one viewport, with setup and the island preview side by
 side on desktop and wide landscape phones. On narrower screens, switch between
 **Setup** and **Island**; return to **Setup** to start the game. **Play across
-devices** remains available in either view. Very short windows scroll the settings
-inside the setup card while its start button stays visible in the card footer.
+devices** and the **Scan to join a board** QR action remain available in either
+view. Portrait phones fit the local setup without scrolling using compact icons;
+short landscape windows or the **Custom World** terrain editor scroll inside
+the setup card while its start button stays visible in the card footer.
 
 The **On this device** card contains the local player settings and **Let's settle
 in**, beneath the theme selector.

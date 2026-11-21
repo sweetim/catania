@@ -495,7 +495,7 @@ for (const viewport of [
       await input.scrollIntoViewIfNeeded();
       await expect(input).toBeInViewport({ ratio: 1 });
     }
-    if (viewport.height >= 650) {
+    if (viewport.height >= 568) {
       await expect(setup.getByRole("button", { name: "Change theme", exact: true })).toBeInViewport({ ratio: 1 });
       expect(await settings.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
     }
@@ -563,6 +563,63 @@ for (const viewport of [
     await expect(page.getByRole("heading", { name: /^Pass the device to / })).toBeVisible();
   });
 }
+
+test("mobile home fits without scrolling, uses compact icon controls, and keeps variant dropdown unclipped", async ({ page }, testInfo) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 375, height: 667 },
+    { width: 320, height: 568 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const setup = page.getByRole("region", { name: "Set up your table", exact: true });
+    const settings = setup.locator(".home-setup-content");
+    await page.getByRole("button", { name: "4 players", exact: true }).click();
+    await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("4");
+    await noPageOverflow(page);
+    expect(await settings.evaluate(element => element.scrollHeight <= element.clientHeight), `No setup scroll at ${viewport.width}x${viewport.height}`).toBe(true);
+
+    const multiplayer = page.getByRole("link", { name: "Play across devices", exact: true });
+    const scanButton = page.getByRole("button", { name: "Scan to join a board", exact: true });
+    const multiplayerBox = (await multiplayer.boundingBox())!;
+    const scanBox = (await scanButton.boundingBox())!;
+    expect(Math.abs(multiplayerBox.y - scanBox.y)).toBeLessThanOrEqual(2);
+    expect(scanBox.width).toBeGreaterThanOrEqual(44);
+    expect(scanBox.height).toBeGreaterThanOrEqual(44);
+
+    const versionButton = page.getByRole("button", { name: "Game version", exact: true });
+    await versionButton.click();
+    const listbox = page.getByRole("listbox", { name: "Game version", exact: true });
+    await expect(listbox).toBeVisible();
+    const listboxBounds = (await listbox.boundingBox())!;
+    expect(listboxBounds.x).toBeGreaterThanOrEqual(0);
+    expect(listboxBounds.y).toBeGreaterThanOrEqual(0);
+    expect(listboxBounds.x + listboxBounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(listboxBounds.y + listboxBounds.height).toBeLessThanOrEqual(viewport.height);
+    await screenshot(page, testInfo, `mobile-home-variants-${viewport.width}x${viewport.height}`, false);
+
+    const customOption = listbox.getByRole("option", { name: "Custom World", exact: true });
+    await customOption.scrollIntoViewIfNeeded();
+    await customOption.click();
+    await expect(versionButton).toContainText("Custom World");
+    const decreaseWood = page.getByRole("button", { name: "Decrease Wood tiles", exact: true });
+    const decreaseBox = (await decreaseWood.boundingBox())!;
+    expect(decreaseBox.width).toBeGreaterThanOrEqual(44);
+    expect(decreaseBox.height).toBeGreaterThanOrEqual(44);
+    await noPageOverflow(page);
+  }
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Game version", exact: true }).click();
+  const landscapeListbox = page.getByRole("listbox", { name: "Game version", exact: true });
+  await expect(landscapeListbox).toBeVisible();
+  const landscapeBounds = (await landscapeListbox.boundingBox())!;
+  expect(landscapeBounds.x).toBeGreaterThanOrEqual(0);
+  expect(landscapeBounds.y).toBeGreaterThanOrEqual(0);
+  expect(landscapeBounds.x + landscapeBounds.width).toBeLessThanOrEqual(844);
+  expect(landscapeBounds.y + landscapeBounds.height).toBeLessThanOrEqual(390);
+});
 
 for (const language of ["en", "ja"] as const) {
   test(`map seed toolbar automatically loads complete codes without overflow in ${language}`, async ({ page }, testInfo) => {

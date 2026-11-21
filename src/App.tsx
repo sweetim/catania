@@ -753,7 +753,7 @@ export function App() {
     <div data-theme={boardThemeId} className={!game ? "home-shell" : !game.winnerId || !showVictoryScreen ? "game-shell" : "min-h-dvh"}>
       {(!game || game.winnerId || !viewer) && (
         <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-3 py-5 sm:gap-4 sm:px-9 lg:px-12">
-          <div className="min-w-0 shrink-0 max-[360px]:[&>span>svg]:hidden max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
+          <div className="min-w-0 shrink-0 max-[360px]:[&>span]:gap-1.5 max-[360px]:[&>span>svg]:h-7 max-[360px]:[&>span>svg]:w-7 max-[360px]:[&>span>span]:text-2xl"><Logo /></div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             {game && !game.winnerId ? (
               !viewer && gameMenu
@@ -782,9 +782,10 @@ export function App() {
               <span className="h-px w-8 bg-clay" />
               {translateText("Your next gathering starts here")}
             </p>
-            <h1 className="font-serif leading-[1.05] tracking-[-.045em]">
+            <h1 className="font-serif leading-[1.08] tracking-[-.045em]">
               {translateText("A little island.")}
-              <br />
+              {language === "en" && " "}
+              <br className="hidden lg:inline" />
               {language === "en"
                 ? <>Endless <span className="italic text-ink">possibility.</span></>
                 : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
@@ -798,26 +799,47 @@ export function App() {
                 aria-controls={`home-${view}`}
                 onClick={() => setHomeView(view)}
               >
+                <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  {view === "setup" ? (
+                    <>
+                      <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
+                      <path d="M14 2v4M8 10v4M16 18v4" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
+                      <path d="m7.5 14.5 3.5-6 3 4 2-2.5 2.5 4.5H7.5Z" />
+                    </>
+                  )}
+                </svg>
                 {translateText(view === "setup" ? "Setup" : "Island")}
               </button>
             ))}
           </nav>
           <section
             id="home-setup"
-            className="home-setup panel"
+            className="home-setup panel @container"
             aria-label={translateText("Set up your table")}
           >
             <div className="home-setup-content">
               <div>
                 <p className="eyebrow">{translateText("On this device")}</p>
-                <h2 className="home-setup-heading mt-1 font-serif text-2xl">
+                <h2 className="home-setup-heading mt-0.5 font-serif text-lg @min-[440px]:mt-1 @min-[440px]:text-2xl">
                   {translateText("Make room at the table.")}
                 </h2>
               </div>
               <div className="home-table-options">
                 <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-muted">{translateText("Table size")}</p>
-                  <div className="flex rounded-xl bg-moss p-1" role="group" aria-label={translateText("Number of players")}>
+                  <p className="mb-1.5 hidden text-[11px] font-semibold text-muted @min-[440px]:block">{translateText("Table size")}</p>
+                  <div className="flex items-center gap-1 rounded-xl bg-moss p-0.5 @min-[440px]:p-1" role="group" aria-label={translateText("Number of players")}>
+                    <span className="flex shrink-0 items-center pl-1.5 text-muted @min-[440px]:hidden" aria-hidden="true" title={translateText("Table size")}>
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </span>
                     {[3, 4].map((count) => (
                       <button
                         key={count}
@@ -825,30 +847,38 @@ export function App() {
                           setPlayerCount(count);
                           setHumanCount((current) => Math.min(current, count));
                         }}
+                        aria-label={translateText("{count} players", { count })}
                         aria-pressed={playerCount === count}
-                        className={`min-h-11 min-w-0 flex-1 rounded-lg px-0 text-[10px] font-semibold sm:px-2 sm:text-xs ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
+                        className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold @min-[440px]:text-xs ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
                       >
-                        {translateText("{count} players", { count })}
+                        <span className="tabular-nums @min-[440px]:hidden">{count}</span>
+                        <span className="hidden @min-[440px]:inline">{translateText("{count} players", { count })}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-                <label className="min-w-0 text-[10px] font-semibold text-muted sm:text-[11px]">
-                  <span className="mb-1.5 block">{translateText("Human players")}</span>
-                  <select
-                    className="field !min-h-[52px] !px-1 !text-[10px] text-ink sm:!px-2 sm:!text-xs"
-                    value={humanCount}
-                    onChange={(event) => setHumanCount(Number(event.target.value))}
-                  >
-                    {Array.from({ length: playerCount }, (_, index) => index + 1)
-                      .map((count) => (
-                        <option key={count} value={count}>
-                          {translateText(count === 1 ? "{count} human" : "{count} humans", { count })}
-                        </option>
-                      ))}
-                  </select>
+                <label className="min-w-0 text-[11px] font-semibold text-muted">
+                  <span className="sr-only @min-[440px]:not-sr-only @min-[440px]:mb-1.5 @min-[440px]:block">{translateText("Human players")}</span>
+                  <span className="relative flex items-center">
+                    <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted @min-[440px]:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+                    </svg>
+                    <select
+                      className="field !min-h-12 !pl-7 !pr-1 !text-base font-medium text-ink @min-[440px]:!min-h-[52px] @min-[440px]:!px-2 @min-[440px]:!text-xs @min-[440px]:font-semibold"
+                      value={humanCount}
+                      onChange={(event) => setHumanCount(Number(event.target.value))}
+                    >
+                      {Array.from({ length: playerCount }, (_, index) => index + 1)
+                        .map((count) => (
+                          <option key={count} value={count}>
+                            {translateText(count === 1 ? "{count} human" : "{count} humans", { count })}
+                          </option>
+                        ))}
+                    </select>
+                  </span>
                 </label>
-                <GameVariantSelector value={variant} onChange={nextVariant => {
+                <GameVariantSelector className="home-variant-selector" value={variant} onChange={nextVariant => {
                   setVariant(nextVariant);
                   const seed = generateMapSeed();
                   setPreview({ seed, board: createBoard(seededRandom(seed), nextVariant,
@@ -867,11 +897,11 @@ export function App() {
                   }}
                 />
               )}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                   <label
                     key={index}
-                    className="flex items-center gap-2 rounded-lg border border-line bg-paper/70 px-3"
+                    className="flex items-center gap-1.5 rounded-lg border border-line bg-paper/70 px-2 sm:gap-2 sm:px-3"
                   >
                     <span
                       className="player-number flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
@@ -891,22 +921,39 @@ export function App() {
                           ),
                         )
                       }
-                      className="min-h-11 w-full min-w-0 bg-transparent text-sm outline-offset-0"
+                      className="min-h-11 w-full min-w-0 bg-transparent text-base outline-offset-0 sm:text-sm"
                     />
                   </label>
                 ) : (
                   <div
                     key={index}
-                    className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-moss/60 px-3 text-sm"
+                    className="flex min-h-11 min-w-0 items-center gap-1.5 rounded-lg border border-line bg-moss/60 px-2 text-sm sm:gap-2 sm:px-3"
                   >
                     <span
                       className="h-5 w-5 shrink-0 rounded-full"
                       style={{ background: PLAYER_COLORS[index] }}
                     />
-                    <span className="min-w-0">
-                      {defaultComputerName(language, index - humanCount + 1)}{" "}
-                      <span className="text-[10px] text-muted">/ {translateText("AI")}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {defaultComputerName(language, index - humanCount + 1)}
                     </span>
+                    <svg
+                      role="img"
+                      aria-label={translateText("AI")}
+                      className="h-4 w-4 shrink-0 text-muted"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <title>{translateText("AI")}</title>
+                      <path d="M12 3v4M3 12v4M21 12v4" />
+                      <rect x="5" y="7" width="14" height="13" rx="4" />
+                      <path d="M9 16h6" />
+                      <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" />
+                      <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+                    </svg>
                   </div>
                 ))}
               </div>
@@ -926,9 +973,12 @@ export function App() {
                 </svg>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
-                  <span className="block text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
+                  <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
                 </span>
-                <span className="text-xs font-semibold underline underline-offset-4">{translateText("Change")}</span>
+                <span className="hidden text-xs font-semibold underline underline-offset-4 @min-[440px]:inline">{translateText("Change")}</span>
+                <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted @min-[440px]:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
               </button>
             </div>
             <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
@@ -942,13 +992,36 @@ export function App() {
             </div>
           </section>
           <section className="home-multiplayer" aria-label={translateText("Cross-device play")}>
-            <h2 className="eyebrow mb-2">{translateText("Separate multiplayer setup")}</h2>
-            <div className="grid gap-2">
-              <a className="button-primary w-full justify-between" href="/?multiplayer=1">
-                {translateText("Play across devices")} <Arrow />
+            <h2 className="eyebrow mb-1.5 lg:mb-2">{translateText("Separate multiplayer setup")}</h2>
+            <div className="home-multiplayer-actions">
+              <a className="button-primary min-w-0 flex-1 justify-between" href="/?multiplayer=1">
+                <span className="truncate">{translateText("Play across devices")}</span> <Arrow className="h-4 w-4 shrink-0" />
               </a>
-              <button className="button-secondary w-full justify-between" onClick={() => setDialog("scan")}>
-                {translateText("Scan to join a board")} <Arrow />
+              <button
+                type="button"
+                className="button-secondary home-scan-button"
+                aria-label={translateText("Scan to join a board")}
+                title={translateText("Scan to join a board")}
+                onClick={() => setDialog("scan")}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <svg aria-hidden="true" className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="5" height="5" x="3" y="3" rx="1" />
+                    <rect width="5" height="5" x="16" y="3" rx="1" />
+                    <rect width="5" height="5" x="3" y="16" rx="1" />
+                    <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+                    <path d="M21 21v.01" />
+                    <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+                    <path d="M3 12h.01" />
+                    <path d="M12 3h.01" />
+                    <path d="M12 16v.01" />
+                    <path d="M16 12h.01" />
+                    <path d="M21 12v.01" />
+                    <path d="M12 21v.01" />
+                  </svg>
+                  <span className="home-scan-label">{translateText("Scan to join a board")}</span>
+                </span>
+                <Arrow className="home-scan-arrow h-4 w-4 shrink-0" />
               </button>
             </div>
           </section>
@@ -959,7 +1032,7 @@ export function App() {
           >
             <div className="shrink-0">
               <p className="eyebrow">{translateText("A place to begin")}</p>
-              <h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2>
+              <h2 className="mt-0.5 font-serif text-lg lg:mt-1 lg:text-2xl">{translateText("Your island awaits.")}</h2>
             </div>
             <div className="min-h-0 flex-1">
               <Board
