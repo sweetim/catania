@@ -22,13 +22,17 @@ export function Dice({ dice, rolling = false }: {
       aria-label={!dice ? translateText("Dice at rest") : rolling ? translateText("Dice rolling") : translateText("Dice: {first} and {second}", { first: dice[0], second: dice[1] })}
       className={`roll-summary-dice flex shrink-0 gap-1.5 ${rolling ? "dice-rolling" : ""} ${dice ? "" : "opacity-60"}`}
     >
-      {(dice ?? [1, 1]).map((value, index) => (
+      {(dice ?? [0, 0]).map((value, index) => (
         <svg key={index} aria-hidden="true" viewBox="0 0 48 48" className="roll-die">
-          <rect x="2" y="4" width="44" height="42" rx="10" fill="#c9b983" />
-          <rect x="2" y="2" width="44" height="42" rx="10" fill="#fffaf0" stroke="#b8a777" />
-          {DIE_PIPS[value]!.map(position => (
-            <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
-          ))}
+          <rect x="2" y="4" width="44" height="42" rx="10" fill={dice ? "#c9b983" : "#ddd4be"} />
+          <rect x="2" y="2" width="44" height="42" rx="10" fill={dice ? "#fffaf0" : "#faf6ec"} stroke={dice ? "#b8a777" : "#c6bba1"} strokeDasharray={dice ? undefined : "4 3"} />
+          {dice ? (
+            DIE_PIPS[value]!.map(position => (
+              <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
+            ))
+          ) : (
+            <text x="24" y="29" textAnchor="middle" fill="#7d8072" fontSize="18" fontWeight="700" fontFamily="serif">?</text>
+          )}
         </svg>
       ))}
     </div>

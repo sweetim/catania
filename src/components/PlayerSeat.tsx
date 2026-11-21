@@ -1,10 +1,10 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { CardTypeIcon, DevelopmentCardIcon, getPlayerLabel, IslandIcon, PieceIcon } from "./GameUi";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { isSeafarers, type GameVariant } from "../game/types";
 
-export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original" }: {
+export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original", badge }: {
   variant?: GameVariant;
   player: { name: string; color: string; control: "human" | "computer"; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
   number: number;
@@ -15,32 +15,34 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   islandBonus?: number;
   stacked?: boolean;
   privateScore?: number;
+  badge?: ReactNode;
 }) {
   const translateText = useTranslation(gameplayTranslations);
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
   const roadLabel = translateText(isSeafarers(variant) ? "{count} connected roads and ships" : player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
   const islandCount = islandBonus / 2;
   const islandLabel = translateText(islandCount === 1 ? "Island bonus: {count} island (+{points} victory points)" : "Island bonus: {count} islands (+{points} victory points)", { count: islandCount, points: islandBonus });
+  const useTwoRowGrid = stacked || Boolean(badge);
 
   return <div style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
-    <div className={stacked ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
-      <span className="player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: player.color }}>{getPlayerLabel(player, number)}</span>
+    <div className={useTwoRowGrid ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
+      <span className={`player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${badge ? "row-span-2" : ""}`} style={{ background: player.color }}>{getPlayerLabel(player, number)}</span>
       <p className="player-name min-w-0 flex-1 truncate text-sm font-semibold" title={player.name}>{player.name}</p>
-      <div role="group" aria-label={translateText("{player}'s card counts", { player: player.name })} className={`player-card-counts ${stacked ? "col-span-2 col-start-2 row-start-2" : ""}`}>
-        <span role="img" aria-label={translateText("{count} resource cards", { count: player.resourceCount })} title={translateText("{count} resource cards", { count: player.resourceCount })} className="player-card-stat text-forest">
+      <div role="group" aria-label={translateText("{player}'s card counts", { player: player.name })} className={`player-card-counts ${useTwoRowGrid ? badge ? "col-start-2 row-start-2" : "col-span-2 col-start-2 row-start-2" : ""}`}>
+        <span role="img" aria-label={translateText("{count} resource cards", { count: player.resourceCount })} title={translateText("{count} resource cards", { count: player.resourceCount })} className="player-card-stat text-[#497562]">
           <CardTypeIcon kind="resource" /><strong>{player.resourceCount}</strong>
         </span>
         <span role="img" aria-label={translateText("{count} development cards", { count: player.developmentCount })} title={translateText("{count} development cards", { count: player.developmentCount })} className="player-card-stat text-[#947231]">
           <CardTypeIcon kind="development" /><strong>{player.developmentCount}</strong>
         </span>
-        <span role="img" aria-label={knightLabel} title={knightLabel} className="player-card-stat text-forest">
+        <span role="img" aria-label={knightLabel} title={knightLabel} className="player-card-stat text-[#497562]">
           <DevelopmentCardIcon kind="knight" /><strong>{player.knightsPlayed}</strong>
         </span>
-        <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-forest">
+        <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-[#497562]">
           <PieceIcon piece="road" /><strong>{player.longestRoad}</strong>
         </span>
       </div>
-      <div role="group" aria-label={translateText("{player}'s victory points", { player: player.name })} className={`player-score col-start-3 row-start-1 flex shrink-0 items-center gap-1 text-right ${leading ? "text-[#8b6425]" : ""}`}>
+      <div role="group" aria-label={translateText("{player}'s victory points", { player: player.name })} className={`player-score col-start-3 row-start-1 flex shrink-0 items-center justify-end gap-1 text-right ${leading ? "text-[#8b6425]" : ""}`}>
         <span className="text-[9px] text-muted">{translateText("VP")}</span>
         <span className="font-serif text-2xl">{privateScore ?? player.score}</span>
         {(largestArmy || longestRoadAward || islandBonus > 0) && <div role="group" aria-label={translateText("Victory point awards")} className="ml-1.5 flex shrink-0 items-center gap-2.5">
@@ -53,6 +55,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
           {longestRoadAward && <span role="img" aria-label={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} title={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} className="shrink-0 text-[#b58a2d]"><PieceIcon piece="road" /></span>}
         </div>}
       </div>
+      {badge && <div className="player-seat-badge col-start-3 row-start-2 flex shrink-0 items-center justify-end gap-1.5">{badge}</div>}
     </div>
   </div>;
 }

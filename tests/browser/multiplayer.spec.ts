@@ -596,8 +596,10 @@ test("Japanese phones localize a shared English game without changing its state 
     await screen.keyboard.press("Escape");
   }
   const before = await latestSnapshot(japanesePhone);
-  await expect(japanesePhone.getByRole("heading", { name: "太郎の手札", exact: true })).toBeVisible();
-  await expect(englishPhone.getByRole("heading", { name: "Sam's hand", exact: true })).toBeVisible();
+  await expect(japanesePhone.getByRole("region", { name: "現在の資源", exact: true })).toBeVisible();
+  await expect(japanesePhone.getByRole("region", { name: "あなたのプレイヤー情報", exact: true })).toContainText("太郎");
+  await expect(englishPhone.getByRole("region", { name: "Your current resources", exact: true })).toBeVisible();
+  await expect(englishPhone.getByRole("region", { name: "Your player summary", exact: true })).toContainText("Sam");
   await expect(japanesePhone.getByRole("button", { name: "サイコロを振る", exact: true })).toBeVisible();
   await expect(englishPhone.getByRole("button", { name: "Roll the dice", exact: true })).toBeVisible();
 
@@ -609,7 +611,8 @@ test("Japanese phones localize a shared English game without changing its state 
 
   const sentBefore = (await messages(japanesePhone)).filter(entry => entry.direction === "sent").length;
   await selectMenuLanguage(japanesePhone, "ja", "en");
-  await expect(japanesePhone.getByRole("heading", { name: "太郎's hand", exact: true })).toBeVisible();
+  await expect(japanesePhone.getByRole("region", { name: "Your current resources", exact: true })).toBeVisible();
+  await expect(japanesePhone.getByRole("region", { name: "Your player summary", exact: true })).toContainText("太郎");
   await expect(host.locator("html")).toHaveAttribute("lang", "en");
   await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
   expect((await latestSnapshot(japanesePhone)).version).toBe(before.version);
@@ -1200,7 +1203,7 @@ test("invitation copies inline with temporary confirmation and a selectable fail
     return input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0);
   })).toBe(invitation);
   await expect(input).toHaveValue(invitation);
-  await host.evaluate(() => { navigator.clipboard.writeText = async () => {}; });
+  await host.evaluate(() => { navigator.clipboard.writeText = async () => { }; });
   await copy.click();
   await expect(host.getByRole("alert")).toHaveCount(0);
   await expect(confirmation).toHaveText("Copied");
@@ -1898,14 +1901,13 @@ test("private player header matches the single-device hand and total score", asy
   await present();
 
   const header = phone.getByRole("region", { name: "Your current resources", exact: true });
-  const heading = header.getByRole("heading", { name: `${player.name}'s hand`, exact: true });
-  await expect(heading).toBeVisible();
-  await expect(header.getByText("95 cards", { exact: true })).toBeVisible();
-  await expect(header.getByText("95 cards", { exact: true })).toHaveClass(/card-count-at-risk/);
-  await expect(header.getByRole("img", { name: "1 victory point cards", exact: true })).toBeVisible();
+  await expect(header.getByRole("heading")).toHaveCount(0);
   await expect(header.locator(".player-seat")).toHaveCount(0);
   const summary = phone.getByRole("region", { name: "Your player summary", exact: true });
   const seat = summary.locator(".player-seat");
+  await expect(seat.getByText("95 cards", { exact: true })).toBeVisible();
+  await expect(seat.getByText("95 cards", { exact: true })).toHaveClass(/card-count-at-risk/);
+  await expect(seat.getByRole("img", { name: "1 victory point cards", exact: true })).toBeVisible();
   await expect(seat.locator(".player-number")).toHaveText(player.name.trim()[0]!.toUpperCase());
   const playerColor = await phone.evaluate(color => { const style = document.createElement("span").style; style.backgroundColor = color; return style.backgroundColor; }, player.color);
   await expect(seat.locator(".player-number")).toHaveCSS("background-color", playerColor);
@@ -1923,7 +1925,7 @@ test("private player header matches the single-device hand and total score", asy
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 667 }, { width: 844, height: 390 }, { width: 1440, height: 900 }]) {
     await phone.setViewportSize(viewport);
     await privateScreenFits(phone);
-    expect(await header.locator(":scope > div").first().evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await seat.locator(".player-seat-badge").evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await summary.scrollIntoViewIfNeeded();
     await expect(summary).toBeInViewport({ ratio: 1 });
     expect(await summary.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -1945,9 +1947,7 @@ test("private player header matches the single-device hand and total score", asy
       expect(handBounds.y).toBeCloseTo(turnBounds.y, 0);
       expect(handBounds.y - summaryBounds.y - summaryBounds.height).toBeGreaterThanOrEqual(8);
     }
-    expect((await heading.boundingBox())!.width).toBeGreaterThan(30);
-    await heading.scrollIntoViewIfNeeded();
-    await expect(heading).toBeInViewport({ ratio: 1 });
+    await expect(seat.locator(".player-seat-badge")).toBeInViewport({ ratio: 1 });
     await screenshot(phone, testInfo, `private-player-header-${viewport.width}-${viewport.height}`);
   }
 
@@ -1966,7 +1966,7 @@ test("private player header matches the single-device hand and total score", asy
   await present();
   await expect(seat.locator(".player-score > span")).toHaveText(["VP", "2"]);
   await expect(seat).not.toContainText("total");
-  await expect(header.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
+  await expect(seat.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
 });
 
 test("private build grid stays compact and pinned without stretching when development cards change", async ({ multiplayer }, testInfo) => {
@@ -1986,8 +1986,14 @@ test("private build grid stays compact and pinned without stretching when develo
       await expect(rows).toHaveCount(4);
       const firstRowBounds = (await rows.nth(0).boundingBox())!;
       const secondRowBounds = (await rows.nth(1).boundingBox())!;
-      expect(secondRowBounds.x).toBeGreaterThan(firstRowBounds.x + firstRowBounds.width - 1);
-      expect(Math.abs(secondRowBounds.y - firstRowBounds.y)).toBeLessThanOrEqual(1);
+      const singleColumn = viewport.width < 700 && viewport.height >= 820;
+      if (singleColumn) {
+        expect(secondRowBounds.y).toBeGreaterThan(firstRowBounds.y + firstRowBounds.height - 1);
+        expect(Math.abs(secondRowBounds.x - firstRowBounds.x)).toBeLessThanOrEqual(1);
+      } else {
+        expect(secondRowBounds.x).toBeGreaterThan(firstRowBounds.x + firstRowBounds.width - 1);
+        expect(Math.abs(secondRowBounds.y - firstRowBounds.y)).toBeLessThanOrEqual(1);
+      }
       for (const [index, label] of ["Build road", "Build settlement", "Upgrade to city", "Buy a card"].entries()) {
         const row = rows.nth(index);
         await expect(row).toContainText(label);
@@ -1997,12 +2003,19 @@ test("private build grid stays compact and pinned without stretching when develo
           const content = element.firstElementChild!;
           const icon = content.firstElementChild!.getBoundingClientRect();
           const cost = element.querySelector(".build-cost")!.getBoundingClientRect();
-          return { width: bounds.width, height: bounds.height, parentWidth: element.parentElement!.getBoundingClientRect().width,
+          return {
+            width: bounds.width, height: bounds.height, parentWidth: element.parentElement!.getBoundingClientRect().width,
             iconWidth: icon.width, iconHeight: icon.height, costBottom: cost.bottom, boundsBottom: bounds.bottom,
-            costLeftGap: cost.left - bounds.left, costRightGap: bounds.right - cost.right };
+            costLeftGap: cost.left - bounds.left, costRightGap: bounds.right - cost.right
+          };
         });
-        expect(geometry.width).toBeLessThan(geometry.parentWidth * 0.55);
-        expect(geometry.height).toBeGreaterThanOrEqual(70);
+        if (singleColumn) {
+          expect(geometry.width).toBeGreaterThan(geometry.parentWidth * 0.9);
+          expect(geometry.height).toBeGreaterThanOrEqual(48);
+        } else {
+          expect(geometry.width).toBeLessThan(geometry.parentWidth * 0.55);
+          expect(geometry.height).toBeGreaterThanOrEqual(54);
+        }
         expect(geometry.iconWidth).toBe(24);
         expect(geometry.iconHeight).toBe(24);
         expect(geometry.costBottom).toBeLessThanOrEqual(geometry.boundsBottom);
@@ -2029,6 +2042,87 @@ test("private build grid stays compact and pinned without stretching when develo
   await expect(rows.nth(2)).toHaveClass(/border-forest bg-moss/);
   await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
   await expect(phone.getByRole("button", { name: "Cancel placement", exact: true })).toBeVisible();
+});
+
+test("private mobile roll screen fits Seafarers actions without clipping and emphasizes primary roll CTA", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const game = snapshot.game!;
+  const player = snapshot.privatePlayer!;
+  game.variant = "seafarers";
+  game.phase = { type: "roll" };
+  game.dice = null;
+  game.turnNumber = 2;
+  player.resources = { wood: 1, brick: 1, wool: 3, grain: 1, ore: 0 };
+  player.developmentCards = [];
+  await present();
+
+  await phone.setViewportSize({ width: 390, height: 844 });
+  await privateScreenFits(phone);
+
+  const hand = phone.locator(".private-hand");
+  const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
+  const rollButton = turnControls.getByRole("button", { name: "Roll the dice", exact: true });
+
+  await expect(turnControls.getByRole("heading", { name: "Your turn", exact: true })).toBeVisible();
+  await expect(turnControls.getByRole("region", { name: "Dice tray", exact: true })).toBeVisible();
+  await expect(hand.getByRole("heading")).toHaveCount(0);
+  await expect(hand.getByText("Roll first to build or trade.", { exact: true })).toHaveCount(0);
+  const summary = phone.getByRole("region", { name: "Your player summary", exact: true });
+  await expect(summary.getByText("6 cards", { exact: true })).toBeVisible();
+  await expect(summary.getByRole("img", { name: /victory point cards/ })).toHaveCount(0);
+  const badgePosition = await summary.evaluate(region => {
+    const score = region.querySelector(".player-score")!.getBoundingClientRect();
+    const badge = region.querySelector(".player-seat-badge")!.getBoundingClientRect();
+    return { badgeTop: badge.top, scoreBottom: score.bottom };
+  });
+  expect(badgePosition.badgeTop).toBeGreaterThanOrEqual(badgePosition.scoreBottom - 4);
+  const rollTurnCardHeight = (await turnControls.locator(".turn-card").boundingBox())!.height;
+
+  await expect(rollButton).toHaveCSS("background-color", "rgb(37, 59, 54)");
+  await expect(rollButton).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(turnControls.locator(".turn-card")).toHaveCSS("background-color", "rgb(233, 237, 223)");
+  await expect(turnControls.locator(".turn-number")).toHaveCSS("background-color", "rgb(233, 237, 223)");
+
+  for (const label of ["Build road", "Build ship", "Build settlement", "Upgrade to city", "Move ship", "Buy a card", "Make a trade"]) {
+    await expect(hand.getByRole("button", { name: label, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  expect(await hand.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  const bottomAnchor = await phone.locator(".private-dashboard").evaluate(dashboard => {
+    const turn = dashboard.querySelector(".private-turn")!.getBoundingClientRect();
+    return dashboard.getBoundingClientRect().bottom - turn.bottom;
+  });
+  expect(bottomAnchor).toBeLessThanOrEqual(4);
+  await screenshot(phone, testInfo, "private-seafarers-roll-mobile");
+
+  game.dice = [6, 2];
+  game.phase = { type: "actions" };
+  player.resources = { ...player.resources, wool: player.resources.wool + 1 };
+  await present();
+  const rollResult = turnControls.getByRole("region", { name: "Roll result", exact: true });
+  await expect(rollResult).toBeVisible();
+  await expect(rollResult.getByText("You received", { exact: true })).toBeVisible();
+  const rewardMetrics = await rollResult.evaluate(summary => {
+    const content = summary.querySelector(".roll-summary-content")!;
+    const reward = summary.querySelector(".roll-summary-resource")!;
+    const summaryBounds = summary.getBoundingClientRect();
+    const contentBounds = content.getBoundingClientRect();
+    const rewardBounds = reward.getBoundingClientRect();
+    return {
+      overflowY: content.scrollHeight - content.clientHeight,
+      clippedBottom: rewardBounds.bottom - Math.min(summaryBounds.bottom, contentBounds.bottom),
+      clippedTop: Math.max(summaryBounds.top, contentBounds.top) - rewardBounds.top,
+    };
+  });
+  expect(rewardMetrics.overflowY).toBeLessThanOrEqual(1);
+  expect(rewardMetrics.clippedBottom).toBeLessThanOrEqual(0.5);
+  expect(rewardMetrics.clippedTop).toBeLessThanOrEqual(0.5);
+  await expect(hand.getByText("Roll first to build or trade.", { exact: true })).toHaveCount(0);
+  expect(Math.abs((await turnControls.locator(".turn-card").boundingBox())!.height - rollTurnCardHeight)).toBeLessThanOrEqual(1);
+  await screenshot(phone, testInfo, "private-seafarers-roll-reward-mobile");
+
+  game.phase = { type: "gold", required: { [player.id]: 1 } };
+  await present();
+  expect(Math.abs((await turnControls.locator(".turn-card").boundingBox())!.height - rollTurnCardHeight)).toBeLessThanOrEqual(1);
 });
 
 test("private build buttons explain resources, legal spots, settlement stock and city limits", async ({ multiplayer }, testInfo) => {
@@ -2593,7 +2687,7 @@ test("private instructions and grouped development cards match single-device gam
   await expect(instructions.getByRole("heading", { name: "Find a place to call home.", exact: true })).toBeVisible();
   await expect(instructions).toContainText("Place your first settlement on a highlighted intersection on the shared board.");
   await expect(instructions).toContainText("Leave at least two edges between settlements.");
-  await expect(instructions.locator(".turn-card")).toHaveCSS("background-color", "rgb(176, 205, 193)");
+  await expect(instructions.locator(".turn-card")).toHaveCSS("background-color", "rgb(233, 237, 223)");
   await expect(developmentHand).toHaveCount(0);
   await expect(phone.getByRole("button", { name: /^Development cards \(/ })).toHaveCount(0);
   await privateScreenFits(phone);
@@ -2623,9 +2717,12 @@ test("private instructions and grouped development cards match single-device gam
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 844, height: 390 }, { width: 1440, height: 900 }]) {
     await phone.setViewportSize(viewport);
     await privateScreenFits(phone);
-    expect((await phone.locator(".private-hand .hand-resources h2").boundingBox())!.width).toBeGreaterThan(30);
     expect(await developmentHand.getByRole("list").evaluate(element => element.clientHeight >= 44 && element.scrollWidth <= element.clientWidth)).toBe(true);
-    expect(await phone.locator(".private-instructions .turn-title, .private-instructions .turn-description, .private-turn .roll-summary-content").evaluateAll(elements => elements.every(element => element.scrollHeight <= element.clientHeight))).toBe(true);
+    expect(await phone.locator(".private-instructions .turn-title, .private-turn .roll-summary-content").evaluateAll(elements => elements.every(element => element.scrollHeight <= element.clientHeight))).toBe(true);
+    expect(await phone.locator(".private-instructions .turn-description").evaluate(element => {
+      const style = getComputedStyle(element);
+      return Math.abs(element.getBoundingClientRect().height - Number.parseFloat(style.lineHeight) * 2) <= 1;
+    })).toBe(true);
     await screenshot(phone, testInfo, `private-development-list-${viewport.width}-${viewport.height}`);
   }
   await phone.setViewportSize({ width: 320, height: 568 });
@@ -2858,6 +2955,65 @@ test("declining a computer trade request identifies the open trade and survives 
   await expect(request).toHaveCount(0);
 });
 
+test("trade request dialog keeps actions visible and previews the proposed return on mobile", async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  const requester = game.players.find(other => other.control === "computer")!;
+  player.resources = { wood: 1, brick: 1, wool: 3, grain: 2, ore: 1 };
+  game.activePlayerId = requester.id;
+  game.phase = { type: "actions" };
+  game.trade = {
+    offeredBy: requester.id,
+    give: null,
+    receive: { ...emptyResources(), wood: 1 },
+    responses: {},
+    expiresAt: Date.now() + 15_000,
+  };
+  await phone.setViewportSize({ width: 390, height: 700 });
+  await present();
+
+  const request = phone.getByRole("dialog", { name: "Trade request", exact: true });
+  const decline = request.getByRole("button", { name: "Decline", exact: true });
+  const propose = request.getByRole("button", { name: "Propose price", exact: true });
+  await expect(request).toBeVisible();
+  await expect(request.getByText(`From ${requester.name}`, { exact: true })).toBeVisible();
+  await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toHaveCount(0);
+  await expect(request.getByText("Choose below", { exact: true })).toBeVisible();
+  await expectInventory(request, player.resources);
+  await noHorizontalOverflow(phone);
+
+  for (const viewport of [{ width: 390, height: 700 }, { width: 320, height: 568 }]) {
+    await phone.setViewportSize(viewport);
+    const dialogBox = (await request.boundingBox())!;
+    const declineBox = (await decline.boundingBox())!;
+    const proposeBox = (await propose.boundingBox())!;
+    expect(declineBox.y + declineBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height + 1);
+    expect(proposeBox.y + proposeBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height + 1);
+    expect(proposeBox.height).toBeLessThanOrEqual(48);
+  }
+  await phone.setViewportSize({ width: 390, height: 700 });
+  await screenshot(phone, testInfo, "trade-request-dialog-initial");
+
+  await request.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
+  await expect(request.getByText("Choose different resources than the ones you give.", { exact: true })).toBeVisible();
+  await expect(propose).toBeDisabled();
+  await request.getByRole("button", { name: "Remove Wood from You want in return", exact: true }).click();
+  await request.getByRole("button", { name: "Add Ore to You want in return", exact: true }).click();
+  await expect(request.getByRole("img", { name: "You receive: 1 Ore", exact: true })).toBeVisible();
+  await expect(propose).toBeEnabled();
+  await screenshot(phone, testInfo, "trade-request-dialog-selected");
+
+  player.resources = { wood: 3, brick: 0, wool: 0, grain: 1, ore: 0 };
+  game.trade.receive = { ...emptyResources(), wool: 1 };
+  await present();
+  const missingNotice = request.getByText("Missing 1 Wool", { exact: true });
+  await expect(missingNotice).toBeVisible();
+  await expect(propose).toBeDisabled();
+  await expect(propose).toHaveAccessibleDescription("Missing 1 Wool");
+  await screenshot(phone, testInfo, "trade-request-dialog-missing");
+});
+
 test("a computer trade request stays answerable after the phone chose a price and another computer replied", async ({ multiplayer }) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
@@ -3054,13 +3210,22 @@ test("private trade responses preserve drafts and confirmations across version c
   game.trade.expiresAt = Date.now() + 15_000;
   await present();
   const propose = request.getByRole("button", { name: "Propose price", exact: true });
+  const decline = request.getByRole("button", { name: "Decline", exact: true });
   await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toBeVisible();
+  await expect(request.getByText("Choose below", { exact: true })).toBeVisible();
   await expectInventory(request, player.resources);
+  const dialogBox = (await request.boundingBox())!;
+  const declineBox = (await decline.boundingBox())!;
+  const proposeBox = (await propose.boundingBox())!;
+  expect(declineBox.y + declineBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height + 1);
+  expect(proposeBox.y + proposeBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height + 1);
   await expect(propose).toBeDisabled();
   await request.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
+  await expect(request.getByText("Choose different resources than the ones you give.", { exact: true })).toBeVisible();
   await expect(propose).toBeDisabled();
   await request.getByRole("button", { name: "Remove Wood from You want in return", exact: true }).click();
   await request.getByRole("button", { name: "Add Ore to You want in return", exact: true }).click();
+  await expect(request.getByRole("img", { name: "You receive: 1 Ore", exact: true })).toBeVisible();
   await expect(propose).toBeEnabled();
   await present();
   await expect(propose).toBeDisabled();
@@ -3085,13 +3250,15 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
   const host = await multiplayer.newPage("Host");
   await host.addInitScript(() => {
     let seed = 1;
-    Object.defineProperty(crypto, "getRandomValues", { configurable: true, value: (values: Uint32Array) => {
-      for (let index = 0; index < values.length; index++) {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        values[index] = seed;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true, value: (values: Uint32Array) => {
+        for (let index = 0; index < values.length; index++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          values[index] = seed;
+        }
+        return values;
       }
-      return values;
-    } });
+    });
   });
   const invitation = await hostGame(host);
   const phones = new Map<string, Page>();
@@ -3121,10 +3288,12 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
   // Control only browser entropy: normal setup and production fund the real engine's hands.
   await host.evaluate(dice => {
     let index = 0;
-    Object.defineProperty(crypto, "getRandomValues", { configurable: true, value: (values: Uint32Array) => {
-      for (let position = 0; position < values.length; position++) values[position] = Math.floor(((dice[index++ % 2]! - 0.5) / 6) * 0x100000000);
-      return values;
-    } });
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true, value: (values: Uint32Array) => {
+        for (let position = 0; position < values.length; position++) values[position] = Math.floor(((dice[index++ % 2]! - 0.5) / 6) * 0x100000000);
+        return values;
+      }
+    });
   }, [firstDie, productionTile.number! - firstDie]);
   for (let turn = 0; turn < 7; turn++) {
     const name = (await host.getByTestId("game-phase").getAttribute("data-active-player"))!;
@@ -3222,7 +3391,7 @@ for (const [stage, expectedError] of [
         RTCPeerConnection.prototype.setRemoteDescription = function (description) {
           return Reflect.apply(nativeSetRemoteDescription, this, [{ type: description.type, sdp: description.sdp?.replace(/^a=candidate:.*\r?\n/gm, "") }]);
         };
-        RTCPeerConnection.prototype.addIceCandidate = async () => {};
+        RTCPeerConnection.prototype.addIceCandidate = async () => { };
       });
     }
     const invitation = await hostGame(host);

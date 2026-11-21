@@ -55,7 +55,12 @@
 
 @layer components {
   .button-primary {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-ink transition-colors hover:bg-ink hover:text-white disabled:hover:bg-forest disabled:hover:text-ink;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1b2e2a] disabled:hover:bg-ink;
+    box-shadow: 0 2px 0 #172723, 0 4px 10px #253b3626;
+  }
+
+  .button-primary:disabled {
+    box-shadow: none;
   }
 
   .button-secondary {
@@ -1185,9 +1190,10 @@
   align-items: center;
   height: 24px;
   padding: 0 10px;
+  border: 1px solid var(--color-line);
   border-radius: 999px;
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-moss);
+  color: var(--color-muted);
   font-size: 11px;
   font-weight: 700;
   line-height: 18px;
@@ -1236,14 +1242,64 @@
   border: 1px solid var(--color-line);
   border-radius: 12px;
   background: var(--color-paper);
-  padding: 10px;
+  padding: 8px 10px;
+}
+
+.resource-inventory .resource-count,
+.card-stack .resource-count {
+  top: -6px;
+  right: -5px;
+  min-width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+.resource-inventory .grayscale .resource-count {
+  background-color: #6d766c;
+}
+
+.dialog-body:has(.open-trade-actions) {
+  padding-bottom: 0;
+}
+
+.dialog-body .open-trade-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-inline: -16px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
+  padding: 12px 16px;
+}
+
+.open-trade-actions .button-primary,
+.open-trade-actions .button-secondary {
+  padding-inline: 10px;
+  padding-block: 10px;
+  font-size: 13px;
+}
+
+@media (min-width: 380px) {
+
+  .open-trade-actions .button-primary,
+  .open-trade-actions .button-secondary {
+    padding-inline: 16px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 640px) {
+  .dialog-body .open-trade-actions {
+    margin-inline: -24px;
+    padding: 14px 24px;
+  }
 }
 
 .hand-task>.resource-inventory {
   position: sticky;
   top: 0;
   z-index: 1;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 @media (min-width: 1024px),
@@ -1267,21 +1323,31 @@
 
 .selected-resource-count {
   position: absolute;
-  top: -5px;
-  right: -2px;
+  top: -6px;
+  right: -3px;
   display: grid;
   place-items: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
   border: 2px solid var(--color-paper);
-  border-radius: 8px;
-  background: var(--color-forest);
-  color: var(--color-ink);
-  font-size: 15px;
+  border-radius: 9999px;
+  background: var(--color-ink);
+  color: white;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-shadow: 0 1px 3px #253b3630;
   pointer-events: none;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.selected-resource-count[data-empty="true"] {
+  border-color: var(--color-line);
+  background: var(--color-paper);
+  color: var(--color-muted);
+  box-shadow: none;
 }
 
 .resource-select-card:disabled {
@@ -1297,9 +1363,19 @@
   height: 32px;
 }
 
+.private-build-grid {
+  gap: 6px;
+}
+
+.private-build-grid .build-tile {
+  min-height: 54px;
+  padding: 6px 8px;
+  gap: 4px;
+}
+
 .private-build-grid .build-cost>span>span {
   width: 22px;
-  height: 28px;
+  height: 26px;
   border-radius: 5px;
 }
 
@@ -1658,8 +1734,8 @@
   .private-player-summary .player-seat>div {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    column-gap: 8px;
-    row-gap: 0;
+    column-gap: 6px;
+    row-gap: 2px;
   }
 
   .private-player-summary .player-number {
@@ -1672,9 +1748,17 @@
   }
 
   .private-player-summary .player-card-counts {
-    grid-column: 2 / -1;
+    grid-column: 2;
     grid-row: 2;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .private-player-summary .player-seat-badge {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+    flex-wrap: wrap;
   }
 
   .private-player-summary .player-card-counts svg,
@@ -1692,7 +1776,10 @@
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
-  background: linear-gradient(180deg, #fcfaf2 0%, #f8f4e8 100%);
+  background:
+    linear-gradient(180deg, rgba(248, 244, 232, 0), #f8f4e8 72%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 100%, rgba(37, 59, 54, 0.2), transparent) center bottom / 100% 12px no-repeat scroll,
+    linear-gradient(180deg, #fcfaf2 0%, #f8f4e8 100%);
 }
 
 .private-turn {
@@ -1713,7 +1800,8 @@
 }
 
 .private-dashboard[data-active="false"] .private-turn .turn-card {
-  background: #dce8e1;
+  border-color: #d7ddd4;
+  background: #eef2eb;
   color: #3a4f49;
 }
 
@@ -1742,10 +1830,21 @@
   font-size: 12px;
 }
 
-.private-instructions .turn-title,
-.private-instructions .turn-description {
+.private-instructions .turn-title {
   height: auto;
-  overflow: visible;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.private-instructions .turn-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  height: 32px;
+  line-height: 16px;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -1845,9 +1944,18 @@
   }
 
   .private-turn .roll-summary {
-    height: 62px;
+    height: auto;
+    min-height: 68px;
     padding: 6px 10px;
     gap: 10px;
+  }
+
+  .private-turn .roll-summary-label {
+    margin-bottom: 1px;
+  }
+
+  .private-turn .roll-summary-rewards {
+    padding: 4px 5px 1px 0;
   }
 
   .private-turn .roll-summary-dice .roll-die {
@@ -1871,7 +1979,8 @@
 
   .private-turn .turn-description {
     font-size: 11px;
-    line-height: 1.3;
+    line-height: 14px;
+    height: 28px;
     margin-top: 2px;
   }
 }
@@ -1887,9 +1996,82 @@
   }
 
   .private-hand.hand-content {
-    flex: 0 1 auto;
     min-height: 0;
+    gap: 8px;
+    padding: 12px 12px 10px;
     overflow: auto;
+  }
+
+  .private-hand .hand-resource-card {
+    height: 62px;
+  }
+
+  .private-turn {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .private-turn .roll-summary {
+    height: auto;
+    min-height: 70px;
+    padding: 6px 10px;
+    gap: 10px;
+  }
+
+  .private-turn .roll-summary-label {
+    margin-bottom: 1px;
+  }
+
+  .private-turn .roll-summary-rewards {
+    padding: 4px 5px 1px 0;
+  }
+
+  .private-turn .roll-summary-dice .roll-die {
+    width: 44px;
+    height: 44px;
+  }
+
+  .private-turn .roll-summary-resource {
+    width: 32px;
+    height: 36px;
+  }
+
+  .private-turn .turn-card {
+    padding: 8px 10px;
+  }
+
+  .private-turn .turn-title {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  .private-turn .turn-description {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 16px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 699px) and (min-height: 820px) {
+  .private-build-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .private-build-grid>p {
+    grid-column: 1;
+  }
+
+  .private-build-grid .build-tile {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+
+  .private-build-grid .build-tile .build-cost {
+    align-self: center;
   }
 }
 
@@ -2143,6 +2325,7 @@
 }
 
 @keyframes board-blocked-shake {
+
   0%,
   100% {
     transform: translateX(0);
@@ -3033,6 +3216,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .resource-dealt-card,
   .board-placement-ring,
   .board-upgrade-ring,

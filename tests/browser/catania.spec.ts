@@ -5870,7 +5870,6 @@ async function prepareComputerRequest(page: Page, humanDice: [number, number], c
 test("computer resource requests accept useful human prices without revealing computer hands", async ({ page }, testInfo) => {
   const request = await prepareComputerRequest(page, [1, 2], [1, 5], "222222DV");
   await expect(request.getByText("From Computer 2", { exact: true })).toBeVisible();
-  await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toBeVisible();
   const give = { ...emptyResources(), wood: 1 };
   await expectTradeCards(request, "You give", give);
   const inventory = { ...emptyResources(), wood: 1, grain: 1 };

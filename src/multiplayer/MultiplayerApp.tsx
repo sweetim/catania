@@ -56,32 +56,33 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
     {players.map(player => {
       const statistics = snapshot.game?.players.find(candidate => candidate.id === player.id);
       return <li key={player.id} style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`panel min-w-0 p-3 ${snapshot.game?.activePlayerId === player.id ? "player-seat-active" : ""}`}>
-      <div className="flex items-center gap-2">
-        <svg role="img" aria-label={translateText(player.control === "computer" ? "Computer player" : "Human player")} className="h-8 w-8 shrink-0 rounded-full border p-1.5" style={{ color: player.color, borderColor: `${player.color}66`, backgroundColor: `${player.color}14` }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          {player.control === "computer" ? <>
-            <path d="M12 3v4M3 12v4M21 12v4" />
-            <rect x="5" y="7" width="14" height="13" rx="4" />
-            <path d="M9 16h6" />
-            <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
-          </> : <><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></>}
-        </svg>
-        <div className="min-w-0 flex-1">
-          {!snapshot.game && player.control === "computer" && renameComputer
-            ? <button className="min-h-11 max-w-full break-words text-left text-sm font-semibold underline decoration-line decoration-dotted underline-offset-4 disabled:opacity-50" aria-label={translateText("Rename {name}", { name: player.name })} disabled={disabled} onClick={() => setEditing({ playerId: player.id, name: player.name })}>{player.name}</button>
-            : <strong className="block break-words text-sm">{player.name}</strong>}
-          {player.control === "human" && <span className="text-[10px] text-muted">{translateText(player.connected ? "Connected" : "Disconnected")}</span>}
+        <div className="flex items-center gap-2">
+          <svg role="img" aria-label={translateText(player.control === "computer" ? "Computer player" : "Human player")} className="h-8 w-8 shrink-0 rounded-full border p-1.5" style={{ color: player.color, borderColor: `${player.color}66`, backgroundColor: `${player.color}14` }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {player.control === "computer" ? <>
+              <path d="M12 3v4M3 12v4M21 12v4" />
+              <rect x="5" y="7" width="14" height="13" rx="4" />
+              <path d="M9 16h6" />
+              <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+            </> : <><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0 1 16 0v2" /></>}
+          </svg>
+          <div className="min-w-0 flex-1">
+            {!snapshot.game && player.control === "computer" && renameComputer
+              ? <button className="min-h-11 max-w-full break-words text-left text-sm font-semibold underline decoration-line decoration-dotted underline-offset-4 disabled:opacity-50" aria-label={translateText("Rename {name}", { name: player.name })} disabled={disabled} onClick={() => setEditing({ playerId: player.id, name: player.name })}>{player.name}</button>
+              : <strong className="block break-words text-sm">{player.name}</strong>}
+            {player.control === "human" && <span className="text-[10px] text-muted">{translateText(player.connected ? "Connected" : "Disconnected")}</span>}
+          </div>
+          {!snapshot.game && removePlayer && <button className="button-secondary shrink-0 px-2 py-2 text-xs sm:px-3" aria-label={translateText("Remove {name}", { name: player.name })} disabled={disabled} onClick={() => removePlayer(player.id)}>{translateText("Remove")}</button>}
         </div>
-        {!snapshot.game && removePlayer && <button className="button-secondary shrink-0 px-2 py-2 text-xs sm:px-3" aria-label={translateText("Remove {name}", { name: player.name })} disabled={disabled} onClick={() => removePlayer(player.id)}>{translateText("Remove")}</button>}
-      </div>
-      {statistics && <>
-        <p className="mt-2 text-xs">{translateText("{points} points / {resources} resource cards / {development} development cards", { points: statistics.score, resources: statistics.resourceCount, development: statistics.developmentCount })}</p>
-        <p className="mt-1 text-[11px] text-muted">{translateText(isSeafarers(snapshot.variant) ? "{knights} played Knights / Longest route: {roads}" : "{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}</p>
-        <p className="text-[11px] font-semibold">
-          {snapshot.game?.awards.longestRoad === player.id && translateText(isSeafarers(snapshot.variant) ? "Longest Route (+2) " : "Longest Road (+2) ")}
-          {snapshot.game?.awards.largestArmy === player.id && translateText("Largest Army (+2)")}
-        </p>
-      </>}
-    </li>; })}
+        {statistics && <>
+          <p className="mt-2 text-xs">{translateText("{points} points / {resources} resource cards / {development} development cards", { points: statistics.score, resources: statistics.resourceCount, development: statistics.developmentCount })}</p>
+          <p className="mt-1 text-[11px] text-muted">{translateText(isSeafarers(snapshot.variant) ? "{knights} played Knights / Longest route: {roads}" : "{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}</p>
+          <p className="text-[11px] font-semibold">
+            {snapshot.game?.awards.longestRoad === player.id && translateText(isSeafarers(snapshot.variant) ? "Longest Route (+2) " : "Longest Road (+2) ")}
+            {snapshot.game?.awards.largestArmy === player.id && translateText("Largest Army (+2)")}
+          </p>
+        </>}
+      </li>;
+    })}
   </ul>
     {!snapshot.game && editing && renameComputer && <Dialog title={translateText("Rename computer")} onClose={() => setEditing(null)}>
       <form className="space-y-4" onSubmit={event => {
@@ -264,8 +265,8 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     : !awaitingPlayer ? activePlayer.control === "computer"
       ? translateText(game.trade ? "{name} is considering the trade." : game.phase.type === "discard" ? "{name} is discarding resources." : "{name} is playing automatically.", { name: activePlayer.name })
       : translateText("{name} is playing. You can inspect your hand and the island while you wait.", { name: activePlayer.name })
-    : snapshot.buildMode ? translateText("Choose a highlighted location for your {piece} on the shared board, then confirm the placement.", { piece: pieceName(language, snapshot.buildMode) })
-    : phaseInstructions.description;
+      : snapshot.buildMode ? translateText("Choose a highlighted location for your {piece} on the shared board, then confirm the placement.", { piece: pieceName(language, snapshot.buildMode) })
+        : phaseInstructions.description;
 
   return <div className="private-dashboard" data-active={active ? "true" : "false"} style={{ "--player-accent": player.color } as CSSProperties} aria-label={translateText("Your hand and actions")}>
     <section className="private-player-summary" aria-label={translateText("Your player summary")}>
@@ -275,25 +276,24 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
         islandBonus={ownStatistics.islands ?? 0}
         privateScore={totalScore}
-        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id || (ownStatistics.islands ?? 0) > 0} />
-    </section>
-    <section className="hand-content private-hand" aria-label={translateText("Your cards")}>
-      <section className="hand-resources" aria-label={translateText("Your current resources")}>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="eyebrow min-w-0 truncate">{translateText("{name}'s hand", { name: player.name })}</h2>
-          <div className="flex shrink-0 items-center gap-2">
-            <strong className={`rounded-md px-2 py-1 text-sm text-ink tabular-nums ${resourceTotal(player.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>{translateText("{count} cards", { count: resourceTotal(player.resources) })}</strong>
+        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id || (ownStatistics.islands ?? 0) > 0}
+        badge={<>
+          <strong className={`rounded-md px-2 py-0.5 text-xs font-semibold leading-5 text-ink tabular-nums ${resourceTotal(player.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>{translateText("{count} cards", { count: resourceTotal(player.resources) })}</strong>
+          {victoryPointCards > 0 && (
             <span
               role="img"
               aria-label={translateText("{count} victory point cards", { count: victoryPointCards })}
               title={translateText("{count} victory point cards", { count: victoryPointCards })}
-              className="flex items-center gap-1 rounded-md bg-moss px-2 py-1 text-sm text-ink tabular-nums"
+              className="flex items-center gap-1 rounded-md bg-moss px-1.5 py-0.5 text-xs leading-5 text-ink tabular-nums"
             >
-              <span className="text-[#947231] [&>svg]:h-4 [&>svg]:w-4"><DevelopmentCardIcon kind="victory-point" /></span>
-              <strong className="font-semibold">{victoryPointCards}</strong>
+              <span className="text-[#947231] [&>svg]:h-3.5 [&>svg]:w-3.5"><DevelopmentCardIcon kind="victory-point" /></span>
+              <strong className="font-semibold">+{victoryPointCards} {translateText("VP")}</strong>
             </span>
-          </div>
-        </div>
+          )}
+        </>} />
+    </section>
+    <section className="hand-content private-hand" aria-label={translateText("Your cards")}>
+      <section className="hand-resources" aria-label={translateText("Your current resources")}>
         <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-1.5 sm:gap-2">
           {RESOURCES.map(resource => {
             const count = player.resources[resource];
@@ -372,7 +372,18 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       )}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
-        <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className={`shrink-0 text-xs ${active ? "font-bold text-ink" : "font-medium text-muted"}`}>{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
+        <h2 className="turn-owner">
+          {game.winnerId ? (
+            <span className="truncate">{translateText("Game over")}</span>
+          ) : active ? (
+            <span className="font-bold text-ink">{translateText("Your turn")}</span>
+          ) : (
+            <>
+              <span className="truncate" title={activePlayer.name}>{activePlayer.name}</span>
+              <span className="shrink-0 text-xs font-medium text-muted">{translateText(" - Their turn")}</span>
+            </>
+          )}
+        </h2>
         <span className="turn-number">{game.turnNumber === 0 ? translateText("Setup") : translateText("Turn {turn}", { turn: game.turnNumber })}</span>
         {turnMenu}
       </div>
@@ -383,9 +394,9 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       <div className="turn-action">
         {discardCount !== undefined ? <button className="button-primary" onClick={() => setDetails("discard")}>{translateText("Discard {count}", { count: discardCount })}</button>
           : active && game.phase.type === "steal" ? <button className="button-primary" onClick={() => setDetails("steal")}>{translateText("Choose player")}</button>
-          : trade ? <button className="button-primary" onClick={() => { setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
-          : active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
-          : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}><DiceIcon />{translateText("Roll the dice")}</button>}
+            : trade ? <button className="button-primary" onClick={() => { setChosen(emptyResources()); setDetails("trade-response"); }}>{translateText("View trade")}</button>
+              : active && game.canCancelKnight ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "cancel-knight" })}>{translateText("Cancel Knight")}</button>
+                : <button className="button-primary" disabled={disabled || !active || game.phase.type !== "roll"} onClick={() => send({ type: "roll" })}><DiceIcon />{translateText("Roll the dice")}</button>}
         {active && game.phase.type === "road-building" && snapshot.boardTargets.edges.length === 0 ? <button className="button-secondary" disabled={disabled} onClick={() => send({ type: "skip-roads" })}>{translateText("Finish Road Building")}</button>
           : <button className="button-secondary" disabled={disabled || !normalActions} onClick={() => send({ type: "end-turn" })}><EndTurnIcon />{translateText("End turn")}</button>}
       </div>
@@ -408,7 +419,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
       }} /></div>
     </Dialog>}
     {details === "trade-response" && trade && <Dialog title={translateText(trade.give ? "Trade offer" : "Trade request")} onClose={() => setDetails(null)} summary={<ResourceInventory resources={player.resources} />}>
-      <OpenTrade trade={trade} viewer={player} players={game.players} chosenResources={chosen} disabled={disabled}
+      <OpenTrade trade={trade} viewer={player} players={game.players} chosenResources={chosen} disabled={disabled} error={error}
         onChangeResources={setChosen}
         onComplete={(playerId, price) => {
           setDetails(null);
@@ -418,7 +429,6 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
         onWithdraw={() => send({ type: "cancel-trade" })}
         onRespond={action => send(action, snapshot.version,
           trade ? { offeredBy: trade.offeredBy, give: trade.give, receive: trade.receive } : undefined)} />
-      {error && <p role="alert" className="mt-4 text-sm text-clay">{error}</p>}
     </Dialog>}
 
     {editor === "trade" && <TradeDialog game={game} player={player} initialMode={tradeMode} onModeChange={setTradeMode} initialOffer={trade?.offeredBy === player.id ? trade : undefined} disabled={disabled || !normalActions || editorStale} error={editorStale ? staleMessage : error}
@@ -652,7 +662,7 @@ export function MultiplayerApp() {
           ...(host && game ? [{ label: translateText("Reset game"), icon: "reset" as const, disabled, onSelect: () => setDialog("reset") }] : []),
           ...(host && game ? [{ label: translateText("Return to lobby"), icon: "lobby" as const, disabled, onSelect: () => setDialog("lobby") }] : []),
           ...(host && game ? [{ label: translateText("Show invitation"), icon: "qr" as const, onSelect: () => setDialog("invitation") }] : []),
-        ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }}         /> : <GameMenu
+        ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} /> : <GameMenu
           triggerLabel={translateText("Menu")}
           groupLabel={translateText("Main menu")}
           profileName={invitation ? playerProfile?.name : undefined}
@@ -689,84 +699,84 @@ export function MultiplayerApp() {
 
         {view && !game && <div className={`mx-auto grid max-w-5xl gap-6 lg:grid-cols-2 ${host ? "multiplayer-lobby-grid" : ""}`}>
           {host && snapshot?.previewBoard && <section aria-label={translateText("Island preview")} className="multiplayer-lobby-island panel min-w-0 p-4 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
-                <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-                  <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
-                </div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
               </div>
-              {snapshot.variant === "custom-world" && <div className="mb-4">
-                <CustomMapConfigPanel
-                  value={snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG}
+            </div>
+            {snapshot.variant === "custom-world" && <div className="mb-4">
+              <CustomMapConfigPanel
+                value={snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG}
+                disabled={disabled}
+                onChange={config => session.current?.setCustomMapConfig(config)}
+              />
+            </div>}
+            <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
+              <Board
+                board={snapshot.previewBoard}
+                players={[]}
+                robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id}
+                pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id}
+                fillBoardWithWater={boardSettings.fillBoardWithWater}
+                interactive={false}
+                compact
+                fit
+                victoryTarget={snapshot.victoryPointsToWin}
+                onChangeVictoryTarget={points => session.current?.setVictoryPointsToWin(points)}
+                victoryTargetDisabled={disabled}
+                onChangeTheme={() => setDialog("theme")}
+                headerControls={<MapSeedControls
+                  value={mapCode}
+                  onChange={setMapCode}
                   disabled={disabled}
-                  onChange={config => session.current?.setCustomMapConfig(config)}
-                />
-              </div>}
-              <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
-                <Board
-                  board={snapshot.previewBoard}
-                  players={[]}
-                  robberTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "desert")?.id}
-                  pirateTileId={snapshot.previewBoard.tiles.find(tile => tile.terrain === "sea")?.id}
-                  fillBoardWithWater={boardSettings.fillBoardWithWater}
-                  interactive={false}
-                  compact
-                  fit
-                  victoryTarget={snapshot.victoryPointsToWin}
-                  onChangeVictoryTarget={points => session.current?.setVictoryPointsToWin(points)}
-                  victoryTargetDisabled={disabled}
-                  onChangeTheme={() => setDialog("theme")}
-                  headerControls={<MapSeedControls
-                    value={mapCode}
-                    onChange={setMapCode}
-                    disabled={disabled}
-                    onLoad={code => session.current?.useMapSeed(code)}
-                    onShuffle={() => session.current?.shuffleBoard()}
-                  />}
-                />
-              </div>
+                  onLoad={code => session.current?.useMapSeed(code)}
+                  onShuffle={() => session.current?.shuffleBoard()}
+                />}
+              />
+            </div>
           </section>}
           <div className={host ? "multiplayer-lobby-column min-w-0 space-y-6" : "contents"}>
-          {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
-            <div className="lobby-invitation-heading text-center">
-              <p className="eyebrow">{translateText("Welcome to the table")}</p>
-              <h1 className="my-3 font-serif text-3xl">{translateText("Scan. Join. Settle in.")}</h1>
-            </div>
-            {invitationQr}
-            {invitationLink}
-          </section>}
-          <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
-            <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
-            {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
-            {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
-            {snapshot && <>
-              <div id="lobby-readiness" role="status" className="my-4 rounded-xl bg-moss p-4">
-                <p className="eyebrow">{translateText("{count} of 4 seats filled", { count: playerCount })}</p>
-                <p className="mt-1 text-sm font-semibold">{missingPlayers > 0 ? translateText(missingPlayers === 1 ? "{count} more player needed to start." : "{count} more players needed to start.", { count: missingPlayers }) : disconnectedPlayers.length > 0 ? translateText("Enough players to start once everyone is connected.") : translateText("Ready to start with {count} players.", { count: playerCount })}</p>
-                {disconnectedPlayers.length > 0 && <p className="mt-2 text-xs text-clay">{translateText("Waiting for {names} to reconnect.", { names: disconnectedPlayers.map(player => player.name).join(", ") })}</p>}
+            {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
+              <div className="lobby-invitation-heading text-center">
+                <p className="eyebrow">{translateText("Welcome to the table")}</p>
+                <h1 className="my-3 font-serif text-3xl">{translateText("Scan. Join. Settle in.")}</h1>
               </div>
-              <div className="lobby-roster my-5 space-y-2">
-                <PlayerList snapshot={snapshot} disabled={disabled} removePlayer={host ? playerId => session.current?.removePlayer(playerId) : undefined} renameComputer={host ? (playerId, name) => session.current?.renameComputer(playerId, name) : undefined} />
-                {playerCount < 4 && <ul aria-label={translateText("Open seats")} className="grid gap-2">
-                  {Array.from({ length: 4 - playerCount }, (_, index) => playerCount + index + 1).map(seat => <li key={seat} className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3 text-muted">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
-                    <div><p className="text-sm font-semibold">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</p><p className="mt-1 text-xs">{translateText(seat < 4 ? "Join by phone or add a computer." : "Start with three, or fill this seat.")}</p></div>
-                  </li>)}
-                </ul>}
-              </div>
-            </>}
-            {host && (snapshot?.pendingPlayers ?? []).map(player => <div key={player.connectionId} className="my-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
-              <strong className="mr-auto break-words text-sm">{player.name}</strong>
-              <button className="button-primary" aria-label={translateText("Admit {name}", { name: player.name })} disabled={disabled || playerCount >= 4} onClick={() => session.current?.admit(player.connectionId)}>{translateText("Admit")}</button>
-              <button className="button-secondary" aria-label={translateText("Decline {name}", { name: player.name })} disabled={disabled} onClick={() => session.current?.reject(player.connectionId)}>{translateText("Decline")}</button>
-            </div>)}
-            {host && <>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button className="button-secondary" disabled={disabled || !snapshot || playerCount >= 4} onClick={() => session.current?.addComputer(language)}>{translateText("Add computer")}</button>
-                <button className="button-primary" aria-describedby="lobby-readiness" disabled={disabled || !snapshot || missingPlayers > 0 || disconnectedPlayers.length > 0} onClick={() => session.current?.startGame()}>{translateText("Start game")}</button>
-              </div>
-            </>}
-          </section>
+              {invitationQr}
+              {invitationLink}
+            </section>}
+            <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
+              <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
+              {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
+              {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
+              {snapshot && <>
+                <div id="lobby-readiness" role="status" className="my-4 rounded-xl bg-moss p-4">
+                  <p className="eyebrow">{translateText("{count} of 4 seats filled", { count: playerCount })}</p>
+                  <p className="mt-1 text-sm font-semibold">{missingPlayers > 0 ? translateText(missingPlayers === 1 ? "{count} more player needed to start." : "{count} more players needed to start.", { count: missingPlayers }) : disconnectedPlayers.length > 0 ? translateText("Enough players to start once everyone is connected.") : translateText("Ready to start with {count} players.", { count: playerCount })}</p>
+                  {disconnectedPlayers.length > 0 && <p className="mt-2 text-xs text-clay">{translateText("Waiting for {names} to reconnect.", { names: disconnectedPlayers.map(player => player.name).join(", ") })}</p>}
+                </div>
+                <div className="lobby-roster my-5 space-y-2">
+                  <PlayerList snapshot={snapshot} disabled={disabled} removePlayer={host ? playerId => session.current?.removePlayer(playerId) : undefined} renameComputer={host ? (playerId, name) => session.current?.renameComputer(playerId, name) : undefined} />
+                  {playerCount < 4 && <ul aria-label={translateText("Open seats")} className="grid gap-2">
+                    {Array.from({ length: 4 - playerCount }, (_, index) => playerCount + index + 1).map(seat => <li key={seat} className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3 text-muted">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
+                      <div><p className="text-sm font-semibold">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</p><p className="mt-1 text-xs">{translateText(seat < 4 ? "Join by phone or add a computer." : "Start with three, or fill this seat.")}</p></div>
+                    </li>)}
+                  </ul>}
+                </div>
+              </>}
+              {host && (snapshot?.pendingPlayers ?? []).map(player => <div key={player.connectionId} className="my-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
+                <strong className="mr-auto break-words text-sm">{player.name}</strong>
+                <button className="button-primary" aria-label={translateText("Admit {name}", { name: player.name })} disabled={disabled || playerCount >= 4} onClick={() => session.current?.admit(player.connectionId)}>{translateText("Admit")}</button>
+                <button className="button-secondary" aria-label={translateText("Decline {name}", { name: player.name })} disabled={disabled} onClick={() => session.current?.reject(player.connectionId)}>{translateText("Decline")}</button>
+              </div>)}
+              {host && <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button className="button-secondary" disabled={disabled || !snapshot || playerCount >= 4} onClick={() => session.current?.addComputer(language)}>{translateText("Add computer")}</button>
+                  <button className="button-primary" aria-describedby="lobby-readiness" disabled={disabled || !snapshot || missingPlayers > 0 || disconnectedPlayers.length > 0} onClick={() => session.current?.startGame()}>{translateText("Start game")}</button>
+                </div>
+              </>}
+            </section>
           </div>
         </div>}
 
@@ -802,12 +812,13 @@ export function MultiplayerApp() {
                     setSelected(null);
                   } else setSelected({ kind, id, version: snapshot.version });
                 }}
-                confirmation={selectedAction ? { title: selectedAction.type === "reveal-tile" ? translateText("Choose this starting cell?")
-                  : selectedAction.type === "move-robber" ? translateText("Move the robber here?")
-                  : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
-                  : selectedAction.type === "move-ship" ? translateText("Move the ship here?")
-                  : routeChoicePending ? translateText("Road or ship here?")
-                  : translateText("Confirm {piece}?", { piece: pieceName(language, selectedAction.type === "place-ship" ? "ship" : selectedAction.type === "place-road" ? "road" : selectedAction.type === "place-city" ? "city" : "settlement") }),
+                confirmation={selectedAction ? {
+                  title: selectedAction.type === "reveal-tile" ? translateText("Choose this starting cell?")
+                    : selectedAction.type === "move-robber" ? translateText("Move the robber here?")
+                      : selectedAction.type === "move-pirate" ? translateText("Move the pirate here?")
+                        : selectedAction.type === "move-ship" ? translateText("Move the ship here?")
+                          : routeChoicePending ? translateText("Road or ship here?")
+                            : translateText("Confirm {piece}?", { piece: pieceName(language, selectedAction.type === "place-ship" ? "ship" : selectedAction.type === "place-road" ? "road" : selectedAction.type === "place-city" ? "city" : "settlement") }),
                   player: activePlayer ? { name: activePlayer.name, color: activePlayer.color } : undefined,
                   ...(routeChoicePending ? {
                     choices: [
@@ -815,7 +826,8 @@ export function MultiplayerApp() {
                       { label: translateText("Build ship"), icon: <PieceIcon piece="ship" />, onConfirm: () => { session.current?.perform({ ...selectedAction, type: "place-ship" }, currentSelection!.version); setSelected(null); setMovingShip(null); } },
                     ],
                   } : {}),
-                  onConfirm: () => { session.current?.perform(selectedAction, currentSelection!.version); setSelected(null); setMovingShip(null); }, onCancel: () => setSelected(null) } : undefined}
+                  onConfirm: () => { session.current?.perform(selectedAction, currentSelection!.version); setSelected(null); setMovingShip(null); }, onCancel: () => setSelected(null)
+                } : undefined}
               />
             </div>
           </section>
@@ -846,7 +858,7 @@ export function MultiplayerApp() {
           )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget}           turnMenu={<GameMenu icon actions={[
+          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} turnMenu={<GameMenu icon actions={[
             { label: translateText("Help"), icon: "help", onSelect: () => setDialog("help") },
             { label: translateText("Settings"), icon: "settings", onSelect: () => setDialog("settings") },
           ]} exitAction={{ label: translateText("Leave room"), icon: "leave", onSelect: () => setDialog("leave") }} />} vibrateOnYourTurn={boardSettings.vibrateOnYourTurn} />

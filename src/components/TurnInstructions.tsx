@@ -33,12 +33,12 @@ export function getPhaseInstructions({
       description: translateText(fogGame
         ? "Choose a highlighted node on the selected land cell for your settlement."
         : sharedBoard
-        ? secondSettlement
-          ? "Place your second settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
-          : "Place your first settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
-        : secondSettlement
-          ? "Place your second settlement on a highlighted intersection. Leave at least two edges between settlements."
-          : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),
+          ? secondSettlement
+            ? "Place your second settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
+            : "Place your first settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
+          : secondSettlement
+            ? "Place your second settlement on a highlighted intersection. Leave at least two edges between settlements."
+            : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),
     }))
     .with({ type: "setup-reveal" }, () => ({
       title: translateText(secondSettlement ? "Place your second settlement." : "Choose a starting cell."),
@@ -51,8 +51,8 @@ export function getPhaseInstructions({
       description: fogGame
         ? translateText("Choose an edge bordering revealed land beside your new settlement, then choose Road or Ship.")
         : isSeafarers(variant) ? translateText("Choose a road or ship beside your new settlement.") : translateText(sharedBoard
-        ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
-        : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
+          ? "Choose a highlighted edge connected to your new settlement on the shared board, then confirm your road."
+          : "Choose a highlighted edge connected to your new settlement, then confirm your road."),
     }))
     .with({ type: "roll" }, () => ({
       title: translateText("Let the dice decide."),
@@ -116,13 +116,13 @@ export function TurnInstructions({
 }) {
   const translateText = useTranslation(gameplayTranslations);
   return (
-    <div className="turn-card rounded-2xl bg-forest text-ink">
+    <div className="turn-card rounded-2xl border border-forest/70 bg-moss text-ink">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <h1 className="turn-title font-serif text-xl leading-tight">
+          <h1 className="turn-title font-serif text-xl leading-tight" title={title}>
             {title}
           </h1>
-          <p role={computerActivity ? "status" : undefined} aria-label={computerActivity ? translateText("Computer activity") : undefined} className="turn-description text-xs leading-4 text-ink/70">
+          <p role={computerActivity ? "status" : undefined} aria-label={computerActivity ? translateText("Computer activity") : undefined} title={description} className="turn-description text-xs leading-4 text-ink/75">
             {description}
           </p>
         </div>

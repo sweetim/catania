@@ -36,60 +36,60 @@ export function ResourceIcon({
       fill="none"
     >
       {theme.id !== "illustrated" ? <ResourceArtwork resource={resource} theme={theme} /> : <>
-      {resource === "wood" && (
-        <>
-          <path d="M16 3 6 17h5l-6 8h22l-6-8h5L16 3Z" fill="currentColor" />
-          <path d="M16 24v6" stroke="currentColor" strokeWidth="3" />
-        </>
-      )}
-      {resource === "brick" && (
-        <>
-          <path d="m3 16 17-8 10 6-17 9-10-7Z" fill="currentColor" />
-          <path
-            d="M3 19v5l10 6 17-9v-5l-17 9-10-6Z"
-            fill="currentColor"
-            opacity=".7"
-          />
-        </>
-      )}
-      {resource === "wool" && (
-        <>
-          <path
-            d="M8 24a6 6 0 0 1-2-11 6 6 0 0 1 10-6 7 7 0 0 1 11 8 5 5 0 0 1-1 9H8Z"
-            fill="currentColor"
-          />
-          <path d="M10 24v5m12-5v5" stroke="currentColor" strokeWidth="3" />
-          <path d="M25 17h4v6h-4z" fill="currentColor" />
-        </>
-      )}
-      {resource === "grain" && (
-        <>
-          <path d="M16 5v25" stroke="currentColor" strokeWidth="2" />
-          {[7, 13, 19].map((position) => (
-            <g key={position}>
-              <path
-                d={`M16 ${position + 7}Q4 ${position + 5} 6 ${position - 1}Q15 ${position} 16 ${position + 7}`}
-                fill="currentColor"
-              />
-              <path
-                d={`M16 ${position + 7}Q28 ${position + 5} 26 ${position - 1}Q17 ${position} 16 ${position + 7}`}
-                fill="currentColor"
-              />
-            </g>
-          ))}
-        </>
-      )}
-      {resource === "ore" && (
-        <>
-          <path d="m3 24 8-17 10-3 9 20-14 5L3 24Z" fill="currentColor" />
-          <path
-            d="m11 7 5 22 5-25"
-            stroke="white"
-            strokeOpacity=".45"
-            strokeWidth="1.5"
-          />
-        </>
-      )}
+        {resource === "wood" && (
+          <>
+            <path d="M16 3 6 17h5l-6 8h22l-6-8h5L16 3Z" fill="currentColor" />
+            <path d="M16 24v6" stroke="currentColor" strokeWidth="3" />
+          </>
+        )}
+        {resource === "brick" && (
+          <>
+            <path d="m3 16 17-8 10 6-17 9-10-7Z" fill="currentColor" />
+            <path
+              d="M3 19v5l10 6 17-9v-5l-17 9-10-6Z"
+              fill="currentColor"
+              opacity=".7"
+            />
+          </>
+        )}
+        {resource === "wool" && (
+          <>
+            <path
+              d="M8 24a6 6 0 0 1-2-11 6 6 0 0 1 10-6 7 7 0 0 1 11 8 5 5 0 0 1-1 9H8Z"
+              fill="currentColor"
+            />
+            <path d="M10 24v5m12-5v5" stroke="currentColor" strokeWidth="3" />
+            <path d="M25 17h4v6h-4z" fill="currentColor" />
+          </>
+        )}
+        {resource === "grain" && (
+          <>
+            <path d="M16 5v25" stroke="currentColor" strokeWidth="2" />
+            {[7, 13, 19].map((position) => (
+              <g key={position}>
+                <path
+                  d={`M16 ${position + 7}Q4 ${position + 5} 6 ${position - 1}Q15 ${position} 16 ${position + 7}`}
+                  fill="currentColor"
+                />
+                <path
+                  d={`M16 ${position + 7}Q28 ${position + 5} 26 ${position - 1}Q17 ${position} 16 ${position + 7}`}
+                  fill="currentColor"
+                />
+              </g>
+            ))}
+          </>
+        )}
+        {resource === "ore" && (
+          <>
+            <path d="m3 24 8-17 10-3 9 20-14 5L3 24Z" fill="currentColor" />
+            <path
+              d="m11 7 5 22 5-25"
+              stroke="white"
+              strokeOpacity=".45"
+              strokeWidth="1.5"
+            />
+          </>
+        )}
       </>}
     </svg>
   );
@@ -286,14 +286,14 @@ export function Dialog({
         event.preventDefault();
         onClose();
       }}
-      className={`m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] rounded-2xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-ink/45 backdrop:backdrop-blur-sm ${wide ? "max-w-2xl" : "max-w-lg"}`}
+      className={`m-auto max-h-[90dvh] w-[calc(100%_-_1.5rem)] overflow-y-auto overscroll-contain rounded-2xl border border-line bg-paper p-0 text-ink shadow-2xl backdrop:bg-ink/45 backdrop:backdrop-blur-sm sm:w-[calc(100%_-_2rem)] ${wide ? "max-w-2xl" : "max-w-lg"}`}
       aria-label={title}
     >
       <div className="sticky top-0 z-10 border-b border-line bg-paper">
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <div className="min-w-0">
             {eyebrow && <div className="mb-1">{eyebrow}</div>}
-            <h2 className="font-serif text-2xl">{title}</h2>
+            <h2 className="font-serif text-xl sm:text-2xl">{title}</h2>
           </div>
           <button
             onClick={onClose}
@@ -303,9 +303,9 @@ export function Dialog({
             <span aria-hidden="true">&times;</span>
           </button>
         </div>
-        {summary && <div className="px-6 pb-4">{summary}</div>}
+        {summary && <div className="px-4 pb-3 sm:px-6 sm:pb-4">{summary}</div>}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="dialog-body px-4 py-3.5 sm:px-6 sm:py-5">{children}</div>
     </dialog>
   );
 }
@@ -360,17 +360,17 @@ export function ResourceInventory({ resources }: { resources: Resources }) {
   const totalResources = Object.values(resources).reduce((total, count) => total + count, 0);
   return (
     <section className="resource-inventory" aria-label={translateText("Your current resources")}>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold">{translateText("Your hand")}</h3>
-        <strong className={`shrink-0 rounded-md px-2 py-1 text-sm text-ink tabular-nums ${totalResources > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-muted">{translateText("Your hand")}</h3>
+        <strong className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold text-ink tabular-nums ${totalResources > 7 ? "card-count-at-risk bg-clay/25" : "bg-moss"}`}>
           {translateText("{count} cards", { count: totalResources })}
         </strong>
       </div>
-      <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-2">
+      <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-1.5 sm:gap-2">
         {(Object.keys(RESOURCE_NAMES) as Resource[]).map(resource => (
-          <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: resources[resource] })} className="flex min-w-0 flex-col items-center gap-1">
-            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-5 w-5" className={`h-11 w-9 ${resources[resource] === 0 ? "grayscale" : ""}`} />
-            <span className="text-[10px] font-semibold">{resourceName(language, resource)}</span>
+          <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: resources[resource] })} className="flex min-w-0 flex-col items-center gap-0.5">
+            <ResourceCard resource={resource} count={resources[resource]} compact iconClassName="h-4 w-4 sm:h-5 sm:w-5" className={`h-10 w-8 sm:h-11 sm:w-9 ${resources[resource] === 0 ? "grayscale" : ""}`} />
+            <span className="max-w-full truncate text-[10px] font-semibold leading-tight text-ink/90">{resourceName(language, resource)}</span>
           </li>
         ))}
       </ul>
@@ -439,48 +439,59 @@ export function ResourceCardStepper({
   const translateText = useTranslation(gameplayTranslations);
   return (
     <fieldset>
-      <legend className="mb-3 text-sm font-semibold">{label}</legend>
-      <div className="grid grid-cols-5 gap-1 sm:gap-2">
-        {(Object.keys(RESOURCE_NAMES) as Resource[]).map((resource) => (
-          <div
-            key={resource}
-            role="group"
-            aria-label={translateText("{resource} selection", { resource: resourceName(language, resource) })}
-            aria-description={maximum
-              ? translateText(maximumLabel === "In hand"
-                ? "In hand {maximum}. Selected {selected}. Remaining {remaining}."
-                : "In bank {maximum}. Selected {selected}. Remaining {remaining}.", {
-                maximum: maximum[resource], selected: values[resource], remaining: maximum[resource] - values[resource],
-              })
-              : translateText("Selected {count}.", { count: values[resource] })}
-            className="flex min-w-0 flex-col items-center gap-1.5"
-          >
-            <div className="relative w-full">
+      <legend className="mb-2 text-sm font-semibold">{label}</legend>
+      <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+        {(Object.keys(RESOURCE_NAMES) as Resource[]).map((resource) => {
+          const selected = values[resource];
+          const name = resourceName(language, resource);
+          return (
+            <div
+              key={resource}
+              role="group"
+              aria-label={translateText("{resource} selection", { resource: name })}
+              aria-description={maximum
+                ? translateText(maximumLabel === "In hand"
+                  ? "In hand {maximum}. Selected {selected}. Remaining {remaining}."
+                  : "In bank {maximum}. Selected {selected}. Remaining {remaining}.", {
+                  maximum: maximum[resource], selected, remaining: maximum[resource] - selected,
+                })
+                : translateText("Selected {count}.", { count: selected })}
+              className="flex min-w-0 flex-col items-center gap-1"
+            >
+              <div className="relative w-full">
+                <button
+                  type="button"
+                  className="resource-select-card relative block min-h-11 w-full rounded-xl transition-transform active:scale-[0.97]"
+                  aria-label={translateText("Add {resource} to {label}", { resource: name, label })}
+                  disabled={selected >= (maximum?.[resource] ?? 19)}
+                  onClick={() =>
+                    onChange({ ...values, [resource]: selected + 1 })
+                  }
+                >
+                  <ResourceCard resource={resource} selected={selected > 0} compact iconClassName="h-6 w-6" className="h-14 w-full sm:h-16" />
+                  <span aria-hidden="true" className="absolute bottom-1 right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-paper/95 text-sm font-bold leading-none text-ink shadow-xs">+</span>
+                </button>
+                <output
+                  aria-label={translateText("{resource} selected", { resource: name })}
+                  data-empty={selected === 0 ? "true" : undefined}
+                  className="selected-resource-count"
+                >
+                  {selected}
+                </output>
+              </div>
+              <span className="max-w-full truncate text-[10px] font-semibold leading-tight text-ink/90">{name}</span>
               <button
                 type="button"
-                className="resource-select-card relative block min-h-11 w-full rounded-xl"
-                aria-label={translateText("Add {resource} to {label}", { resource: resourceName(language, resource), label })}
-                disabled={values[resource] >= (maximum?.[resource] ?? 19)}
-                onClick={() =>
-                  onChange({ ...values, [resource]: values[resource] + 1 })
-                }
+                className="flex h-9 w-full items-center justify-center rounded-lg border border-line bg-white/75 text-base font-bold leading-none text-ink transition-colors hover:bg-moss disabled:border-transparent disabled:bg-moss/50"
+                aria-label={translateText("Remove {resource} from {label}", { resource: name, label })}
+                disabled={!selected}
+                onClick={() => onChange({ ...values, [resource]: selected - 1 })}
               >
-                <ResourceCard resource={resource} selected={values[resource] > 0} compact className="aspect-[3/4] w-full" />
-                <span aria-hidden="true" className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-paper text-base font-bold leading-none text-forest">+</span>
+                &minus;
               </button>
-              <output aria-label={translateText("{resource} selected", { resource: resourceName(language, resource) })} className="selected-resource-count">{values[resource]}</output>
             </div>
-            <button
-              type="button"
-              className="flex h-11 w-full items-center justify-center rounded-lg bg-moss text-lg font-bold text-ink"
-              aria-label={translateText("Remove {resource} from {label}", { resource: resourceName(language, resource), label })}
-              disabled={!values[resource]}
-              onClick={() => onChange({ ...values, [resource]: values[resource] - 1 })}
-            >
-              &minus;
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </fieldset>
   );
@@ -513,7 +524,7 @@ export function CardStack({
     <span
       role={label ? "img" : undefined}
       aria-label={label ? translateText("{label}: {resources}", { label, resources: entries.map(resource => translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })).join(language === "ja" ? "、" : ", ") }) : undefined}
-      className="inline-flex min-w-0 flex-col items-center gap-2"
+      className="card-stack inline-flex min-w-0 flex-col items-center gap-1.5"
     >
       {label && <span className="text-[10px] font-semibold uppercase tracking-[.1em] text-muted">{label}</span>}
       <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
@@ -524,7 +535,7 @@ export function CardStack({
             count={resources[resource]}
             compact
             iconClassName="h-5 w-5"
-            className={`h-13 w-9${available !== undefined && available[resource] < resources[resource] ? " opacity-50" : ""}`}
+            className={`h-12 w-9${available !== undefined && available[resource] < resources[resource] ? " opacity-50" : ""}`}
           />
         ))}
       </span>
