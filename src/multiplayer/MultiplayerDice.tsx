@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { ResourceCard } from "../components/GameUi";
 import { Dice } from "../components/RollSummary";
-import { useTranslation } from "../localization";
+import { RESOURCES } from "../game/engine";
+import type { Resources } from "../game/types";
+import { resourceName } from "../i18n";
+import { useLanguage, useTranslation } from "../localization";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import type { PublicGame } from "./types";
 
-export function MultiplayerDice({ game }: { game: PublicGame }) {
+export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Resources | null }) {
+  const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
   const dice = game.dice;
   const rollIdentity = dice ? `${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
@@ -13,7 +18,9 @@ export function MultiplayerDice({ game }: { game: PublicGame }) {
   const [rollingIdentity, setRollingIdentity] = useState<string | null>(null);
   const rolling = rollIdentity !== null && rollingIdentity === rollIdentity;
   const playerName = game.players.find(player => player.id === game.activePlayerId)!.name;
-  const result = dice ? `${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}` : "";
+  const total = dice ? dice[0] + dice[1] : null;
+  const result = dice ? `${dice[0]} + ${dice[1]} = ${total}` : "";
+  const gainedResources = dice && total !== 7 && gains ? RESOURCES.filter(resource => gains[resource] > 0) : [];
 
   useEffect(() => {
     if (rollIdentity === null || rollIdentity === lastRoll.current) {
@@ -48,8 +55,24 @@ export function MultiplayerDice({ game }: { game: PublicGame }) {
       <section aria-label={translateText(dice ? "Roll result" : "Dice tray")} data-stage={dice ? rolling ? "rolling" : "complete" : "idle"} className="roll-summary">
         <Dice key={rollIdentity} dice={dice} rolling={rolling} />
         <div className="roll-summary-content">
-          {dice && <p className="roll-summary-label">{translateText("{name} rolled", { name: playerName })}</p>}
-          <p className="roll-summary-title">{dice ? result : translateText("Waiting for the next roll.")}</p>
+          {!rolling && gainedResources.length > 0 && gains ? (
+            <div className="roll-summary-private">
+              <p className="roll-summary-label">{translateText("You received")}</p>
+              <ul className="roll-summary-rewards" aria-label={translateText("Your roll rewards")}>
+                {gainedResources.map(resource => (
+                  <li key={resource} aria-label={translateText("{resource} +{count}", { resource: resourceName(language, resource), count: gains[resource] })} title={translateText("You received +{count} {resource}", { count: gains[resource], resource: resourceName(language, resource) })}>
+                    <ResourceCard resource={resource} compact iconClassName="h-4 w-4" className="roll-summary-resource" />
+                    <strong aria-hidden="true" className="roll-summary-gain">+{gains[resource]}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <>
+              {dice && <p className="roll-summary-label">{translateText("{name} rolled", { name: playerName })}</p>}
+              <p className="roll-summary-title">{dice ? result : translateText("Waiting for the next roll.")}</p>
+            </>
+          )}
         </div>
       </section>
     </>

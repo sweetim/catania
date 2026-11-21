@@ -2,6 +2,7 @@ import type { Board, CustomMapConfig, GameAction, GamePhase, GameState, GameVari
 import type { Language } from "../i18n";
 import type { GameMessage } from "../game/messages";
 import type { ProfileStats } from "../profile";
+import type { BoardThemeId } from "../themes";
 import type { TradeIdentity } from "./protocol";
 
 export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | null;
@@ -53,6 +54,7 @@ export type PublicGame = Pick<GameState,
 export type RoomSnapshot = {
   variant: GameVariant;
   victoryPointsToWin: number;
+  boardThemeId?: BoardThemeId;
   version: number;
   players: RoomPlayer[];
   customMapConfig?: CustomMapConfig;
@@ -84,6 +86,7 @@ export type SessionView = {
 export type MultiplayerSession = {
   setVariant: (variant: GameVariant) => void;
   setVictoryPointsToWin: (points: number) => void;
+  setBoardTheme: (theme: BoardThemeId) => void;
   setCustomMapConfig: (config: CustomMapConfig) => void;
   startGame: () => void;
   resetGame: () => void;

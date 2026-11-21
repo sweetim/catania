@@ -4,6 +4,7 @@ import type { GameMessage } from "../game/messages";
 import { isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
+import { isBoardThemeId } from "../themes";
 import type { BuildMode, RoomSnapshot } from "./types";
 
 export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string; userId?: string };
@@ -206,11 +207,12 @@ function publicGame(value: unknown): boolean {
     array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
-  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed", "customMapConfig"])) return false;
+  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed", "customMapConfig", "boardThemeId"])) return false;
   let previousTheftId = 0;
   let previousMonopolyId = 0;
   return (!Object.hasOwn(value, "mapSeed") || (typeof value.mapSeed === "string" && normalizeMapSeed(value.mapSeed) === value.mapSeed)) &&
     (!Object.hasOwn(value, "customMapConfig") || isCustomMapConfigDraft(value.customMapConfig)) &&
+    (!Object.hasOwn(value, "boardThemeId") || isBoardThemeId(value.boardThemeId)) &&
     isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) &&
     (value.game === null || (record(value.game) && value.game.victoryPointsToWin === value.victoryPointsToWin)) &&
     integer(value.version) && array(value.players, 4, value => roomPlayer(value)) && (value.game === null || publicGame(value.game)) &&

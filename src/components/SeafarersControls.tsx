@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { emptyResources, resourceTotal } from "../game/engine";
-import type { GamePhase, Resources } from "../game/types";
+import type { Resources } from "../game/types";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { ResourceCardStepper } from "./GameUi";
@@ -24,21 +24,4 @@ export function GoldSelection({ bank, count, onSubmit, disabled = false }: {
     <button className="button-primary w-full" disabled={disabled || resourceTotal(chosen) !== required}
       onClick={() => onSubmit(chosen)}>{translateText("Collect resources")}</button>
   </section>;
-}
-
-export function FreeRouteChoice({ phase, mode, onSelect, disabled = false }: {
-  phase: GamePhase;
-  mode: string | null;
-  onSelect: (mode: "road" | "ship") => void;
-  disabled?: boolean;
-}) {
-  const translateText = useTranslation(gameplayTranslations);
-  if (phase.type !== "setup-road" && phase.type !== "road-building") return null;
-  return <div className="my-2 flex gap-2">
-    {(["road", "ship"] as const).map(piece => <button key={piece} className="button-secondary flex-1 px-2 text-xs"
-      aria-label={translateText(piece === "ship" ? "Choose ships" : "Choose roads")}
-      disabled={disabled} aria-pressed={mode === piece} onClick={() => onSelect(piece)}>
-      {translateText(piece === "ship" ? "Build ship" : "Build road")}
-    </button>)}
-  </div>;
 }

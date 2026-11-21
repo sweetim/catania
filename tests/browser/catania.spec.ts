@@ -1503,7 +1503,7 @@ for (const variant of ["original", "seafarers"] as const) {
     await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
     await expect(page.getByRole("button", { name: "Game", exact: true })).toBeFocused();
     await expect(board.getByRole("img", { name: /'s settlement at / })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "Confirm placement", exact: true })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Placement confirmation" })).toBeVisible();
     await chooseGameOption(page, "Reset game");
     await screenshot(page, testInfo, `reset-${variant}-confirmation`, false);
     await confirmation.getByRole("button", { name: "Reset game", exact: true }).click();
@@ -1513,7 +1513,7 @@ for (const variant of ["original", "seafarers"] as const) {
     await showView(page, "board");
     expect(await themeBoardGeometry(board)).toEqual(initialGeometry);
     await expect(board.getByRole("img", { name: /'s (settlement|road|ship) at / })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Confirm placement", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Placement confirmation" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Place settlement at/ }).first()).toBeVisible();
     await expectResourceBank(page, { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 });
     await showView(page, "hand");
@@ -2719,11 +2719,18 @@ test("Seafarers aligns diagonal ships and preserves vertical ships with variant-
     await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
-    await page.getByRole("button", { name: "Choose ships", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
     const edgeId = legalShipEdges(state, state.activePlayerId).find(edgeId => matchingEdges.has(edgeId))!;
-    await page.getByRole("button", { name: `Build ship at ${edgeId}`, exact: true }).click();
-    await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await page.getByRole("button", { name: new RegExp(`^Build (road|ship) at ${edgeId}$`) }).click();
+    const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+    if (legalRoadEdges(state, state.activePlayerId).includes(edgeId)) {
+      await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+      await routeDialog.getByRole("button", { name: "Build ship", exact: true }).click();
+    } else {
+      await expect(routeDialog.getByText("Build a ship here?", { exact: true })).toBeVisible();
+      await routeDialog.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
     const player = state.players.find(player => player.id === state.activePlayerId)!;
     state = applyAction(state, player.id, { type: "place-ship", edgeId });
     if (state.activePlayerId !== player.id) await revealHand(page);
@@ -2796,7 +2803,11 @@ test("zoom bar pirate chip indicates the pirate and moves it off and back onto t
     state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
     const edgeId = legalRoadEdges(state, state.activePlayerId)[0]!;
     await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    if (legalShipEdges(state, state.activePlayerId).includes(edgeId)) {
+      await page.getByRole("group", { name: "Placement confirmation" }).getByRole("button", { name: "Build road", exact: true }).click();
+    } else {
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
     state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId });
   }
 
@@ -2910,10 +2921,12 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await expect(page.locator(".fog-reveal-veil")).toHaveCount(0);
   await page.getByRole("button", { name: "Place settlement at vertex-18", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
-  await expect(page.getByText("Build a ship here?", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Choose roads", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Build road at edge-22", exact: true }).click();
+  const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+  await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+  await routeDialog.getByRole("button", { name: "Build ship", exact: true }).click();
   const veil = page.locator(".fog-reveal-veil");
   await expect(veil).toHaveCount(1);
   await expect(fogLabels).toHaveCount(22);
@@ -2942,9 +2955,8 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await showView(page, "board");
   await page.getByRole("button", { name: "Place settlement at vertex-18", exact: true }).click();
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await page.getByRole("button", { name: "Choose ships", exact: true }).click();
-  await page.getByRole("button", { name: "Build ship at edge-22", exact: true }).click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await page.getByRole("button", { name: "Build road at edge-22", exact: true }).click();
+  await page.getByRole("group", { name: "Placement confirmation" }).getByRole("button", { name: "Build ship", exact: true }).click();
   // Dismiss the pass-the-device handoff so the board is clickable again.
   await revealHand(page);
   const peek = page.getByRole("button", { name: /Toggle to reveal the number hidden by this harbor/ });
@@ -3000,7 +3012,7 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
     await page.getByRole("button", { name: /^Build (road|ship) at/ }).first().click();
     const roadChoice = page.getByRole("group", { name: "Placement confirmation" }).getByRole("button", { name: "Build road", exact: true });
     if (await roadChoice.isVisible()) await roadChoice.click();
-    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    else await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     const collection = page.getByRole("region", { name: "Resource collection" });
     if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
   }

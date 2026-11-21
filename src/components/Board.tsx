@@ -20,12 +20,13 @@ import { ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
 
-function NumberToken({ x, y, number, matchesRoll, blocked }: {
+function NumberToken({ x, y, number, matchesRoll, blocked, illustrationId }: {
   x: number;
   y: number;
   number: number;
   matchesRoll: boolean;
   blocked: boolean;
+  illustrationId: string;
 }) {
   const probability = 6 - Math.abs(7 - number);
   const frequent = number === 6 || number === 8;
@@ -37,38 +38,39 @@ function NumberToken({ x, y, number, matchesRoll, blocked }: {
       {matchesRoll && (
         <circle
           className="number-token-halo"
-          r="25"
+          r="25.5"
           fill={blocked ? "none" : "#f4cf75"}
-          fillOpacity="0.3"
+          fillOpacity="0.34"
           stroke={blocked ? "#817d71" : "#ae772c"}
-          strokeWidth={blocked ? "1.5" : "2"}
+          strokeWidth={blocked ? "1.5" : "2.2"}
           strokeDasharray={blocked ? "3 4" : undefined}
           opacity={blocked ? "0.7" : "1"}
           pointerEvents="none"
         />
       )}
-      <circle cy="3" r="19.5" fill="#35453a" opacity="0.22" />
-      <circle cy="1.5" r="19" fill="#b8a27b" />
+      <circle cy="3.5" r="19.5" fill="#233329" opacity="0.26" />
+      <circle cy="1.8" r="19" fill="#ae9872" />
       <circle
         className="number-token-face"
         r="19"
-        fill={blocked ? "#e6e1d4" : matchesRoll ? "#ffecab" : "#fbf4df"}
-        stroke={blocked ? "#887f6c" : matchesRoll ? "#ac6b24" : "#c8b998"}
-        strokeWidth={matchesRoll ? "2.2" : "1.3"}
+        fill={blocked ? "#e4dfd2" : matchesRoll ? `url(#${illustrationId}-token-hot)` : `url(#${illustrationId}-token)`}
+        stroke={blocked ? "#887f6c" : matchesRoll ? "#a5631e" : frequent ? "#c9856e" : "#c8b998"}
+        strokeWidth={matchesRoll ? "2.2" : frequent ? "1.5" : "1.2"}
       />
       <circle
-        r="16.3"
+        r="16.1"
         fill="none"
-        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : "#e7ddc5"}
-        strokeWidth="0.7"
+        stroke={blocked ? "#bbb29e" : matchesRoll ? "#d7ad51" : frequent ? "#d88a71" : "#e7ddc5"}
+        strokeOpacity={frequent && !blocked && !matchesRoll ? "0.55" : "0.9"}
+        strokeWidth={frequent ? "0.95" : "0.7"}
       />
       <text
         y="4.5"
         textAnchor="middle"
         fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="23"
+        fontSize={frequent ? "24" : "22.5"}
         fontWeight="700"
-        fill={frequent ? "#b14e38" : "#394b42"}
+        fill={frequent ? "#b2432e" : "#32453c"}
       >
         {number}
       </text>
@@ -76,9 +78,9 @@ function NumberToken({ x, y, number, matchesRoll, blocked }: {
         <circle
           key={index}
           cx={(index - (probability - 1) / 2) * 4.3}
-          cy="11"
-          r="1.35"
-          fill={frequent ? "#b14e38" : "#59644f"}
+          cy="11.2"
+          r={frequent ? "1.45" : "1.3"}
+          fill={frequent ? "#b2432e" : "#55624d"}
         />
       ))}
     </g>
@@ -273,7 +275,6 @@ export function Board({
   onSelect,
   onChangeTheme,
   headerControls,
-  routeChoice,
   interactive = true,
   compact = false,
   fit = false,
@@ -311,7 +312,6 @@ export function Board({
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   onChangeTheme?: () => void;
   headerControls?: ReactNode;
-  routeChoice?: ReactNode;
   interactive?: boolean;
   compact?: boolean;
   fit?: boolean;
@@ -707,14 +707,38 @@ export function Board({
             <defs>
               <radialGradient
                 id={`${illustrationId}-sea`}
-                cx="48%"
-                cy="43%"
-                r="65%"
+                cx="46%"
+                cy="40%"
+                r="66%"
               >
                 <stop offset="0" stopColor={theme.sea[0]} />
-                <stop offset="0.78" stopColor={theme.sea[1]} />
+                <stop offset="0.74" stopColor={theme.sea[1]} />
                 <stop offset="1" stopColor={theme.sea[2]} />
               </radialGradient>
+              <linearGradient id={`${illustrationId}-hex-light`} x1="15%" y1="5%" x2="85%" y2="95%">
+                <stop offset="0" stopColor="#fffdf6" stopOpacity="0.24" />
+                <stop offset="0.48" stopColor="#ffffff" stopOpacity="0" />
+                <stop offset="1" stopColor="#1e2d24" stopOpacity="0.18" />
+              </linearGradient>
+              <linearGradient id={`${illustrationId}-sea-light`} x1="15%" y1="5%" x2="85%" y2="95%">
+                <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
+                <stop offset="0.55" stopColor="#ffffff" stopOpacity="0" />
+                <stop offset="1" stopColor="#16353a" stopOpacity="0.14" />
+              </linearGradient>
+              <linearGradient id={`${illustrationId}-token`} x1="25%" y1="0%" x2="75%" y2="100%">
+                <stop offset="0" stopColor="#fffdf5" />
+                <stop offset="0.6" stopColor="#faf2dc" />
+                <stop offset="1" stopColor="#ede0be" />
+              </linearGradient>
+              <linearGradient id={`${illustrationId}-token-hot`} x1="25%" y1="0%" x2="75%" y2="100%">
+                <stop offset="0" stopColor="#fff6cc" />
+                <stop offset="1" stopColor="#f5d784" />
+              </linearGradient>
+              <linearGradient id={`${illustrationId}-robber`} x1="20%" y1="0%" x2="85%" y2="100%">
+                <stop offset="0" stopColor="#55665d" />
+                <stop offset="0.5" stopColor="#313f39" />
+                <stop offset="1" stopColor="#1b2621" />
+              </linearGradient>
               <pattern
                 id={`${illustrationId}-texture`}
                 width={theme.id === "illustrated" ? 17 : 24}
@@ -935,17 +959,25 @@ export function Board({
                 <>
                   <path
                     d="M-302-159C-273-260-165-318-40-315C95-340 245-274 296-169C350-67 332 92 267 195C198 291 72 322-42 309C-169 321-286 244-315 129C-345 26-341-54-302-159Z"
-                    transform={`scale(${halfWidth / 355} ${halfHeight / 337})`}
+                    transform={`scale(${(halfWidth * 1.045) / 355} ${(halfHeight * 1.045) / 337})`}
                     fill={`url(#${illustrationId}-sea)`}
                   />
+                  <path
+                    d="M-302-159C-273-260-165-318-40-315C95-340 245-274 296-169C350-67 332 92 267 195C198 291 72 322-42 309C-169 321-286 244-315 129C-345 26-341-54-302-159Z"
+                    transform={`scale(${(halfWidth * 0.995) / 355} ${(halfHeight * 0.995) / 337})`}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeOpacity="0.24"
+                    strokeWidth="1.2"
+                  />
                   <ellipse
-                    rx={halfWidth - 25}
-                    ry={halfHeight - 24}
+                    rx={halfWidth - 20}
+                    ry={halfHeight - 19}
                     fill="none"
                     stroke="#86aca1"
                     strokeWidth="0.8"
                     strokeDasharray="2 7"
-                    opacity="0.55"
+                    opacity="0.45"
                   />
                 </>
               )}
@@ -955,36 +987,57 @@ export function Board({
                 stroke="#6e9c91"
                 strokeWidth="1.4"
                 strokeLinecap="round"
-                opacity="0.55"
+                opacity="0.48"
               />
               <g
-                transform={`translate(${halfWidth - 55} ${-halfHeight + 55})`}
+                transform={`translate(${halfWidth - 52} ${-halfHeight + 52})`}
                 fill="none"
-                stroke="#80998a"
-                opacity="0.8"
+                stroke="#7a9385"
+                opacity="0.72"
               >
                 <circle r="18" strokeWidth="0.7" />
-                <path d="M0-25V25M-25 0H25" strokeWidth="0.7" />
+                <circle r="13" strokeWidth="0.45" strokeDasharray="1.5 2.5" opacity="0.65" />
+                <path d="M0-24V24M-24 0H24" strokeWidth="0.7" />
                 <path
-                  d="M0-18 4 0 0 18-4 0Z"
-                  fill="#80998a"
+                  d="M0-17 3.8 0 0 17-3.8 0Z"
+                  fill="#7a9385"
                   strokeWidth="0.8"
                 />
+                <path d="M0-17 3.8 0H0Z" fill="#fffdf6" fillOpacity="0.55" stroke="none" />
                 <text
-                  y="-31"
+                  y="-29"
                   textAnchor="middle"
-                  fill="#718b7c"
+                  fill="#678172"
                   stroke="none"
-                  fontSize="9"
+                  fontSize="8.5"
+                  fontWeight="700"
                   letterSpacing="2"
                 >
                   {translateText("N")}
                 </text>
               </g>
               <g
+                stroke="#ffffff"
+                strokeOpacity="0.32"
+                strokeWidth="23"
+                strokeLinecap="round"
+              >
+                {edgeGeometry
+                  .filter(({ coastal }) => coastal)
+                  .map(({ edge, start, end }) => (
+                    <line
+                      key={`foam-${edge.id}`}
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                    />
+                  ))}
+              </g>
+              <g
                 filter={`url(#${illustrationId}-shadow)`}
                 stroke={theme.coast}
-                strokeWidth="14"
+                strokeWidth="13.5"
                 strokeLinecap="round"
               >
                 {edgeGeometry
@@ -1029,21 +1082,21 @@ export function Board({
                   role="img"
                   aria-label={description}
                 >
-                  {tile.terrain !== "fog" && <polygon
+                  {tile.terrain !== "fog" && tile.terrain !== "sea" && <polygon
                     points={points}
-                    transform={`translate(0 ${2.5 + (raised ? tileElevation : 0)})`}
-                    fill="#887753"
-                    stroke="#887753"
-                    strokeWidth="3"
+                    transform={`translate(0 ${3 + (raised ? tileElevation : 0)})`}
+                    fill="#5c4d33"
+                    stroke="#5c4d33"
+                    strokeWidth="2.8"
                     strokeLinejoin="round"
-                    opacity={raised ? "0.85" : "0.45"}
+                    opacity={raised ? "0.72" : "0.34"}
                     pointerEvents="none"
                   />}
                   <polygon
                     points={points}
                     fill={terrain.fill}
                     stroke={theme.border}
-                    strokeWidth="3"
+                    strokeWidth={tile.terrain === "sea" ? "1.6" : "2.7"}
                     strokeLinejoin="round"
                   />
                   <polygon
@@ -1051,6 +1104,23 @@ export function Board({
                     fill={`url(#${illustrationId}-texture)`}
                     pointerEvents="none"
                   />
+                  <polygon
+                    points={points}
+                    fill={`url(#${illustrationId}-${tile.terrain === "sea" ? "sea-light" : "hex-light"})`}
+                    pointerEvents="none"
+                  />
+                  {tile.terrain !== "sea" && tile.terrain !== "fog" && (
+                    <polygon
+                      points={points}
+                      transform={`translate(${tile.x} ${tile.y}) scale(0.935) translate(${-tile.x} ${-tile.y})`}
+                      fill="none"
+                      stroke="#fffdf6"
+                      strokeOpacity="0.34"
+                      strokeWidth="1.2"
+                      strokeLinejoin="round"
+                      pointerEvents="none"
+                    />
+                  )}
                   {theme.id === "illustrated" && tile.terrain !== "sea" && tile.terrain !== "fog" && tile.terrain !== "gold" ? (
                     <use
                       href={`#${illustrationId}-${tile.terrain}`}
@@ -1061,17 +1131,28 @@ export function Board({
                       <TerrainArtwork terrain={tile.terrain} theme={theme} />
                     </g>
                   )}
-                  <text
-                    x={tile.x}
-                    y={tile.y + 43}
-                    textAnchor="middle"
-                    fill={terrain.ink}
-                    fontSize="7.5"
-                    fontWeight="700"
-                    letterSpacing="1.5"
-                  >
-                    {getTerrainName(theme, tile.terrain, language).toUpperCase()}
-                  </text>
+                  {tile.terrain !== "fog" && robberTileId === tile.id && (
+                    <polygon
+                      points={points}
+                      fill="#1c2a24"
+                      fillOpacity="0.22"
+                      pointerEvents="none"
+                    />
+                  )}
+                  {tile.terrain !== "sea" && (
+                    <text
+                      x={tile.x}
+                      y={tile.y + 42.5}
+                      textAnchor="middle"
+                      fill={terrain.ink}
+                      fillOpacity="0.78"
+                      fontSize="6.8"
+                      fontWeight="700"
+                      letterSpacing="1.6"
+                    >
+                      {getTerrainName(theme, tile.terrain, language).toUpperCase()}
+                    </text>
+                  )}
                   {number !== null && !peekingThisTile && (
                     <NumberToken
                       x={tile.x}
@@ -1079,6 +1160,7 @@ export function Board({
                       number={number}
                       matchesRoll={matchesRoll}
                       blocked={blocked}
+                      illustrationId={illustrationId}
                     />
                   )}
                   {fogRevealVeilKey !== null && !fogRevealState.current.completedVeils.has(fogRevealVeilKey) && (
@@ -1275,6 +1357,7 @@ export function Board({
                   number={peekedTile.number}
                   matchesRoll={peekedTile.number === rolledNumber}
                   blocked={peekedTile.number === rolledNumber && robberTileId === peekedTile.id}
+                  illustrationId={illustrationId}
                 />
               </g>
             )}
@@ -1393,20 +1476,30 @@ export function Board({
                       strokeWidth="9"
                       strokeLinecap="round"
                     />
+                    <line
+                      x1={start.x}
+                      y1={start.y - 1}
+                      x2={end.x}
+                      y2={end.y - 1}
+                      stroke="#fffdf6"
+                      strokeOpacity="0.28"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
                     <circle
                       cx={x}
                       cy={y}
-                      r="7.5"
-                      fill="#fff5df"
+                      r="6"
+                      fill="#fff7e2"
                       stroke={player.color}
-                      strokeWidth="1.5"
+                      strokeWidth="1.4"
                     />
                     <text
                       x={x}
-                      y={y + 3}
+                      y={y + 2.6}
                       textAnchor="middle"
                       fill="#33483d"
-                      fontSize="8.5"
+                      fontSize="7.5"
                       fontWeight="800"
                     >
                       {players.findIndex(
@@ -1469,10 +1562,11 @@ export function Board({
                     <circle
                       cx={x}
                       cy={y}
-                      r={highlighted ? 8 : 6}
+                      r={highlighted ? 8.5 : 6.5}
+                      className={highlighted ? undefined : "legal-target-pulse"}
                       fill={highlighted ? "#664b28" : "#fff4d4"}
-                      stroke="#a77a3a"
-                      strokeWidth="1.4"
+                      stroke={highlighted ? "#fff4d4" : "#a77a3a"}
+                      strokeWidth="1.5"
                       pointerEvents="none"
                     />
                     <path
@@ -1608,26 +1702,27 @@ export function Board({
                 >
                   <ellipse
                     cy="13"
-                    rx="13"
-                    ry="4"
-                    fill="#243b35"
-                    opacity="0.25"
+                    rx="13.5"
+                    ry="4.5"
+                    fill="#1a2c26"
+                    opacity="0.32"
                   />
                   <path
                     d="M-10 11Q-12 8-8 3L-5-4Q-11-12-5-17Q0-21 5-17Q11-12 5-4L8 3Q12 8 10 11Z"
-                    fill="#36443e"
-                    stroke="#f8edcf"
-                    strokeWidth="2"
+                    fill={`url(#${illustrationId}-robber)`}
+                    stroke="#fff6dd"
+                    strokeWidth="2.1"
                     strokeLinejoin="round"
                   />
                   <path
                     d="M-3-15Q-6-12-3-9M-5 5-3-1"
                     fill="none"
-                    stroke="#829084"
-                    strokeWidth="2"
+                    stroke="#a4b4aa"
+                    strokeOpacity="0.85"
+                    strokeWidth="1.8"
                     strokeLinecap="round"
                   />
-                  <path d="M-8 8H8" stroke="#1f2f29" strokeWidth="2" />
+                  <path d="M-8 8H8" stroke="#18241f" strokeWidth="2" />
                 </g>
               ))}
 
@@ -1667,11 +1762,12 @@ export function Board({
                     <circle
                       cx={vertex.x}
                       cy={vertex.y}
-                      r={occupied ? 24 : highlighted ? 17 : 13}
+                      r={occupied ? 24 : highlighted ? 17.5 : 13.5}
+                      className={highlighted ? undefined : "legal-target-pulse"}
                       fill={occupied ? "none" : "#fff5d9"}
-                      fillOpacity="0.75"
+                      fillOpacity="0.8"
                       stroke={highlighted ? "#5d4525" : "#b68c45"}
-                      strokeWidth={highlighted ? "3" : "1.5"}
+                      strokeWidth={highlighted ? "3" : "1.6"}
                       strokeDasharray={
                         occupied && !highlighted ? "3 3" : undefined
                       }
@@ -1777,7 +1873,6 @@ export function Board({
       <div
         className={`board-controls flex flex-wrap min-w-0 shrink-0 items-center justify-end gap-2 border-t border-[#e0ddcd] bg-[#f8f5eb] ${compact ? "px-3 py-2" : "px-4 py-3 sm:px-5"}`}
       >
-        {routeChoice && <div className="basis-full">{routeChoice}</div>}
         {onChangeTheme && (
           <button
             type="button"
@@ -1797,16 +1892,16 @@ export function Board({
         {pirateIndicator && (
           <button
             type="button"
-            className="button-secondary px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white/50"
+            className="board-pirate-button button-secondary min-w-0 px-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white/50"
             disabled={!pirateIndicator.enabled}
             onClick={pirateIndicator.onSelect}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
               <path d="M4 15h16l-2.5 4h-11Z" />
               <path d="M12 15V4" />
               <path d="M12 4l6 8h-6Z" />
             </svg>
-            <span>{translateText(pirateIndicator.onBoard ? "Move pirate off board" : "Pirate off board")}</span>
+            <span className="truncate">{translateText(pirateIndicator.onBoard ? "Move pirate off board" : "Pirate off board")}</span>
           </button>
         )}
         {victoryTarget !== undefined && (

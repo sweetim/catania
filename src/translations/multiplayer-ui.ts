@@ -191,4 +191,10 @@ export const multiplayerUiTranslations = {
   "The host can return everyone to the lobby for a rematch.": "ホストが全員をロビーに戻すと、再戦を始められます。",
   "Player history: {games} games / {wins} wins / {points} total points": "プレイヤー履歴：{games}戦 / {wins}勝 / 合計{points}点",
   "Profile": "プロフィール",
+  "You received": "受け取った資源",
+  "Your roll rewards": "今回の出目で受け取った資源",
+  "{resource} +{count}": "{resource} +{count}",
+  "You received +{count} {resource}": "{resource}を+{count}受け取りました",
+  "Place your {piece} on the shared board": "共用ボード上に{piece}を配置してください",
+  "Cancel placement": "配置をキャンセル",
 };

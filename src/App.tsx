@@ -8,7 +8,7 @@ import { CustomMapConfigPanel } from "./components/CustomMapConfigPanel";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
 import { GameVariantSelector } from "./components/GameVariantSelector";
-import { FreeRouteChoice, GoldSelection } from "./components/SeafarersControls";
+import { GoldSelection } from "./components/SeafarersControls";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
 import { PrivateNotices } from "./components/PrivateNotices";
@@ -75,7 +75,6 @@ import {
   CUSTOM_MAP_COUNT_FIELDS,
   DEFAULT_CUSTOM_MAP_CONFIG,
   isCustomMapConfig,
-  isFogBoard,
   isGameVariant,
   isSeafarers,
 } from "./game/types";
@@ -651,7 +650,7 @@ export function App() {
   const routeChoicePending =
     selected?.kind === "edge" &&
     selectedAction?.type === "place-road" &&
-    game && isFogBoard(game.board) &&
+    game && isSeafarers(game.variant) &&
     (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(selected.id);
 
@@ -818,54 +817,50 @@ export function App() {
           </nav>
           <section
             id="home-setup"
-            className="home-setup panel @container"
+            className="home-setup panel"
             aria-label={translateText("Set up your table")}
           >
             <div className="home-setup-content">
               <div>
                 <p className="eyebrow">{translateText("On this device")}</p>
-                <h2 className="home-setup-heading mt-0.5 font-serif text-lg @min-[440px]:mt-1 @min-[440px]:text-2xl">
+                <h2 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
                   {translateText("Make room at the table.")}
                 </h2>
               </div>
               <div className="home-table-options">
-                <div>
-                  <p className="mb-1.5 hidden text-[11px] font-semibold text-muted @min-[440px]:block">{translateText("Table size")}</p>
-                  <div className="flex items-center gap-1 rounded-xl bg-moss p-0.5 @min-[440px]:p-1" role="group" aria-label={translateText("Number of players")}>
-                    <span className="flex shrink-0 items-center pl-1.5 text-muted @min-[440px]:hidden" aria-hidden="true" title={translateText("Table size")}>
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                    </span>
-                    {[3, 4].map((count) => (
-                      <button
-                        key={count}
-                        onClick={() => {
-                          setPlayerCount(count);
-                          setHumanCount((current) => Math.min(current, count));
-                        }}
-                        aria-label={translateText("{count} players", { count })}
-                        aria-pressed={playerCount === count}
-                        className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold @min-[440px]:text-xs ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
-                      >
-                        <span className="tabular-nums @min-[440px]:hidden">{count}</span>
-                        <span className="hidden @min-[440px]:inline">{translateText("{count} players", { count })}</span>
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-1 rounded-xl bg-moss p-0.5" role="group" aria-label={translateText("Number of players")}>
+                  <span className="flex shrink-0 items-center pl-1.5 text-muted sm:pl-2" aria-hidden="true" title={translateText("Table size")}>
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </span>
+                  {[3, 4].map((count) => (
+                    <button
+                      key={count}
+                      onClick={() => {
+                        setPlayerCount(count);
+                        setHumanCount((current) => Math.min(current, count));
+                      }}
+                      aria-label={translateText("{count} players", { count })}
+                      aria-pressed={playerCount === count}
+                      className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums ${playerCount === count ? "bg-white shadow-sm" : "text-muted"}`}
+                    >
+                      {count}
+                    </button>
+                  ))}
                 </div>
                 <label className="min-w-0 text-[11px] font-semibold text-muted">
-                  <span className="sr-only @min-[440px]:not-sr-only @min-[440px]:mb-1.5 @min-[440px]:block">{translateText("Human players")}</span>
+                  <span className="sr-only">{translateText("Human players")}</span>
                   <span className="relative flex items-center">
-                    <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted @min-[440px]:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="8" r="4" />
                       <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
                     </svg>
                     <select
-                      className="field !min-h-12 !pl-7 !pr-1 !text-base font-medium text-ink @min-[440px]:!min-h-[52px] @min-[440px]:!px-2 @min-[440px]:!text-xs @min-[440px]:font-semibold"
+                      className="field !min-h-12 !pl-7 !pr-1 !text-base font-medium text-ink sm:!pl-8 sm:!pr-2 sm:!text-sm"
                       value={humanCount}
                       onChange={(event) => setHumanCount(Number(event.target.value))}
                     >
@@ -975,8 +970,7 @@ export function App() {
                   <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
                   <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
                 </span>
-                <span className="hidden text-xs font-semibold underline underline-offset-4 @min-[440px]:inline">{translateText("Change")}</span>
-                <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted @min-[440px]:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m9 6 6 6-6 6" />
                 </svg>
               </button>
@@ -1228,9 +1222,6 @@ export function App() {
                   robberTileId={game.robberTileId}
                   pirateTileId={game.pirateTileId}
                   routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                  routeChoice={isActive && isSeafarers(game.variant) && !isFogBoard(game.board) && (game.phase.type === "setup-road" || game.phase.type === "road-building")
-                    ? <FreeRouteChoice phase={game.phase} mode={buildMode} disabled={rollBusy} onSelect={mode => { setBuildMode(mode); setSelected(null); }} />
-                    : undefined}
                   pirateIndicator={isSeafarers(game.variant) ? {
                     onBoard: game.pirateTileId !== null,
                     enabled: isActive && !rollBusy && game.phase.type === "robber",

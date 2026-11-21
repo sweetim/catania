@@ -8,7 +8,7 @@ import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettin
 import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
 import { GameVariantSelector } from "../components/GameVariantSelector";
-import { FreeRouteChoice, GoldSelection } from "../components/SeafarersControls";
+import { GoldSelection } from "../components/SeafarersControls";
 import { BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, TheftChoices } from "../components/GameplayDialogs";
 import { OpenTrade } from "../components/OpenTrade";
@@ -25,7 +25,7 @@ import { CollapsibleSection } from "../components/CollapsibleSection";
 import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
 import { COSTS, diceRollCounts, emptyResources, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { DEFAULT_CUSTOM_MAP_CONFIG, isFogBoard, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -154,6 +154,19 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     returnTo?: "steal" | "trade-response";
   } | null>(null);
   const [chosen, setChosen] = useState(emptyResources);
+  const rollIdentity = game.dice ? `${game.gameId}:${game.turnNumber}:${game.activePlayerId}:${game.dice[0]}:${game.dice[1]}` : null;
+  const previousRollReference = useRef<{
+    gameId: string;
+    phaseType: string;
+    rollIdentity: string | null;
+    resources: Resources;
+  }>({
+    gameId: game.gameId,
+    phaseType: game.phase.type,
+    rollIdentity,
+    resources: { ...player.resources },
+  });
+  const [rollReceipt, setRollReceipt] = useState<{ identity: string; gains: Resources } | null>(null);
   const discardCount = game.phase.type === "discard" ? game.phase.required[player.id] : undefined;
   const canPay = (cost: Resources) => RESOURCES.every(resource => player.resources[resource] >= cost[resource]);
   const settlementUnavailable = game.board.vertices.filter(vertex => vertex.building?.playerId === player.id && vertex.building.kind === "settlement").length >= 5
@@ -180,6 +193,37 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
   const editorStale = editorVersion !== snapshot.version;
 
   useEffect(() => { setChosen(emptyResources()); }, [game.phase.type]);
+
+  useEffect(() => {
+    const previous = previousRollReference.current;
+    if (previous.gameId !== game.gameId || rollIdentity === null) {
+      setRollReceipt(null);
+    } else if (rollIdentity !== previous.rollIdentity) {
+      const diceTotal = game.dice ? game.dice[0] + game.dice[1] : 0;
+      if (previous.phaseType === "roll" && diceTotal !== 7) {
+        const gains = emptyResources();
+        let anyGain = false;
+        for (const resource of RESOURCES) {
+          const delta = player.resources[resource] - previous.resources[resource];
+          if (delta > 0) {
+            gains[resource] = delta;
+            anyGain = true;
+          }
+        }
+        setRollReceipt(anyGain ? { identity: rollIdentity, gains } : null);
+      } else {
+        setRollReceipt(null);
+      }
+    }
+    previousRollReference.current = {
+      gameId: game.gameId,
+      phaseType: game.phase.type,
+      rollIdentity,
+      resources: { ...player.resources },
+    };
+  }, [game.gameId, game.phase.type, rollIdentity, player.resources]);
+
+  const activeRollGains = rollReceipt && rollReceipt.identity === rollIdentity ? rollReceipt.gains : null;
 
   useEffect(() => {
     setChosen(emptyResources());
@@ -223,7 +267,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     : snapshot.buildMode ? translateText("Choose a highlighted location for your {piece} on the shared board, then confirm the placement.", { piece: pieceName(language, snapshot.buildMode) })
     : phaseInstructions.description;
 
-  return <div className="private-dashboard" aria-label={translateText("Your hand and actions")}>
+  return <div className="private-dashboard" data-active={active ? "true" : "false"} style={{ "--player-accent": player.color } as CSSProperties} aria-label={translateText("Your hand and actions")}>
     <section className="private-player-summary" aria-label={translateText("Your player summary")}>
       <PlayerSeat variant={game.variant} player={{ ...ownStatistics, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length }}
         number={game.players.findIndex(other => other.id === player.id) + 1} active={active}
@@ -251,16 +295,20 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
           </div>
         </div>
         <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-1.5 sm:gap-2">
-          {RESOURCES.map(resource => <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count: player.resources[resource] })}>
-            <ResourceCard resource={resource} count={player.resources[resource]} iconClassName="h-8 w-8" className="hand-resource-card w-full" />
-          </li>)}
+          {RESOURCES.map(resource => {
+            const count = player.resources[resource];
+            const arrived = Boolean(activeRollGains && activeRollGains[resource] > 0);
+            return <li key={resource} aria-label={translateText("{resource}: {count} in hand", { resource: resourceName(language, resource), count })} className={arrived ? "resource-hand-arrival" : undefined}>
+              <ResourceCard resource={resource} count={count} iconClassName="h-8 w-8" className={`hand-resource-card w-full ${count === 0 ? "resource-card-empty" : ""}`} />
+            </li>;
+          })}
         </ul>
       </section>
       {choosingGold && game.phase.type === "gold" && <GoldSelection key={JSON.stringify(game.phase.required)}
         bank={game.bank} count={game.phase.required[player.id]!} disabled={disabled}
         onSubmit={resources => send({ type: "choose-gold", resources })} />}
       <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building" defaultOpen>
-        <div className="build-options flex flex-col gap-2">
+        <div className="build-options private-build-grid grid grid-cols-2 gap-2">
           {(["road", ...(isSeafarers(game.variant) ? ["ship" as const] : []), "settlement", "city"] as const).map(piece => {
             const locations = piece === "road"
               ? legalRoadEdges(game, player.id)
@@ -276,21 +324,24 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
                   ? translateText("No legal position or no pieces remaining.")
                   : translateText("Select a location on the board."));
             return <Fragment key={piece}>
-              <BuildButton piece={piece} color={player.color} resources={COSTS[piece]}
+              <BuildButton piece={piece} color={player.color} resources={COSTS[piece]} available={player.resources} layout="tile"
                 aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })}
                 aria-pressed={snapshot.buildMode === piece} aria-describedby={explanation ? `${piece}-build-explanation` : undefined}
                 title={unavailable}
                 disabled={disabled || !normalActions || !canPay(COSTS[piece]) || !locations.length}
                 onClick={() => selectBuild(snapshot.buildMode === piece ? null : piece)} />
-              {explanation && <p id={`${piece}-build-explanation`} className="-mt-1 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
+              {explanation && <p id={`${piece}-build-explanation`} className="col-span-2 -mt-0.5 rounded-lg bg-moss/60 px-3 py-2 text-xs leading-5 text-ink">{explanation}</p>}
             </Fragment>;
           })}
-          {isSeafarers(game.variant) && <button className="button-secondary w-full"
+          {isSeafarers(game.variant) && <button className={`build-tile flex min-h-[70px] w-full flex-col items-start justify-center gap-1 rounded-xl border px-2.5 py-2 text-left text-xs font-semibold transition-all ${snapshot.buildMode === "move-ship" ? "border-forest bg-moss ring-2 ring-forest/50" : "border-[#cfc3a6] bg-white/90 shadow-[0_2px_0_#d8ccb0,0_3px_8px_#253b3610] hover:bg-white"}`}
             disabled={disabled || !normalActions || !movableShipEdges(game, player.id).some(id => legalShipDestinations(game, player.id, id).length)}
             aria-pressed={snapshot.buildMode === "move-ship"} onClick={() => selectBuild(snapshot.buildMode === "move-ship" ? null : "move-ship")}>
-            {translateText("Move ship")}
+            <span className="flex min-w-0 items-center gap-1.5" style={{ color: player.color }}>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6"><PieceIcon piece="ship" /></span>
+              <span className="text-[12px] font-semibold leading-tight text-ink">{translateText("Move ship")}</span>
+            </span>
           </button>}
-          <BuildButton piece="development" color={player.color} resources={COSTS.development} aria-label={translateText("Buy a card")} disabled={disabled || !normalActions || !canPay(COSTS.development) || game.developmentRemaining === 0} onClick={() => setConfirmation({
+          <BuildButton piece="development" color={player.color} resources={COSTS.development} available={player.resources} layout="tile" aria-label={translateText("Buy a card")} disabled={disabled || !normalActions || !canPay(COSTS.development) || game.developmentRemaining === 0} onClick={() => setConfirmation({
             action: { type: "buy-development" },
             title: "Invest in a development card",
             description: "Pay one wool, one grain, and one ore. Your new card stays private. Action cards cannot be played until a later turn.",
@@ -304,14 +355,28 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
     </section>
 
     <section className="hand-dice private-turn" aria-label={translateText("Turn controls")}>
-      {active && isSeafarers(game.variant) && !isFogBoard(game.board) && <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={selectBuild} />}
+      {active && snapshot.buildMode && game.phase.type === "actions" && (
+        <div className="placement-mode-banner" role="status">
+          <span className="flex min-w-0 items-center gap-2" style={{ color: player.color }}>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
+              <PieceIcon piece={snapshot.buildMode === "move-ship" ? "ship" : snapshot.buildMode} />
+            </span>
+            <span className="min-w-0 text-xs font-semibold leading-4 text-ink">
+              {translateText("Place your {piece} on the shared board", { piece: pieceName(language, snapshot.buildMode) })}
+            </span>
+          </span>
+          <button type="button" className="button-secondary min-h-9 shrink-0 px-2.5 py-1 text-xs" aria-label={translateText("Cancel placement")} disabled={disabled} onClick={() => selectBuild(null)}>
+            {translateText("Cancel")}
+          </button>
+        </div>
+      )}
       <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
-        <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className="shrink-0 text-xs font-medium text-muted">{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
+        <h2 className="turn-owner"><span className="truncate" title={activePlayer.name}>{game.winnerId ? translateText("Game over") : activePlayer.name}</span>{!game.winnerId && <span className={`shrink-0 text-xs ${active ? "font-bold text-ink" : "font-medium text-muted"}`}>{translateText(active ? " - Your turn" : " - Their turn")}</span>}</h2>
         <span className="turn-number">{game.turnNumber === 0 ? translateText("Setup") : translateText("Turn {turn}", { turn: game.turnNumber })}</span>
         {turnMenu}
       </div>
-      <MultiplayerDice game={game} />
+      <MultiplayerDice game={game} gains={activeRollGains} />
       <div data-testid="game-phase" data-phase={game.phase.type} data-active-player={activePlayer.name} className="private-instructions" aria-live="polite">
         <TurnInstructions title={instructionTitle} description={instructionDescription} computerActivity={!awaitingPlayer && activePlayer.control === "computer"} />
       </div>
@@ -551,11 +616,13 @@ export function MultiplayerApp() {
     .with("vertex", () => ({ type: snapshot?.buildMode === "city" ? "place-city" as const : "place-settlement" as const, vertexId: currentSelection.id }))
     .exhaustive();
   const routeChoicePending = currentSelection?.kind === "edge" && selectedAction?.type === "place-road" &&
-    game && isFogBoard(game.board) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
+    game && isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
     legalShipEdges(game, game.activePlayerId).includes(currentSelection.id);
 
-  return <BoardThemeContext value={BOARD_THEMES[boardThemeId]}>
-    <div data-theme={boardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
+  const effectiveBoardThemeId: BoardThemeId = host ? boardThemeId : (snapshot?.boardThemeId ?? boardThemeId);
+
+  return <BoardThemeContext value={BOARD_THEMES[effectiveBoardThemeId]}>
+    <div data-theme={effectiveBoardThemeId} className={privateGame ? "game-shell private-game-shell" : sharedGame ? "game-shell shared-game-shell" : hostLobby ? "multiplayer-lobby-shell" : "min-h-dvh"}>
       {!privateGame && <header className="mx-auto flex max-w-[1600px] items-center justify-between gap-2 border-b border-line px-5 py-4 sm:gap-3 sm:px-8">
         <div className="min-w-0 shrink-0 max-sm:[&>span>svg]:hidden max-sm:[&>span>span]:text-2xl"><Logo /></div>
         {sharedGame && snapshot?.mapSeed && <button type="button" className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[#e3d3a8] bg-gradient-to-b from-[#fdf7e3] to-[#f3e7c2] px-2.5 py-0.5 text-[10px] font-bold tracking-[.08em] tabular-nums text-[#8b6425] shadow-[inset_0_1px_0_#fffdf5,0_1px_3px_#423d2814] hover:border-[#cdb87e] hover:to-[#eee0b8] sm:mx-auto" aria-label={translateText("Copy map code")} title={translateText(copied ? "Map code copied" : "Copy map code")} onClick={async () => {
@@ -718,9 +785,6 @@ export function MultiplayerApp() {
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                routeChoice={isSeafarers(game.variant) && !isFogBoard(game.board) && activePlayer?.control === "human" && (game.phase.type === "setup-road" || game.phase.type === "road-building")
-                  ? <FreeRouteChoice phase={game.phase} mode={snapshot.buildMode} disabled={disabled} onSelect={piece => session.current?.selectBuild(piece, snapshot.version)} />
-                  : undefined}
                 pirateIndicator={isSeafarers(game.variant) ? {
                   onBoard: game.pirateTileId !== null,
                   enabled: !disabled && activePlayer?.control === "human" && game.phase.type === "robber" && game.pirateTileId !== null,
@@ -810,7 +874,10 @@ export function MultiplayerApp() {
         </div>}
       </main>
       {!host && game && !game.winnerId && snapshot?.privatePlayer && <PrivateNotices key={game.gameId} thefts={snapshot.privateThefts} monopolies={snapshot.privateMonopolies} playerId={snapshot.privatePlayer.id} players={game.players} target={privateNoticeTarget} />}
-      {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={setBoardThemeId} /></Dialog>}
+      {dialog === "theme" && <Dialog title={translateText("Choose your theme")} onClose={() => setDialog(null)} wide><ThemeSelector value={boardThemeId} onChange={theme => {
+        setBoardThemeId(theme);
+        if (host) session.current?.setBoardTheme(theme);
+      }} /></Dialog>}
       {dialog === "invitation" && host && <Dialog title={translateText("Room invitation")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText("Share this code or link to let a disconnected player rejoin their seat with the same profile or name.")}</p>
         <div className="flex flex-col items-center">

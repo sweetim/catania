@@ -7,6 +7,7 @@ export const gameMessages = {
   "The host did not provide a map code for this game.": "ホストからこのゲームのマップコードを受信できませんでした。",
   "Choose Original or Seafarers.": "オリジナルまたは航海者を選択してください。",
   "Choose a supported game version.": "対応しているゲームの種類を選択してください。",
+  "Choose a supported board theme.": "対応している盤面のテーマを選択してください。",
   "The fog discovery deck is empty.": "霧タイルの山札がありません。",
   "The fog cell has no hidden terrain.": "霧のタイルの地形データがありません。",
   "Finish exploration before continuing.": "探索を完了してから続行してください。",

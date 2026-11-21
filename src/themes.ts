@@ -5,6 +5,10 @@ import { themeTranslations } from "./translations/board";
 
 export type BoardThemeId = "illustrated" | "ceramic" | "wooden" | "pixel" | "space" | "underwater";
 
+export function isBoardThemeId(value: unknown): value is BoardThemeId {
+  return typeof value === "string" && Object.hasOwn(BOARD_THEMES, value);
+}
+
 export type BoardTheme = {
   id: BoardThemeId;
   name: string;

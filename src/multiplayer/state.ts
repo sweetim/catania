@@ -13,6 +13,7 @@ import { GameError, gameErrorMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
 import { defaultComputerName, type Language } from "../i18n";
 import type { ProfileStats } from "../profile";
+import { isBoardThemeId, type BoardThemeId } from "../themes";
 import { generateIdentifier } from "../identity";
 import { parseAction, validName } from "./protocol";
 import type { Command, CommandResult, JoinMessage } from "./protocol";
@@ -82,6 +83,7 @@ type Seat = {
 export class HostRoom {
   variant: GameVariant = "original";
   victoryPointsToWin = victoryTarget(this.variant);
+  boardThemeId: BoardThemeId = "illustrated";
   customMapConfig: CustomMapConfig = { ...DEFAULT_CUSTOM_MAP_CONFIG };
   version = 0;
   game: GameState | null = null;
@@ -128,6 +130,13 @@ export class HostRoom {
     requireRoom(isVictoryPointsToWin(points), "Choose a whole number from 3 to 13 victory points.");
     if (points === this.victoryPointsToWin) return;
     this.victoryPointsToWin = points;
+    this.version++;
+  }
+
+  setBoardTheme(theme: BoardThemeId): void {
+    requireRoom(isBoardThemeId(theme), "Choose a supported board theme.");
+    if (theme === this.boardThemeId) return;
+    this.boardThemeId = theme;
     this.version++;
   }
 
@@ -448,6 +457,7 @@ export class HostRoom {
     const privatePlayer = game?.players.find(player => player.id === seat?.player.id) ?? null;
     return structuredClone({
       version: this.version, players, variant: this.variant, victoryPointsToWin: this.victoryPointsToWin,
+      ...(this.boardThemeId !== "illustrated" ? { boardThemeId: this.boardThemeId } : {}),
       ...(this.variant === "custom-world" ? { customMapConfig: this.customMapConfig } : {}),
       ...(host || game?.winnerId ? { mapSeed: this.mapSeed } : {}),
       ...(host ? { profiles: Object.fromEntries(this.seats.filter(seat => seat.profile).map(seat => [seat.player.id, seat.profile!])) } : {}),

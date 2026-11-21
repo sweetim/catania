@@ -59,7 +59,8 @@ The shared screen hosts the game without occupying a player seat.
     theme selection preserve the map; **Start game** uses the exact preview, including
     its terrain, number tokens, ports, and initial robber location. Phones cannot shuffle.
    The **Theme** button sits in the map's zoom bar, just as in single-device play,
-   and opens the theme gallery in a dialog. Selecting a theme updates the map immediately.
+   and opens the theme gallery in a dialog. Selecting a theme updates the map immediately
+   and synchronizes the theme to connected phones so their resource cards match the shared table.
    On desktop, the map fills the left column, with the invitation above the player
    controls on the right. The panels fit the viewport without page scrolling.
    A 16-pixel gap separates the navigation from the lobby panels at every screen size.
@@ -142,16 +143,20 @@ public-score-leader highlights and awards. On narrow screens, the counts wrap on
 a second row.
 
 The private screen uses the single-device hand sidebar's heading, resource-card
-count, illustrated resources, and a single score combining public and hidden points.
-The hidden score stays on your device only. **Build a little bigger** contains the
-same full-width build and card-purchase rows, icons, and costs, followed by **Make a
-trade**. This section is collapsible and starts open on every device, unlike
-single-device play where phones start it closed. Your hand and the turn controls stay in a vertical stack on desktop and
-mobile. On phones, the turn/dice panel stays visible while the hand scrolls above
-it. Larger screens scroll the stack when needed, without page scrolling or shrinking
-the action buttons. Phase guidance uses the same green instruction panel, headings,
-and explanations as single-device play, with placement directions referring to
-the shared board.
+count, illustrated resources (with zero-count resources dimmed so owned cards stand out),
+and a single score combining public and hidden points.
+The hidden score stays on your device only. **Build a little bigger** presents
+build and card-purchase tiles in a compact two-column grid with icons and
+affordability-aware resource costs, followed by **Make a trade**. This section is
+collapsible and starts open on every device, unlike single-device play where phones
+start it closed. On portrait phones, your hand scrolls above the pinned turn/dice
+panel; on landscape phones, tablets, and wider screens (`min-width: 700px`), the
+player summary spans the top while the hand and turn controls sit side by side in
+two columns without page scrolling. Active turns highlight the turn panel with your
+player accent color, and selecting a build displays a placement banner with a
+one-tap **Cancel** button while awaiting confirmation on the shared board. Phase
+guidance uses the same green instruction panel, headings, and explanations as
+single-device play, with placement directions referring to the shared board.
 
 Owned development cards appear directly in the hand as the same grouped list of
 icons, names, counts, and descriptions used in single-device play. The list is hidden
@@ -178,8 +183,10 @@ host checks the state version of submitted choices, so an outdated dialog cannot
 silently apply its selection to a changed game.
 
 New rolls animate the actual dice received from the host without delaying game
-state or computer turns. Reduced-motion settings skip the animation, and reconnecting
-shows the current result without replaying an old roll.
+state or computer turns, and show any resources you gained from that roll right
+inside the dice tray while pulsing the newly arrived cards in your hand.
+Reduced-motion settings skip the animation, and reconnecting shows the current
+result without replaying an old roll.
 
 Successful thefts show a dismissible private notice on both involved phones:
 the victim sees who robbed them and the exact card lost (**-1**), and the thief

@@ -33,8 +33,6 @@ export const seafarersTranslations = {
   "Build ship": "船を建造",
   "All 15 ships are on the board.": "15隻すべての船が盤上にあります。",
   "No legal position. Ships must connect to your ships, settlements, or cities.": "建設できる場所がありません。船は自分の船・開拓地・都市につながっている必要があります。",
-  "Choose ships": "船を選択",
-  "Choose roads": "街道を選択",
   "Move ship": "船を移動",
   "Longest Route": "最長交易路",
   "Longest Route (+2 victory points)": "最長交易路（勝利点+2）",

@@ -532,35 +532,55 @@ export function CardStack({
   );
 }
 
-export function BuildButton({ piece, color, resources, ...buttonProperties }: ComponentProps<"button"> & {
+export function BuildButton({ piece, color, resources, available, layout = "row", ...buttonProperties }: ComponentProps<"button"> & {
   piece: "road" | "ship" | "settlement" | "city" | "development";
   color: string;
   resources: Resources;
+  available?: Resources;
+  layout?: "row" | "tile";
 }) {
   const translateText = useTranslation(gameplayTranslations);
+  const pressed = buttonProperties["aria-pressed"] === true || buttonProperties["aria-pressed"] === "true";
+  const label = match(piece)
+    .with("ship", () => translateText("Build ship"))
+    .with("development", () => translateText("Buy a card"))
+    .with("city", () => translateText("Upgrade to city"))
+    .with("road", () => translateText("Build road"))
+    .with("settlement", () => translateText("Build settlement"))
+    .exhaustive();
+  if (layout === "tile") {
+    return (
+      <button
+        {...buttonProperties}
+        className={`build-tile flex min-h-[70px] w-full flex-col justify-between gap-1.5 rounded-xl border px-2.5 py-2 text-left text-xs transition-all ${pressed ? "border-forest bg-moss ring-2 ring-forest/50" : "border-[#cfc3a6] bg-white/90 shadow-[0_2px_0_#d8ccb0,0_3px_8px_#253b3610] hover:bg-white"}`}
+      >
+        <span className="flex min-w-0 items-center gap-1.5" style={{ color }}>
+          {piece === "development" ? <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5"><CardTypeIcon kind="development" /></span> : <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6"><PieceIcon piece={piece} /></span>}
+          <span className="min-w-0 text-[12px] font-semibold leading-tight text-ink">
+            {label}
+          </span>
+        </span>
+        <span className="build-cost shrink-0 self-end"><Cost resources={resources} available={available} /></span>
+      </button>
+    );
+  }
   return (
     <button
       {...buttonProperties}
-      className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${buttonProperties["aria-pressed"] === true || buttonProperties["aria-pressed"] === "true" ? "border-forest bg-moss" : "border-line bg-white/40"}`}
+      className={`flex min-h-14 w-full items-center justify-between gap-2 rounded-xl border px-2.5 text-left text-xs ${pressed ? "border-forest bg-moss" : "border-line bg-white/40"}`}
     >
       <span className="flex min-w-0 items-center gap-2" style={{ color }}>
         {piece === "development" ? <span className="flex h-8 w-8 shrink-0 items-center justify-center"><CardTypeIcon kind="development" /></span> : <PieceIcon piece={piece} />}
         <span className="font-semibold text-ink">
-          {match(piece)
-            .with("ship", () => translateText("Build ship"))
-            .with("development", () => translateText("Buy a card"))
-            .with("city", () => translateText("Upgrade to city"))
-            .with("road", () => translateText("Build road"))
-            .with("settlement", () => translateText("Build settlement"))
-            .exhaustive()}
+          {label}
         </span>
       </span>
-      <span className="build-cost shrink-0"><Cost resources={resources} /></span>
+      <span className="build-cost shrink-0"><Cost resources={resources} available={available} /></span>
     </button>
   );
 }
 
-export function Cost({ resources }: { resources: Resources }) {
+export function Cost({ resources, available }: { resources: Resources; available?: Resources }) {
   const theme = useBoardTheme();
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
@@ -568,25 +588,28 @@ export function Cost({ resources }: { resources: Resources }) {
     <span className="inline-flex items-center gap-1">
       {(Object.keys(RESOURCE_NAMES) as Resource[])
         .filter((resource) => resources[resource] > 0)
-        .map((resource) => (
-          <span
-            key={resource}
-            data-theme={theme.id}
-            className="resource-card relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm"
-            style={{ backgroundColor: theme.resources[resource] }}
-            title={translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
-          >
-            <ResourceIcon resource={resource} className="h-4 w-4 text-white" />
-            {resources[resource] > 1 && (
-              <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/40 px-1 text-[9px] font-bold leading-4 text-white">
-                {resources[resource]}
+        .map((resource) => {
+          const missing = available !== undefined && available[resource] < resources[resource];
+          return (
+            <span
+              key={resource}
+              data-theme={theme.id}
+              className={`resource-card relative inline-flex h-9 w-7 items-center justify-center rounded-md shadow-sm ${missing ? "cost-pip-missing" : ""}`}
+              style={{ backgroundColor: theme.resources[resource] }}
+              title={translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
+            >
+              <ResourceIcon resource={resource} className="h-4 w-4 text-white" />
+              {resources[resource] > 1 && (
+                <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/40 px-1 text-[9px] font-bold leading-4 text-white">
+                  {resources[resource]}
+                </span>
+              )}
+              <span className="sr-only">
+                {translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
               </span>
-            )}
-            <span className="sr-only">
-              {translateText("{count} {resource}", { count: resources[resource], resource: resourceName(language, resource) })}
             </span>
-          </span>
-        ))}
+          );
+        })}
     </span>
   );
 }

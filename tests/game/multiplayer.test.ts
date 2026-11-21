@@ -2025,3 +2025,22 @@ describe("invitation URLs", () => {
     expect(parseInvitationUrl("")).toBeNull();
   });
 });
+
+describe("multiplayer board theme sync", () => {
+  test("host board theme synchronizes in snapshots and protocol rejects unknown themes", () => {
+    const { room } = started();
+    expect(room.snapshot("connection-1").boardThemeId).toBeUndefined();
+    const before = room.version;
+    room.setBoardTheme("ceramic");
+    expect(room.version).toBe(before + 1);
+    const synced = room.snapshot("connection-1");
+    expect(synced.boardThemeId).toBe("ceramic");
+    expect(parseServerMessage({ type: "snapshot", snapshot: synced })).toEqual({ type: "snapshot", snapshot: synced });
+    room.setBoardTheme("ceramic");
+    expect(room.version).toBe(before + 1);
+    room.setBoardTheme("illustrated");
+    expect(room.snapshot("connection-1").boardThemeId).toBeUndefined();
+    expect(() => room.setBoardTheme("unknown" as never)).toThrow("theme");
+    expect(() => parseServerMessage({ type: "snapshot", snapshot: { ...synced, boardThemeId: "unknown" } })).toThrow();
+  });
+});

@@ -212,17 +212,17 @@ async function privateScreenFits(page: Page) {
   const bounds = await dashboard.boundingBox();
   expect(bounds!.y).toBeGreaterThanOrEqual(0);
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
-  const scrollContainer = page.viewportSize()!.width < 700 ? page.locator(".private-hand") : dashboard;
+  const scrollContainer = page.locator(".private-hand");
   const scrollTop = await scrollContainer.evaluate(element => element.scrollTop);
   for (const button of await dashboard.getByRole("button").all()) {
     await button.scrollIntoViewIfNeeded();
-    const inScrollableHand = page.viewportSize()!.width < 700 && await button.evaluate(element => Boolean(element.closest(".private-hand")));
+    const inScrollableHand = await button.evaluate(element => Boolean(element.closest(".private-hand")));
     const visibleHeight = inScrollableHand ? await scrollContainer.evaluate(element => element.clientHeight - 3) : page.viewportSize()!.height;
     expect(visibleHeight).toBeGreaterThanOrEqual(44);
     await expect(button).toBeInViewport({ ratio: Math.min(1, visibleHeight / (await button.boundingBox())!.height) });
   }
   await scrollContainer.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
-  expect(await page.locator(page.viewportSize()!.width < 700 ? ".private-turn" : ".private-hand, .private-turn").evaluateAll(elements => elements
+  expect(await page.locator(".private-turn").evaluateAll(elements => elements
     .map(element => ({ panel: element.className, height: element.clientHeight, content: element.scrollHeight }))
     .filter(element => element.content > element.height))).toEqual([]);
 }
@@ -663,13 +663,13 @@ for (const variant of ["original", "seafarers"] as const) {
     const confirmation = host.getByRole("dialog", { name: "Reset this game?", exact: true });
     await expect(confirmation).toBeInViewport({ ratio: 1 });
     await confirmation.getByRole("button", { name: "Keep playing", exact: true }).click();
-    await expect(host.getByRole("button", { name: "Confirm placement", exact: true })).toBeVisible();
+    await expect(host.getByRole("group", { name: "Placement confirmation" })).toBeVisible();
     expect((await latestSnapshot(phones[0]!)).version).toBe(progressed.version);
     await chooseGameOption(host, "Reset game");
     await screenshot(host, testInfo, `host-reset-${variant}-confirmation`);
     await confirmation.getByRole("button", { name: "Reset game", exact: true }).click();
     await expectPhase([host, ...phones], "setup-settlement", activeName);
-    await expect(host.getByRole("button", { name: "Confirm placement", exact: true })).toHaveCount(0);
+    await expect(host.getByRole("group", { name: "Placement confirmation" })).toHaveCount(0);
     await expect(host.getByRole("img", { name: /'s (settlement|road|ship) at / })).toHaveCount(0);
     for (const [index, phone] of phones.entries()) {
       const reset = await latestSnapshot(phone);
@@ -1546,11 +1546,27 @@ test("Seafarers lobby selection synchronizes phones and allows coastal ships and
     await host.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
     await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
     await expectPhase([host, phone], "setup-road", "Alex");
-    await phone.getByRole("button", { name: "Choose ships", exact: true }).click();
-    const target = host.getByRole("button", { name: /^Build ship at / }).first();
+    await expect(phone.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    await expect(host.getByRole("button", { name: "Choose ships", exact: true })).toHaveCount(0);
+    const roadSnapshot = await latestSnapshot(phone);
+    const roadGame = roadSnapshot.game!;
+    const coastalEdgeId = roadSnapshot.boardTargets.edges.find(id => {
+      const edge = roadGame.board.edges.find(edge => edge.id === id)!;
+      const adjacentTiles = roadGame.board.tiles.filter(tile => edge.vertexIds.every(vertexId => tile.vertexIds.includes(vertexId)));
+      return adjacentTiles.some(tile => tile.terrain === "sea" && tile.id !== roadGame.pirateTileId);
+    })!;
+    expect(coastalEdgeId).toBeDefined();
+    const target = host.getByRole("button", { name: new RegExp(`^Build (road|ship) at ${coastalEdgeId}$`) });
     await expect(target).toBeVisible();
     await target.click();
-    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    const routeDialog = host.getByRole("group", { name: "Placement confirmation" });
+    const shipChoice = routeDialog.getByRole("button", { name: "Build ship", exact: true });
+    if (await shipChoice.isVisible()) {
+      await expect(routeDialog.getByText("Road or ship here?", { exact: true })).toBeVisible();
+      await shipChoice.click();
+    } else {
+      await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
   }
   await expect(phone.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 45_000 });
   await host.evaluate(() => {
@@ -1920,8 +1936,15 @@ test("private player header matches the single-device hand and total score", asy
     expect(islandCountBounds.y + islandCountBounds.height - islandIconBounds.y - islandIconBounds.height).toBeCloseTo(2, 0);
     const summaryBounds = (await summary.boundingBox())!;
     const handBounds = (await phone.locator(".private-hand").boundingBox())!;
-    expect(handBounds.width).toBe(summaryBounds.width);
-    expect(handBounds.y - summaryBounds.y - summaryBounds.height).toBe(8);
+    const turnBounds = (await phone.locator(".private-turn").boundingBox())!;
+    if (viewport.width < 700) {
+      expect(handBounds.width).toBe(summaryBounds.width);
+      expect(handBounds.y - summaryBounds.y - summaryBounds.height).toBe(8);
+    } else {
+      expect(turnBounds.x).toBeGreaterThan(handBounds.x + handBounds.width - 1);
+      expect(handBounds.y).toBeCloseTo(turnBounds.y, 0);
+      expect(handBounds.y - summaryBounds.y - summaryBounds.height).toBeGreaterThanOrEqual(8);
+    }
     expect((await heading.boundingBox())!.width).toBeGreaterThan(30);
     await heading.scrollIntoViewIfNeeded();
     await expect(heading).toBeInViewport({ ratio: 1 });
@@ -1946,7 +1969,7 @@ test("private player header matches the single-device hand and total score", asy
   await expect(header.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
 });
 
-test("private build rows match the sidebar without stretching when development cards change", async ({ multiplayer }, testInfo) => {
+test("private build grid stays compact and pinned without stretching when development cards change", async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
@@ -1961,6 +1984,10 @@ test("private build rows match the sidebar without stretching when development c
       await phone.setViewportSize(viewport);
       await privateScreenFits(phone);
       await expect(rows).toHaveCount(4);
+      const firstRowBounds = (await rows.nth(0).boundingBox())!;
+      const secondRowBounds = (await rows.nth(1).boundingBox())!;
+      expect(secondRowBounds.x).toBeGreaterThan(firstRowBounds.x + firstRowBounds.width - 1);
+      expect(Math.abs(secondRowBounds.y - firstRowBounds.y)).toBeLessThanOrEqual(1);
       for (const [index, label] of ["Build road", "Build settlement", "Upgrade to city", "Buy a card"].entries()) {
         const row = rows.nth(index);
         await expect(row).toContainText(label);
@@ -1969,26 +1996,29 @@ test("private build rows match the sidebar without stretching when development c
           const bounds = element.getBoundingClientRect();
           const content = element.firstElementChild!;
           const icon = content.firstElementChild!.getBoundingClientRect();
-          const label = content.lastElementChild!.getBoundingClientRect();
           const cost = element.querySelector(".build-cost")!.getBoundingClientRect();
           return { width: bounds.width, height: bounds.height, parentWidth: element.parentElement!.getBoundingClientRect().width,
-            iconWidth: icon.width, iconHeight: icon.height, labelRight: label.right, costLeft: cost.left };
+            iconWidth: icon.width, iconHeight: icon.height, costBottom: cost.bottom, boundsBottom: bounds.bottom,
+            costLeftGap: cost.left - bounds.left, costRightGap: bounds.right - cost.right };
         });
-        expect(geometry.width).toBe(geometry.parentWidth);
-        expect(geometry.height).toBe(56);
-        expect(geometry.iconWidth).toBe(32);
-        expect(geometry.iconHeight).toBe(32);
-        expect(geometry.labelRight).toBeLessThanOrEqual(geometry.costLeft);
+        expect(geometry.width).toBeLessThan(geometry.parentWidth * 0.55);
+        expect(geometry.height).toBeGreaterThanOrEqual(70);
+        expect(geometry.iconWidth).toBe(24);
+        expect(geometry.iconHeight).toBe(24);
+        expect(geometry.costBottom).toBeLessThanOrEqual(geometry.boundsBottom);
+        expect(geometry.costRightGap).toBeLessThanOrEqual(geometry.costLeftGap + 1);
       }
       await expect(rows.last().locator("svg").first()).toHaveAttribute("viewBox", "0 0 24 28");
       await expect(building.getByRole("button", { name: "Make a trade", exact: true })).toHaveText("Make a trade");
-      expect(await hand.evaluate(element => {
-        const lastChild = element.lastElementChild!.getBoundingClientRect();
-        return element.getBoundingClientRect().bottom - lastChild.bottom;
-      })).toBeLessThanOrEqual(15);
-      expect(await phone.locator(".private-turn").evaluate(element =>
-        element.getBoundingClientRect().top - element.previousElementSibling!.getBoundingClientRect().bottom,
-      )).toBe(8);
+      if (viewport.width < 700) {
+        expect(await phone.locator(".private-turn").evaluate(element =>
+          element.getBoundingClientRect().top - element.previousElementSibling!.getBoundingClientRect().bottom,
+        )).toBe(8);
+      } else {
+        const handBounds = (await hand.boundingBox())!;
+        const turnBounds = (await phone.locator(".private-turn").boundingBox())!;
+        expect(turnBounds.x).toBeGreaterThan(handBounds.x + handBounds.width - 1);
+      }
       await dashboard.evaluate(element => { element.scrollTop = 0; });
       await screenshot(phone, testInfo, `private-sidebar-${kinds.length}-types-${viewport.width}-${viewport.height}`);
     }
@@ -1998,6 +2028,7 @@ test("private build rows match the sidebar without stretching when development c
   await expect(rows.nth(2)).toHaveAttribute("aria-pressed", "true");
   await expect(rows.nth(2)).toHaveClass(/border-forest bg-moss/);
   await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
+  await expect(phone.getByRole("button", { name: "Cancel placement", exact: true })).toBeVisible();
 });
 
 test("private build buttons explain resources, legal spots, settlement stock and city limits", async ({ multiplayer }, testInfo) => {
