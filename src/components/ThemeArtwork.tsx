@@ -175,30 +175,33 @@ export function TerrainArtwork({ terrain, theme, clipPathId }: {
   }
   if (terrain === "gold") {
     return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M-52-58H52V-12Q0-4-52-14Z" fill="#fae299" fillOpacity=".45" stroke="none" />
-      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#d1982e" strokeWidth="17" strokeOpacity=".55" />
-      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#6aa5a0" strokeWidth="11.5" />
-      <path d="M-46 15Q-20-2 3 10Q24 21 47 0" stroke="#bee5df" strokeWidth="2.4" strokeOpacity=".72" />
-      <path d="M-52 35Q0 29 52 35V58H-52Z" fill="#f0c869" fillOpacity=".88" stroke="none" />
-      <ellipse cy="25" rx="34" ry="6.5" fill={ink} fillOpacity=".14" stroke="none" />
+      <path d="M-52-24L8-58H30L-52-8Z" fill="#fff9cc" fillOpacity=".48" stroke="none" />
+      <path d="M-52 0L44-58H52V-50L-52 12Z" fill="#fffbe0" fillOpacity=".3" stroke="none" />
+      <path d="M-52 10Q0 22 52 10V58H-52Z" fill="#b97409" fillOpacity=".34" stroke="none" />
+      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#a8670a" strokeWidth="16" strokeOpacity=".52" />
+      <path d="M-52 17Q-22-3 2 10Q25 22 52-2" stroke="#4d9692" strokeWidth="11" />
+      <path d="M-46 15Q-20-2 3 10Q24 21 47 0" stroke="#d6f4ef" strokeWidth="2.4" strokeOpacity=".85" />
+      <path d="M-52 35Q0 29 52 35V58H-52Z" fill="#f5c644" fillOpacity=".78" stroke="none" />
+      <path d="M-44 35Q0 29.5 44 35" stroke="#fff6be" strokeOpacity=".65" strokeWidth="1.2" />
+      <ellipse cy="25" rx="34" ry="6.5" fill={ink} fillOpacity=".18" stroke="none" />
       <g className="gold-ingots">
         <g>
-          <path d="m-19-28 29-8 13 9-30 8Z" fill="#fff0a6" />
-          <path d="m-19-28 12 9v7l-12-9Z" fill="#c68b25" />
-          <path d="m-7-19 30-8v7l-30 8Z" fill="#edb53d" />
-          <path d="m-12-28 21-5" stroke="#fff9da" strokeWidth="2.5" />
+          <path d="m-19-28 29-8 13 9-30 8Z" fill="#fffbe0" />
+          <path d="m-19-28 12 9v7l-12-9Z" fill="#a9670c" />
+          <path d="m-7-19 30-8v7l-30 8Z" fill="#f6bd27" />
+          <path d="m-12-28 21-5" stroke="#ffffff" strokeWidth="2.5" />
         </g>
       </g>
       <g className="gold-coins">
         {[-32, 32].map(position => <g key={position} transform={`translate(${position} 0)`}>
-          <path d="M-9-2v15a9 4 0 0 0 18 0V-2" fill="#e9ae32" />
+          <path d="M-9-2v15a9 4 0 0 0 18 0V-2" fill="#e59f16" />
           <path d="M-9 3a9 4 0 0 0 18 0m-18 5a9 4 0 0 0 18 0m-18 5a9 4 0 0 0 18 0" />
-          <ellipse cy="-2" rx="9" ry="4" fill="#fff0a6" />
+          <ellipse cy="-2" rx="9" ry="4" fill="#fff7bf" />
           <ellipse cy="-2" rx="5" ry="2" strokeWidth="1" />
-          <path d="M-6 2v10" stroke="#fff0a6" strokeWidth="2" />
+          <path d="M-6 2v10" stroke="#fff8c4" strokeWidth="2.2" />
         </g>)}
       </g>
-      <path className="gold-sparkles" d="m-34-29 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm66 8 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5Z" fill="#fff9da" strokeWidth="1" />
+      <path className="gold-sparkles" d="m-34-29 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm66 8 1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5Zm-48 45 1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1Z" fill="#fffdf0" strokeWidth="1" />
     </g>;
   }
   if (terrain === "sea") {

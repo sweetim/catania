@@ -1254,14 +1254,12 @@ export function Board({
               return (
                 <g
                   key={tile.id}
+                  className={`terrain-hex${raised ? " terrain-hex-raised" : ""}`}
                   transform={raised ? `translate(0 ${-tileElevation})` : undefined}
                   pointerEvents="none"
+                  role="img"
+                  aria-label={description}
                 >
-                  <g
-                    className={`terrain-hex${raised ? " terrain-hex-raised" : ""}`}
-                    role="img"
-                    aria-label={description}
-                  >
                   {tile.terrain !== "fog" && tile.terrain !== "sea" && <polygon
                     points={points}
                     transform={`translate(0 ${3 + (raised ? tileElevation : 0)})`}
@@ -1377,7 +1375,6 @@ export function Board({
                       strokeLinejoin="round"
                     />
                   )}
-                  </g>
                 </g>
               );
             })}
@@ -1624,10 +1621,12 @@ export function Board({
                     : `${boardMotion.version}:ship-ripple:${edge.id}:${rippleGeneration}`;
                   const shipRippleActive = isMotionActive(shipRippleKey);
                   return (
-                    <g key={edge.id} transform={`translate(${x} ${y})`} pointerEvents="none">
+                    <g key={edge.id} pointerEvents="none">
                       {shipRippleActive && (
                         <circle
                           key={shipRippleKey}
+                          cx={x}
+                          cy={y}
                           className="board-water-ripple"
                           r="15"
                           aria-hidden="true"
@@ -1642,7 +1641,8 @@ export function Board({
                         style={shipSailActive ? ({
                           "--ship-from-x": `${movedShip!.horizontal}px`,
                           "--ship-from-y": `${movedShip!.vertical}px`,
-                        } as CSSProperties) : undefined}
+                          transformOrigin: `${x}px ${y}px`,
+                        } as CSSProperties) : shipEnterActive ? { transformOrigin: `${x}px ${y}px` } : undefined}
                         onAnimationEnd={event => {
                           if (shipSailKey && event.animationName === "board-ship-sail") completeMotionKey(shipSailKey);
                           if (shipEnterKey && event.animationName === "board-ship-drop") completeMotionKey(shipEnterKey);
@@ -1652,12 +1652,14 @@ export function Board({
                           className={shipSailActive && movedShip!.rotationDelta !== 0 ? "board-ship-turn" : undefined}
                           style={shipSailActive && movedShip!.rotationDelta !== 0 ? ({
                             "--ship-from-rotation": `${movedShip!.rotationDelta}deg`,
+                            transformOrigin: `${x}px ${y}px`,
                           } as CSSProperties) : undefined}
                         >
                           <g
                             role="img"
                             aria-label={translateText("{player}'s ship at {location}", { player: player.name, location: edge.id })}
-                            transform={rotation === 0 ? "scale(0.65)" : `rotate(${rotation}) scale(0.65) translate(0 -12)`}
+                            transform={rotation === 0 ? `translate(${x} ${y}) scale(0.65)`
+                              : `translate(${x} ${y}) rotate(${rotation}) scale(0.65) translate(0 -12)`}
                           >
                             {selectedId === edge.id && <ellipse rx="23" ry="27" fill="none" stroke="#8c672e" strokeWidth="3" />}
                             <path d="M-19 6h38l-7 12H-12Z" fill={player.color} stroke="#fff5dc" strokeWidth="2" />
@@ -1882,12 +1884,13 @@ export function Board({
                 return (
                   <g
                     key={vertex.id}
-                    transform={`translate(${vertex.x} ${vertex.y})`}
                     pointerEvents="none"
                   >
                     {settlementRingActive && (
                       <circle
                         key={settlementRingKey}
+                        cx={vertex.x}
+                        cy={vertex.y}
                         className="board-placement-ring"
                         r="14"
                         fill="none"
@@ -1902,6 +1905,8 @@ export function Board({
                     {cityRingActive && (
                       <circle
                         key={cityRingKey}
+                        cx={vertex.x}
+                        cy={vertex.y}
                         className="board-upgrade-ring"
                         r="16"
                         fill="none"
@@ -1915,13 +1920,17 @@ export function Board({
                     )}
                     <g
                       className={cityUpgradeActive ? "board-city-upgrade" : settlementEnterActive ? "board-settlement-enter" : undefined}
-                      role="img"
-                      aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
+                      style={cityUpgradeActive || settlementEnterActive ? { transformOrigin: `${vertex.x}px ${vertex.y}px` } : undefined}
                       onAnimationEnd={event => {
                         if (settlementEnterKey && event.animationName === "board-settlement-drop") completeMotionKey(settlementEnterKey);
                         if (cityUpgradeKey && event.animationName === "board-city-upgrade") completeMotionKey(cityUpgradeKey);
                       }}
                     >
+                      <g
+                        transform={`translate(${vertex.x} ${vertex.y})`}
+                        role="img"
+                        aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
+                      >
                       <ellipse
                         cy="10"
                         rx={city ? "19" : "15"}
@@ -1991,6 +2000,7 @@ export function Board({
                         ) + 1)}
                       </text>
                       {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
+                      </g>
                     </g>
                   </g>
                 );
@@ -2013,14 +2023,12 @@ export function Board({
                   : null;
               const pirateRippleActive = isMotionActive(pirateRippleKey);
               return (
-                <g
-                  key="pirate"
-                  transform={`translate(${tile.x} ${tile.y - 6})`}
-                  pointerEvents="none"
-                >
+                <g key="pirate" pointerEvents="none">
                   {pirateRippleActive && (
                     <circle
                       key={pirateRippleKey}
+                      cx={tile.x}
+                      cy={tile.y - 6}
                       className="board-water-ripple"
                       r="18"
                       aria-hidden="true"
@@ -2035,16 +2043,20 @@ export function Board({
                     style={pirateTravelActive ? ({
                       "--travel-from-x": `${pirateTravel!.horizontal}px`,
                       "--travel-from-y": `${pirateTravel!.vertical}px`,
-                    } as CSSProperties) : undefined}
-                    role="img"
-                    aria-label={translateText("Pirate; adjacent ships cannot be built or moved")}
+                    } as CSSProperties) : pirateEnterActive ? { transformOrigin: `${tile.x}px ${tile.y - 6}px` } : undefined}
                     onAnimationEnd={event => {
                       if (pirateTravelKey && event.animationName === "board-piece-travel") completeMotionKey(pirateTravelKey);
                       if (pirateEnterKey && event.animationName === "board-ship-drop") completeMotionKey(pirateEnterKey);
                     }}
                   >
-                    <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
-                    <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
+                    <g
+                      transform={`translate(${tile.x} ${tile.y - 6})`}
+                      role="img"
+                      aria-label={translateText("Pirate; adjacent ships cannot be built or moved")}
+                    >
+                      <path d="M-21 7h42l-8 12H-13ZM0-26V7M3-24 19 3H3Z" fill="#253b36" stroke="#fff5dc" strokeWidth="2" />
+                      <path d="m8-8 6 6m0-6-6 6" stroke="#fff5dc" strokeWidth="2" />
+                    </g>
                   </g>
                 </g>
               );
@@ -2063,25 +2075,24 @@ export function Board({
                   tile.number === rolledNumber;
                 return (
                   <g
-                    key="robber"
-                    transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
+                    key={robberTravelActive ? robberTravelKey : robberBlockedShake ? blockedRollKey : "robber"}
+                    className={robberTravelActive ? "board-piece-travel" : robberBlockedShake ? "board-blocked-shake" : undefined}
+                    style={robberTravelActive ? ({
+                      "--travel-from-x": `${robberTravel!.horizontal}px`,
+                      "--travel-from-y": `${robberTravel!.vertical}px`,
+                    } as CSSProperties) : undefined}
                     pointerEvents="none"
+                    onAnimationEnd={event => {
+                      if (robberTravelKey && event.animationName === "board-piece-travel") completeMotionKey(robberTravelKey);
+                      if (blockedRollKey && event.animationName === "board-blocked-shake") completeMotionKey(blockedRollKey);
+                    }}
                   >
                     <g
-                      key={robberTravelActive ? robberTravelKey : robberBlockedShake ? blockedRollKey : "robber-still"}
-                      className={robberTravelActive ? "board-piece-travel" : robberBlockedShake ? "board-blocked-shake" : undefined}
-                      style={robberTravelActive ? ({
-                        "--travel-from-x": `${robberTravel!.horizontal}px`,
-                        "--travel-from-y": `${robberTravel!.vertical}px`,
-                      } as CSSProperties) : undefined}
+                      transform={`translate(${tile.x + 24} ${tile.y + 18 - (raisedTileIds.has(tile.id) ? tileElevation : 0)})`}
                       role="img"
                       aria-label={translateText(tile.number === null ? "Robber on {resource}; production blocked" : "Robber on {resource} {number}; production blocked", {
                         resource: terrainResourceName(tile.terrain), number: tile.number ?? "",
                       })}
-                      onAnimationEnd={event => {
-                        if (robberTravelKey && event.animationName === "board-piece-travel") completeMotionKey(robberTravelKey);
-                        if (blockedRollKey && event.animationName === "board-blocked-shake") completeMotionKey(blockedRollKey);
-                      }}
                     >
                       <ellipse
                         cy="13"

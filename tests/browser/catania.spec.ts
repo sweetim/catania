@@ -5969,3 +5969,274 @@ test("ending a game cancels a queued computer move before a new table starts", a
   await expect(page.getByRole("status", { name: "Computer activity" })).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+async function recordBoardAnimations(page: Page) {
+  await page.evaluate(() => {
+    const windowState = window as typeof window & {
+      __boardAnimations?: string[];
+      __boardAnimationListener?: (event: AnimationEvent) => void;
+    };
+    if (windowState.__boardAnimationListener) {
+      document.removeEventListener("animationstart", windowState.__boardAnimationListener, true);
+    }
+    windowState.__boardAnimations = [];
+    windowState.__boardAnimationListener = (event: AnimationEvent) => {
+      windowState.__boardAnimations?.push(event.animationName);
+    };
+    document.addEventListener("animationstart", windowState.__boardAnimationListener, true);
+  });
+}
+
+async function recordedBoardAnimations(page: Page) {
+  return page.evaluate(() => (window as typeof window & { __boardAnimations?: string[] }).__boardAnimations ?? []);
+}
+
+test("board gameplay animations play for placements, harvest bursts, robber travel and blocked rolls, and respect reduced motion", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  const fixture = await seedGameRandomness(page, 3, 1);
+  let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
+  })), fixture.random, fixture.board);
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+  await revealHand(page);
+  await showView(page, "board");
+  await expect(page.locator(".board-settlement-enter, .board-placement-ring, .board-road-enter")).toHaveCount(0);
+
+  // First settlement triggers drop-in and placement ring animations, then cleans itself up.
+  await recordBoardAnimations(page);
+  const firstVertexId = legalSettlementVertices(state, state.activePlayerId)[0]!;
+  await page.getByRole("button", { name: `Place settlement at ${firstVertexId}`, exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId: firstVertexId });
+
+  await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+    expect.arrayContaining(["board-settlement-drop", "board-ring-expand"]),
+  );
+  await expect(page.locator(".board-settlement-enter")).toHaveCount(0);
+  await expect(page.locator(".board-placement-ring")).toHaveCount(0);
+
+  const firstEdgeId = legalRoadEdges(state, state.activePlayerId)[0]!;
+  await page.getByRole("button", { name: `Build road at ${firstEdgeId}`, exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId: firstEdgeId });
+
+  // Finish the remaining setup placements, checking road draw on Jordan's non-handoff turn.
+  for (let placement = 1; placement < 6; placement++) {
+    if (placement !== 3) await revealHand(page);
+    await showView(page, "board");
+    const vertexId = legalSettlementVertices(state, state.activePlayerId)[0]!;
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    const edgeId = legalRoadEdges(state, state.activePlayerId)[0]!;
+    if (placement === 2) await recordBoardAnimations(page);
+    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId });
+    if (placement === 2) {
+      await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+        expect.arrayContaining(["board-road-draw", "board-badge-pop"]),
+      );
+      await expect(page.locator(".board-road-enter")).toHaveCount(0);
+    }
+  }
+
+  // Roll a producing number and verify hex lift plus floating harvest chips.
+  const producingTile = state.board.tiles.find(tile =>
+    tile.id !== state.robberTileId &&
+    tile.number !== null &&
+    tile.vertexIds.some(vertexId => Boolean(state.board.vertices.find(vertex => vertex.id === vertexId)?.building)),
+  )!;
+  const dieOne = Math.max(1, producingTile.number! - 6);
+  await showView(page, "hand");
+  await chooseDice(page, [dieOne, producingTile.number! - dieOne]);
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  await expect(page.locator(".board-harvest-chip").first()).toContainText("+1");
+  await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+    expect.arrayContaining(["board-hex-lift", "board-harvest-rise"]),
+  );
+  await screenshot(page, testInfo, "board-harvest-burst", false);
+  await expect(page.locator(".board-harvest-chip")).toHaveCount(0);
+
+  // Move the robber on a 7 and verify travel animation.
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  await revealHand(page);
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  const robberDestination = state.board.tiles.find(tile =>
+    tile.id !== state.robberTileId &&
+    tile.number !== null &&
+    tile.vertexIds.every(vertexId => !state.board.vertices.find(vertex => vertex.id === vertexId)!.building),
+  )!;
+  const robberTargetIndex = state.board.tiles.filter(tile => tile.id !== state.robberTileId).indexOf(robberDestination);
+  await page.getByRole("button", { name: /^Move robber to / }).nth(robberTargetIndex).click();
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await showView(page, "board");
+  await expect.poll(() => recordedBoardAnimations(page)).toContain("board-piece-travel");
+  await expect(page.locator(".board-piece-travel")).toHaveCount(0);
+
+  // Roll the robber-blocked tile's number and verify blocked shake on robber and token.
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  await revealHand(page);
+  const blockedDieOne = Math.max(1, robberDestination.number! - 6);
+  await chooseDice(page, [blockedDieOne, robberDestination.number! - blockedDieOne]);
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  await expect.poll(() => recordedBoardAnimations(page)).toContain("board-blocked-shake");
+  await expect(page.locator(".board-blocked-shake")).toHaveCount(0);
+
+  // Reduced motion suppresses all board gameplay animations.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  await revealHand(page);
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: /^Move robber to / }).first().click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  expect(await recordedBoardAnimations(page)).toEqual([]);
+  const runningAnimations = await page.locator(".board-map").evaluate(element => element.getAnimations({ subtree: true }).length);
+  expect(runningAnimations).toBe(0);
+  await expect(page.locator(".board-harvest-chip")).toHaveCount(0);
+});
+
+test("Seafarers board animations play for ship placement, sailing movement and pirate travel", async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
+  await selectGameVersion(page, "seafarers");
+  const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
+  await seedRandomness(page, 17);
+  let seed = 17;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  let state = createGame(["Alex", "Sam", "Jordan"].map((name, index) => ({
+    name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: "human" as const,
+  })), random, createBoard(seededRandom(mapCode), "seafarers"));
+  await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
+
+  // Place coastal starting settlement + ship away from the pirate so the ship can sail on turn 1.
+  await revealHand(page);
+  await showView(page, "board");
+  const pirateTile = state.board.tiles.find(tile => tile.id === state.pirateTileId);
+  const pirateVertices = new Set(pirateTile?.vertexIds ?? []);
+  const coastalVertexId = legalSettlementVertices(state, state.activePlayerId).find(vertexId => {
+    const placed = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    const shipEdges = legalShipEdges(placed, placed.activePlayerId).filter(edgeId => {
+      const edge = placed.board.edges.find(candidate => candidate.id === edgeId)!;
+      return !edge.vertexIds.every(id => pirateVertices.has(id));
+    });
+    return shipEdges.length >= 2;
+  })!;
+  await page.getByRole("button", { name: `Place settlement at ${coastalVertexId}`, exact: true }).click();
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId: coastalVertexId });
+  const initialShipEdgeId = legalShipEdges(state, state.activePlayerId).find(edgeId => {
+    const edge = state.board.edges.find(candidate => candidate.id === edgeId)!;
+    return !edge.vertexIds.every(id => pirateVertices.has(id));
+  })!;
+  await page.getByRole("button", { name: new RegExp(`^Build (road|ship) at ${initialShipEdgeId}$`) }).click();
+  const routeDialog = page.getByRole("group", { name: "Placement confirmation" });
+  if (legalRoadEdges(state, state.activePlayerId).includes(initialShipEdgeId)) {
+    await routeDialog.getByRole("button", { name: "Build ship", exact: true }).click();
+  } else {
+    await routeDialog.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  }
+  state = applyAction(state, state.activePlayerId, { type: "place-ship", edgeId: initialShipEdgeId });
+
+  // Finish setup, verifying ship drop + water ripple on Jordan's non-handoff placement.
+  for (let placement = 1; placement < 6; placement++) {
+    if (placement !== 3) await revealHand(page);
+    await showView(page, "board");
+    if (placement === 2) {
+      const shipVertexId = legalSettlementVertices(state, state.activePlayerId).find(vertexId => {
+        const placed = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+        return legalShipEdges(placed, placed.activePlayerId).length > 0;
+      })!;
+      await page.getByRole("button", { name: `Place settlement at ${shipVertexId}`, exact: true }).click();
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+      state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId: shipVertexId });
+      const shipEdgeId = legalShipEdges(state, state.activePlayerId)[0]!;
+      await page.getByRole("button", { name: new RegExp(`^Build (road|ship) at ${shipEdgeId}$`) }).click();
+      const dialog = page.getByRole("group", { name: "Placement confirmation" });
+      await recordBoardAnimations(page);
+      if (legalRoadEdges(state, state.activePlayerId).includes(shipEdgeId)) {
+        await dialog.getByRole("button", { name: "Build ship", exact: true }).click();
+      } else {
+        await dialog.getByRole("button", { name: "Confirm placement", exact: true }).click();
+      }
+      state = applyAction(state, state.activePlayerId, { type: "place-ship", edgeId: shipEdgeId });
+      await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+        expect.arrayContaining(["board-ship-drop", "board-water-ripple"]),
+      );
+      await expect(page.locator(".board-ship-enter")).toHaveCount(0);
+      await expect(page.locator(".board-water-ripple")).toHaveCount(0);
+      continue;
+    }
+    const vertexId = legalSettlementVertices(state, state.activePlayerId)[0]!;
+    await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    state = applyAction(state, state.activePlayerId, { type: "place-settlement", vertexId });
+    const edgeId = legalRoadEdges(state, state.activePlayerId)[0]!;
+    await page.getByRole("button", { name: `Build road at ${edgeId}`, exact: true }).click();
+    if (legalShipEdges(state, state.activePlayerId).includes(edgeId)) {
+      await page.getByRole("group", { name: "Placement confirmation" }).getByRole("button", { name: "Build road", exact: true }).click();
+    } else {
+      await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    }
+    state = applyAction(state, state.activePlayerId, { type: "place-road", edgeId });
+  }
+
+  // Roll a non-7 number, then sail the open-ended starting ship to a new edge.
+  await showView(page, "hand");
+  await chooseDice(page, [1, 1]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+  await revealBuildSection(page);
+  await page.getByRole("button", { name: "Move ship", exact: true }).click();
+  await showView(page, "board");
+  const shipSource = page.getByRole("button", { name: /^Move ship at / }).first();
+  await shipSource.click();
+  const shipDestination = page.getByRole("button", { name: /^Move ship at / }).first();
+  await shipDestination.click();
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await showView(page, "board");
+
+  await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+    expect.arrayContaining(["board-ship-sail", "board-water-ripple"]),
+  );
+  await screenshot(page, testInfo, "seafarers-ship-sail", false);
+  await expect(page.locator(".board-ship-sail")).toHaveCount(0);
+  await expect(page.locator(".board-water-ripple")).toHaveCount(0);
+
+  // Next turn: roll 7 and move the pirate across sea hexes.
+  await showView(page, "hand");
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+  await revealHand(page);
+  await chooseDice(page, [3, 4]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await showView(page, "board");
+  await page.getByRole("button", { name: "Move pirate to sea", exact: true }).first().click();
+  await recordBoardAnimations(page);
+  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  await showView(page, "board");
+
+  await expect.poll(() => recordedBoardAnimations(page)).toEqual(
+    expect.arrayContaining(["board-piece-travel", "board-water-ripple"]),
+  );
+  await expect(page.locator(".board-piece-travel")).toHaveCount(0);
+});

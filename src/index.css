@@ -1942,11 +1942,11 @@
 
 @keyframes board-hex-lift {
   0% {
-    transform: translateY(8px);
+    transform: translateY(0);
   }
 
   100% {
-    transform: translateY(0);
+    transform: translateY(-8px);
   }
 }
 
@@ -1993,6 +1993,8 @@
 
 .board-placement-ring,
 .board-upgrade-ring {
+  transform-box: fill-box;
+  transform-origin: center;
   pointer-events: none;
   animation: board-ring-expand 560ms ease-out both;
 }
@@ -2100,6 +2102,8 @@
   fill: none;
   stroke: #ffffff;
   stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
   pointer-events: none;
   animation: board-water-ripple 620ms ease-out both;
 }
@@ -2122,15 +2126,15 @@
 
 @keyframes board-piece-travel {
   0% {
-    transform: translate(var(--travel-from-x, 0px), var(--travel-from-y, 0px)) scale(1);
+    transform: translate(var(--travel-from-x, 0px), var(--travel-from-y, 0px));
   }
 
   50% {
-    transform: translate(calc(var(--travel-from-x, 0px) * 0.5), calc(var(--travel-from-y, 0px) * 0.5 - 20px)) scale(1.12);
+    transform: translate(calc(var(--travel-from-x, 0px) * 0.5), calc(var(--travel-from-y, 0px) * 0.5 - 20px));
   }
 
   100% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0);
   }
 }
 
