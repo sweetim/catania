@@ -83,8 +83,8 @@ The shared screen hosts the game without occupying a player seat.
 
 ## Shared Board Screen
 
-Active gameplay shows only public player seats above the island, using the same
-player cards and map as single-device play. The map fills the remaining viewport
+Active gameplay shows public player seats and three separate compact status islands side by side above the island, using the same
+player cards, bank supply, dice faces, cumulative dice-roll chart, and map as single-device play. On tablets and desktops, the three islands sit side by side in one row — status (active player, turn/phase, and public dice roll), dice analysis (live full-game 2-12 dice roll distribution), and bank cards (resource and development bank supply) — while narrower phones stack the islands cleanly above the map. The map fills the remaining viewport
 without page scrolling. On tablets and larger screens, all seats fit without
 horizontal scrolling; narrow cards place the name above a horizontal row of counts.
 On phones, the player strip scrolls horizontally while the map remains visible.
@@ -126,15 +126,16 @@ dialogs returns focus to **Game**.
 Player seats show numbered colors, public points, card counts, played Knights,
 connected roads, and awards, with the same active-turn and public-score-leader
 highlights as single-device play. Disconnected human players are marked. The shared
-screen has no bank, regular build controls, dice/setup panel, activity panel, or view tabs.
+screen has no regular build controls, private hands, activity panel, or view tabs.
 In Seafarers, the map footer includes the free road/ship choice when needed and
 the pirate's off-board move during robber/pirate movement.
 Build selection, turn guidance, rolls, and private actions remain on players' phones.
 
 ## Private Player Screen
 
-The header's **Game** dropdown contains **Language**, **Help**, and **Leave room**.
-Board-only settings and single-device handoff controls are omitted from private phones.
+The turn panel's **Game** dropdown contains **Help**, **Players & bank**, **Table activity**,
+**Settings**, **Language**, and **Leave room**.
+Single-device handoff controls are omitted from private phones.
 
 A separate player-summary card sits above the hand, showing your seat number,
 name, resource and development-card counts, played Knights, connected roads, and
@@ -157,25 +158,30 @@ two columns without page scrolling. Active turns highlight the turn panel with y
 player accent color, and selecting a build displays a placement banner with a
 one-tap **Cancel** button while awaiting confirmation on the shared board. Phase
 guidance uses the same green instruction panel, headings, and explanations as
-single-device play, with placement directions referring to the shared board.
+single-device play, with placement directions referring to the shared board. When a long
+instruction wraps past two lines on a phone, tap the toggle button in the instruction
+card to expand or collapse the full text. Build-unavailable explanations appear neatly
+beneath the two-column build grid.
 
 Owned development cards appear directly in the hand as the same grouped list of
 icons, names, counts, and descriptions used in single-device play. The list is hidden
-when empty. Selecting a row opens its inspector and prefers a copy eligible by
-purchase turn. A long list scrolls with the rest of the hand; owning cards does not
-change the build layout or stretch the hand panel.
+when empty. Selecting a row opens its grouped inspector, automatically choosing a copy
+eligible by purchase turn when available, showing status badges and specific disabled
+reasons, and using illustrated resource cards for Monopoly. A long list scrolls with the
+rest of the hand; owning cards does not change the build layout or stretch the hand panel.
 
-Public player information is shown on the shared board; private phones omit the
-Players & bank and Activity navigation buttons. Discard, theft, and
+Use **Game > Players & bank** or **Game > Table activity** from the turn menu to inspect
+all players, bank counts, or recent public table activity in a dialog at any time. Discard, theft, and
 incoming trade choices open in dialogs; dismissing one keeps its action available
 in the turn controls, even while builds are collapsed. Dialog contents can scroll on
 small screens. Trades use illustrated **Bank & ports** selectors with rates, counts,
 and an exchange preview, or **Player trade** with **Request cards** and **Exact
 offer** choices. Open trades show every opponent's response, proposed prices, and
 missing cards. **Change offer** edits a draft; closing it leaves the original offer
-and responses unchanged. Choosing a trade partner, a theft victim, or **Buy a card**
-opens a **Cancel** / **Confirm** dialog showing your name and color before sending
-the action. Development cards
+and responses unchanged. Choosing a trade partner or a theft victim opens a
+**Cancel** / **Confirm** dialog showing your name and color before sending the
+action; **Buy a card** opens a compact **Cancel** / **Buy** dialog showing only
+the card cost. Development cards
 remain selectable for inspection, including hidden victory points and cards that
 cannot yet be played; eligible action cards are confirmed in the same dialog.
 Resource-affecting choices show your hand, and discards show selected and remaining

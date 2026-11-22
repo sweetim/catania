@@ -48,7 +48,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
   return structuredClone({
     variant: game.variant, victoryPointsToWin: game.victoryPointsToWin, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
     board: publicBoard(game.board), bank: game.bank, activePlayerId: game.activePlayerId,
-    turnNumber: game.turnNumber, dice: game.dice, robberTileId: game.robberTileId,
+    turnNumber: game.turnNumber, dice: game.dice, diceRollTotals: game.diceRollTotals, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
     // Engine logs describe public events, never drawn cards, discarded kinds, or stolen resources.
     log: game.log, developmentPlayed: game.developmentPlayed,

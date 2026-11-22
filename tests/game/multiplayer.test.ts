@@ -800,7 +800,7 @@ describe("public and private multiplayer projections", () => {
     const host = room.snapshot();
     const guest = room.snapshot("connection-1");
     expect(Object.keys(host.game!).sort()).toEqual([
-      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "gameId", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "victoryPointsToWin", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
+      "activePlayerId", "awards", "bank", "board", "canCancelKnight", "developmentPlayed", "developmentRemaining", "dice", "diceRollTotals", "gameId", "log", "phase", "players", "robberTileId", "pirateTileId", "variant", "victoryPointsToWin", "shipMoved", "shipsBuiltThisTurn", "trade", "turnNumber", "winnerId",
     ].sort());
     expect(host.game!.phase).toEqual({ type: "robber", returnPhase: "actions" });
     expect(host.game!.canCancelKnight).toBe(true);

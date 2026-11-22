@@ -33,7 +33,7 @@ export type ScoreBreakdown = {
 };
 
 export type PublicGame = Pick<GameState,
-  "bank" | "activePlayerId" | "turnNumber" | "dice" |
+  "bank" | "activePlayerId" | "turnNumber" | "dice" | "diceRollTotals" |
   "robberTileId" | "pirateTileId" | "variant" | "victoryPointsToWin" | "shipMoved" | "shipsBuiltThisTurn" |
   "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {

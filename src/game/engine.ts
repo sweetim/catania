@@ -85,7 +85,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     activePlayerId: players[0]!.id, phase: isFogBoard(board) ? { type: "setup-reveal" } : { type: "setup-settlement" }, setupIndex: 0,
     setupOrder: [...players.map(player => player.id), ...players.map(player => player.id).reverse()],
     ...(variant === "four-islands" ? { startingIslandIds: Object.fromEntries(players.map(player => [player.id, []])) } : {}),
-    turnNumber: 0, dice: null, robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
+    turnNumber: 0, dice: null, diceRollTotals: Array.from({ length: 11 }, () => 0), robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
     pirateTileId: pirateStartTileId(board, random),
     shipMoved: false, shipsBuiltThisTurn: [],
     awards: { longestRoad: null, largestArmy: null }, winnerId: null,
@@ -514,6 +514,7 @@ export function applyAction(
       requireRule(state.phase.type === "roll", "You may roll once per turn, after completing any pre-roll card effect.");
       state.dice = [randomInteger(6, random) + 1, randomInteger(6, random) + 1];
       const total = state.dice[0] + state.dice[1];
+      state.diceRollTotals[total - 2]!++;
       state.log.push({ key: "{player} rolls {first} + {second} = {total}.", parameters: { player: player.name, first: state.dice[0], second: state.dice[1], total } });
       if (total === 7) {
         const required = Object.fromEntries(state.players.filter(player => resourceTotal(player.resources) > 7)

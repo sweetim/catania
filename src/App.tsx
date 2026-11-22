@@ -56,7 +56,6 @@ import {
   applyAction,
   COSTS,
   createGame,
-  diceRollCounts,
   emptyResources,
   getLongestRoadLength,
   getScore,
@@ -213,7 +212,9 @@ export function App() {
     title: keyof typeof appTranslations;
     description?: keyof typeof appTranslations;
     parameters?: TranslationParameters;
+    cost?: Resources;
     exchange?: { give: Resources; receive: Resources };
+    confirmLabel?: keyof typeof appTranslations;
   } | null>(null);
   const [error, setError] = useState<GameMessage | keyof typeof appTranslations | "">(
     new URLSearchParams(window.location.search).has("map") && !savedMap ? "This saved map link is invalid." : "",
@@ -1515,9 +1516,9 @@ export function App() {
                         onClick={() =>
                           setConfirmation({
                             action: { type: "buy-development" },
-                            title: "Invest in a development card",
-                            description:
-                              "Pay one wool, one grain, and one ore. Your new card stays private. Action cards cannot be played until a later turn.",
+                            title: "Buy a development card?",
+                            cost: COSTS.development,
+                            confirmLabel: "Buy",
                           })
                         }
                       />
@@ -1663,7 +1664,7 @@ export function App() {
                   ...(game.variant === "seafarers" || game.variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
                   { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
                 ]}
-                diceCounts={diceRollCounts(game.log)}
+                diceCounts={game.diceRollTotals}
                 profileNote={humanCount === 1 && playerProfile && winner.control === "human"
                   ? translateText("Player history: {games} games / {wins} wins / {points} total points", profileStats(playerProfile))
                   : undefined}
@@ -1782,10 +1783,12 @@ export function App() {
         {confirmation && (
           <ActionConfirmation
             title={translateText(confirmation.title, confirmation.parameters)}
-            player={viewer ? { name: viewer.name, color: viewer.color } : undefined}
+            player={viewer && confirmation.action.type !== "buy-development" ? { name: viewer.name, color: viewer.color } : undefined}
             description={confirmation.description && translateText(confirmation.description, confirmation.parameters)}
+            cost={confirmation.cost}
             exchange={confirmation.exchange}
-            resources={viewer && confirmation.action.type !== "steal" ? viewer.resources : undefined}
+            resources={viewer && confirmation.action.type !== "steal" && confirmation.action.type !== "buy-development" ? viewer.resources : undefined}
+            confirmLabel={confirmation.confirmLabel && translateText(confirmation.confirmLabel)}
             error={errorText}
             onClose={() => {
               setConfirmation(null);

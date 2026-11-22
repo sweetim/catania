@@ -647,7 +647,7 @@
     display: none;
   }
 
-  .home-island .board-controls > span {
+  .home-island .board-controls>span {
     justify-content: flex-start;
   }
 }
@@ -1528,6 +1528,61 @@
   box-shadow: inset 3px 0 #b58a2d, inset 0 1px #fffaf0, 0 3px 9px #8b642524;
 }
 
+.player-seat-disconnected {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--color-clay) 68%, transparent);
+  background: linear-gradient(125deg, #fbf3ef, #f3e4dc);
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--color-clay) 72%, transparent);
+}
+
+.player-seat-disconnected .player-number {
+  background-image: linear-gradient(rgb(246 243 235 / 0.42), rgb(246 243 235 / 0.42));
+  box-shadow: inset 0 0 0 1.5px rgb(187 101 73 / 0.45);
+}
+
+.player-seat-disconnected .player-name {
+  color: color-mix(in srgb, var(--color-ink) 78%, var(--color-clay));
+}
+
+.player-seat-disconnected .player-card-counts,
+.player-seat-disconnected .player-score {
+  opacity: 0.68;
+}
+
+.player-disconnected-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: flex;
+  height: 16px;
+  width: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1.5px solid var(--color-paper);
+  background: var(--color-clay);
+  color: #fff;
+  box-shadow: 0 1px 3px rgb(37 59 54 / 0.25);
+}
+
+.player-disconnected-pill {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--color-clay) 38%, transparent);
+  background: rgb(187 101 73 / 0.14);
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: #8f422b;
+  white-space: nowrap;
+}
+
 .player-seat-active {
   position: relative;
   isolation: isolate;
@@ -1630,9 +1685,484 @@
   container-type: inline-size;
 }
 
-@media (max-width: 380px) {
-  .shared-game-shell>header {
+.shared-table-status {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.shared-status-island {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid #d3c8ad;
+  border-radius: 14px;
+  background: #f5efe1;
+  box-shadow: inset 0 1px #fffdf6;
+}
+
+.shared-table-disconnected {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-clay) 45%, #d3c8ad);
+  border-radius: 12px;
+  background: #fff7f3;
+  color: #8f422b;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.shared-table-disconnected-summary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.shared-table-rejoin-button {
+  display: inline-flex;
+  min-height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--color-clay) 45%, transparent);
+  background: #fffaf7;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8f422b;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.shared-table-rejoin-button:hover {
+  background: #f8e9e1;
+  border-color: var(--color-clay);
+}
+
+.shared-table-phase {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shared-table-phase-label {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.shared-table-phase .turn-number {
+  margin-left: auto;
+}
+
+.shared-dice-chart {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid #d3c8ad;
+  border-radius: 14px;
+  background: #f5efe1;
+  box-shadow: inset 0 1px #fffdf6;
+}
+
+.shared-dice-bars {
+  gap: 3px;
+}
+
+.shared-dice-bars .victory-die-column {
+  flex: 1 1 0;
+  gap: 2px;
+}
+
+.shared-dice-bars .victory-die-count {
+  font-size: 9px;
+  line-height: 10px;
+}
+
+.shared-dice-bars .victory-die-track {
+  width: 100%;
+  height: 24px;
+  border-radius: 4px;
+}
+
+.shared-dice-bars .victory-die-fill {
+  border-radius: 4px 4px 0 0;
+  animation: none;
+  transition: height 220ms ease;
+}
+
+.shared-dice-bars .victory-die-number {
+  font-size: 10px;
+  line-height: 11px;
+}
+
+.shared-die-highlighted .victory-die-fill {
+  background: linear-gradient(180deg, #d87a4a 0%, #bb6549 100%);
+}
+
+.shared-die-highlighted .victory-die-count,
+.shared-die-highlighted .victory-die-number {
+  color: var(--color-clay);
+  font-weight: 800;
+}
+
+.shared-board-dice {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.shared-board-dice .roll-summary-dice {
+  gap: 6px;
+}
+
+.shared-board-dice .roll-summary-dice .roll-die {
+  width: 40px;
+  height: 40px;
+}
+
+.shared-board-dice-total {
+  min-width: 2ch;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-ink);
+}
+
+@media (min-width: 700px) {
+  .shared-table-status {
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 350px) auto;
+    align-items: stretch;
+    gap: 8px;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1099px) {
+  .shared-status-island {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px 10px;
+  }
+
+  .shared-status-island .shared-table-phase {
+    flex: none;
     gap: 6px;
+  }
+
+  .shared-status-island .turn-number {
+    height: 20px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .shared-board-dice {
+    gap: 6px;
+  }
+
+  .shared-board-dice .roll-summary-dice {
+    gap: 5px;
+  }
+
+  .shared-board-dice .roll-summary-dice .roll-die {
+    width: 30px;
+    height: 30px;
+  }
+
+  .shared-board-dice-total {
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .shared-status-island {
+    padding: 6px 12px;
+    gap: 10px;
+  }
+}
+
+.shared-table-status .bank-tray {
+  height: auto;
+  justify-content: center;
+  padding: 6px 10px;
+  gap: 6px;
+  border: 1px solid #d3c8ad;
+  border-radius: 14px;
+  background: #eee7d6;
+  box-shadow: inset 0 1px #fffdf6;
+}
+
+.shared-table-status .bank-tray .eyebrow {
+  display: none;
+}
+
+.shared-table-status .bank-supply {
+  gap: 5px;
+}
+
+.shared-table-status .bank-card {
+  width: 32px;
+  height: 42px;
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.shared-table-status .bank-card svg {
+  width: 16px;
+  height: 16px;
+}
+
+.shared-table-status .bank-card strong {
+  font-size: 12px;
+  line-height: 13px;
+}
+
+.shared-table-status .bank-development {
+  width: 32px;
+  height: 42px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 13px;
+}
+
+.shared-table-status .bank-development svg {
+  width: 17px;
+  height: 19px;
+}
+
+@media (max-width: 699px) {
+  .shared-table-status {
+    gap: 4px;
+  }
+
+  .shared-status-island {
+    padding: 4px 8px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .shared-table-phase {
+    gap: 6px;
+  }
+
+  .shared-table-phase .turn-number {
+    height: 20px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .shared-dice-chart {
+    padding: 3px 6px;
+    border-radius: 12px;
+  }
+
+  .shared-dice-bars .victory-die-track {
+    height: 15px;
+  }
+
+  .shared-board-dice {
+    gap: 5px;
+  }
+
+  .shared-board-dice .roll-summary-dice {
+    gap: 4px;
+  }
+
+  .shared-board-dice .roll-summary-dice .roll-die {
+    width: 28px;
+    height: 28px;
+  }
+
+  .shared-board-dice-total {
+    font-size: 14px;
+  }
+
+  .shared-table-status .bank-tray {
+    padding: 3px 6px;
+    gap: 4px;
+    border-radius: 12px;
+  }
+
+  .shared-table-status .bank-supply {
+    gap: 4px;
+  }
+
+  .shared-table-status .bank-card,
+  .shared-table-status .bank-development {
+    width: 24px;
+    height: 32px;
+    border-radius: 7px;
+  }
+
+  .shared-table-status .bank-card {
+    padding: 2px;
+  }
+
+  .shared-table-status .bank-card svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .shared-table-status .bank-card strong,
+  .shared-table-status .bank-development {
+    font-size: 10px;
+    line-height: 11px;
+  }
+
+  .shared-table-status .bank-development svg {
+    width: 13px;
+    height: 15px;
+  }
+}
+
+@media (max-width: 380px) {
+  .shared-board-dice .roll-summary-dice .roll-die {
+    width: 26px;
+    height: 26px;
+  }
+
+  .shared-board-dice-total {
+    font-size: 14px;
+  }
+
+  .shared-table-status .bank-tray {
+    padding: 3px 5px;
+    gap: 3px;
+  }
+
+  .shared-table-status .bank-supply {
+    gap: 3px;
+  }
+
+  .shared-table-status .bank-card,
+  .shared-table-status .bank-development {
+    width: 22px;
+    height: 29px;
+  }
+}
+
+@media (max-height: 520px) {
+  .shared-game-table {
+    gap: 4px;
+    padding-top: 4px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .shared-table-seats .player-seat {
+    padding: 4px 10px;
+  }
+
+  .shared-table-status {
+    gap: 6px;
+  }
+
+  .shared-status-island {
+    padding: 3px 8px;
+    gap: 2px;
+    border-radius: 12px;
+  }
+
+  .shared-status-island .turn-number {
+    height: 18px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .shared-dice-chart {
+    padding: 3px 6px;
+    border-radius: 12px;
+  }
+
+  .shared-dice-bars .victory-die-track {
+    height: 15px;
+  }
+
+  .shared-board-dice {
+    gap: 5px;
+  }
+
+  .shared-board-dice .roll-summary-dice {
+    gap: 4px;
+  }
+
+  .shared-board-dice .roll-summary-dice .roll-die {
+    width: 26px;
+    height: 26px;
+  }
+
+  .shared-board-dice-total {
+    font-size: 14px;
+  }
+
+  .shared-table-status .bank-tray {
+    padding: 3px 6px;
+    gap: 5px;
+    border-radius: 12px;
+  }
+
+  .shared-table-status .bank-supply {
+    gap: 3px;
+  }
+
+  .shared-table-status .bank-card,
+  .shared-table-status .bank-development {
+    width: 24px;
+    height: 30px;
+    border-radius: 7px;
+  }
+
+  .shared-table-status .bank-card {
+    padding: 2px;
+  }
+
+  .shared-table-status .bank-card svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .shared-table-status .bank-card strong,
+  .shared-table-status .bank-development {
+    font-size: 10px;
+    line-height: 11px;
+  }
+
+  .shared-table-status .bank-development svg {
+    width: 13px;
+    height: 15px;
+  }
+
+  .shared-table-disconnected {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .shared-table-rejoin-button {
+    min-height: 26px;
+    padding: 2px 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .shared-game-shell.game-shell>header {
+    gap: 4px;
+    padding-inline: 10px;
   }
 
   .shared-game-shell>header>span:first-child {
@@ -1913,13 +2443,6 @@
   box-shadow: inset 0 1px #fffdf6;
 }
 
-.private-navigation {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.private-navigation>button,
 .private-turn .turn-action>button {
   min-width: 0;
   padding: 6px 8px;
@@ -1944,19 +2467,21 @@
   overflow-wrap: anywhere;
 }
 
+.private-instructions .turn-card[data-expanded="true"] .turn-title {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+}
+
+.private-instructions .turn-card[data-expanded="true"] .turn-description {
+  display: block;
+  -webkit-line-clamp: unset;
+  height: auto;
+  overflow: visible;
+}
+
 .private-instructions {
   min-width: 0;
-}
-
-.private-navigation>button {
-  border-color: transparent;
-  background: transparent;
-  color: var(--color-muted);
-}
-
-.private-navigation>button:hover {
-  background: var(--color-moss);
-  color: var(--color-ink);
 }
 
 .private-connection-notice,
@@ -2745,6 +3270,16 @@
     gap: 6px;
   }
 
+  :is(.table-seats, .table-players) .player-seat-disconnected .player-card-counts {
+    grid-column: 1 / 3;
+  }
+
+  :is(.table-seats, .table-players) .player-seat-disconnected .player-disconnected-pill {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
+
   :is(.table-seats, .table-players) .player-card-stat {
     gap: 3px;
   }
@@ -2760,10 +3295,27 @@
   }
 }
 
+@container (max-width: 230px) {
+  .table-seats .player-seat-disconnected .player-disconnected-pill {
+    padding-inline: 5px;
+  }
+
+  .table-seats .player-seat-disconnected .player-disconnected-label {
+    display: none;
+  }
+}
+
 @container (max-width: 160px) {
   .table-seats .player-number {
     width: 24px;
     height: 24px;
+  }
+
+  .table-seats .player-disconnected-dot {
+    height: 13px;
+    width: 13px;
+    right: -2px;
+    bottom: -2px;
   }
 
   .table-seats .player-name {

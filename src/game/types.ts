@@ -167,6 +167,7 @@ export type GameState = {
   startingIslandIds?: Record<string, string[]>;
   turnNumber: number;
   dice: [number, number] | null;
+  diceRollTotals: number[];
   robberTileId: string;
   pirateTileId: string | null;
   shipMoved: boolean;

@@ -8,19 +8,10 @@ import { useLanguage, useTranslation } from "../localization";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import type { PublicGame } from "./types";
 
-export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Resources | null }) {
-  const { language } = useLanguage();
-  const translateText = useTranslation(multiplayerUiTranslations);
-  const dice = game.dice;
-  const rollIdentity = dice ? `${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
+function useDiceRollAnimation(rollIdentity: string | null): boolean {
   // A first snapshot is already settled, including when reconnecting.
   const lastRoll = useRef(rollIdentity);
   const [rollingIdentity, setRollingIdentity] = useState<string | null>(null);
-  const rolling = rollIdentity !== null && rollingIdentity === rollIdentity;
-  const playerName = game.players.find(player => player.id === game.activePlayerId)!.name;
-  const total = dice ? dice[0] + dice[1] : null;
-  const result = dice ? `${dice[0]} + ${dice[1]} = ${total}` : "";
-  const gainedResources = dice && total !== 7 && gains ? RESOURCES.filter(resource => gains[resource] > 0) : [];
 
   useEffect(() => {
     if (rollIdentity === null || rollIdentity === lastRoll.current) {
@@ -46,6 +37,41 @@ export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Res
       reducedMotion.removeEventListener("change", settleOnReducedMotion);
     };
   }, [rollIdentity]);
+
+  return rollIdentity !== null && rollingIdentity === rollIdentity;
+}
+
+export function SharedBoardDice({ game }: { game: PublicGame }) {
+  const translateText = useTranslation(multiplayerUiTranslations);
+  const dice = game.dice;
+  const rollIdentity = dice ? `${game.gameId}:${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
+  const rolling = useDiceRollAnimation(rollIdentity);
+  const total = dice ? dice[0] + dice[1] : null;
+  return (
+    <div
+      className="shared-board-dice"
+      role="group"
+      aria-label={translateText("Shared dice")}
+      data-stage={dice ? rolling ? "rolling" : "complete" : "idle"}
+    >
+      <Dice key={rollIdentity} dice={dice} rolling={rolling} />
+      {total !== null && (
+        <strong className="shared-board-dice-total tabular-nums">{total}</strong>
+      )}
+    </div>
+  );
+}
+
+export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Resources | null }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(multiplayerUiTranslations);
+  const dice = game.dice;
+  const rollIdentity = dice ? `${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
+  const rolling = useDiceRollAnimation(rollIdentity);
+  const playerName = game.players.find(player => player.id === game.activePlayerId)!.name;
+  const total = dice ? dice[0] + dice[1] : null;
+  const result = dice ? `${dice[0]} + ${dice[1]} = ${total}` : "";
+  const gainedResources = dice && total !== 7 && gains ? RESOURCES.filter(resource => gains[resource] > 0) : [];
 
   return (
     <>

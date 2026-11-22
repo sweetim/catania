@@ -396,8 +396,8 @@ the card. Discards show one selected/required progress line and the total left i
 hand instead of repeating labels under every resource. Per-resource availability
 and remaining quantities remain available to assistive technology.
 
-Development-card purchases and resource choices for Year of Plenty or Monopoly
-also show your current resources; Knight, Road Building, Victory Point, and theft
+Resource choices for Year of Plenty or Monopoly also show your current resources;
+development-card purchase, Knight, Road Building, Victory Point, and theft
 confirmation omit that summary. The device-handoff picker shows human names and
 colors without detailed player cards; all private summaries disappear during handoff.
 
@@ -457,12 +457,14 @@ buttons and retain standard tooltips, but do not add descriptions beneath them.
 
 Owned development cards appear below as a vertical stack, one row per card type
 with a quantity badge, a distinct icon, and a description below its title. The
-section heading counts all owned cards, including duplicates. The hand and card
-dialog omit the "In your hand" and "New this turn" labels. Select a row to open
-an older copy first when available in the existing, individual-card dialog;
-playing still requires confirmation and action cards purchased this turn remain
-unavailable. The entire owned-card section is hidden when your hand has no
-development cards.
+section heading counts all owned cards, including duplicates. Select a row to open
+the grouped card dialog, where duplicate card types share a single row with a
+quantity badge and playability status (such as **Available next turn** or ready
+count), automatically choosing an older playable copy when available. Monopoly uses
+visual resource cards instead of a dropdown, and disabled confirmation buttons explain
+the specific blocking rule directly above the button. Playing still requires
+confirmation and action cards purchased this turn remain unavailable. The entire
+owned-card section is hidden when your hand has no development cards.
 
 After **Confirm Knight**, use **Cancel Knight** in the turn card or mobile
 Board prompt to return the card before confirming the robber move. This

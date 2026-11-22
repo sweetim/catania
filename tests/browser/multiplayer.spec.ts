@@ -779,7 +779,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
 
   for (const [name, page, options] of [
     ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Show invitation", "Leave room"]],
-    ["phone", phone, ["Help", "Settings", "Leave room"]],
+    ["phone", phone, ["Help", "Players & bank", "Table activity", "Settings", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
     if (name === "phone") {
@@ -1507,7 +1507,26 @@ test("shared tabletop shows only single-device player seats and map at desktop a
     }
     await noHorizontalOverflow(host);
     expect(await host.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))).toBeLessThanOrEqual(viewport.height);
-    for (const name of ["Your cards", "Resource bank", "Build a little bigger", "Turn status", "Dice tray", "Roll result"]) {
+    const tableStatus = host.getByRole("region", { name: "Table status", exact: true });
+    await expect(tableStatus).toBeVisible();
+    await expect(tableStatus).toContainText("AlexandertheExplorer");
+    await expect(tableStatus).toContainText("Place settlement");
+    await expect(tableStatus).toContainText("Setup");
+    await expect(tableStatus.getByRole("group", { name: "Shared dice", exact: true })).toBeVisible();
+    await expect(tableStatus.getByRole("region", { name: "Resource bank", exact: true })).toBeVisible();
+    const diceChart = tableStatus.getByRole("figure", { name: "Dice rolls", exact: true });
+    await expect(diceChart).toBeVisible();
+    await expect(diceChart.getByRole("img")).toHaveCount(11);
+    if (viewport.width >= 700) {
+      const statusIslandBounds = (await tableStatus.locator(".shared-status-island").boundingBox())!;
+      const chartBounds = (await diceChart.boundingBox())!;
+      const bankBounds = (await tableStatus.getByRole("region", { name: "Resource bank", exact: true }).boundingBox())!;
+      expect(chartBounds.x).toBeGreaterThan(statusIslandBounds.x + statusIslandBounds.width);
+      expect(bankBounds.x).toBeGreaterThan(chartBounds.x + chartBounds.width);
+      expect(Math.abs(chartBounds.y - statusIslandBounds.y)).toBeLessThan(2);
+      expect(Math.abs(bankBounds.y - statusIslandBounds.y)).toBeLessThan(2);
+    }
+    for (const name of ["Your cards", "Build a little bigger", "Turn status", "Dice tray", "Roll result"]) {
       await expect(host.getByRole("region", { name, exact: true, includeHidden: true })).toHaveCount(0);
     }
     await expect(host.getByRole("navigation", { name: "Game views", includeHidden: true })).toHaveCount(0);
@@ -2381,6 +2400,8 @@ test("host and three private phones play over real PeerJS channels and recover a
   await expectPhase(pages, rolled.phase.type, activeName);
   for (const phone of phones.values()) await expect.poll(async () => (await latestSnapshot(phone)).game).toEqual(rolled);
   await expect(host.getByRole("region", { name: "Roll result", exact: true, includeHidden: true })).toHaveCount(0);
+  await expect(host.getByRole("group", { name: "Shared dice", exact: true })).toContainText(String(total));
+  await expect(host.getByRole("figure", { name: "Dice rolls", exact: true }).getByRole("img", { name: `${total} appeared 1 times`, exact: true })).toBeVisible();
   await screenshot(host, testInfo, "host-shared-roll");
   await screenshot(activePhone, testInfo, "phone-after-roll");
   await activePhone.clock.resume();
@@ -2670,7 +2691,7 @@ test("private custom-target cards and victory instructions use the configured po
   snapshot.privateScore = 3;
   await present();
   await expect(phone.getByRole("dialog")).toContainText("Alex takes the island.");
-  await phone.getByRole("button", { name: "View the island", exact: true }).click();
+  await phone.getByRole("button", { name: "View your hand", exact: true }).click();
   await expect(phone.getByTestId("game-phase")).toContainText("The first player to reach 3 victory points on their turn wins.");
   await expect(phone.getByTestId("game-phase")).not.toContainText("reach 10 victory points");
 });
@@ -2691,6 +2712,14 @@ test("private instructions and grouped development cards match single-device gam
   await expect(developmentHand).toHaveCount(0);
   await expect(phone.getByRole("button", { name: /^Development cards \(/ })).toHaveCount(0);
   await privateScreenFits(phone);
+  const expandInstructions = instructions.getByRole("button", { name: "Expand instructions", exact: true });
+  await expect(expandInstructions).toBeVisible();
+  await expandInstructions.click();
+  await expect(instructions.locator(".turn-card")).toHaveAttribute("data-expanded", "true");
+  await expect(instructions.getByRole("button", { name: "Collapse instructions", exact: true })).toBeVisible();
+  await privateScreenFits(phone);
+  await instructions.getByRole("button", { name: "Collapse instructions", exact: true }).click();
+  await expect(instructions.locator(".turn-card")).not.toHaveAttribute("data-expanded", "true");
   await screenshot(phone, testInfo, "private-setup-instructions");
 
   game.players.forEach((other, index) => { game.board.vertices[index]!.building = { playerId: other.id, kind: "settlement" }; });
@@ -2733,7 +2762,8 @@ test("private instructions and grouped development cards match single-device gam
     const selected = inspector.getByRole("button", { name: new RegExp(`^${name}`), pressed: true });
     await expect(selected).toHaveCount(1);
     if (name === "Knight") {
-      await expect(inspector.getByRole("button", { name: /^Knight/ }).last()).toHaveAttribute("aria-pressed", "true");
+      await expect(inspector.getByRole("button", { name: /^Knight/ })).toHaveCount(1);
+      await expect(inspector.getByRole("button", { name: /^Knight/ })).toContainText("1 ready");
       await expect(inspector.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
     }
     if (name === "Victory point") await expect(inspector.getByRole("button", { name: /^Confirm / })).toHaveCount(0);
@@ -2761,29 +2791,31 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await privateScreenFits(phone);
   await phone.getByRole("region", { name: "Your development cards", exact: true }).getByRole("button", { name: /^Knight/ }).click();
   const cards = phone.getByRole("dialog", { name: "A card up your sleeve", exact: true });
-  await expect(cards.getByRole("button", { name: /^Knight/ })).toHaveCount(2);
-  expect(await cards.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect(cards.getByRole("button", { name: /^Knight/ })).toHaveCount(1);
+  await expect(cards.getByRole("button", { name: /^Knight/ })).toContainText("×2");
+  await expect(cards.getByRole("button", { name: /^Knight/ })).toContainText("1 ready");
+  await expect(cards.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
+  await expect(cards).toContainText("Only played Knights count toward Largest Army");
   await cards.getByRole("button", { name: /^Victory point/ }).click();
   await expect(cards.getByRole("button", { name: /^Victory point/ })).toHaveAttribute("aria-pressed", "true");
   await expect(cards).toContainText("Counted automatically toward your ten points");
   await expect(cards.getByRole("button", { name: /^Confirm / })).toHaveCount(0);
   await expect(cards.getByRole("region", { name: "Your current resources" })).toHaveCount(0);
-  await cards.getByRole("button", { name: /^Knight/ }).first().click();
-  await expect(cards.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
-  await expect(cards).toContainText("Only played Knights count toward Largest Army");
-  await cards.getByRole("button", { name: /^Knight/ }).last().click();
-  await expect(cards.getByRole("button", { name: "Confirm Knight", exact: true })).toBeDisabled();
   await cards.getByRole("button", { name: /^Road building/ }).click();
   await expect(cards.getByRole("button", { name: "Confirm Road building", exact: true })).toBeEnabled();
   await cards.getByRole("button", { name: /^Year of plenty/ }).click();
   await expectInventory(cards, player.resources);
   await expect(cards.getByRole("button", { name: "Confirm Year of plenty", exact: true })).toBeDisabled();
+  await expect(cards).toContainText("Choose 2 more resources from the bank.");
   await expect(cards.getByRole("button", { name: "Add Ore to Take from the bank", exact: true })).toBeDisabled();
-  await cards.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click({ clickCount: 2 });
+  await cards.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
+  await expect(cards).toContainText("Choose 1 more resource from the bank.");
+  await cards.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
   await expect(cards.getByRole("button", { name: "Confirm Year of plenty", exact: true })).toBeEnabled();
   await cards.getByRole("button", { name: /^Monopoly/ }).click();
   await expectInventory(cards, player.resources);
-  await cards.getByRole("combobox", { name: "Claim every card of this resource" }).selectOption("grain");
+  await cards.getByRole("button", { name: "Claim Grain", exact: true }).click();
+  await expect(cards.getByRole("button", { name: "Claim Grain", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(cards.getByRole("button", { name: "Confirm Monopoly", exact: true })).toBeEnabled();
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "private-development-dialog");
@@ -2791,6 +2823,44 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(cards.getByRole("button", { name: "Confirm Monopoly", exact: true })).toBeDisabled();
   await expect(cards.getByRole("alert")).toContainText("The game changed");
   await cards.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Verify a newly bought card shows why it cannot be played yet.
+  player.developmentCards = [{ id: "development-99", kind: "knight", purchasedTurn: game.turnNumber }];
+  await present();
+  await phone.getByRole("region", { name: "Your development cards", exact: true }).getByRole("button", { name: /^Knight/ }).click();
+  await expect(cards.getByRole("button", { name: /^Knight/ })).toContainText("Available next turn");
+  await expect(cards).toContainText("Wait until your next turn to play this card.");
+  await expect(cards.getByRole("button", { name: "Confirm Knight", exact: true })).toBeDisabled();
+  await cards.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Verify phone Game menu opens "All players and bank" and "Table activity" dialogs.
+  await phone.locator(".private-turn").getByRole("button", { name: "Game", exact: true }).click();
+  await phone.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Players & bank", exact: true }).click();
+  const tableDialog = phone.getByRole("dialog", { name: "All players and bank", exact: true });
+  await expect(tableDialog).toBeVisible();
+  await expect(tableDialog.getByRole("region", { name: "Resource bank", exact: true })).toBeVisible();
+  await expect(tableDialog).toContainText(opponent.name);
+  await tableDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  await phone.locator(".private-turn").getByRole("button", { name: "Game", exact: true }).click();
+  await phone.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Table activity", exact: true }).click();
+  const activityDialog = phone.getByRole("dialog", { name: "Table activity", exact: true });
+  await expect(activityDialog).toBeVisible();
+  await activityDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Verify build-unavailable explanations sit below the 2-column build grid rather than splitting it.
+  const previousBuildings = game.board.vertices.slice(0, 5).map(vertex => vertex.building);
+  for (let index = 0; index < 5; index++) {
+    game.board.vertices[index]!.building = { playerId: player.id, kind: "settlement" };
+  }
+  await present();
+  const settlementNote = phone.locator("#settlement-build-explanation");
+  await expect(settlementNote).toBeVisible();
+  expect(await settlementNote.evaluate(element => Boolean(element.closest(".private-build-grid")))).toBe(false);
+  for (let index = 0; index < 5; index++) {
+    game.board.vertices[index]!.building = previousBuildings[index];
+  }
+  await present();
 
   await phone.getByRole("button", { name: "Make a trade", exact: true }).click();
   const trade = phone.getByRole("dialog", { name: "A fair exchange", exact: true });
@@ -2835,14 +2905,16 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await trade.getByRole("button", { name: "Close dialog", exact: true }).click();
 
   await phone.getByRole("button", { name: "Buy a card", exact: true }).click();
-  const buy = phone.getByRole("dialog", { name: "Invest in a development card", exact: true });
-  await expectInventory(buy, player.resources);
-  await expect(buy.locator(".eyebrow")).toHaveText(player.name);
-  await expect(buy).toContainText("Pay one wool, one grain, and one ore");
+  const buy = phone.getByRole("dialog", { name: "Buy a development card?", exact: true });
+  await expect(buy.locator(".eyebrow")).toHaveCount(0);
+  await expect(buy.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(0);
+  await expect(buy.getByRole("img", { name: "Cost: 1 Wool, 1 Grain, 1 Ore", exact: true })).toBeVisible();
+  await noHorizontalOverflow(phone);
+  await screenshot(phone, testInfo, "private-buy-development-dialog");
   expect(await sentActions(phone)).toEqual([]);
   await buy.getByRole("button", { name: "Cancel", exact: true }).click();
   await phone.getByRole("button", { name: "Buy a card", exact: true }).click();
-  await buy.getByRole("button", { name: "Confirm", exact: true }).click();
+  await buy.getByRole("button", { name: "Buy", exact: true }).click();
   await expect.poll(() => sentActions(phone)).toEqual([expect.objectContaining({ version: snapshot.version, action: { type: "buy-development" } })]);
   await expect(phone.getByRole("alert")).toContainText("The game changed");
 
@@ -2930,13 +3002,13 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   const victoryActions = victory.locator(".victory-actions");
   const victoryActionsBox = (await victoryActions.boundingBox())!;
   const leaveRoomBox = (await victory.getByRole("button", { name: "Leave room", exact: true }).boundingBox())!;
-  const viewIslandBox = (await victory.getByRole("button", { name: "View the island", exact: true }).boundingBox())!;
+  const viewHandBox = (await victory.getByRole("button", { name: "View your hand", exact: true }).boundingBox())!;
   expect(leaveRoomBox.width).toBeCloseTo(victoryActionsBox.width, 0);
-  expect(viewIslandBox.width, "View the island fills its row instead of collapsing into the corner").toBeCloseTo(victoryActionsBox.width, 0);
-  expect(viewIslandBox.y).toBeGreaterThan(leaveRoomBox.y);
+  expect(viewHandBox.width, "View your hand fills its row instead of collapsing into the corner").toBeCloseTo(victoryActionsBox.width, 0);
+  expect(viewHandBox.y).toBeGreaterThan(leaveRoomBox.y);
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "victory-popup-phone");
-  await victory.getByRole("button", { name: "View the island", exact: true }).click();
+  await victory.getByRole("button", { name: "View your hand", exact: true }).click();
   await expect(victory).toHaveCount(0);
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} wins!`);
   await privateScreenFits(phone);
@@ -3492,9 +3564,13 @@ test("signaling and data-channel loss report failure and recover the reserved se
   await expect(phone.getByRole("alert")).toContainText("Connection to the host was lost");
   await expect(host.getByRole("button", { name: "Start game", exact: true })).toBeDisabled();
   await expect(host.getByRole("status").filter({ hasText: "seats filled" })).toContainText("Waiting for Alex to reconnect.");
+  const disconnectedLobbyRow = host.getByRole("list", { name: "Players", exact: true }).getByRole("listitem").filter({ hasText: "Alex" });
+  await expect(disconnectedLobbyRow).toHaveAttribute("data-disconnected", "true");
+  await expect(disconnectedLobbyRow.locator(".player-disconnected-pill")).toBeVisible();
   await phone.getByRole("button", { name: "Reconnect", exact: true }).click();
   await expect(phone.getByRole("alert")).toHaveCount(0);
   await expect(host.getByRole("button", { name: "Start game", exact: true })).toBeEnabled();
+  await expect(disconnectedLobbyRow).not.toHaveAttribute("data-disconnected", "true");
   expect((await latestSnapshot(phone)).playerId).toBe(originalSeat);
   await expect(host.getByRole("button", { name: /^Admit / })).toHaveCount(0);
   for (const page of [host, ...phones]) await expect(page.getByRole("list", { name: "Players", exact: true }).getByRole("listitem")).toHaveCount(3);
@@ -3521,8 +3597,31 @@ test("a lost phone rejoins mid-game from the host's invitation without host admi
   await expect(phone.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
   await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toBeVisible();
 
-  // The host can show the room invitation again while the game keeps running.
-  await chooseGameOption(host, "Show invitation");
+  // The disconnected seat shows an integrated dashed offline treatment without shifting row height,
+  // and the table status bar surfaces a one-click invitation button.
+  const seatItems = host.getByRole("list", { name: "Players", exact: true }).getByRole("listitem");
+  const alexSeat = seatItems.filter({ hasText: "Alex" }).locator(".player-seat");
+  const connectedSeat = seatItems.filter({ hasNotText: "Alex" }).first().locator(".player-seat");
+  await expect(alexSeat).toHaveAttribute("data-disconnected", "true");
+  await expect(alexSeat).toHaveCSS("border-top-style", "dashed");
+  await expect(alexSeat.locator(".player-disconnected-pill")).toBeVisible();
+  const alexBounds = await alexSeat.boundingBox();
+  const connectedBounds = await connectedSeat.boundingBox();
+  expect(Math.abs((alexBounds?.height ?? 0) - (connectedBounds?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  const tableStatus = host.getByRole("region", { name: "Table status", exact: true });
+  await expect(tableStatus).toHaveAttribute("data-has-disconnected", "true");
+  const activePlayerName = await host.getByTestId("game-phase").getAttribute("data-active-player");
+  const disconnectedNotice = tableStatus.locator(".shared-table-disconnected");
+  await expect(disconnectedNotice).toBeVisible();
+  await expect(disconnectedNotice).toHaveAttribute("data-blocking", activePlayerName === "Alex" ? "true" : "false");
+  await expect(disconnectedNotice).toContainText(activePlayerName === "Alex" ? "Waiting for Alex to reconnect." : "Alex disconnected");
+  await noHorizontalOverflow(host);
+  await alexSeat.scrollIntoViewIfNeeded();
+  await screenshot(host, testInfo, "midgame-disconnected-seat");
+
+  // The host can open the room invitation directly from the disconnection bar while the game keeps running.
+  await disconnectedNotice.getByRole("button", { name: "Show invitation", exact: true }).click();
   const invitationDialog = host.getByRole("dialog", { name: "Room invitation", exact: true });
   await expect(invitationDialog).toBeVisible();
   await expect(invitationDialog.getByRole("img", { name: "Scan to join this game", exact: true })).toBeVisible();
@@ -3531,11 +3630,20 @@ test("a lost phone rejoins mid-game from the host's invitation without host admi
   await host.keyboard.press("Escape");
   await expect(invitationDialog).toHaveCount(0);
 
+  // Opening the invitation from the Game menu remains available as well.
+  await chooseGameOption(host, "Show invitation");
+  await expect(invitationDialog).toBeVisible();
+  await host.keyboard.press("Escape");
+  await expect(invitationDialog).toHaveCount(0);
+
   // A fresh phone with the same player profile reclaims the disconnected seat automatically.
   const rejoin = await multiplayer.newPage("Rejoin phone", true);
   await requestSeat(rejoin, reinvitation, "Alex");
   await expect(rejoin.getByLabel("Your hand and actions", { exact: true })).toBeVisible();
   await expect(host.getByRole("status").filter({ hasText: "Alex disconnected" })).toHaveCount(0);
+  await expect(alexSeat).not.toHaveAttribute("data-disconnected", "true");
+  await expect(tableStatus).not.toHaveAttribute("data-has-disconnected", "true");
+  await expect(disconnectedNotice).toHaveCount(0);
   const rejoined = await latestSnapshot(rejoin);
   expect(rejoined.playerId).toBe(original.playerId);
   expect(rejoined.game!.gameId).toBe(original.game!.gameId);

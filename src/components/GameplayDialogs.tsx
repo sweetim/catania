@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { emptyResources, RESOURCES, resourceTotal, victoryTarget } from "../game/engine";
 import { isSeafarers, type DevelopmentKind, type GameAction, type GamePhase, type GameVariant, type Player, type Resource, type Resources } from "../game/types";
-import { resourceName, translate, type Language } from "../i18n";
+import { translate, type Language } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
-import { Arrow, CardStack, DevelopmentCardIcon, Dialog, ResourceCardStepper, ResourceInventory } from "./GameUi";
+import { Arrow, CardStack, DevelopmentCardIcon, Dialog, ResourceCardStepper, ResourceInventory, SelectableResourceCard } from "./GameUi";
 
 export const DEVELOPMENT_NAMES = {
   knight: "Knight",
@@ -81,10 +81,41 @@ export function DevelopmentDialog({
   const translateText = useTranslation(gameplayTranslations);
   const developmentNames = getDevelopmentNames(language);
   const developmentDescriptions = getDevelopmentDescriptions(language, variant, victoryPointsToWin);
-  const [developmentCardId, setDevelopmentCardId] = useState(initialCardId);
+  const cardGroups = [...new Set(player.developmentCards.map(card => card.kind))].map(kind => {
+    const cards = player.developmentCards.filter(card => card.kind === kind);
+    const playableCard = cards.find(card => card.purchasedTurn < turnNumber);
+    const readyCount = cards.filter(card => card.purchasedTurn < turnNumber).length;
+    return {
+      kind,
+      cards,
+      selectedCard: kind === "victory-point" ? cards[0]! : playableCard ?? cards[0]!,
+      readyCount,
+      newThisTurnCount: cards.length - readyCount,
+    };
+  });
+  const [selectedKind, setSelectedKind] = useState<DevelopmentKind | null>(
+    () => player.developmentCards.find(card => card.id === initialCardId)?.kind ?? cardGroups[0]?.kind ?? null,
+  );
   const [chosenResources, setChosenResources] = useState(emptyResources);
   const [chosenResource, setChosenResource] = useState<Resource>("wood");
-  const developmentCard = player.developmentCards.find(card => card.id === developmentCardId);
+  const selectedGroup = cardGroups.find(group => group.kind === selectedKind) ?? null;
+  const developmentCard = selectedGroup?.selectedCard;
+  const yearOfPlentyRequired = Math.min(2, resourceTotal(bank));
+  const yearOfPlentyRemaining = Math.max(0, yearOfPlentyRequired - resourceTotal(chosenResources));
+  const blockedReason = !selectedGroup || selectedGroup.kind === "victory-point" ? null
+    : !active ? translateText("Available on your turn.")
+      : !["roll", "actions"].includes(phaseType) ? translateText("Finish the current step before playing a development card.")
+        : developmentPlayed ? translateText("You already played an action card this turn.")
+          : selectedGroup.readyCount === 0 ? translateText("Wait until your next turn to play this card.")
+            : selectedGroup.kind === "year-of-plenty" && resourceTotal(bank) === 0 ? translateText("The bank has no resources left.")
+              : selectedGroup.kind === "year-of-plenty" && yearOfPlentyRemaining > 0
+                ? translateText(yearOfPlentyRemaining === 1 ? "Choose {count} more resource from the bank." : "Choose {count} more resources from the bank.", { count: yearOfPlentyRemaining })
+                : null;
+  const confirmDisabled = !selectedGroup || !developmentCard || disabled || Boolean(blockedReason) ||
+    (selectedGroup.kind === "year-of-plenty" && (
+      resourceTotal(chosenResources) !== yearOfPlentyRequired ||
+      RESOURCES.some(resource => chosenResources[resource] > bank[resource])
+    ));
 
   return (
     <Dialog
@@ -93,28 +124,48 @@ export function DevelopmentDialog({
       onClose={onClose}
     >
       <div className="space-y-3">
-        {player.developmentCards.map((card) => (
+        {cardGroups.map((group) => (
           <button
-            key={card.id}
-            className={`w-full rounded-xl border p-4 text-left ${developmentCardId === card.id ? "border-forest bg-moss" : "border-line"}`}
-            aria-pressed={developmentCardId === card.id}
+            key={group.kind}
+            className={`w-full rounded-xl border p-4 text-left ${selectedGroup?.kind === group.kind ? "border-forest bg-moss" : "border-line"}`}
+            aria-pressed={selectedGroup?.kind === group.kind}
             onClick={() => {
-              setDevelopmentCardId(card.id);
+              setSelectedKind(group.kind);
               setChosenResources(emptyResources());
               onClearError?.();
             }}
           >
-            <span className="flex justify-between gap-3">
+            <span className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex items-center gap-2 font-serif text-xl">
-                <span className="text-forest"><DevelopmentCardIcon kind={card.kind} /></span>
-                {developmentNames[card.kind]}
+                <span className="text-forest"><DevelopmentCardIcon kind={group.kind} /></span>
+                {developmentNames[group.kind]}
               </span>
-              {card.kind === "victory-point" && (
-                <span className="text-[10px] text-muted">{translateText("+1 hidden point")}</span>
-              )}
+              <span className="flex flex-wrap items-center justify-end gap-1.5">
+                {group.cards.length > 1 && (
+                  <span className="rounded-md bg-paper/90 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink border border-line">
+                    <span aria-hidden="true">&times;{group.cards.length}</span>
+                    <span className="sr-only">{translateText("{count} cards", { count: group.cards.length })}</span>
+                  </span>
+                )}
+                {group.kind === "victory-point" ? (
+                  <span className="rounded-md bg-moss px-2 py-0.5 text-[10px] font-semibold text-muted">
+                    {group.cards.length === 1
+                      ? translateText("+1 hidden point")
+                      : translateText("+{count} hidden points", { count: group.cards.length })}
+                  </span>
+                ) : group.readyCount === 0 ? (
+                  <span className="rounded-md bg-clay/15 px-2 py-0.5 text-[10px] font-semibold text-clay">
+                    {translateText("Available next turn")}
+                  </span>
+                ) : group.newThisTurnCount > 0 ? (
+                  <span className="rounded-md bg-forest/45 px-2 py-0.5 text-[10px] font-semibold text-ink">
+                    {translateText("{count} ready", { count: group.readyCount })}
+                  </span>
+                ) : null}
+              </span>
             </span>
             <span className="mt-2 block text-xs leading-6 text-muted">
-              {developmentDescriptions[card.kind]}
+              {developmentDescriptions[group.kind]}
             </span>
           </button>
         ))}
@@ -133,36 +184,39 @@ export function DevelopmentDialog({
                 />
               </fieldset>
               <p className="mt-3 text-xs text-muted">
-                {translateText("Selected {selected} of {required}", { selected: resourceTotal(chosenResources), required: Math.min(2, resourceTotal(bank)) })}
+                {translateText("Selected {selected} of {required}", { selected: resourceTotal(chosenResources), required: yearOfPlentyRequired })}
               </p>
             </>
           )}
           {developmentCard.kind === "monopoly" && (
-            <label className="text-sm">
-              {translateText("Claim every card of this resource")}
-              <select
-                className="field mt-2"
-                value={chosenResource}
-                disabled={disabled}
-                onChange={(event) => setChosenResource(event.target.value as Resource)}
-              >
+            <fieldset disabled={disabled}>
+              <legend className="mb-3 text-sm font-semibold">
+                {translateText("Claim every card of this resource")}
+              </legend>
+              <div className="grid grid-cols-5 gap-2 sm:gap-3">
                 {RESOURCES.map((resource) => (
-                  <option value={resource} key={resource}>
-                    {resourceName(language, resource)}
-                  </option>
+                  <SelectableResourceCard
+                    key={resource}
+                    resource={resource}
+                    action="Claim"
+                    caption=""
+                    selected={chosenResource === resource}
+                    disabled={disabled}
+                    onClick={() => setChosenResource(resource)}
+                  />
                 ))}
-              </select>
-            </label>
+              </div>
+            </fieldset>
+          )}
+          {blockedReason && !error && (
+            <p id="development-blocked-reason" className="mt-4 rounded-lg border border-line bg-moss/60 px-3 py-2 text-xs font-medium text-ink">
+              {blockedReason}
+            </p>
           )}
           <button
             className="button-primary mt-4 w-full"
-            disabled={!active || disabled || !["roll", "actions"].includes(phaseType) ||
-              developmentPlayed || developmentCard.purchasedTurn >= turnNumber ||
-              (developmentCard.kind === "year-of-plenty" && (
-                resourceTotal(bank) === 0 ||
-                resourceTotal(chosenResources) !== Math.min(2, resourceTotal(bank)) ||
-                RESOURCES.some(resource => chosenResources[resource] > bank[resource])
-              ))}
+            aria-describedby={blockedReason && !error ? "development-blocked-reason" : undefined}
+            disabled={confirmDisabled}
             onClick={() => onSubmit({
               type: "play-development",
               cardId: developmentCard.id,
@@ -199,8 +253,10 @@ export function ActionConfirmation({
   title,
   player,
   description,
+  cost,
   exchange,
   resources,
+  confirmLabel,
   disabled = false,
   error,
   onClose,
@@ -209,8 +265,10 @@ export function ActionConfirmation({
   title: string;
   player?: { name: string; color: string };
   description?: string;
+  cost?: Resources;
   exchange?: { give: Resources; receive: Resources };
   resources?: Resources;
+  confirmLabel?: string;
   disabled?: boolean;
   error?: string;
   onClose: () => void;
@@ -223,6 +281,8 @@ export function ActionConfirmation({
         <CardStack label={translateText("You give")} resources={exchange.give} />
         <Arrow className="h-5 w-5 shrink-0 text-forest" />
         <CardStack label={translateText("You receive")} resources={exchange.receive} />
+      </div> : cost ? <div className="flex items-center justify-center rounded-xl bg-moss p-4">
+        <CardStack label={translateText("Cost")} resources={cost} />
       </div> : <p className="text-sm leading-7 text-muted">
         {description}
       </p>}
@@ -232,7 +292,7 @@ export function ActionConfirmation({
           {translateText("Cancel")}
         </button>
         <button className="button-primary" disabled={disabled} onClick={onConfirm}>
-          {translateText("Confirm")}
+          {confirmLabel ?? translateText("Confirm")}
         </button>
       </div>
     </Dialog>

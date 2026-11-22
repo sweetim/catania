@@ -4,7 +4,30 @@ import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { isSeafarers, type GameVariant } from "../game/types";
 
-export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original", badge }: {
+export function DisconnectedIcon({ className = "h-3.5 w-3.5 shrink-0" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 2 22 22" />
+      <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+      <path d="M5 12.86a10 10 0 0 1 5.17-2.69" />
+      <path d="M19 12.86a10 10 0 0 0-2.01-1.52" />
+      <path d="M2 8.82a15 15 0 0 1 4.18-2.64" />
+      <path d="M22 8.82a15 15 0 0 0-11.29-3.76" />
+      <circle cx="12" cy="20" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original", badge, disconnected = false }: {
   variant?: GameVariant;
   player: { name: string; color: string; control: "human" | "computer"; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
   number: number;
@@ -16,6 +39,7 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   stacked?: boolean;
   privateScore?: number;
   badge?: ReactNode;
+  disconnected?: boolean;
 }) {
   const translateText = useTranslation(gameplayTranslations);
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
@@ -24,10 +48,34 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
   const islandLabel = translateText(islandCount === 1 ? "Island bonus: {count} island (+{points} victory points)" : "Island bonus: {count} islands (+{points} victory points)", { count: islandCount, points: islandBonus });
   const useTwoRowGrid = stacked || Boolean(badge);
 
-  return <div style={{ "--seat-pulse-color": player.color } as CSSProperties} className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${active ? "player-seat-active border-forest/40 bg-moss/80" : "border-line bg-white/30"} ${leading ? "player-seat-leading" : ""}`}>
+  return <div
+    data-disconnected={disconnected ? "true" : undefined}
+    style={{ "--seat-pulse-color": disconnected ? "#bb6549" : player.color } as CSSProperties}
+    className={`player-seat min-w-0 rounded-xl border px-4 py-3 ${
+      disconnected
+        ? `player-seat-disconnected ${active ? "player-seat-active" : ""}`
+        : active
+          ? "player-seat-active border-forest/40 bg-moss/80"
+          : "border-line bg-white/30"
+    } ${leading && !disconnected ? "player-seat-leading" : ""}`}
+  >
     <div className={useTwoRowGrid ? "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1" : "flex items-center gap-2.5"}>
-      <span className={`player-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${badge ? "row-span-2" : ""}`} style={{ background: player.color }}>{getPlayerLabel(player, number)}</span>
+      <span className={`player-number relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${badge ? "row-span-2" : ""}`} style={{ backgroundColor: player.color }}>
+        <span className={disconnected ? "opacity-75" : undefined}>{getPlayerLabel(player, number)}</span>
+        {disconnected && (
+          <span aria-hidden="true" className="player-disconnected-dot">
+            <DisconnectedIcon className="h-2.5 w-2.5" />
+          </span>
+        )}
+      </span>
       <p className="player-name min-w-0 flex-1 truncate text-sm font-semibold" title={player.name}>{player.name}</p>
+      {disconnected && (
+        <span role="status" className="player-disconnected-pill">
+          <DisconnectedIcon className="h-3 w-3 shrink-0" />
+          <span className="player-disconnected-label" aria-hidden="true">{translateText("Disconnected")}</span>
+          <span className="sr-only">{translateText("{name} disconnected", { name: player.name })}</span>
+        </span>
+      )}
       <div role="group" aria-label={translateText("{player}'s card counts", { player: player.name })} className={`player-card-counts ${useTwoRowGrid ? badge ? "col-start-2 row-start-2" : "col-span-2 col-start-2 row-start-2" : ""}`}>
         <span role="img" aria-label={translateText("{count} resource cards", { count: player.resourceCount })} title={translateText("{count} resource cards", { count: player.resourceCount })} className="player-card-stat text-[#497562]">
           <CardTypeIcon kind="resource" /><strong>{player.resourceCount}</strong>

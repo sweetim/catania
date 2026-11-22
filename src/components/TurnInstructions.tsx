@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { victoryTarget } from "../game/engine";
 import { isFogWorld, isSeafarers, type GamePhase, type GameVariant } from "../game/types";
@@ -107,25 +108,77 @@ export function TurnInstructions({
   computerActivity,
   onCancelKnight,
   disabled,
+  expandable = false,
 }: {
   title: string;
   description: string;
   computerActivity?: boolean;
   onCancelKnight?: () => void;
   disabled?: boolean;
+  expandable?: boolean;
 }) {
   const translateText = useTranslation(gameplayTranslations);
+  const titleReference = useRef<HTMLHeadingElement>(null);
+  const descriptionReference = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [truncated, setTruncated] = useState(false);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [title, description]);
+
+  useLayoutEffect(() => {
+    if (!expandable || expanded) return;
+    const titleElement = titleReference.current;
+    const descriptionElement = descriptionReference.current;
+    if (!titleElement || !descriptionElement) return;
+    const measure = () => {
+      const titleClipped = titleElement.scrollWidth > titleElement.clientWidth + 1;
+      const descriptionClipped = descriptionElement.scrollHeight > descriptionElement.clientHeight + 1;
+      setTruncated(titleClipped || descriptionClipped);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(titleElement);
+    observer.observe(descriptionElement);
+    return () => observer.disconnect();
+  }, [expandable, expanded, title, description]);
+
   return (
-    <div className="turn-card rounded-2xl border border-forest/70 bg-moss text-ink">
+    <div className="turn-card rounded-2xl border border-forest/70 bg-moss text-ink" data-expanded={expanded ? "true" : undefined}>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <h1 className="turn-title font-serif text-xl leading-tight" title={title}>
+          <h1 ref={titleReference} className="turn-title font-serif text-xl leading-tight" title={title}>
             {title}
           </h1>
-          <p role={computerActivity ? "status" : undefined} aria-label={computerActivity ? translateText("Computer activity") : undefined} title={description} className="turn-description text-xs leading-4 text-ink/75">
+          <p ref={descriptionReference} role={computerActivity ? "status" : undefined} aria-label={computerActivity ? translateText("Computer activity") : undefined} title={description} className="turn-description text-xs leading-4 text-ink/75">
             {description}
           </p>
         </div>
+        {expandable && (truncated || expanded) && (
+          <button
+            type="button"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-ink/75 transition-colors hover:bg-forest/35"
+            aria-expanded={expanded}
+            aria-label={translateText(expanded ? "Collapse instructions" : "Expand instructions")}
+            title={translateText(expanded ? "Collapse instructions" : "Expand instructions")}
+            onClick={() => setExpanded(current => !current)}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m4 6 4 4 4-4" />
+            </svg>
+          </button>
+        )}
         {onCancelKnight && (
           <button className="button-secondary shrink-0 px-3 text-xs" disabled={disabled} onClick={onCancelKnight}>
             {translateText("Cancel Knight")}

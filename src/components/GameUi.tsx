@@ -389,7 +389,7 @@ export function SelectableResourceCard({
   onClick,
 }: {
   resource: Resource;
-  action: "Give" | "Receive";
+  action: "Give" | "Receive" | "Claim";
   count?: number;
   caption: string;
   countLabel?: "In hand" | "In bank";
@@ -400,12 +400,17 @@ export function SelectableResourceCard({
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
   const name = resourceName(language, resource);
+  const actionLabel = match(action)
+    .with("Give", () => translateText("Give {resource}", { resource: name }))
+    .with("Receive", () => translateText("Receive {resource}", { resource: name }))
+    .with("Claim", () => translateText("Claim {resource}", { resource: name }))
+    .exhaustive();
   return (
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={translateText(action === "Give" ? "Give {resource}" : "Receive {resource}", { resource: name })}
-      aria-description={countLabel && count !== undefined ? translateText("{countLabel}: {count}. {caption}", { countLabel: translateText(countLabel), count, caption }) : caption}
+      aria-label={actionLabel}
+      aria-description={countLabel && count !== undefined ? translateText("{countLabel}: {count}. {caption}", { countLabel: translateText(countLabel), count, caption }) : caption || undefined}
       title={countLabel && count !== undefined ? translateText("{resource} / {countLabel}: {count}", { resource: name, countLabel: translateText(countLabel), count }) : name}
       disabled={disabled}
       onClick={onClick}

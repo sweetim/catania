@@ -191,13 +191,14 @@ function board(value: unknown): boolean {
       identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
 function publicGame(value: unknown): boolean {
-  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
+  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
   const trade = value.trade;
   return isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) && token(value.gameId) &&
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
-    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || value.variant === "custom-world" || isFogWorld(value.variant)) && value.robberTileId === "")) &&
+    (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) &&
+    Array.isArray(value.diceRollTotals) && value.diceRollTotals.length === 11 && value.diceRollTotals.every(value => integer(value, 10_000)) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || value.variant === "custom-world" || isFogWorld(value.variant)) && value.robberTileId === "")) &&
     record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"], ["expiresAt"]) &&

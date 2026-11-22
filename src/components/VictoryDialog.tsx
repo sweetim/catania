@@ -387,32 +387,49 @@ function Confetti({ winnerColor }: { winnerColor: string }) {
   );
 }
 
-function DiceChart({ diceCounts }: { diceCounts: readonly number[] }) {
+export function DiceChart({
+  diceCounts,
+  compact = false,
+  highlightedNumber,
+}: {
+  diceCounts: readonly number[];
+  compact?: boolean;
+  highlightedNumber?: number;
+}) {
   const translateText = useTranslation(appTranslations);
-  const highest = Math.max(...diceCounts);
+  const highest = Math.max(1, ...diceCounts);
   return (
-    <figure className="mt-5 rounded-xl bg-moss/60 p-3.5" aria-label={translateText("Dice rolls")}>
-      <figcaption className="text-xs font-semibold uppercase tracking-[.08em] text-muted">{translateText("Dice rolls")}</figcaption>
-      <div className="victory-dice mt-2.5">
-        {diceCounts.map((count, index) => (
-          <div
-            key={index}
-            className="victory-die-column"
-            role="img"
-            aria-label={translateText("{number} appeared {count} times", { number: index + 2, count })}
-          >
-            <span className="victory-die-count tabular-nums">{count}</span>
-            <span className="victory-die-track">
-              {count > 0 && (
-                <span
-                  className="victory-die-fill"
-                  style={{ height: `${(count / highest) * 100}%`, "--die-index": index } as CSSProperties}
-                />
-              )}
-            </span>
-            <span className="victory-die-number tabular-nums">{index + 2}</span>
-          </div>
-        ))}
+    <figure
+      className={compact ? "shared-dice-chart" : "mt-5 rounded-xl bg-moss/60 p-3.5"}
+      aria-label={translateText("Dice rolls")}
+    >
+      <figcaption className={compact ? "sr-only" : "text-xs font-semibold uppercase tracking-[.08em] text-muted"}>
+        {translateText("Dice rolls")}
+      </figcaption>
+      <div className={compact ? "victory-dice shared-dice-bars" : "victory-dice mt-2.5"}>
+        {diceCounts.map((count, index) => {
+          const number = index + 2;
+          const highlighted = highlightedNumber === number;
+          return (
+            <div
+              key={number}
+              className={`victory-die-column${highlighted ? " shared-die-highlighted" : ""}`}
+              role="img"
+              aria-label={translateText("{number} appeared {count} times", { number, count })}
+            >
+              <span className="victory-die-count tabular-nums">{count}</span>
+              <span className="victory-die-track">
+                {count > 0 && (
+                  <span
+                    className="victory-die-fill"
+                    style={{ height: `${(count / highest) * 100}%`, "--die-index": index } as CSSProperties}
+                  />
+                )}
+              </span>
+              <span className="victory-die-number tabular-nums">{number}</span>
+            </div>
+          );
+        })}
       </div>
     </figure>
   );

@@ -3781,12 +3781,12 @@ test("development card purchase requires resources and keyboard confirmation", a
   await expect(resourceCounts).toHaveText(RESOURCES.map(resource => `${beforePurchase.resources[resource]} ${RESOURCE_NAMES[resource]}`));
   await buy.focus();
   await page.keyboard.press("Enter");
-  const confirmation = page.getByRole("dialog", { name: "Invest in a development card", exact: true });
+  const confirmation = page.getByRole("dialog", { name: "Buy a development card?", exact: true });
   await expect(confirmation).toBeVisible();
-  await expect(confirmation.locator(".eyebrow")).toHaveText(state.players.find(player => player.id === buyerId)!.name);
-  await expect(confirmation).toContainText("Pay one wool, one grain, and one ore. Your new card stays private. Action cards cannot be played until a later turn.");
+  await expect(confirmation.locator(".eyebrow")).toHaveCount(0);
+  await expect(confirmation.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(0);
+  await expect(confirmation.getByRole("img", { name: "Cost: 1 Wool, 1 Grain, 1 Ore", exact: true })).toBeVisible();
   await expect(confirmation.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
-  await expectResourceInventory(confirmation, beforePurchase.resources);
   await screenshot(page, testInfo, "development-purchase-confirmation", false);
   await page.keyboard.press("Escape");
   await expect(confirmation).toHaveCount(0);
@@ -3807,7 +3807,7 @@ test("development card purchase requires resources and keyboard confirmation", a
   await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
-  await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeFocused();
+  await expect(confirmation.getByRole("button", { name: "Buy", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
   state = applyAction(state, buyerId, { type: "buy-development" });
   await expect(confirmation).toHaveCount(0);
@@ -3821,6 +3821,8 @@ test("development card purchase requires resources and keyboard confirmation", a
   const development = page.getByRole("dialog", { name: "A card up your sleeve", exact: true });
   await expect(development.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(0);
   await expect(development.getByRole("button", { pressed: true })).toContainText("Knight");
+  await expect(development.getByRole("button", { pressed: true })).toContainText("Available next turn");
+  await expect(development).toContainText("Wait until your next turn to play this card.");
   await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeDisabled();
   await screenshot(page, testInfo, "new-development-card", false);
   await page.keyboard.press("Escape");
@@ -3873,7 +3875,7 @@ test("Cancel Knight restores the card and turn until the robber move is confirme
   }
   expect(state.activePlayerId).toBe(buyerId);
   await page.getByRole("button", { name: "Buy a card 1 Wool 1 Grain 1 Ore", exact: true }).click();
-  await page.getByRole("dialog", { name: "Invest in a development card", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("dialog", { name: "Buy a development card?", exact: true }).getByRole("button", { name: "Buy", exact: true }).click();
   state = applyAction(state, buyerId, { type: "buy-development" });
   const card = state.players.find(player => player.id === buyerId)!.developmentCards[0]!;
   expect(card.kind).toBe("knight");
@@ -4084,7 +4086,7 @@ test("played Knight and connected road counts show Largest Army and Longest Road
     if (state.activePlayerId === buyerId) {
       if (turn > 0 && turn <= 27) {
         await page.getByRole("button", { name: /^Buy a card\b/ }).click();
-        await page.getByRole("dialog", { name: "Invest in a development card", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
+        await page.getByRole("dialog", { name: "Buy a development card?", exact: true }).getByRole("button", { name: "Buy", exact: true }).click();
         state = applyAction(state, buyerId, { type: "buy-development" });
       }
       if (turn >= 30) {
@@ -4505,7 +4507,7 @@ test("owned development cards group by type with counts, descriptions and older-
     await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
     if (turn > 0 && state.activePlayerId === buyerId) {
       await page.getByRole("button", { name: /^Buy a card\b/ }).click();
-      await page.getByRole("dialog", { name: "Invest in a development card", exact: true }).getByRole("button", { name: "Confirm", exact: true }).click();
+      await page.getByRole("dialog", { name: "Buy a development card?", exact: true }).getByRole("button", { name: "Buy", exact: true }).click();
       state = applyAction(state, buyerId, { type: "buy-development" });
       const cards = state.players.find(player => player.id === buyerId)!.developmentCards;
       await expect(developmentHand.getByRole("listitem")).toHaveCount(new Set(cards.map(card => card.kind)).size);
@@ -4515,10 +4517,11 @@ test("owned development cards group by type with counts, descriptions and older-
         expect(cards.at(-1)!.kind).toBe("knight");
         expect(cards.at(-1)!.purchasedTurn).toBe(state.turnNumber);
         await developmentHand.getByRole("button", { name: /^Knight 2 cards / }).click();
-        await expect(development.locator("button[aria-pressed]").first()).toHaveAttribute("aria-pressed", "true");
+        await expect(development.getByRole("button", { name: /^Knight/ })).toHaveCount(1);
+        await expect(development.getByRole("button", { name: /^Knight/ })).toHaveAttribute("aria-pressed", "true");
+        await expect(development.getByRole("button", { name: /^Knight/ })).toContainText("×2");
+        await expect(development.getByRole("button", { name: /^Knight/ })).toContainText("1 ready");
         await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeEnabled();
-        await development.getByRole("button", { name: /^Knight Move the robber/ }).last().click();
-        await expect(development.getByRole("button", { name: "Confirm Knight", exact: true })).toBeDisabled();
         await page.keyboard.press("Escape");
       }
     }
@@ -4594,10 +4597,14 @@ test("owned development cards group by type with counts, descriptions and older-
     } else {
       await expect(development.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(0);
     }
-    await expect(development.getByRole("button", { pressed: true })).toHaveCount(1);
-    await expect(development.getByRole("button", { pressed: true }).locator("svg[data-development-kind]")).toHaveAttribute("data-development-kind", card.kind);
-    await expect(development.getByRole("button", { pressed: true })).toContainText(cardNames[card.kind]);
-    await expect(development.getByRole("button", { pressed: true })).toContainText(cardDescriptions[card.kind]);
+    const selectedCard = development.getByRole("button", { name: new RegExp(`^${cardNames[card.kind]}`), pressed: true });
+    await expect(selectedCard).toHaveCount(1);
+    await expect(selectedCard.locator("svg[data-development-kind]")).toHaveAttribute("data-development-kind", card.kind);
+    await expect(selectedCard).toContainText(cardNames[card.kind]);
+    await expect(selectedCard).toContainText(cardDescriptions[card.kind]);
+    if (card.kind === "monopoly") {
+      await expect(development.getByRole("button", { name: "Claim Wood", exact: true })).toHaveAttribute("aria-pressed", "true");
+    }
     await expect(development.getByText(/^(In your hand|New this turn)$/)).toHaveCount(0);
     const confirm = development.getByRole("button", { name: `Confirm ${cardNames[card.kind]}`, exact: true });
     if (card.kind === "victory-point") {
@@ -4607,8 +4614,8 @@ test("owned development cards group by type with counts, descriptions and older-
     } else {
       await expect(confirm).toBeEnabled();
     }
-    await expect(development.locator("button[aria-pressed]")).toHaveCount(8);
-    await expect(development.locator("button[aria-pressed]").nth(buyer.developmentCards.indexOf(card))).toHaveAttribute("aria-pressed", "true");
+    await expect(development.locator("button[aria-pressed]")).toHaveCount(kinds.length + (card.kind === "monopoly" ? 5 : 0));
+    await expect(development.locator("button[aria-pressed]").nth(index)).toHaveAttribute("aria-pressed", "true");
     await screenshot(page, testInfo, `development-dialog-${index}-${card.kind}`, false);
     await page.keyboard.press("Escape");
     await expect(row).toBeFocused();
