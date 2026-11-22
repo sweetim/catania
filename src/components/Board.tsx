@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { match } from "ts-pattern";
 import { blockedSettlementVertices } from "../game/engine";
 import { edgeTiles, hiddenNumberTileIds, isPortRevealed, isResource, portAnchor } from "../game/board";
 import { type Board as BoardState, type Player, type Resource, type Terrain, type Tile } from "../game/types";
@@ -119,6 +120,270 @@ function createBoardMotionTracker(): BoardMotionTracker {
     harvestBursts: [],
     completedKeys: new Set(),
   };
+}
+
+const SETTLEMENT_SILHOUETTE_PATH =
+  "M-11.5 10.5V-1.6H-13.3L-3.5-14 4-17.5 6.4-14.5V-16.9H9.7V-10.3L13.8-5.1H12V7L4.5 10.5Z";
+
+const CITY_SILHOUETTE_PATH =
+  "M-16.5 10.5V-1.8H-18.2L-8-12.6-1.8-15.5.5-13.1V-19.7H3.1V-16.8H4.7V-19.7H7.3V-16.8H8.9V-19.7H11.5L13.6-20.7V-18L15.6-18.9V-21.6L17.7-22.6V7.6L11.5 10.5Z";
+
+function BoardBuildingPiece({
+  kind,
+  playerColor,
+  playerLabel,
+  selected,
+}: {
+  kind: "settlement" | "city";
+  playerColor: string;
+  playerLabel: string | number;
+  selected: boolean;
+}) {
+  return match(kind)
+    .with("settlement", () => (
+      <>
+        <ellipse
+          transform="translate(2.5 10.5) rotate(-10)"
+          rx="14"
+          ry="4.5"
+          fill="#22362b"
+          opacity="0.25"
+        />
+        {selected && (
+          <circle
+            r="24"
+            fill="none"
+            stroke="#805e2c"
+            strokeWidth="3"
+            strokeDasharray="4 3"
+          />
+        )}
+        <path
+          d={SETTLEMENT_SILHOUETTE_PATH}
+          fill={playerColor}
+          stroke="#fff7df"
+          strokeWidth="3.6"
+          strokeLinejoin="round"
+        />
+        <path d={SETTLEMENT_SILHOUETTE_PATH} fill={playerColor} />
+        <path
+          d="M4.5-1.6 12-5.1V7L4.5 10.5Z"
+          fill="#1a2620"
+          fillOpacity="0.26"
+        />
+        <path
+          d="M4.5-1.6 12-5.1V-3.1L4.5 .4Z"
+          fill="#141e19"
+          fillOpacity="0.18"
+        />
+        <path
+          d="M-3.5-14 4-17.5 13.8-5.1 6.3-1.6Z"
+          fill="#fff8e3"
+          fillOpacity="0.24"
+        />
+        <path
+          d="M6.4-16.9H8.4V-11.9L6.4-14.5Z"
+          fill={playerColor}
+        />
+        <path
+          d="M8.4-16.9H9.7V-10.3L8.4-11.9Z"
+          fill={playerColor}
+        />
+        <path
+          d="M8.4-16.9H9.7V-10.3L8.4-11.9Z"
+          fill="#1a2620"
+          fillOpacity="0.28"
+        />
+        <path
+          d="M-11.5 8.8H4.5V10.5H-11.5Z"
+          fill="#1a2620"
+          fillOpacity="0.14"
+        />
+        <path
+          d="M-11.5-1.5-3.5-11.7 4.5-1.5"
+          fill="none"
+          stroke="#1a2620"
+          strokeOpacity="0.22"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M-12.5-2.4-3.5-13.6 4-17.1"
+          fill="none"
+          stroke="#fffdf3"
+          strokeOpacity="0.72"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4.5-1.6V10.5M-13.3-1.6-3.5-14 6.3-1.6 13.8-5.1M8.4-16.9V-11.9"
+          fill="none"
+          stroke="#2f3f36"
+          strokeOpacity="0.45"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        />
+        <path
+          d={SETTLEMENT_SILHOUETTE_PATH}
+          fill="none"
+          stroke="#2f3f36"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M-7.9 10.2V4A4.4 4.4 0 0 1 .9 4V10.2Z"
+          fill="#fff7e2"
+          stroke="#2f3f36"
+          strokeOpacity="0.45"
+          strokeWidth="0.95"
+        />
+        <text
+          x="-3.5"
+          y="7.9"
+          textAnchor="middle"
+          fill="#2b3d34"
+          fontSize="8.5"
+          fontWeight="800"
+        >
+          {playerLabel}
+        </text>
+      </>
+    ))
+    .with("city", () => (
+      <>
+        <ellipse
+          transform="translate(2.5 10.5) rotate(-8)"
+          rx="19"
+          ry="5.2"
+          fill="#22362b"
+          opacity="0.26"
+        />
+        {selected && (
+          <circle
+            r="24"
+            fill="none"
+            stroke="#805e2c"
+            strokeWidth="3"
+            strokeDasharray="4 3"
+          />
+        )}
+        <path
+          d={CITY_SILHOUETTE_PATH}
+          fill={playerColor}
+          stroke="#fff7df"
+          strokeWidth="3.6"
+          strokeLinejoin="round"
+        />
+        <path d={CITY_SILHOUETTE_PATH} fill={playerColor} />
+        <path
+          d="M-8-12.6-1.8-15.5 .5-13.1V-3.6Z"
+          fill="#fff8e3"
+          fillOpacity="0.24"
+        />
+        <path
+          d="M11.5-19.7 13.6-20.7V-18L15.6-18.9V-21.6L17.7-22.6V7.6L11.5 10.5Z"
+          fill="#1a2620"
+          fillOpacity="0.26"
+        />
+        <path
+          d="M.5-15.2H11.5V-13.8H.5Z"
+          fill="#1a2620"
+          fillOpacity="0.16"
+        />
+        <path
+          d="M11.5-15.2 17.7-18.1V-16.7L11.5-13.8Z"
+          fill="#1a2620"
+          fillOpacity="0.14"
+        />
+        <path
+          d="M-16.5 8.8H11.5V10.5H-16.5Z"
+          fill="#1a2620"
+          fillOpacity="0.14"
+        />
+        <path
+          d="M-16.5-1.7-8-10.5 .5-1.7"
+          fill="none"
+          stroke="#1a2620"
+          strokeOpacity="0.22"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M-17.4-2.4-8-12.2-1.8-15.1"
+          fill="none"
+          stroke="#fffdf3"
+          strokeOpacity="0.72"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M.9-19.2H2.7M5.1-19.2H6.9M9.3-19.2H11.1M.8-15.4H11.2"
+          fill="none"
+          stroke="#fffdf3"
+          strokeOpacity="0.55"
+          strokeWidth="0.95"
+          strokeLinecap="round"
+        />
+        <path
+          d="M.5-13.1V10.5M11.5-19.7V10.5M-18.2-1.8-8-12.6 .5-3.6"
+          fill="none"
+          stroke="#2f3f36"
+          strokeOpacity="0.45"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        />
+        <path
+          d={CITY_SILHOUETTE_PATH}
+          fill="none"
+          stroke="#2f3f36"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M4.2-6.2V-10.2A1.8 1.8 0 0 1 7.8-10.2V-6.2Z"
+          fill="#fff2be"
+          stroke="#2f3f36"
+          strokeOpacity="0.55"
+          strokeWidth="0.9"
+        />
+        <path
+          d="M4.6 3.5V.8A1.4 1.4 0 0 1 7.4 .8V3.5Z"
+          fill="#fff2be"
+          stroke="#2f3f36"
+          strokeOpacity="0.55"
+          strokeWidth="0.9"
+        />
+        <path
+          d="M13.8-7.8V-11.2L15.4-12V-8.6Z"
+          fill="#f6dfa0"
+          fillOpacity="0.88"
+          stroke="#2f3f36"
+          strokeOpacity="0.45"
+          strokeWidth="0.8"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M-12.4 10.2V4A4.4 4.4 0 0 1-3.6 4V10.2Z"
+          fill="#fff7e2"
+          stroke="#2f3f36"
+          strokeOpacity="0.45"
+          strokeWidth="0.95"
+        />
+        <text
+          x="-8"
+          y="7.9"
+          textAnchor="middle"
+          fill="#2b3d34"
+          fontSize="8.5"
+          fontWeight="800"
+        >
+          {playerLabel}
+        </text>
+      </>
+    ))
+    .exhaustive();
 }
 
 function NumberToken({ x, y, number, matchesRoll, blocked, blockedShake = false, popIn = false, illustrationId }: {
@@ -1931,75 +2196,17 @@ export function Board({
                         role="img"
                         aria-label={translateText("{player}'s {piece} at {location}", { player: player.name, piece: pieceName(language, building.kind), location: vertex.id })}
                       >
-                        <ellipse
-                          cy="10"
-                          rx={city ? "19" : "15"}
-                          ry="6"
-                          fill="#35483c"
-                          opacity="0.23"
+                        <BoardBuildingPiece
+                          kind={building.kind}
+                          playerColor={player.color}
+                          playerLabel={getPlayerLabel(
+                            player,
+                            players.findIndex(
+                              (candidate) => candidate.id === player.id,
+                            ) + 1,
+                          )}
+                          selected={selectedId === vertex.id}
                         />
-                        {selectedId === vertex.id && (
-                          <circle
-                            r="24"
-                            fill="none"
-                            stroke="#805e2c"
-                            strokeWidth="3"
-                            strokeDasharray="4 3"
-                          />
-                        )}
-                        <path
-                          d={
-                            city
-                              ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                              : "M-13 11V-5L0-17 13-5V11Z"
-                          }
-                          fill={player.color}
-                          stroke="#fff7df"
-                          strokeWidth="5"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d={
-                            city
-                              ? "M-17 10V-6L-9-15-1-6V-1H3V-13L11-21 19-13V10Z"
-                              : "M-13 11V-5L0-17 13-5V11Z"
-                          }
-                          fill={player.color}
-                          stroke="#39483e"
-                          strokeWidth="1.5"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d={
-                            city
-                              ? "M-17-6-9-15-1-6M3-13 11-21 19-13"
-                              : "M-13-5 0-17 13-5"
-                          }
-                          fill="none"
-                          stroke="#fff6da"
-                          strokeOpacity="0.5"
-                          strokeWidth="1.5"
-                        />
-                        <rect
-                          x="-5.5"
-                          y="-2"
-                          width="11"
-                          height="12"
-                          rx="2"
-                          fill="#fff5dc"
-                        />
-                        <text
-                          y="7"
-                          textAnchor="middle"
-                          fill="#35483d"
-                          fontSize="9"
-                          fontWeight="800"
-                        >
-                          {getPlayerLabel(player, players.findIndex(
-                            (candidate) => candidate.id === player.id,
-                          ) + 1)}
-                        </text>
-                        {city && <path d="M9-9h4v5H9Z" fill="#fff5dc" />}
                       </g>
                     </g>
                   </g>

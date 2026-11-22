@@ -139,18 +139,25 @@ export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "
         ))
         .with("settlement", () => (
           <>
-            <path d="M5 15 15 6l10 9v13H5Z" fill="currentColor" />
-            <path d="m15 6 5-3 10 9v13l-5 3V15Z" fill="currentColor" opacity=".65" />
-            <path d="m7 16 8-7 8 7" stroke="white" strokeOpacity=".45" />
-            <path d="M13 20h5v8h-5Z" fill="black" opacity=".2" />
+            <path d="M5 27V15.5L13 7.5 21 15.5V27Z" fill="currentColor" />
+            <path d="M21 15.5 27 12.5V24L21 27Z" fill="currentColor" opacity=".6" />
+            <path d="M13 6.5 19 3.5 28.5 13 22.5 16Z" fill="currentColor" opacity=".82" />
+            <path d="M21.5 5.2H24.5V10.2L21.5 7.2Z" fill="currentColor" opacity=".72" />
+            <path d="M3.5 16 13 6.5 22.5 16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4.5 15.2 13 6.8 19 3.8" stroke="white" strokeOpacity=".45" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10.2 27V21.2A2.8 2.8 0 0 1 15.8 21.2V27Z" fill="black" opacity=".24" />
           </>
         ))
         .with("city", () => (
           <>
-            <path d="M3 16 10 9l7 7v-6l5-5 7 5v18H3Z" fill="currentColor" />
-            <path d="m22 5 4-3 5 5v18l-2 3V10Z" fill="currentColor" opacity=".65" />
-            <path d="m5 17 5-5 5 5m4-6 3-3 5 3" stroke="white" strokeOpacity=".45" />
-            <path d="M8 21h5v7H8Zm13-6h4v4h-4Z" fill="black" opacity=".2" />
+            <path d="M3 28V17L9.5 10.5 16 17V28Z" fill="currentColor" />
+            <path d="M9.5 9.8 14.5 7.3 16 9V17Z" fill="currentColor" opacity=".8" />
+            <path d="M1.8 17.5 9.5 9.8 16 16.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M16 28V5.5H18.2V8.2H19.4V5.5H21.6V8.2H22.8V5.5H25V28Z" fill="currentColor" />
+            <path d="M25 5.5 26.8 4.6V7.1L28.2 6.4V3.9L30 3V25.5L25 28Z" fill="currentColor" opacity=".6" />
+            <path d="M2.5 16.8 9.5 10 14.5 7.5M16.5 6H24.5" stroke="white" strokeOpacity=".42" strokeWidth="1.1" strokeLinecap="round" />
+            <path d="M7.1 28V22.5A2.4 2.4 0 0 1 11.9 22.5V28Z" fill="black" opacity=".24" />
+            <path d="M19 16V13.2A1.5 1.5 0 0 1 22 13.2V16ZM19.4 22.5V20A1.1 1.1 0 0 1 21.6 20V22.5Z" fill="white" fillOpacity=".55" />
           </>
         ))
         .exhaustive()}
