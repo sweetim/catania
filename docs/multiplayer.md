@@ -84,7 +84,7 @@ The shared screen hosts the game without occupying a player seat.
 ## Shared Board Screen
 
 Active gameplay shows public player seats and three separate compact status islands side by side above the island, using the same
-player cards, bank supply, dice faces, cumulative dice-roll chart, and map as single-device play. On tablets and desktops, the three islands sit side by side in one row — status (active player, turn/phase, and public dice roll), dice analysis (live full-game 2-12 dice roll distribution), and bank cards (resource and development bank supply) — while narrower phones stack the islands cleanly above the map. The map fills the remaining viewport
+player cards, bank supply, dice faces, cumulative dice-roll chart, and map as single-device play. On tablets and desktops, the three islands sit side by side in one row — status (active-player color dot with turn badge and public dice faces), dice analysis (live full-game 2-12 dice roll distribution), and bank cards (resource and development bank supply) — while narrower phones stack the islands cleanly above the map. The map fills the remaining viewport
 without page scrolling. On tablets and larger screens, all seats fit without
 horizontal scrolling; narrow cards place the name above a horizontal row of counts.
 On phones, the player strip scrolls horizontally while the map remains visible.

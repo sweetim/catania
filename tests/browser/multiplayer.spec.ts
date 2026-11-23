@@ -517,6 +517,12 @@ test("multiplayer admission, actions and reset work without randomUUID", async (
   const activePhone = phones[["Ada", "Grace", "Linus"].indexOf(activeName)]!;
   await activePhone.getByRole("button", { name: "Roll the dice", exact: true }).click();
   await expect.poll(async () => (await latestSnapshot(activePhone)).game!.dice).not.toBeNull();
+  const sharedStatus = host.getByRole("region", { name: "Table status", exact: true });
+  await expect(sharedStatus.locator(".shared-turn-badge")).toHaveText("Turn 1");
+  await expect(sharedStatus.locator(".shared-turn-badge .shared-turn-dot")).toBeVisible();
+  const sharedDice = sharedStatus.getByRole("group", { name: "Shared dice", exact: true });
+  await expect(sharedDice.locator(".roll-die")).toHaveCount(2);
+  await expect(sharedDice).toHaveText("");
   expect(await sentActions(activePhone)).toContainEqual(expect.objectContaining({ action: { type: "roll" } }));
   await chooseGameOption(host, "Reset game");
   await host.getByRole("dialog", { name: "Reset this game?", exact: true }).getByRole("button", { name: "Reset game", exact: true }).click();
@@ -1509,16 +1515,28 @@ test("shared tabletop shows only single-device player seats and map at desktop a
     expect(await host.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))).toBeLessThanOrEqual(viewport.height);
     const tableStatus = host.getByRole("region", { name: "Table status", exact: true });
     await expect(tableStatus).toBeVisible();
-    await expect(tableStatus).toContainText("AlexandertheExplorer");
-    await expect(tableStatus).toContainText("Place settlement");
-    await expect(tableStatus).toContainText("Setup");
-    await expect(tableStatus.getByRole("group", { name: "Shared dice", exact: true })).toBeVisible();
+    const statusIsland = tableStatus.locator(".shared-status-island");
+    await expect(statusIsland).not.toContainText("AlexandertheExplorer");
+    await expect(statusIsland).not.toContainText("Place settlement");
+    const turnBadge = statusIsland.locator(".shared-turn-badge");
+    await expect(turnBadge).toHaveText("Setup");
+    await expect(turnBadge.locator(".shared-turn-dot")).toBeVisible();
+    const sharedDice = tableStatus.getByRole("group", { name: "Shared dice", exact: true });
+    await expect(sharedDice).toBeVisible();
+    await expect(sharedDice.locator(".roll-die")).toHaveCount(2);
+    expect(await statusIsland.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const statusIslandBounds = (await statusIsland.boundingBox())!;
+    const turnBadgeBounds = (await turnBadge.boundingBox())!;
+    const sharedDiceBounds = (await sharedDice.boundingBox())!;
+    for (const childBounds of [turnBadgeBounds, sharedDiceBounds]) {
+      expect(childBounds.x).toBeGreaterThanOrEqual(statusIslandBounds.x);
+      expect(childBounds.x + childBounds.width).toBeLessThanOrEqual(statusIslandBounds.x + statusIslandBounds.width + 1);
+    }
     await expect(tableStatus.getByRole("region", { name: "Resource bank", exact: true })).toBeVisible();
     const diceChart = tableStatus.getByRole("figure", { name: "Dice rolls", exact: true });
     await expect(diceChart).toBeVisible();
     await expect(diceChart.getByRole("img")).toHaveCount(11);
     if (viewport.width >= 700) {
-      const statusIslandBounds = (await tableStatus.locator(".shared-status-island").boundingBox())!;
       const chartBounds = (await diceChart.boundingBox())!;
       const bankBounds = (await tableStatus.getByRole("region", { name: "Resource bank", exact: true }).boundingBox())!;
       expect(chartBounds.x).toBeGreaterThan(statusIslandBounds.x + statusIslandBounds.width);

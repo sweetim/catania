@@ -46,7 +46,6 @@ export function SharedBoardDice({ game }: { game: PublicGame }) {
   const dice = game.dice;
   const rollIdentity = dice ? `${game.gameId}:${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
   const rolling = useDiceRollAnimation(rollIdentity);
-  const total = dice ? dice[0] + dice[1] : null;
   return (
     <div
       className="shared-board-dice"
@@ -55,9 +54,6 @@ export function SharedBoardDice({ game }: { game: PublicGame }) {
       data-stage={dice ? rolling ? "rolling" : "complete" : "idle"}
     >
       <Dice key={rollIdentity} dice={dice} rolling={rolling} />
-      {total !== null && (
-        <strong className="shared-board-dice-total tabular-nums">{total}</strong>
-      )}
     </div>
   );
 }

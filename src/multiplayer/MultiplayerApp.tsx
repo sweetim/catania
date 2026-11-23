@@ -148,26 +148,6 @@ function SharedTableStatus({ game, onShowInvitation }: { game: PublicGame; onSho
   const blockingDisconnectedPlayers = disconnectedPlayers.filter(player => waitingPlayerIds.includes(player.id));
   const activePlayerDisconnected = Boolean(!winner && activePlayer?.control === "human" && !activePlayer.connected);
   const showDisconnectedNotice = !winner && disconnectedPlayers.length > 0;
-  const formatPlayerNames = (ids: string[]) => ids
-    .map(playerId => game.players.find(player => player.id === playerId)?.name)
-    .filter((playerName): playerName is string => Boolean(playerName))
-    .join(", ");
-  const phaseLabel: string | null = winner
-    ? translateText("{name} wins!", { name: winner.name })
-    : match(game.phase)
-      .with({ type: "setup-settlement" }, () => translateText("Place settlement"))
-      .with({ type: "setup-reveal" }, () => translateText("Choose starting cell"))
-      .with({ type: "setup-road" }, () => translateText(isSeafarers(game.variant) ? "Place route" : "Place road"))
-      .with({ type: "roll" }, () => translateText("Roll the dice"))
-      .with({ type: "actions" }, () => game.trade ? translateText("Open trade") : null)
-      .with({ type: "discard" }, phase => translateText("Waiting for discards: {names}", { names: formatPlayerNames(Object.keys(phase.required)) }))
-      .with({ type: "gold" }, phase => translateText("Choosing gold: {names}", { names: formatPlayerNames(Object.keys(phase.required)) }))
-      .with({ type: "robber" }, () => translateText(isSeafarers(game.variant) ? "Move robber or pirate" : "Move robber"))
-      .with({ type: "steal" }, () => translateText("Choose theft target"))
-      .with({ type: "road-building" }, phase => translateText("Road Building ({count} left)", { count: phase.remaining }))
-      .with({ type: "finished" }, () => translateText("Game over"))
-      .exhaustive();
-
   const rolledTotal = game.dice ? game.dice[0] + game.dice[1] : undefined;
 
   return (
@@ -177,27 +157,18 @@ function SharedTableStatus({ game, onShowInvitation }: { game: PublicGame; onSho
       aria-label={translateText("Table status")}
     >
       <div className="shared-status-island">
-        <div className="shared-table-phase">
-          {activePlayer && (
+        <span className="turn-number shared-turn-badge">
+          {(winner ?? activePlayer) && (
             <span
               aria-hidden="true"
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${activePlayerDisconnected ? "opacity-55" : ""}`}
-              style={{ backgroundColor: (winner ?? activePlayer).color }}
+              className={`shared-turn-dot ${activePlayerDisconnected ? "opacity-55" : ""}`}
+              style={{ backgroundColor: (winner ?? activePlayer)!.color }}
             />
           )}
-          <strong className="min-w-0 truncate text-xs font-semibold text-ink">
-            {(winner ?? activePlayer)?.name}
-          </strong>
-          {activePlayerDisconnected && <DisconnectedIcon className="h-3.5 w-3.5 shrink-0 text-clay" />}
-          {phaseLabel && (
-            <span className="shared-table-phase-label truncate text-xs text-muted">
-              {phaseLabel}
-            </span>
-          )}
-          <span className="turn-number">
+          <span>
             {game.turnNumber === 0 ? translateText("Setup") : translateText("Turn {turn}", { turn: game.turnNumber })}
           </span>
-        </div>
+        </span>
         <SharedBoardDice game={game} />
       </div>
       <DiceChart diceCounts={game.diceRollTotals} compact highlightedNumber={rolledTotal} />

@@ -1750,21 +1750,17 @@
   border-color: var(--color-clay);
 }
 
-.shared-table-phase {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.shared-turn-badge {
+  flex-shrink: 0;
+  gap: 5px;
+  padding: 0 9px 0 7px;
 }
 
-.shared-table-phase-label {
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-.shared-table-phase .turn-number {
-  margin-left: auto;
+.shared-turn-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
 }
 
 .shared-dice-chart {
@@ -1825,7 +1821,6 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
 }
 
 .shared-board-dice .roll-summary-dice {
@@ -1837,17 +1832,9 @@
   height: 40px;
 }
 
-.shared-board-dice-total {
-  min-width: 2ch;
-  text-align: center;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--color-ink);
-}
-
 @media (min-width: 700px) {
   .shared-table-status {
-    grid-template-columns: minmax(0, 1fr) minmax(200px, 350px) auto;
+    grid-template-columns: auto minmax(200px, 1fr) auto;
     align-items: stretch;
     gap: 8px;
   }
@@ -1856,25 +1843,22 @@
 @media (min-width: 700px) and (max-width: 1099px) {
   .shared-status-island {
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 4px;
     padding: 5px 10px;
-  }
-
-  .shared-status-island .shared-table-phase {
-    flex: none;
-    gap: 6px;
   }
 
   .shared-status-island .turn-number {
     height: 20px;
-    padding: 0 8px;
+    gap: 4px;
+    padding: 0 7px 0 6px;
     font-size: 10px;
   }
 
-  .shared-board-dice {
-    gap: 6px;
+  .shared-status-island .shared-turn-dot {
+    width: 7px;
+    height: 7px;
   }
 
   .shared-board-dice .roll-summary-dice {
@@ -1884,10 +1868,6 @@
   .shared-board-dice .roll-summary-dice .roll-die {
     width: 30px;
     height: 30px;
-  }
-
-  .shared-board-dice-total {
-    font-size: 15px;
   }
 }
 
@@ -1958,14 +1938,16 @@
     border-radius: 12px;
   }
 
-  .shared-table-phase {
-    gap: 6px;
+  .shared-status-island .turn-number {
+    height: 20px;
+    gap: 4px;
+    padding: 0 7px 0 6px;
+    font-size: 10px;
   }
 
-  .shared-table-phase .turn-number {
-    height: 20px;
-    padding: 0 7px;
-    font-size: 10px;
+  .shared-status-island .shared-turn-dot {
+    width: 7px;
+    height: 7px;
   }
 
   .shared-dice-chart {
@@ -1977,10 +1959,6 @@
     height: 15px;
   }
 
-  .shared-board-dice {
-    gap: 5px;
-  }
-
   .shared-board-dice .roll-summary-dice {
     gap: 4px;
   }
@@ -1988,10 +1966,6 @@
   .shared-board-dice .roll-summary-dice .roll-die {
     width: 28px;
     height: 28px;
-  }
-
-  .shared-board-dice-total {
-    font-size: 14px;
   }
 
   .shared-table-status .bank-tray {
@@ -2038,10 +2012,6 @@
     height: 26px;
   }
 
-  .shared-board-dice-total {
-    font-size: 14px;
-  }
-
   .shared-table-status .bank-tray {
     padding: 3px 5px;
     gap: 3px;
@@ -2081,8 +2051,14 @@
 
   .shared-status-island .turn-number {
     height: 18px;
-    padding: 0 7px;
+    gap: 4px;
+    padding: 0 7px 0 6px;
     font-size: 10px;
+  }
+
+  .shared-status-island .shared-turn-dot {
+    width: 7px;
+    height: 7px;
   }
 
   .shared-dice-chart {
@@ -2094,10 +2070,6 @@
     height: 15px;
   }
 
-  .shared-board-dice {
-    gap: 5px;
-  }
-
   .shared-board-dice .roll-summary-dice {
     gap: 4px;
   }
@@ -2105,10 +2077,6 @@
   .shared-board-dice .roll-summary-dice .roll-die {
     width: 26px;
     height: 26px;
-  }
-
-  .shared-board-dice-total {
-    font-size: 14px;
   }
 
   .shared-table-status .bank-tray {
