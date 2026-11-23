@@ -722,7 +722,7 @@
   padding-inline: 6px;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1024px), (min-width: 640px) and (min-height: 500px) {
   .multiplayer-lobby-shell {
     height: 100dvh;
     display: flex;
@@ -752,21 +752,8 @@
   .multiplayer-lobby-grid {
     flex: 1;
     width: 100%;
-    max-width: 1440px;
     min-height: 0;
-    grid-template-columns: minmax(0, 1.2fr) minmax(390px, 1fr);
     gap: 16px;
-  }
-
-  .multiplayer-lobby-column {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 8px;
-    min-height: 0;
-  }
-
-  .multiplayer-lobby-column>* {
-    margin-block: 0;
   }
 
   .multiplayer-lobby-invitation {
@@ -804,7 +791,7 @@
     flex-direction: column;
     gap: 8px;
     min-height: 0;
-    padding: 12px;
+    padding: 12px 12px 0;
   }
 
   .multiplayer-lobby-island> :first-child {
@@ -831,6 +818,14 @@
     flex: 1;
     height: auto;
     min-height: 0;
+    margin-inline: -12px;
+  }
+
+  .multiplayer-lobby-island .board-surface {
+    border-inline: 0;
+    border-bottom: 0;
+    border-radius: 0 0 15px 15px;
+    box-shadow: none;
   }
 
   .multiplayer-lobby-map .board-controls {
@@ -849,7 +844,7 @@
     min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
-    padding: 12px;
+    padding: 12px 12px 0;
   }
 
   .multiplayer-lobby-players>h2 {
@@ -868,6 +863,105 @@
 
   .multiplayer-lobby-players .lobby-roster li {
     padding: 4px 8px;
+  }
+
+  .multiplayer-lobby-players>div:last-child {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: 12px;
+    background: color-mix(in srgb, #fff 45%, var(--color-paper));
+  }
+}
+
+@media (min-width: 1024px) {
+  .multiplayer-lobby-grid {
+    max-width: 1440px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(390px, 1fr);
+  }
+
+  .multiplayer-lobby-column {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .multiplayer-lobby-column>* {
+    margin-block: 0;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) and (min-height: 500px) {
+  .multiplayer-lobby-column {
+    display: contents;
+  }
+
+  .multiplayer-lobby-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, .75fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "island invitation" "island players";
+  }
+
+  .multiplayer-lobby-island {
+    grid-area: island;
+  }
+
+  .multiplayer-lobby-invitation {
+    grid-area: invitation;
+  }
+
+  .multiplayer-lobby-players {
+    grid-area: players;
+  }
+}
+
+@media (min-width: 640px) and (min-height: 900px) and (max-aspect-ratio: 4/5) {
+  .multiplayer-lobby-column {
+    display: contents;
+  }
+
+  .multiplayer-lobby-grid {
+    container-type: size;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 4fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "island island" "invitation players";
+  }
+
+  .multiplayer-lobby-island {
+    grid-area: island;
+    overflow-y: auto;
+  }
+
+  .multiplayer-lobby-map {
+    min-height: 160px;
+  }
+
+  .multiplayer-lobby-invitation {
+    grid-area: invitation;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 12px;
+  }
+
+  .multiplayer-lobby-invitation .lobby-invitation-heading {
+    text-align: center;
+  }
+
+  .multiplayer-lobby-invitation .lobby-qr {
+    width: min(100%, 240px);
+    margin-top: 8px;
+  }
+
+  .multiplayer-lobby-invitation .lobby-invitation-link {
+    margin-top: 12px;
+  }
+
+  .multiplayer-lobby-players {
+    grid-area: players;
+    max-height: 46cqh;
   }
 }
 

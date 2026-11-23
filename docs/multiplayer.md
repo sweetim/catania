@@ -29,7 +29,9 @@ The shared screen hosts the game without occupying a player seat.
    characters. Color-tinted avatars appear before names: a person for human players
    and a robot for computers.
    The lobby shows how many players are still needed and marks the fourth seat as
-   optional. Pending join requests do not count until admitted. **Start game** becomes
+   optional. A pending join request appears with its username and **Admit** /
+   **Decline** buttons in place of an open seat, so the roster never needs scrolling;
+   it does not count until admitted. **Start game** becomes
    available with three or four total players and every human connected; disconnected
    humans are named in the readiness message. Turn order is randomized.
    The host's island preview shows the map that will be used.
@@ -39,7 +41,8 @@ The shared screen hosts the game without occupying a player seat.
    Changing the version regenerates the preview and synchronizes the choice to all
    phones without changing the roster. With **Custom World** selected, the host
    also edits the terrain-count panel and fog toggle beneath the version
-   selector; phones receive the configuration with the snapshot but cannot
+   selector (expanded by default; select its header to collapse it and give the map
+   the space); phones receive the configuration with the snapshot but cannot
    change it. Select the gold **VP** badge in the map's
    zoom bar to choose **Victory points to win** from **3 to 13**. The map, phone lobby summaries,
    help, and victory checks use this target. It stays fixed during play and is

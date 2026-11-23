@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import { match } from "ts-pattern";
 import { DiceIcon, EndTurnIcon } from "../components/ActionIcons";
-import { Board } from "../components/Board";
+import { Board, VictoryTargetBadge } from "../components/Board";
 import { MapSeedControls } from "../components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "../components/BoardSettings";
 import { GameMenu } from "../components/GameMenu";
@@ -613,6 +613,13 @@ export function MultiplayerApp() {
   const disabled = view?.status !== "connected" || Boolean(view?.pending);
   const playerCount = snapshot?.players.length ?? 0;
   const missingPlayers = Math.max(0, 3 - playerCount);
+  const pendingPlayers = snapshot?.pendingPlayers ?? [];
+  const extraPendingPlayers = pendingPlayers.slice(Math.max(0, 4 - playerCount));
+  const renderPendingPlayer = (player: NonNullable<RoomSnapshot["pendingPlayers"]>[number]) => <>
+    <strong className="mr-auto min-w-0 truncate text-sm" title={player.name}>{player.name}</strong>
+    <button className="button-primary min-h-9 shrink-0 px-3 py-1.5" aria-label={translateText("Admit {name}", { name: player.name })} disabled={disabled || playerCount >= 4} onClick={() => session.current?.admit(player.connectionId)}>{translateText("Admit")}</button>
+    <button className="button-secondary min-h-9 shrink-0 px-3 py-1.5" aria-label={translateText("Decline {name}", { name: player.name })} disabled={disabled} onClick={() => session.current?.reject(player.connectionId)}>{translateText("Decline")}</button>
+  </>;
   const disconnectedPlayers = snapshot?.players.filter(player => player.control === "human" && !player.connected) ?? [];
   const sessionError = view?.error ? formatGameMessage(language, view.error) : "";
   const victoryWinner = game?.winnerId ? game.players.find(player => player.id === game.winnerId) : undefined;
@@ -835,6 +842,7 @@ export function MultiplayerApp() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
               <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <VictoryTargetBadge victoryTarget={snapshot.victoryPointsToWin} disabled={disabled} onChange={points => session.current?.setVictoryPointsToWin(points)} />
                 <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
               </div>
             </div>
@@ -855,14 +863,12 @@ export function MultiplayerApp() {
                 interactive={false}
                 compact
                 fit
-                victoryTarget={snapshot.victoryPointsToWin}
-                onChangeVictoryTarget={points => session.current?.setVictoryPointsToWin(points)}
-                victoryTargetDisabled={disabled}
                 onChangeTheme={() => setDialog("theme")}
                 headerControls={<MapSeedControls
                   value={mapCode}
                   onChange={setMapCode}
                   disabled={disabled}
+                  showCopy
                   onLoad={code => session.current?.useMapSeed(code)}
                   onShuffle={() => session.current?.shuffleBoard()}
                 />}
@@ -891,18 +897,20 @@ export function MultiplayerApp() {
                 <div className="lobby-roster my-5 space-y-2">
                   <PlayerList snapshot={snapshot} disabled={disabled} removePlayer={host ? playerId => session.current?.removePlayer(playerId) : undefined} renameComputer={host ? (playerId, name) => session.current?.renameComputer(playerId, name) : undefined} />
                   {playerCount < 4 && <ul aria-label={translateText("Open seats")} className="grid gap-2">
-                    {Array.from({ length: 4 - playerCount }, (_, index) => playerCount + index + 1).map(seat => <li key={seat} className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3 text-muted">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
-                      <div><p className="text-sm font-semibold">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</p><p className="mt-1 text-xs">{translateText(seat < 4 ? "Join by phone or add a computer." : "Start with three, or fill this seat.")}</p></div>
-                    </li>)}
+                    {Array.from({ length: 4 - playerCount }, (_, index) => playerCount + index + 1).map((seat, index) => {
+                      const pendingPlayer = host ? pendingPlayers[index] : undefined;
+                      return pendingPlayer ? <li key={pendingPlayer.connectionId} className="flex items-center gap-3 rounded-xl border border-line p-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
+                        {renderPendingPlayer(pendingPlayer)}
+                      </li> : <li key={seat} className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3 text-muted">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
+                        <div><p className="text-sm font-semibold">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</p><p className="mt-1 text-xs">{translateText(seat < 4 ? "Join by phone or add a computer." : "Start with three, or fill this seat.")}</p></div>
+                      </li>;
+                    })}
                   </ul>}
                 </div>
               </>}
-              {host && (snapshot?.pendingPlayers ?? []).map(player => <div key={player.connectionId} className="my-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
-                <strong className="mr-auto break-words text-sm">{player.name}</strong>
-                <button className="button-primary" aria-label={translateText("Admit {name}", { name: player.name })} disabled={disabled || playerCount >= 4} onClick={() => session.current?.admit(player.connectionId)}>{translateText("Admit")}</button>
-                <button className="button-secondary" aria-label={translateText("Decline {name}", { name: player.name })} disabled={disabled} onClick={() => session.current?.reject(player.connectionId)}>{translateText("Decline")}</button>
-              </div>)}
+              {host && extraPendingPlayers.map(player => <div key={player.connectionId} className="my-3 flex items-center gap-2 rounded-xl border border-line p-3">{renderPendingPlayer(player)}</div>)}
               {host && <>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button className="button-secondary" disabled={disabled || !snapshot || playerCount >= 4} onClick={() => session.current?.addComputer(language)}>{translateText("Add computer")}</button>

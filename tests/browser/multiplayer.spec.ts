@@ -338,16 +338,17 @@ async function selectMenuLanguage(page: Page, currentLanguage: "en" | "ja", next
   await page.keyboard.press("Escape");
 }
 
-test("host configures 3 to 13 victory points from the lobby map badge and synchronizes phones", async ({ multiplayer }, testInfo) => {
+test("host configures 3 to 13 victory points from the lobby island header and synchronizes phones", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
-  const mapControls = host.locator(".board-controls");
-  const target = mapControls.getByRole("button", { name: "Victory points to win", exact: true });
+  const preview = host.getByRole("region", { name: "Island preview", exact: true });
+  const target = preview.getByRole("button", { name: "Victory points to win", exact: true });
   const chooseVictoryTarget = async (points: number) => {
     await target.click();
     await host.getByRole("listbox", { name: "Victory points to win", exact: true }).getByRole("option", { name: String(points), exact: true }).click();
   };
   await expect(host.getByRole("button", { name: "Victory points to win", exact: true })).toHaveCount(1);
+  await expect(preview.locator(".board-controls").getByRole("button", { name: "Victory points to win", exact: true })).toHaveCount(0);
   await expect(target).toContainText("10 VP to win");
   await target.click();
   const targetOptions = host.getByRole("listbox", { name: "Victory points to win", exact: true }).getByRole("option");
@@ -376,7 +377,7 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
     const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
     for (const points of [3, 13, 7]) {
       await chooseVictoryTarget(points);
-      await expect(host.locator(".board-controls").getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
+      await expect(preview.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
       await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(points);
       await expect(host.getByRole("textbox", { name: "Map code", exact: true })).toHaveValue(mapCode);
     }
@@ -411,18 +412,15 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await host.setViewportSize({ width: 320, height: 568 });
   await target.scrollIntoViewIfNeeded();
   await expect(target).toBeInViewport({ ratio: 1 });
-  const themeBounds = (await mapControls.getByRole("button", { name: "Change theme", exact: true }).boundingBox())!;
-  const zoomBounds = (await mapControls.getByRole("button", { name: "Zoom out", exact: true }).boundingBox())!;
+  const boardBounds = (await preview.locator(".multiplayer-lobby-map").boundingBox())!;
   for (const points of [3, 13, 7]) {
     await chooseVictoryTarget(points);
-    await expect(mapControls.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
+    await expect(preview.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
     const targetBounds = (await target.boundingBox())!;
-    const controlsBounds = (await mapControls.boundingBox())!;
     expect(targetBounds.height).toBeGreaterThanOrEqual(44);
-    expect(targetBounds.x).toBeGreaterThanOrEqual(themeBounds.x + themeBounds.width);
-    expect(targetBounds.x + targetBounds.width).toBeLessThanOrEqual(zoomBounds.x);
-    expect(targetBounds.y).toBeGreaterThanOrEqual(controlsBounds.y);
-    expect(targetBounds.y + targetBounds.height).toBeLessThanOrEqual(controlsBounds.y + controlsBounds.height);
+    expect(targetBounds.x).toBeGreaterThanOrEqual(0);
+    expect(targetBounds.x + targetBounds.width).toBeLessThanOrEqual(320);
+    expect(targetBounds.y + targetBounds.height).toBeLessThanOrEqual(boardBounds.y);
   }
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "narrow-lobby-victory-target");
@@ -431,7 +429,7 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await host.setViewportSize({ width: 1280, height: 720 });
   for (const points of [3, 13, 7]) {
     await chooseVictoryTarget(points);
-    await expect(mapControls.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
+    await expect(preview.getByText(new RegExp(`^${points} VP(?: to win)?$`)).filter({ visible: true })).toBeVisible();
   }
   await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
   await host.setViewportSize(originalViewport);
@@ -450,6 +448,44 @@ test("host configures 3 to 13 victory points from the lobby map badge and synchr
   await host.getByRole("dialog").getByRole("button", { name: "Return to lobby", exact: true }).click();
   await expect(target).toContainText("7 VP");
   await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
+});
+
+test("Custom World config panel collapses to free the map and a join request takes an open seat without scrolling", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const phone = await multiplayer.newPage("hellooworld", true);
+  await requestSeat(phone, invitation, "hellooworld");
+  await selectGameVersion(host, "custom-world");
+  const panel = host.getByRole("region", { name: "Customize the map", exact: true });
+  const toggle = panel.getByRole("button", { name: /^Customize the map/ });
+  const map = host.locator(".multiplayer-lobby-map");
+  const players = host.locator(".multiplayer-lobby-players");
+  const island = host.getByRole("region", { name: "Island preview", exact: true });
+  const openSeats = host.getByRole("list", { name: "Open seats", exact: true });
+  for (const viewport of [{ width: 720, height: 1100 }, { width: 1440, height: 1000 }, { width: 1024, height: 720 }]) {
+    await host.setViewportSize(viewport);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(panel.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeHidden();
+    await expect(panel.getByRole("status")).toHaveText("All 42 tiles assigned.");
+    await expect(openSeats.getByRole("listitem").first().getByText("hellooworld", { exact: true })).toBeVisible();
+    await expect(openSeats.getByText("Player needed", { exact: true })).toHaveCount(2);
+    await expect(host.getByRole("button", { name: "Admit hellooworld", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(host.getByRole("button", { name: "Decline hellooworld", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect.poll(() => host.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))).toBeLessThanOrEqual(viewport.height);
+    await noHorizontalOverflow(host);
+    const playersHeight = await players.evaluate(element => ({ content: element.scrollHeight, available: element.clientHeight }));
+    expect(playersHeight.content).toBeLessThanOrEqual(playersHeight.available + 1);
+    const islandHeight = await island.evaluate(element => ({ content: element.scrollHeight, available: element.clientHeight }));
+    expect(islandHeight.content).toBeLessThanOrEqual(islandHeight.available + 1);
+    const collapsedMapHeight = (await map.boundingBox())!.height;
+    await screenshot(host, testInfo, `custom-lobby-collapsed-${viewport.width}-${viewport.height}`);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(panel.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeVisible();
+    await expect.poll(async () => (await map.boundingBox())!.height).toBeLessThanOrEqual(collapsedMapHeight);
+  }
 });
 
 test("Custom World lobby lets the host shape the island and share it with phones", async ({ multiplayer }, testInfo) => {
@@ -1116,6 +1152,59 @@ test("desktop lobby fits the map left and invitation above players right without
   }
 });
 
+test("tablet lobby keeps the island, invitation and roster in view without scrolling", async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  await hostGame(host);
+  const island = host.getByRole("region", { name: "Island preview", exact: true });
+  const invitation = host.getByRole("region", { name: "Room invitation", exact: true });
+  const players = host.locator(".multiplayer-lobby-players");
+  const map = host.getByRole("region", { name: "Island map. Use the zoom controls to enlarge, then scroll or drag to pan.", exact: true });
+  const expectRosterToFit = async () => {
+    const rosterHeight = await players.evaluate(element => ({ content: element.scrollHeight, available: element.clientHeight }));
+    expect(rosterHeight.content).toBeLessThanOrEqual(rosterHeight.available + 1);
+  };
+  const expectEverythingInView = async (viewport: { width: number; height: number }, name: string) => {
+    await expect.poll(() => host.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight))).toBeLessThanOrEqual(viewport.height);
+    await noHorizontalOverflow(host);
+    await expect(map).toBeInViewport({ ratio: 1 });
+    await expect(host.getByRole("img", { name: "Scan to join this game", exact: true })).toBeInViewport({ ratio: 1 });
+    for (const button of await host.getByRole("main").getByRole("button").all()) await expect(button).toBeInViewport({ ratio: 1 });
+    await screenshot(host, testInfo, name);
+  };
+  for (const playerCount of [0, 4]) {
+    if (playerCount === 4) {
+      for (let player = 0; player < 4; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+    }
+    for (const viewport of [{ width: 720, height: 1100 }, { width: 768, height: 1024 }]) {
+      await host.setViewportSize(viewport);
+      const header = (await host.getByRole("banner").boundingBox())!;
+      const islandBounds = (await island.boundingBox())!;
+      const invitationBounds = (await invitation.boundingBox())!;
+      const playersBounds = (await players.boundingBox())!;
+      expect(islandBounds.y).toBeCloseTo(header.y + header.height + 16, 0);
+      expect(invitationBounds.y).toBeGreaterThanOrEqual(islandBounds.y + islandBounds.height);
+      expect(playersBounds.y).toBeCloseTo(invitationBounds.y, 0);
+      expect(playersBounds.x).toBeGreaterThanOrEqual(invitationBounds.x + invitationBounds.width);
+      expect((await map.boundingBox())!.height).toBeGreaterThanOrEqual(280);
+      await expectRosterToFit();
+      await expectEverythingInView(viewport, `tablet-lobby-${viewport.width}-${viewport.height}-${playerCount}-players`);
+    }
+  }
+  await host.setViewportSize({ width: 1023, height: 768 });
+  const header = (await host.getByRole("banner").boundingBox())!;
+  const islandBounds = (await island.boundingBox())!;
+  const invitationBounds = (await invitation.boundingBox())!;
+  const playersBounds = (await players.boundingBox())!;
+  expect(islandBounds.y).toBeCloseTo(header.y + header.height + 16, 0);
+  expect(islandBounds.x + islandBounds.width).toBeLessThanOrEqual(invitationBounds.x);
+  expect(islandBounds.y).toBeCloseTo(invitationBounds.y, 0);
+  expect(playersBounds.x).toBeCloseTo(invitationBounds.x, 0);
+  expect(playersBounds.y).toBeGreaterThanOrEqual(invitationBounds.y + invitationBounds.height);
+  expect((await map.boundingBox())!.height).toBeGreaterThanOrEqual(400);
+  await expectRosterToFit();
+  await expectEverythingInView({ width: 1023, height: 768 }, "tablet-lobby-1023x768-4-players");
+});
+
 test("lobby uses the map zoom bar theme control and ends the invitation at the copy button", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
@@ -1289,14 +1378,15 @@ test("host map seed toolbar automatically loads complete codes across languages 
   for (const language of ["en", "ja"] as const) {
     if (language === "ja") await selectMenuLanguage(host, "en", "ja");
     const labels = language === "ja"
-      ? { preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", shuffle: "島の配置をシャッフル" }
-      : { preview: "Island preview", code: "Map code", replay: "Replay map", shuffle: "Shuffle island preview" };
+      ? { preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", copy: "マップコードをコピー", shuffle: "島の配置をシャッフル" }
+      : { preview: "Island preview", code: "Map code", replay: "Replay map", copy: "Copy map code", shuffle: "Shuffle island preview" };
     const preview = host.getByRole("region", { name: labels.preview, exact: true });
     const toolbar = preview.locator(".board-surface > .board-header-controls").getByRole("form", { name: labels.code, exact: true });
     const input = toolbar.getByRole("textbox", { name: labels.code, exact: true });
     const shuffle = toolbar.getByRole("button", { name: labels.shuffle, exact: true });
     await expect(toolbar.getByRole("button", { name: labels.replay, exact: true })).toHaveCount(0);
-    await expect(toolbar.getByRole("button")).toHaveCount(1);
+    await expect(toolbar.getByRole("button")).toHaveCount(2);
+    await expect(toolbar.getByRole("button", { name: labels.copy, exact: true })).toBeEnabled();
     await expect(input).toHaveAttribute("maxlength", "8");
     const islandLayout = () => preview.locator('svg g[role="img"]').evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
     for (const width of [1440, 390, 320]) {

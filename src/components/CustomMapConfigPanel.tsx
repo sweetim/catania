@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import {
   CUSTOM_LAND_MINIMUM,
   CUSTOM_MAP_COUNT_FIELDS,
@@ -31,6 +32,14 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
   const remaining = CUSTOM_MAP_TILES - assigned;
   const land = customMapConfigLandCount(value);
   const sabotageCards = customSabotageCardCount(value);
+  const [expanded, setExpanded] = useState(true);
+  const contentId = useId();
+  const statusClassName = `text-xs font-semibold ${isCustomMapConfig(value) ? "text-forest" : "text-clay"}`;
+  const statusText = remaining > 0
+    ? translateText(remaining === 1 ? "{count} tile left to assign." : "{count} tiles left to assign.", { count: remaining })
+    : land < CUSTOM_LAND_MINIMUM
+      ? translateText("Add at least {count} land tiles.", { count: CUSTOM_LAND_MINIMUM - land })
+      : translateText("All 42 tiles assigned.");
 
   function terrainName(field: CustomMapCountField): string {
     const label = TERRAIN_LABELS[field];
@@ -54,7 +63,20 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
 
   return (
     <section aria-label={translateText("Customize the map")} className="rounded-xl border border-line bg-paper/70 p-3">
-      <p className="mb-2 text-[11px] font-semibold text-muted">{translateText("Customize the map")}</p>
+      <button
+        type="button"
+        className={`flex min-h-9 w-full cursor-pointer items-center gap-2 text-left text-[11px] font-semibold text-muted ${expanded ? "mb-2" : ""}`}
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className="min-w-0 flex-1 truncate">{translateText("Customize the map")}</span>
+        {!expanded && <span className={`${statusClassName} truncate`} role="status">{statusText}</span>}
+        <svg aria-hidden="true" className={`h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="m3 4.5 3 3 3-3" />
+        </svg>
+      </button>
+      <div id={contentId} hidden={!expanded}>
       <div className="grid grid-cols-1 gap-1.5 min-[360px]:grid-cols-2 sm:grid-cols-4">
         {CUSTOM_MAP_COUNT_FIELDS.map(field => (
           <div key={field} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white/40 px-2 py-1.5 min-[360px]:block" role="group" aria-label={terrainName(field)}>
@@ -112,17 +134,12 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
             </div>
           </div>
         </div>
-        <p className={`text-xs font-semibold ${isCustomMapConfig(value) ? "text-forest" : "text-clay"}`} role="status">
-          {remaining > 0
-            ? translateText(remaining === 1 ? "{count} tile left to assign." : "{count} tiles left to assign.", { count: remaining })
-            : land < CUSTOM_LAND_MINIMUM
-              ? translateText("Add at least {count} land tiles.", { count: CUSTOM_LAND_MINIMUM - land })
-              : translateText("All 42 tiles assigned.")}
-        </p>
+        <p className={statusClassName} role="status">{statusText}</p>
       </div>
       <p className="mt-1 text-[10px] leading-4 text-muted">
         {translateText("Fog hides the whole map until discovered.")} {translateText("Sabotage cards destroy 2 opponent roads or ships, destroy a settlement, or reduce a city.")}
       </p>
+      </div>
     </section>
   );
 }

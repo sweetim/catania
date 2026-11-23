@@ -482,7 +482,7 @@ function VictoryTargetLabel({ victoryTarget }: { victoryTarget: number }) {
   </>;
 }
 
-function VictoryTargetBadge({ victoryTarget, disabled = false, onChange }: {
+export function VictoryTargetBadge({ victoryTarget, disabled = false, onChange }: {
   victoryTarget: number;
   disabled?: boolean;
   onChange: (points: number) => void;
