@@ -10,4 +10,8 @@ export const customMapTranslations = {
   "Increase {terrain} tiles": "{terrain}タイルを1枚増やす",
   "Decrease {terrain} tiles": "{terrain}タイルを1枚減らす",
   "Fog hides the whole map until discovered.": "霧を ON にすると、発見されるまでマップ全体が隠されます。",
+  "Sabotage cards": "破壊工作カード",
+  "Decrease Sabotage cards": "破壊工作カードを1枚減らす",
+  "Increase Sabotage cards": "破壊工作カードを1枚増やす",
+  "Sabotage cards destroy 2 opponent roads or ships, destroy a settlement, or reduce a city.": "破壊工作カードは相手の街道や船を2つ破壊するか、開拓地を破壊、または都市を開拓地に格下げします。",
 } satisfies TranslationCatalog;

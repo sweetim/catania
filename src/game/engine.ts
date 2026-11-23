@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
 import { createBoard, edgeTiles, isLand, isPortRevealed, isResource, pirateStartTileId, randomInteger, relocateFoggyWorldPorts, secureRandom, shuffle } from "./board";
-import { isCustomMapConfig, isFogBoard, isGameVariant, isSeafarers, isVictoryPointsToWin } from "./types";
+import { customSabotageCardCount, isCustomMapConfig, isFogBoard, isGameVariant, isSeafarers, isVictoryPointsToWin } from "./types";
 import { GameError } from "./messages";
 import type { GameMessage } from "./messages";
 import type { Board, CustomMapConfig, DevelopmentKind, FogDiscovery, GameAction, GameState, GameVariant, Player, Resource, Resources, Tile, Vertex } from "./types";
@@ -76,9 +76,11 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     resources: emptyResources(), developmentCards: [], knightsPlayed: 0,
   })), random);
   const board = selectedBoard ? structuredClone(selectedBoard) : createBoard(random, variant, customMapConfig);
+  const sabotageCount = variant === "custom-world" ? customSabotageCardCount(customMapConfig) : 0;
   const developmentDeck = shuffle<DevelopmentKind>([
     ...Array<DevelopmentKind>(14).fill("knight"), ...Array<DevelopmentKind>(5).fill("victory-point"),
     "road-building", "road-building", "year-of-plenty", "year-of-plenty", "monopoly", "monopoly",
+    ...Array<DevelopmentKind>(sabotageCount).fill("sabotage"),
   ], random);
   return {
     variant, victoryPointsToWin, board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
@@ -198,6 +200,41 @@ export function legalShipDestinations(state: GameState | (PlacementState & Pick<
   if (!movableShipEdges({ ...state, pirateTileId: state.pirateTileId ?? null }, playerId).includes(edgeId)) return [];
   const board = { ...state.board, edges: state.board.edges.map(edge => edge.id === edgeId ? { ...edge, playerId: null } : edge) };
   return legalShipEdges({ ...state, board }, playerId).filter(id => id !== edgeId);
+}
+
+function sabotageableEdges(board: Board, playerId: string): string[] {
+  return board.edges
+    .filter(edge => edge.playerId !== null && edge.playerId !== playerId)
+    .map(edge => edge.id);
+}
+
+function sabotageableVertices(board: Board, playerId: string): string[] {
+  const buildingCounts = new Map<string, number>();
+  for (const vertex of board.vertices) {
+    if (vertex.building) {
+      buildingCounts.set(vertex.building.playerId, (buildingCounts.get(vertex.building.playerId) ?? 0) + 1);
+    }
+  }
+  return board.vertices
+    .filter(vertex => {
+      if (!vertex.building || vertex.building.playerId === playerId) return false;
+      return vertex.building.kind === "city" || (buildingCounts.get(vertex.building.playerId) ?? 0) >= 2;
+    })
+    .map(vertex => vertex.id);
+}
+
+export function hasLegalSabotageTarget(state: Pick<GameState, "board">, playerId: string): boolean {
+  return sabotageableEdges(state.board, playerId).length > 0 || sabotageableVertices(state.board, playerId).length > 0;
+}
+
+export function legalSabotageEdges(state: PlacementState, playerId: string): string[] {
+  if (state.phase.type !== "sabotage" || state.activePlayerId !== playerId || state.phase.remainingRoutes <= 0) return [];
+  return sabotageableEdges(state.board, playerId);
+}
+
+export function legalSabotageVertices(state: PlacementState, playerId: string): string[] {
+  if (state.phase.type !== "sabotage" || state.activePlayerId !== playerId || !state.phase.canTargetBuilding) return [];
+  return sabotageableVertices(state.board, playerId);
 }
 
 export function victoryTarget(variant: GameVariant): number {
@@ -695,7 +732,7 @@ export function applyAction(
       requireRule(state.developmentDeck.length > 0, "The development-card deck is empty.");
       pay(state, player, COSTS.development);
       const kind = state.developmentDeck.pop()!;
-      player.developmentCards.push({ id: `development-${25 - state.developmentDeck.length}`, kind, purchasedTurn: state.turnNumber });
+      player.developmentCards.push({ id: `development-${state.developmentDeck.length + 1}`, kind, purchasedTurn: state.turnNumber });
       state.log.push({ key: "{player} buys a development card.", parameters: { player: player.name } });
     })
     .with({ type: "play-development" }, action => {
@@ -744,6 +781,15 @@ export function applyAction(
             state.monopolies = state.monopolies.slice(-100);
           }
         })
+        .with("sabotage", () => {
+          requireRule(hasLegalSabotageTarget(state, playerId), "There are no opponent pieces available to sabotage.");
+          state.phase = {
+            type: "sabotage",
+            remainingRoutes: 2,
+            canTargetBuilding: sabotageableVertices(state.board, playerId).length > 0,
+            returnPhase,
+          };
+        })
         .exhaustive();
       player.developmentCards = player.developmentCards.filter(other => other.id !== card.id);
       state.developmentPlayed = true;
@@ -754,6 +800,46 @@ export function applyAction(
       requireRule(legalRoadEdges(state, playerId).length === 0 && legalShipEdges(state, playerId).length === 0, "Place the remaining free roads while legal locations and road pieces are available.");
       state.phase = { type: state.phase.returnPhase };
       state.log.push({ key: "{player} finishes Road Building.", parameters: { player: player.name } });
+    })
+    .with({ type: "sabotage-route" }, action => {
+      requireRule(state.phase.type === "sabotage" && legalSabotageEdges(state, playerId).includes(action.edgeId),
+        "Choose an opponent's road or ship to destroy.");
+      const edge = state.board.edges.find(edge => edge.id === action.edgeId)!;
+      const victim = playerFor(state, edge.playerId!);
+      const ship = edge.kind === "ship";
+      edge.playerId = null;
+      delete edge.kind;
+      state.shipsBuiltThisTurn = state.shipsBuiltThisTurn.filter(id => id !== edge.id);
+      state.log.push({
+        key: ship ? "{player} destroys {victim}'s ship." : "{player} destroys {victim}'s road.",
+        parameters: { player: player.name, victim: victim.name },
+      });
+      state.phase.remainingRoutes--;
+      state.phase.canTargetBuilding = false;
+      if (state.phase.remainingRoutes === 0 || legalSabotageEdges(state, playerId).length === 0) {
+        state.phase = { type: state.phase.returnPhase };
+      }
+    })
+    .with({ type: "sabotage-building" }, action => {
+      requireRule(state.phase.type === "sabotage" && legalSabotageVertices(state, playerId).includes(action.vertexId),
+        "Choose an opponent's city or non-final settlement to sabotage.");
+      const vertex = state.board.vertices.find(vertex => vertex.id === action.vertexId)!;
+      const building = vertex.building!;
+      const victim = playerFor(state, building.playerId);
+      if (building.kind === "city") {
+        vertex.building = { playerId: victim.id, kind: "settlement" };
+        state.log.push({
+          key: "{player} reduces {victim}'s city to a settlement.",
+          parameters: { player: player.name, victim: victim.name },
+        });
+      } else {
+        vertex.building = null;
+        state.log.push({
+          key: "{player} destroys {victim}'s settlement.",
+          parameters: { player: player.name, victim: victim.name },
+        });
+      }
+      state.phase = { type: state.phase.returnPhase };
     })
     .with({ type: "end-turn" }, () => {
       requireActions();

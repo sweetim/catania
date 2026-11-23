@@ -18,18 +18,32 @@ export function isFogWorld(variant: GameVariant | undefined): boolean {
 }
 export const CUSTOM_MAP_TILES = 42;
 export const CUSTOM_LAND_MINIMUM = 8;
+export const CUSTOM_SABOTAGE_CARDS_MAXIMUM = 6;
+export const DEVELOPMENT_DECK_MAXIMUM = 25 + CUSTOM_SABOTAGE_CARDS_MAXIMUM;
 export const CUSTOM_MAP_COUNT_FIELDS = ["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"] as const;
 export type CustomMapCountField = typeof CUSTOM_MAP_COUNT_FIELDS[number];
-export type CustomMapConfig = Record<CustomMapCountField, number> & { fog: boolean };
+export type CustomMapConfig = Record<CustomMapCountField, number> & { fog: boolean; sabotageCards?: number };
 export const DEFAULT_CUSTOM_MAP_CONFIG: CustomMapConfig = {
-  wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13, fog: false,
+  wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13, fog: false, sabotageCards: 2,
 };
+
+export function customSabotageCardCount(config: Pick<CustomMapConfig, "sabotageCards"> | undefined): number {
+  return config?.sabotageCards ?? 0;
+}
 
 function customMapCounts(value: unknown): Record<CustomMapCountField, number> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
     Object.getPrototypeOf(value) !== Object.prototype) return null;
   const candidate = value as Record<string, unknown>;
-  if (Object.keys(candidate).length !== CUSTOM_MAP_COUNT_FIELDS.length + 1 || typeof candidate.fog !== "boolean") return null;
+  const hasSabotage = Object.hasOwn(candidate, "sabotageCards");
+  const expectedKeys = CUSTOM_MAP_COUNT_FIELDS.length + 1 + (hasSabotage ? 1 : 0);
+  if (Object.keys(candidate).length !== expectedKeys || typeof candidate.fog !== "boolean") return null;
+  if (hasSabotage) {
+    const sabotage = candidate.sabotageCards;
+    if (typeof sabotage !== "number" || !Number.isSafeInteger(sabotage) || sabotage < 0 || sabotage > CUSTOM_SABOTAGE_CARDS_MAXIMUM) {
+      return null;
+    }
+  }
   const counts = {} as Record<CustomMapCountField, number>;
   for (const field of CUSTOM_MAP_COUNT_FIELDS) {
     const count = candidate[field];
@@ -64,7 +78,8 @@ export type DevelopmentKind =
   | "victory-point"
   | "road-building"
   | "year-of-plenty"
-  | "monopoly";
+  | "monopoly"
+  | "sabotage";
 
 export type Building = { playerId: string; kind: "settlement" | "city" };
 export type Tile = {
@@ -143,6 +158,7 @@ export type GamePhase =
     }
   | { type: "steal"; victimIds: string[]; returnPhase: "roll" | "actions" }
   | { type: "road-building"; remaining: number; returnPhase: "roll" | "actions" }
+  | { type: "sabotage"; remainingRoutes: number; canTargetBuilding: boolean; returnPhase: "roll" | "actions" }
   | { type: "finished" };
 export type TradeOffer = {
   offeredBy: string;
@@ -205,4 +221,6 @@ export type GameAction =
   | { type: "cancel-trade" }
   | { type: "buy-development" }
   | { type: "play-development"; cardId: string; resource?: Resource; resources?: Resources }
-  | { type: "skip-roads" };
+  | { type: "skip-roads" }
+  | { type: "sabotage-route"; edgeId: string }
+  | { type: "sabotage-building"; vertexId: string };

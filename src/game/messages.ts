@@ -50,6 +50,13 @@ export const gameMessages = {
   "{player} buys a development card.": "{player}が発展カードを購入しました。",
   "{player} plays {kind}.": "{player}が{kind}を使用しました。",
   "{player} finishes Road Building.": "{player}が街道建設を完了しました。",
+  "{player} destroys {victim}'s road.": "{player}が{victim}の街道を破壊しました。",
+  "{player} destroys {victim}'s ship.": "{player}が{victim}の船を破壊しました。",
+  "{player} destroys {victim}'s settlement.": "{player}が{victim}の開拓地を破壊しました。",
+  "{player} reduces {victim}'s city to a settlement.": "{player}が{victim}の都市を開拓地に格下げしました。",
+  "There are no opponent pieces available to sabotage.": "破壊工作の対象にできる相手のコマがありません。",
+  "Choose an opponent's road or ship to destroy.": "破壊する相手の街道または船を選んでください。",
+  "Choose an opponent's city or non-final settlement to sabotage.": "相手の都市、または最後の1つではない開拓地を選んでください。",
   "{player} begins a turn.": "{player}のターンが始まります。",
   "Specify a nonnegative whole number for each of the five resources.": "5種類の資源それぞれに0以上の整数を指定してください。",
   "This player is not seated in the game.": "このプレイヤーはゲームに参加していません。",
@@ -190,7 +197,7 @@ export const gameMessages = {
 export type GameMessage = { key: keyof typeof gameMessages; parameters?: TranslationParameters };
 
 const developmentNames: Record<DevelopmentKind, string> = {
-  knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占",
+  knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占", sabotage: "破壊工作",
 };
 const awardNames = { "Longest Road": "最長交易路", "Longest Route": "最長交易路", "Largest Army": "最大騎士力" } as const;
 const resourceNames: Resource[] = ["wood", "brick", "wool", "grain", "ore"];

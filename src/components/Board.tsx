@@ -635,6 +635,7 @@ export function Board({
   robberTileId,
   pirateTileId,
   routeMode,
+  sabotageMode = false,
   pirateIndicator,
   legalVertexIds = [],
   legalEdgeIds = [],
@@ -662,6 +663,7 @@ export function Board({
   robberTileId?: string;
   pirateTileId?: string | null;
   routeMode?: "road" | "ship" | "move-ship" | null;
+  sabotageMode?: boolean;
   pirateIndicator?: {
     onBoard: boolean;
     enabled: boolean;
@@ -2042,7 +2044,7 @@ export function Board({
               .map(({ edge, start, end, x, y }) => {
                 const highlighted =
                   selectedId === edge.id || focusedId === edge.id;
-                // A generous touch target must never cover another road's visible center.
+                // A generous touch target must never cover another road's or legal vertex's visible center.
                 const radius = Math.min(
                   hitRadius,
                   ...edgeGeometry
@@ -2052,16 +2054,23 @@ export function Board({
                         legalEdges.has(other.edge.id),
                     )
                     .map((other) => Math.hypot(other.x - x, other.y - y) - 1),
+                  ...board.vertices
+                    .filter((vertex) => legalVertices.has(vertex.id))
+                    .map((vertex) => Math.hypot(vertex.x - x, vertex.y - y) * 0.5),
                 );
+                const owner = edge.playerId ? playersById.get(edge.playerId) : undefined;
+                const edgeLabel = sabotageMode
+                  ? translateText(edge.kind === "ship" ? "Destroy {player}'s ship at {location}" : "Destroy {player}'s road at {location}", { player: owner?.name ?? "", location: edge.id })
+                  : translateText(routeMode === "move-ship" ? "Move ship at {location}" :
+                    routeMode === "ship" || edgeTiles(board, edge).every(tile => tile.terrain === "sea" || tile.terrain === "fog")
+                      ? "Build ship at {location}" : "Build road at {location}", { location: edge.id });
                 return (
                   <g
                     key={edge.id}
                     {...targetProperties(
                       "edge",
                       edge.id,
-                      translateText(routeMode === "move-ship" ? "Move ship at {location}" :
-                        routeMode === "ship" || edgeTiles(board, edge).every(tile => tile.terrain === "sea" || tile.terrain === "fog")
-                          ? "Build ship at {location}" : "Build road at {location}", { location: edge.id }),
+                      edgeLabel,
                     )}
                   >
                     <circle cx={x} cy={y} r={radius} fill="transparent" />
@@ -2070,7 +2079,7 @@ export function Board({
                       y1={start.y * 0.85 + end.y * 0.15}
                       x2={start.x * 0.15 + end.x * 0.85}
                       y2={start.y * 0.15 + end.y * 0.85}
-                      stroke="#fff4d4"
+                      stroke={sabotageMode ? "#fde4df" : "#fff4d4"}
                       strokeWidth={highlighted ? "12" : "9"}
                       strokeLinecap="round"
                       pointerEvents="none"
@@ -2080,7 +2089,7 @@ export function Board({
                       y1={start.y * 0.85 + end.y * 0.15}
                       x2={start.x * 0.15 + end.x * 0.85}
                       y2={start.y * 0.15 + end.y * 0.85}
-                      stroke={highlighted ? "#664b28" : "#b48b45"}
+                      stroke={sabotageMode ? (highlighted ? "#7c261b" : "#c75442") : (highlighted ? "#664b28" : "#b48b45")}
                       strokeWidth={highlighted ? "7" : "4"}
                       strokeDasharray={highlighted ? undefined : "3 6"}
                       strokeLinecap="round"
@@ -2091,15 +2100,18 @@ export function Board({
                       cy={y}
                       r={highlighted ? 8.5 : 6.5}
                       className={highlighted ? undefined : "legal-target-pulse"}
-                      fill={highlighted ? "#664b28" : "#fff4d4"}
-                      stroke={highlighted ? "#fff4d4" : "#a77a3a"}
+                      fill={sabotageMode ? (highlighted ? "#8a2f22" : "#fde4df") : (highlighted ? "#664b28" : "#fff4d4")}
+                      stroke={sabotageMode ? (highlighted ? "#fde4df" : "#b84a39") : (highlighted ? "#fff4d4" : "#a77a3a")}
                       strokeWidth="1.5"
                       pointerEvents="none"
                     />
                     <path
-                      d={`M${x - 2.5} ${y}h5M${x} ${y - 2.5}v5`}
-                      stroke={highlighted ? "#fff4d4" : "#8a642d"}
-                      strokeWidth="1.3"
+                      d={sabotageMode
+                        ? `M${x - 2.4} ${y - 2.4}L${x + 2.4} ${y + 2.4}M${x - 2.4} ${y + 2.4}L${x + 2.4} ${y - 2.4}`
+                        : `M${x - 2.5} ${y}h5M${x} ${y - 2.5}v5`}
+                      stroke={sabotageMode ? (highlighted ? "#fde4df" : "#8a2f22") : (highlighted ? "#fff4d4" : "#8a642d")}
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
                       pointerEvents="none"
                     />
                   </g>
@@ -2346,14 +2358,25 @@ export function Board({
                       (other) =>
                         Math.hypot(other.x - vertex.x, other.y - vertex.y) - 1,
                     ),
+                  ...edgeGeometry
+                    .filter(({ edge }) => legalEdges.has(edge.id))
+                    .map(
+                      (edge) =>
+                        Math.hypot(edge.x - vertex.x, edge.y - vertex.y) * 0.5,
+                    ),
                 );
+                const building = vertex.building;
+                const owner = building ? playersById.get(building.playerId) : undefined;
+                const vertexLabel = sabotageMode && building
+                  ? translateText(building.kind === "city" ? "Reduce {player}'s city to a settlement at {location}" : "Destroy {player}'s settlement at {location}", { player: owner?.name ?? "", location: vertex.id })
+                  : translateText(occupied ? "Upgrade to city at {location}" : "Place settlement at {location}", { location: vertex.id });
                 return (
                   <g
                     key={vertex.id}
                     {...targetProperties(
                       "vertex",
                       vertex.id,
-                      translateText(occupied ? "Upgrade to city at {location}" : "Place settlement at {location}", { location: vertex.id }),
+                      vertexLabel,
                     )}
                   >
                     <circle
@@ -2369,8 +2392,8 @@ export function Board({
                       className={highlighted ? undefined : "legal-target-pulse"}
                       fill={occupied ? "none" : "#fff5d9"}
                       fillOpacity="0.8"
-                      stroke={highlighted ? "#5d4525" : "#b68c45"}
-                      strokeWidth={highlighted ? "3" : "1.6"}
+                      stroke={sabotageMode ? (highlighted ? "#7c261b" : "#c75442") : (highlighted ? "#5d4525" : "#b68c45")}
+                      strokeWidth={highlighted ? "3.2" : sabotageMode ? "2.4" : "1.6"}
                       strokeDasharray={
                         occupied && !highlighted ? "3 3" : undefined
                       }

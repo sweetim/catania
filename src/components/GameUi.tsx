@@ -227,6 +227,13 @@ export function DevelopmentCardIcon({ kind }: { kind: DevelopmentKind }) {
             <path d="m16 5 3 4-3 4-3-4Z" fill="white" />
           </>
         ))
+        .with("sabotage", () => (
+          <>
+            <path d="M5 27V13l5-5 4 4-3 5 5 2-4 8H5Z" fill="currentColor" />
+            <path d="M27 27H16l4-7-5-2 3-5 4-5 5 5v14Z" fill="currentColor" opacity=".78" />
+            <path d="m17 4-4 8 5 2-5 11" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        ))
         .exhaustive()}
     </svg>
   );

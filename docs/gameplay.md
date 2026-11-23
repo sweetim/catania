@@ -247,9 +247,9 @@ turn.
 Custom World hands the map design to the players. Selecting it adds a
 **Customize the map** panel to setup (and to the multiplayer host lobby) with a
 stepper for every terrain type — wood, brick, wool, grain, ore, gold, desert,
-and sea — plus a fog toggle. Assign exactly 42 tiles with at least 8 land
-hexes; the panel tracks the tiles left, and the game cannot start until the
-mix is complete.
+and sea — plus a fog toggle and a **Sabotage cards** stepper (0–6, default 2).
+Assign exactly 42 tiles with at least 8 land hexes; the panel tracks the tiles
+left, and the game cannot start until the mix is complete.
 
 - **Fog off:** the map grows one connected island from the configured land
   hexes, ringed by the configured sea. All land is open for starting
@@ -260,9 +260,16 @@ mix is complete.
   Foggy World — fixed per-cell discoveries, cell-first setup, discovery
   rewards, relocating harbors, and no island bonuses — but with your terrain
   counts instead of the fixed mix.
+- **Sabotage development cards:** adds the configured number of **Sabotage**
+  cards (0–6) to the shuffled development deck (up to 31 cards total). Played
+  like any standard action development card (on a later turn, before or after
+  rolling, one action card per turn), Sabotage lets you either destroy up to
+  two opponent roads or ships, destroy one opponent settlement (as long as it
+  is not that opponent's last remaining building), or reduce one opponent city
+  to a settlement. Longest Route and victory checks recalculate immediately.
 
 The map code together with the configuration rebuilds the identical island:
-deep links carry both (`?map=…&variant=custom-world&wood=…&fog=1`), and
+deep links carry both (`?map=…&variant=custom-world&wood=…&fog=1&sabotage=2`), and
 finished games record the configuration in the winner's profile history so
 **Replay map** restores it. Win at 12 points on your own turn.
 

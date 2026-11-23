@@ -1,7 +1,7 @@
 import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import { isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
+import { DEVELOPMENT_DECK_MAXIMUM, isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import { isBoardThemeId } from "../themes";
@@ -75,9 +75,9 @@ export function parseAction(value: unknown): GameAction {
   switch (value.type) {
     case "roll": case "end-turn": case "cancel-knight": case "cancel-trade": case "buy-development": case "skip-roads":
       valid = fields(value, ["type"]); break;
-    case "place-settlement": case "place-city":
+    case "place-settlement": case "place-city": case "sabotage-building":
       valid = fields(value, ["type", "vertexId"]) && identifier(value.vertexId, "vertex"); break;
-    case "place-road": case "place-ship":
+    case "place-road": case "place-ship": case "sabotage-route":
       valid = fields(value, ["type", "edgeId"]) && identifier(value.edgeId, "edge"); break;
     case "move-ship":
       valid = fields(value, ["type", "edgeId", "destinationEdgeId"]) && identifier(value.edgeId, "edge") && identifier(value.destinationEdgeId, "edge"); break;
@@ -156,8 +156,8 @@ function roomPlayer(value: unknown, publicPlayer = false): boolean {
 function privatePlayer(value: unknown): boolean {
   return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed"]) &&
     roomPlayer({ id: value.id, name: value.name, color: value.color, control: value.control, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) &&
-    array(value.developmentCards, 25, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
-      ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"].includes(card.kind as string));
+    array(value.developmentCards, DEVELOPMENT_DECK_MAXIMUM, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
+      ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly", "sabotage"].includes(card.kind as string));
 }
 function phase(value: unknown): boolean {
   if (!record(value)) return false;
@@ -169,6 +169,7 @@ function phase(value: unknown): boolean {
     case "robber": return fields(value, ["type", "returnPhase"]) && ["roll", "actions"].includes(value.returnPhase as string);
     case "steal": return fields(value, ["type", "victimIds", "returnPhase"]) && array(value.victimIds, 3, value => identifier(value, "player")) && ["roll", "actions"].includes(value.returnPhase as string);
     case "road-building": return fields(value, ["type", "remaining", "returnPhase"]) && integer(value.remaining, 2) && ["roll", "actions"].includes(value.returnPhase as string);
+    case "sabotage": return fields(value, ["type", "remainingRoutes", "canTargetBuilding", "returnPhase"]) && integer(value.remainingRoutes, 2) && typeof value.canTargetBuilding === "boolean" && ["roll", "actions"].includes(value.returnPhase as string);
     default: return false;
   }
 }
@@ -205,7 +206,7 @@ function publicGame(value: unknown): boolean {
       (!Object.hasOwn(trade, "expiresAt") || integer(trade.expiresAt)) && identifier(trade.offeredBy, "player") &&
       (trade.give === null || resources(trade.give)) && resources(trade.receive) && record(trade.responses) && Object.entries(trade.responses).every(([key, value]) => identifier(key, "player") && (value === false || resources(value))))) &&
     array(value.log, 100, isGameMessage) && typeof value.developmentPlayed === "boolean" &&
-    array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
+    array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, DEVELOPMENT_DECK_MAXIMUM);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
   if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed", "customMapConfig", "boardThemeId"])) return false;

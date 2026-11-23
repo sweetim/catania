@@ -1,8 +1,9 @@
 import { match } from "ts-pattern";
 import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio,
-  legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipDestinations, legalShipEdges,
-  legalSetupRevealTiles, movableShipEdges, RESOURCES, resourceTotal,
+  hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalSabotageEdges, legalSabotageVertices,
+  legalSettlementVertices, legalShipDestinations, legalShipEdges, legalSetupRevealTiles, movableShipEdges,
+  RESOURCES, resourceTotal,
 } from "./engine";
 import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
 import { isFogBoard, isSeafarers } from "./types";
@@ -812,6 +813,84 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     return { action: { type: "move-robber", tileId: bestLandTile.id }, value: tileValue(bestLandTile) + unblockValue };
   }
 
+  function bestSabotageTarget(sabotageState: GameState): { action: GameAction; value: number } | null {
+    const ownRouteLength = getLongestRoadLength(sabotageState, playerId);
+    const opponentRouteLengths = new Map(opponents.map(other => [other.id, getLongestRoadLength(sabotageState, other.id)]));
+    const contenderMultiplier = (ownerId: string): number => {
+      const opponentScore = publicScores.get(ownerId) ?? 0;
+      const isLeader = opponentScore === highestOpponentScore && opponentScore >= 3;
+      return opponentScore >= state.victoryPointsToWin - 1 ? 3.0
+        : opponentScore >= state.victoryPointsToWin - 2 ? 2.0
+        : isLeader ? 1.4 : 1.0;
+    };
+
+    let bestChoice: { action: GameAction; value: number } | null = null;
+    for (const vertexId of legalSabotageVertices(sabotageState, playerId)) {
+      const vertex = vertices.get(vertexId)!;
+      const building = vertex.building!;
+      const pips = vertex.tileIds.reduce((total, tileId) => {
+        const tile = tiles.get(tileId)!;
+        if (tile.number === null) return total;
+        return total + (isResource(tile.terrain) ? pipCount(tile.number) : tile.terrain === "gold" ? pipCount(tile.number) * 2.2 : 0);
+      }, 0);
+      let routeBonus = 0;
+      if (building.kind === "settlement") {
+        const nextState: GameState = {
+          ...sabotageState,
+          board: {
+            ...sabotageState.board,
+            vertices: sabotageState.board.vertices.map(candidate =>
+              candidate.id === vertexId ? { ...candidate, building: null } : candidate),
+          },
+        };
+        const nextOwnRoute = getLongestRoadLength(nextState, playerId);
+        const maximumOpponentRoute = Math.max(0, ...opponents.map(other => getLongestRoadLength(nextState, other.id)));
+        if (state.awards.longestRoad !== playerId && nextOwnRoute >= 5 && nextOwnRoute > maximumOpponentRoute) {
+          routeBonus = winsWith(2) ? 10000 : 28;
+        }
+      }
+      const value = routeBonus === 10000
+        ? 10000
+        : (12 + pips * 1.4 + (building.kind === "city" ? 3 : 0)) * contenderMultiplier(building.playerId) + routeBonus;
+      if (!bestChoice || value > bestChoice.value) {
+        bestChoice = { action: { type: "sabotage-building", vertexId }, value };
+      }
+    }
+
+    for (const edgeId of legalSabotageEdges(sabotageState, playerId)) {
+      const edge = edges.get(edgeId)!;
+      const ownerId = edge.playerId!;
+      const nextState: GameState = {
+        ...sabotageState,
+        board: {
+          ...sabotageState.board,
+          edges: sabotageState.board.edges.map(candidate =>
+            candidate.id === edgeId ? { ...candidate, playerId: null, kind: undefined } : candidate),
+        },
+      };
+      const previousLength = opponentRouteLengths.get(ownerId) ?? 0;
+      const nextLength = getLongestRoadLength(nextState, ownerId);
+      const lengthDrop = Math.max(0, previousLength - nextLength);
+      const otherMaximum = Math.max(0, ...opponents.filter(other => other.id !== ownerId).map(other => opponentRouteLengths.get(other.id) ?? 0));
+      let awardBonus = 0;
+      if (state.awards.longestRoad === ownerId) {
+        if (ownRouteLength >= 5 && ownRouteLength > Math.max(nextLength, otherMaximum)) {
+          awardBonus = winsWith(2) ? 10000 : 34;
+        } else if (nextLength < 5 || nextLength <= otherMaximum) {
+          awardBonus = 24;
+        }
+      }
+      const value = awardBonus === 10000
+        ? 10000
+        : (3 + lengthDrop * 4.5 + awardBonus) * contenderMultiplier(ownerId);
+      if (!bestChoice || value > bestChoice.value) {
+        bestChoice = { action: { type: "sabotage-route", edgeId }, value };
+      }
+    }
+
+    return bestChoice;
+  }
+
   function isBlockedTradePartner(otherId: string): boolean {
     return publicScores.get(otherId)! >= state.victoryPointsToWin - 1;
   }
@@ -918,6 +997,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       const road = bestRoad(state);
       return road ? { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId } : { type: "skip-roads" };
     })
+    .with({ type: "sabotage" }, (): GameAction | null => bestSabotageTarget(state)?.action ?? null)
     .with({ type: "gold" }, (phase): GameAction => {
       const selected = emptyResources();
       const targets = buildTargets();
@@ -1124,6 +1204,19 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
             const minimumExpected = score >= state.victoryPointsToWin - 3 || cost[bestResource] > activePlayer.resources[bestResource] ? 2.0 : 2.8;
             return expected[bestResource] >= minimumExpected
               ? { action: { type: "play-development", cardId: card.id, resource: bestResource }, value: scoreMonopoly(bestResource) * 2.2 }
+              : null;
+          })
+          .with("sabotage", (): typeof developmentActions[number] | null => {
+            if (!hasLegalSabotageTarget(state, playerId)) return null;
+            const sabotagePreview: GameState = {
+              ...state,
+              phase: { type: "sabotage", remainingRoutes: 2, canTargetBuilding: true, returnPhase: "actions" },
+            };
+            const targetChoice = bestSabotageTarget(sabotagePreview);
+            if (!targetChoice) return null;
+            const urgentLeader = highestOpponentScore >= state.victoryPointsToWin - 2;
+            return targetChoice.value >= 12 || urgentLeader
+              ? { action: { type: "play-development", cardId: card.id }, value: targetChoice.value }
               : null;
           })
           .exhaustive();

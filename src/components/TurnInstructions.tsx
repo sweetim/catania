@@ -95,6 +95,20 @@ export function getPhaseInstructions({
           ? "Place {count} more road for free. Confirm each placement on the board."
           : "Place {count} more roads for free. Confirm each placement on the board.", { count: phase.remaining }),
     }))
+    .with({ type: "sabotage" }, phase => ({
+      title: translateText("Sabotage the opposition."),
+      description: phase.canTargetBuilding
+        ? translateText(sharedBoard
+          ? "Destroy up to 2 opponent roads or ships, destroy an opponent settlement, or reduce an opponent city on the shared board."
+          : "Destroy up to 2 opponent roads or ships, destroy an opponent settlement, or reduce an opponent city on the board.")
+        : translateText(sharedBoard
+          ? phase.remainingRoutes === 1
+            ? "Destroy {count} more opponent road or ship on the shared board."
+            : "Destroy up to {count} opponent roads or ships on the shared board."
+          : phase.remainingRoutes === 1
+            ? "Destroy {count} more opponent road or ship on the board."
+            : "Destroy up to {count} opponent roads or ships on the board.", { count: phase.remainingRoutes }),
+    }))
     .with({ type: "finished" }, () => ({
       title: translateText("An island. A new legend."),
       description: translateText("The first player to reach {points} victory points on their turn wins.", { points: victoryPointsToWin }),

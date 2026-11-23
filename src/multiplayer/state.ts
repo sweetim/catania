@@ -3,7 +3,7 @@ import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "..
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
-  legalRoadEdges, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
+  legalRoadEdges, legalSabotageEdges, legalSabotageVertices, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
 } from "../game/engine";
 import {
   DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig, isCustomMapConfigDraft, isGameVariant, isSeafarers, isVictoryPointsToWin,
@@ -20,7 +20,7 @@ import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 
 const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
-const BOARD_ACTIONS = new Set(["place-settlement", "reveal-tile", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate"]);
+const BOARD_ACTIONS = new Set(["place-settlement", "reveal-tile", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate", "sabotage-route", "sabotage-building"]);
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {
   if (!condition) throw new GameError(message);
@@ -43,6 +43,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
     .with({ type: "robber" }, phase => ({ type: "robber", returnPhase: phase.returnPhase } as const))
     .with({ type: "steal" }, phase => ({ type: "steal" as const, victimIds: [...phase.victimIds], returnPhase: phase.returnPhase }))
     .with({ type: "road-building" }, phase => ({ type: "road-building", remaining: phase.remaining, returnPhase: phase.returnPhase } as const))
+    .with({ type: "sabotage" }, phase => ({ type: "sabotage", remainingRoutes: phase.remainingRoutes, canTargetBuilding: phase.canTargetBuilding, returnPhase: phase.returnPhase } as const))
     .with({ type: "finished" }, () => ({ type: "finished" } as const))
     .exhaustive();
   return structuredClone({
@@ -364,6 +365,8 @@ export class HostRoom {
       .with({ type: "move-pirate" }, action => action.tileId === null
         ? isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
         : targets.tiles.includes(action.tileId))
+      .with({ type: "sabotage-route" }, action => game.phase.type === "sabotage" && targets.edges.includes(action.edgeId))
+      .with({ type: "sabotage-building" }, action => game.phase.type === "sabotage" && targets.vertices.includes(action.vertexId))
       .otherwise(() => false);
     requireRoom(authorized, "Choose a highlighted board target for the current build or phase.");
     this.game = applyAction(game, game.activePlayerId, action);
@@ -445,6 +448,9 @@ export class HostRoom {
       targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
         ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
         : tile.id !== game.robberTileId)).map(tile => tile.id);
+    } else if (game.phase.type === "sabotage") {
+      targets.edges = legalSabotageEdges(game, game.activePlayerId);
+      targets.vertices = legalSabotageVertices(game, game.activePlayerId);
     }
     return targets;
   }

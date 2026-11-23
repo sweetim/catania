@@ -2,7 +2,9 @@ import {
   CUSTOM_LAND_MINIMUM,
   CUSTOM_MAP_COUNT_FIELDS,
   CUSTOM_MAP_TILES,
+  CUSTOM_SABOTAGE_CARDS_MAXIMUM,
   customMapConfigLandCount,
+  customSabotageCardCount,
   isCustomMapConfig,
   type CustomMapConfig,
   type CustomMapCountField,
@@ -28,6 +30,7 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
   const assigned = CUSTOM_MAP_COUNT_FIELDS.reduce((total, field) => total + value[field], 0);
   const remaining = CUSTOM_MAP_TILES - assigned;
   const land = customMapConfigLandCount(value);
+  const sabotageCards = customSabotageCardCount(value);
 
   function terrainName(field: CustomMapCountField): string {
     const label = TERRAIN_LABELS[field];
@@ -41,6 +44,12 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
     const next = { ...value, [field]: Math.max(0, Math.min(CUSTOM_MAP_TILES, value[field] + delta)) };
     if (CUSTOM_MAP_COUNT_FIELDS.reduce((total, name) => total + next[name], 0) > CUSTOM_MAP_TILES) return;
     onChange(next);
+  }
+
+  function adjustSabotageCards(delta: number) {
+    if (disabled) return;
+    const nextCount = Math.max(0, Math.min(CUSTOM_SABOTAGE_CARDS_MAXIMUM, sabotageCards + delta));
+    onChange({ ...value, sabotageCards: nextCount });
   }
 
   return (
@@ -71,16 +80,38 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
         ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
-          <input
-            type="checkbox"
-            checked={value.fog}
-            disabled={disabled}
-            onChange={event => onChange({ ...value, fog: event.target.checked })}
-            className="h-4 w-4 accent-[#477c91]"
-          />
-          {translateBoardText("Fog")}
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
+            <input
+              type="checkbox"
+              checked={value.fog}
+              disabled={disabled}
+              onChange={event => onChange({ ...value, fog: event.target.checked })}
+              className="h-4 w-4 accent-[#477c91]"
+            />
+            {translateBoardText("Fog")}
+          </label>
+          <div className="flex items-center gap-2 rounded-lg border border-line bg-white/40 px-2 py-1" role="group" aria-label={translateText("Sabotage cards")}>
+            <span className="text-[11px] font-semibold text-ink">{translateText("Sabotage cards")}</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label={translateText("Decrease Sabotage cards")}
+                disabled={disabled || sabotageCards === 0}
+                onClick={() => adjustSabotageCards(-1)}
+                className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-md border border-line bg-paper text-sm font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-7"
+              >−</button>
+              <span className="min-w-5 text-center text-sm font-bold tabular-nums" aria-label={translateText("Sabotage cards")}>{sabotageCards}</span>
+              <button
+                type="button"
+                aria-label={translateText("Increase Sabotage cards")}
+                disabled={disabled || sabotageCards >= CUSTOM_SABOTAGE_CARDS_MAXIMUM}
+                onClick={() => adjustSabotageCards(1)}
+                className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-md border border-line bg-paper text-sm font-bold text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:h-7 sm:w-7"
+              >+</button>
+            </div>
+          </div>
+        </div>
         <p className={`text-xs font-semibold ${isCustomMapConfig(value) ? "text-forest" : "text-clay"}`} role="status">
           {remaining > 0
             ? translateText(remaining === 1 ? "{count} tile left to assign." : "{count} tiles left to assign.", { count: remaining })
@@ -89,7 +120,9 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
               : translateText("All 42 tiles assigned.")}
         </p>
       </div>
-      <p className="mt-1 text-[10px] leading-4 text-muted">{translateText("Fog hides the whole map until discovered.")}</p>
+      <p className="mt-1 text-[10px] leading-4 text-muted">
+        {translateText("Fog hides the whole map until discovered.")} {translateText("Sabotage cards destroy 2 opponent roads or ships, destroy a settlement, or reduce a city.")}
+      </p>
     </section>
   );
 }

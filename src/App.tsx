@@ -59,8 +59,11 @@ import {
   emptyResources,
   getLongestRoadLength,
   getScore,
+  hasLegalSabotageTarget,
   legalCityVertices,
   legalRoadEdges,
+  legalSabotageEdges,
+  legalSabotageVertices,
   legalShipEdges,
   legalShipDestinations,
   movableShipEdges,
@@ -72,6 +75,7 @@ import {
 } from "./game/engine";
 import {
   CUSTOM_MAP_COUNT_FIELDS,
+  customSabotageCardCount,
   DEFAULT_CUSTOM_MAP_CONFIG,
   isCustomMapConfig,
   isGameVariant,
@@ -121,9 +125,11 @@ function phaseDescription(state: GameState, language: Language) {
 }
 
 function customMapConfigFromParameters(parameters: URLSearchParams): CustomMapConfig | null {
+  const sabotageParameter = parameters.get("sabotage");
   const candidate = {
     ...Object.fromEntries(CUSTOM_MAP_COUNT_FIELDS.map(field => [field, Number(parameters.get(field))])),
     fog: parameters.get("fog") === "1",
+    ...(sabotageParameter !== null ? { sabotageCards: Number(sabotageParameter) } : {}),
   };
   return isCustomMapConfig(candidate) ? candidate : null;
 }
@@ -483,7 +489,7 @@ export function App() {
       !(next.phase.type === "discard" && (next.phase.required[viewerId ?? ""] ?? 0) > 0)) return;
     if (game?.phase.type === "roll" && next.phase.type === "actions") return;
     setMobileView(
-      ["setup-settlement", "setup-reveal", "setup-road", "road-building", "robber"].includes(
+      ["setup-settlement", "setup-reveal", "setup-road", "road-building", "robber", "sabotage"].includes(
         next.phase.type,
       )
         ? "board"
@@ -602,26 +608,31 @@ export function App() {
     : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
-      ? game.phase.type === "setup-settlement" || game.phase.type === "setup-reveal" || buildMode === "settlement"
-        ? legalSettlementVertices(game, viewer.id)
-        : buildMode === "city"
-          ? legalCityVertices(game, viewer.id)
-          : []
+      ? game.phase.type === "sabotage"
+        ? legalSabotageVertices(game, viewer.id)
+        : game.phase.type === "setup-settlement" || game.phase.type === "setup-reveal" || buildMode === "settlement"
+          ? legalSettlementVertices(game, viewer.id)
+          : buildMode === "city"
+            ? legalCityVertices(game, viewer.id)
+            : []
       : [];
   const legalEdges =
     game &&
       viewer &&
       isActive &&
       !rollBusy &&
-      (game.phase.type === "setup-road" ||
+      (game.phase.type === "sabotage" ||
+        game.phase.type === "setup-road" ||
         game.phase.type === "road-building" ||
         buildMode === "road" || buildMode === "ship" || buildMode === "move-ship")
-      ? buildMode === "move-ship"
-        ? movingShipId ? legalShipDestinations(game, viewer.id, movingShipId)
-          : movableShipEdges(game, viewer.id).filter(id => legalShipDestinations(game, viewer.id, id).length)
-        : buildMode === "ship" ? legalShipEdges(game, viewer.id)
-          : buildMode === "road" ? legalRoadEdges(game, viewer.id)
-            : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
+      ? game.phase.type === "sabotage"
+        ? legalSabotageEdges(game, viewer.id)
+        : buildMode === "move-ship"
+          ? movingShipId ? legalShipDestinations(game, viewer.id, movingShipId)
+            : movableShipEdges(game, viewer.id).filter(id => legalShipDestinations(game, viewer.id, id).length)
+          : buildMode === "ship" ? legalShipEdges(game, viewer.id)
+            : buildMode === "road" ? legalRoadEdges(game, viewer.id)
+              : [...legalRoadEdges(game, viewer.id), ...legalShipEdges(game, viewer.id)]
       : [];
   const legalTiles =
     game && viewer && isActive && !rollBusy
@@ -640,13 +651,17 @@ export function App() {
       : selected.kind === "tile"
         ? { type: game.phase.type === "setup-reveal" ? "reveal-tile" : game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
         : selected.kind === "edge"
-          ? buildMode === "move-ship" && movingShipId
-            ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
-            : { type: buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(selected.id) ? "place-ship" : "place-road", edgeId: selected.id }
-          : {
-            type: buildMode === "city" ? "place-city" : "place-settlement",
-            vertexId: selected.id,
-          };
+          ? game.phase.type === "sabotage"
+            ? { type: "sabotage-route", edgeId: selected.id }
+            : buildMode === "move-ship" && movingShipId
+              ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
+              : { type: buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(selected.id) ? "place-ship" : "place-road", edgeId: selected.id }
+          : game.phase.type === "sabotage"
+            ? { type: "sabotage-building", vertexId: selected.id }
+            : {
+              type: buildMode === "city" ? "place-city" : "place-settlement",
+              vertexId: selected.id,
+            };
   const routeChoicePending =
     selected?.kind === "edge" &&
     selectedAction?.type === "place-road" &&
@@ -1209,6 +1224,7 @@ export function App() {
                       "setup-road",
                       "road-building",
                       "robber",
+                      "sabotage",
                     ].includes(game.phase.type)
                       ? "board"
                       : "hand",
@@ -1265,6 +1281,7 @@ export function App() {
                     robberTileId={game.robberTileId}
                     pirateTileId={game.pirateTileId}
                     routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
+                    sabotageMode={game.phase.type === "sabotage"}
                     pirateIndicator={isSeafarers(game.variant) ? {
                       onBoard: game.pirateTileId !== null,
                       enabled: isActive && !rollBusy && game.phase.type === "robber",
@@ -1286,13 +1303,25 @@ export function App() {
                     tileSelectionMode={game.phase.type === "setup-reveal" ? "setup" : "robber"}
                     selectedId={selected?.id ?? movingShipId}
                     confirmation={selectedAction && selected ? {
-                      title: selected.kind === "tile"
-                        ? translateText(selectedAction.type === "reveal-tile" ? "Choose this starting cell?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
-                        : selected.kind === "edge"
-                          ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : routeChoicePending ? "Road or ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
-                          : buildMode === "city"
-                            ? translateText("Upgrade to a city?")
-                            : translateText("Settle here?"),
+                      title: selectedAction.type === "sabotage-route"
+                        ? (() => {
+                          const edge = game.board.edges.find(candidate => candidate.id === selectedAction.edgeId);
+                          const owner = game.players.find(candidate => candidate.id === edge?.playerId);
+                          return translateText(edge?.kind === "ship" ? "Destroy {name}'s ship?" : "Destroy {name}'s road?", { name: owner?.name ?? "" });
+                        })()
+                        : selectedAction.type === "sabotage-building"
+                          ? (() => {
+                            const building = game.board.vertices.find(candidate => candidate.id === selectedAction.vertexId)?.building;
+                            const owner = game.players.find(candidate => candidate.id === building?.playerId);
+                            return translateText(building?.kind === "city" ? "Reduce {name}'s city to a settlement?" : "Destroy {name}'s settlement?", { name: owner?.name ?? "" });
+                          })()
+                          : selected.kind === "tile"
+                            ? translateText(selectedAction.type === "reveal-tile" ? "Choose this starting cell?" : selectedAction.type === "move-pirate" ? "Move the pirate here?" : "Move the robber here?")
+                            : selected.kind === "edge"
+                              ? translateText(selectedAction.type === "move-ship" ? "Move the ship here?" : routeChoicePending ? "Road or ship here?" : selectedAction.type === "place-ship" ? "Build a ship here?" : "Build a road here?")
+                              : buildMode === "city"
+                                ? translateText("Upgrade to a city?")
+                                : translateText("Settle here?"),
                       player: { name: viewer.name, color: viewer.color },
                       onConfirm: () => perform(selectedAction),
                       onCancel: () => setSelected(null),
@@ -1717,7 +1746,11 @@ export function App() {
         )}
 
         {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
-        {dialog === "help" && <HelpDialog variant={game?.variant ?? variant} onClose={() => setDialog(null)} />}
+        {dialog === "help" && <HelpDialog
+          variant={game?.variant ?? variant}
+          sabotageCards={(game?.variant ?? variant) === "custom-world" ? customSabotageCardCount(game ? (gameCustomMapConfig ?? customMapConfig) : customMapConfig) : 0}
+          onClose={() => setDialog(null)}
+        />}
         {dialog === "scan" && !game && <ScanToJoin onClose={() => setDialog(null)} />}
         {game && !game.winnerId && <PrivateNotices key={gameInstanceId} thefts={game.thefts} monopolies={game.monopolies} playerId={viewer?.id ?? null} players={game.players} target={privateNoticeTarget} />}
         {dialog === "players" && game && needsHandoff && (
@@ -1822,6 +1855,7 @@ export function App() {
             phaseType={game.phase.type}
             developmentPlayed={game.developmentPlayed}
             active={isActive}
+            hasSabotageTarget={hasLegalSabotageTarget(game, viewer.id)}
             disabled={rollBusy}
             initialCardId={developmentCardId}
             error={errorText}
