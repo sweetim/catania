@@ -25,7 +25,7 @@ import { CollapsibleSection } from "../components/CollapsibleSection";
 import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
 import { COSTS, emptyResources, hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { customSabotageCardCount, DEFAULT_CUSTOM_MAP_CONFIG, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isCustomSabotageEnabled, isSeafarers, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -436,6 +436,17 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
               <span className="text-[12px] font-semibold leading-tight text-ink">{translateText("Move ship")}</span>
             </span>
           </button>}
+          {game.sabotageEnabled && <BuildButton piece="sabotage" color="#8a2f22" resources={COSTS.sabotage} available={player.resources} layout="tile"
+            aria-label={translateText("Sabotage")} aria-pressed={snapshot.buildMode === "sabotage"}
+            title={!normalActions
+              ? translateText("Available after rolling on your turn.")
+              : !canPay(COSTS.sabotage)
+                ? translateText("You need more resources.")
+                : !hasLegalSabotageTarget(game, player.id)
+                  ? translateText("There are no opponent pieces available to sabotage.")
+                  : translateText("Select a location on the board.")}
+            disabled={disabled || !normalActions || !canPay(COSTS.sabotage) || !hasLegalSabotageTarget(game, player.id)}
+            onClick={() => selectBuild(snapshot.buildMode === "sabotage" ? null : "sabotage")} />}
           <BuildButton piece="development" color={player.color} resources={COSTS.development} available={player.resources} layout="tile" aria-label={translateText("Buy a card")} disabled={disabled || !normalActions || !canPay(COSTS.development) || game.developmentRemaining === 0} onClick={() => setConfirmation({
             action: { type: "buy-development" },
             title: "Buy a development card?",
@@ -561,7 +572,7 @@ function PlayerControls({ snapshot, disabled, error, perform, selectBuild, onPri
 
     {editor === "trade" && <TradeDialog game={game} player={player} initialMode={tradeMode} onModeChange={setTradeMode} initialOffer={trade?.offeredBy === player.id ? trade : undefined} disabled={disabled || !normalActions || editorStale} error={editorStale ? staleMessage : error}
       onClose={() => { setEditor(null); if (trade) setDetails("trade-response"); }} onSubmit={action => send(action, editorVersion)} />}
-    {editor === "development" && <DevelopmentDialog variant={game.variant} victoryPointsToWin={game.victoryPointsToWin} player={player} bank={game.bank} turnNumber={game.turnNumber} phaseType={game.phase.type} developmentPlayed={game.developmentPlayed} initialCardId={developmentCardId} active={active} hasSabotageTarget={hasLegalSabotageTarget(game, player.id)} disabled={disabled || editorStale} error={editorStale ? staleMessage : error}
+    {editor === "development" && <DevelopmentDialog variant={game.variant} victoryPointsToWin={game.victoryPointsToWin} player={player} bank={game.bank} turnNumber={game.turnNumber} phaseType={game.phase.type} developmentPlayed={game.developmentPlayed} initialCardId={developmentCardId} active={active} disabled={disabled || editorStale} error={editorStale ? staleMessage : error}
       onClose={() => setEditor(null)} onSubmit={action => send(action, editorVersion)} />}
     {confirmation && <ActionConfirmation title={translateText(confirmation.title, confirmation.parameters)} player={confirmation.action.type === "buy-development" ? undefined : { name: player.name, color: player.color }} description={confirmation.description ? translateText(confirmation.description, confirmation.parameters) : undefined} cost={confirmation.cost} exchange={confirmation.exchange} resources={confirmation.action.type === "steal" || confirmation.action.type === "buy-development" ? undefined : player.resources}
       confirmLabel={confirmation.confirmLabel ? translateText(confirmation.confirmLabel) : undefined}
@@ -756,12 +767,12 @@ export function MultiplayerApp() {
   const movingShipId = movingShip?.version === snapshot?.version && snapshot?.buildMode === "move-ship" ? movingShip?.edgeId : null;
   const selectedAction: GameAction | null = !currentSelection || !game ? null : match(currentSelection.kind)
     .with("tile", (): GameAction => ({ type: game.phase.type === "setup-reveal" ? "reveal-tile" : game.board.tiles.find(tile => tile.id === currentSelection.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: currentSelection.id }))
-    .with("edge", (): GameAction => game.phase.type === "sabotage"
+    .with("edge", (): GameAction => snapshot?.buildMode === "sabotage"
       ? { type: "sabotage-route", edgeId: currentSelection.id }
       : movingShipId
         ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: currentSelection.id }
         : { type: snapshot?.buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(currentSelection.id) ? "place-ship" : "place-road", edgeId: currentSelection.id })
-    .with("vertex", (): GameAction => game.phase.type === "sabotage"
+    .with("vertex", (): GameAction => snapshot?.buildMode === "sabotage"
       ? { type: "sabotage-building", vertexId: currentSelection.id }
       : { type: snapshot?.buildMode === "city" ? "place-city" as const : "place-settlement" as const, vertexId: currentSelection.id })
     .exhaustive();
@@ -937,7 +948,7 @@ export function MultiplayerApp() {
               <Board board={game.board} players={game.players} robberTileId={game.robberTileId} pirateTileId={game.pirateTileId} fit
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
-                sabotageMode={game.phase.type === "sabotage"}
+                sabotageMode={snapshot.buildMode === "sabotage"}
                 pirateIndicator={isSeafarers(game.variant) ? {
                   onBoard: game.pirateTileId !== null,
                   enabled: !disabled && activePlayer?.control === "human" && game.phase.type === "robber" && game.pirateTileId !== null,
@@ -1049,7 +1060,7 @@ export function MultiplayerApp() {
           {invitationLink}
         </div>
       </Dialog>}
-      {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} victoryPointsToWin={game?.victoryPointsToWin ?? snapshot?.victoryPointsToWin} sabotageCards={customSabotageCardCount(snapshot?.customMapConfig)} multiplayer onClose={() => setDialog(null)} />}
+      {dialog === "help" && <HelpDialog variant={game?.variant ?? snapshot?.variant ?? "original"} victoryPointsToWin={game?.victoryPointsToWin ?? snapshot?.victoryPointsToWin} sabotageEnabled={game ? game.sabotageEnabled === true : isCustomSabotageEnabled(snapshot?.customMapConfig)} multiplayer onClose={() => setDialog(null)} />}
       {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
       {dialog === "reset" && host && game && <Dialog title={translateText("Reset this game?")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText("Restart from the first settlement on the same island with the same players. All current progress will be lost.")}</p>

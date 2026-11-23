@@ -17,6 +17,11 @@ async function revealHand(page: Page) {
   if (await button.isVisible()) await button.click();
 }
 
+function diceForTotal(total: number): [number, number] {
+  const first = Math.max(1, Math.min(6, Math.floor(total / 2)));
+  return [first, total - first];
+}
+
 async function chooseDice(page: Page, dice: [number, number]) {
   await page.evaluate(values => {
     let index = 0;
@@ -58,36 +63,21 @@ async function seedBrowserRandom(page: Page, initialSeed: number) {
 
 const SABOTAGE_MAP_CODE = "23456789";
 const SABOTAGE_CONFIG: CustomMapConfig = {
-  wood: 0,
-  brick: 0,
-  wool: 14,
-  grain: 14,
-  ore: 14,
+  wood: 9,
+  brick: 9,
+  wool: 8,
+  grain: 8,
+  ore: 8,
   gold: 0,
   desert: 0,
   sea: 0,
   fog: false,
-  sabotageCards: 6,
+  sabotage: true,
 };
 
-function findSeedWithTopSabotage(): number {
-  const board = createBoard(seededRandom(SABOTAGE_MAP_CODE), "custom-world", SABOTAGE_CONFIG);
-  const profiles = [
-    { name: "Alex", color: "#b85d47", control: "human" as const },
-    { name: "Sam", color: "#477c91", control: "human" as const },
-    { name: "Jordan", color: "#c1953d", control: "human" as const },
-  ];
-  for (let candidate = 1; candidate <= 500; candidate++) {
-    const game = createGame(profiles, lcgFromSeed(candidate), board, "custom-world", 12, SABOTAGE_CONFIG);
-    if (game.developmentDeck.at(-1) === "sabotage") return candidate;
-  }
-  throw new Error("Could not find a seed with Sabotage on top of the deck.");
-}
-
 async function setupSabotageReadyGame(page: Page) {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  const randomSeed = findSeedWithTopSabotage();
-  const deepLink = `/?map=${SABOTAGE_MAP_CODE}&variant=custom-world&wood=${SABOTAGE_CONFIG.wood}&brick=${SABOTAGE_CONFIG.brick}&wool=${SABOTAGE_CONFIG.wool}&grain=${SABOTAGE_CONFIG.grain}&ore=${SABOTAGE_CONFIG.ore}&gold=${SABOTAGE_CONFIG.gold}&desert=${SABOTAGE_CONFIG.desert}&sea=${SABOTAGE_CONFIG.sea}&fog=0&sabotage=${SABOTAGE_CONFIG.sabotageCards}`;
+  const randomSeed = 7;
+  const deepLink = `/?map=${SABOTAGE_MAP_CODE}&variant=custom-world&wood=${SABOTAGE_CONFIG.wood}&brick=${SABOTAGE_CONFIG.brick}&wool=${SABOTAGE_CONFIG.wool}&grain=${SABOTAGE_CONFIG.grain}&ore=${SABOTAGE_CONFIG.ore}&gold=${SABOTAGE_CONFIG.gold}&desert=${SABOTAGE_CONFIG.desert}&sea=${SABOTAGE_CONFIG.sea}&fog=0&sabotage=1`;
   await page.goto(deepLink);
   const setupButton = page.getByRole("button", { name: "Setup", exact: true });
   if (await setupButton.isVisible()) await setupButton.click();
@@ -101,31 +91,53 @@ async function setupSabotageReadyGame(page: Page) {
   ];
   let state = createGame(profiles, lcgFromSeed(randomSeed), board, "custom-world", 12, SABOTAGE_CONFIG);
   const firstPlayerId = state.players[0]!.id;
-  // Find a vertex bordering wool, grain, and ore for the first player's second settlement so they can buy a dev card on turn 1.
-  const devCardVertex = board.vertices.find(vertex => {
+
+  // Reserve a second-settlement vertex bordering wood, brick, and wool (3 of the 5 resources),
+  // and a first-settlement vertex bordering grain and ore (the remaining 2 resources).
+  const secondVertex = board.vertices.find(vertex => {
     const terrains = new Set(vertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!.terrain));
-    return terrains.has("wool") && terrains.has("grain") && terrains.has("ore");
+    return terrains.has("wood") && terrains.has("brick") && terrains.has("wool");
   })!;
-  expect(devCardVertex).toBeDefined();
+  expect(secondVertex).toBeDefined();
+
+  const secondForbidden = new Set<string>([secondVertex.id]);
+  for (const edgeId of secondVertex.edgeIds) {
+    const edge = board.edges.find(candidate => candidate.id === edgeId)!;
+    for (const vertexId of edge.vertexIds) secondForbidden.add(vertexId);
+  }
+
+  const firstVertex = board.vertices.find(vertex => {
+    if (secondForbidden.has(vertex.id)) return false;
+    const tiles = vertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!);
+    return tiles.some(tile => tile.terrain === "grain" && tile.number !== null) &&
+      tiles.some(tile => tile.terrain === "ore" && tile.number !== null);
+  })!;
+  expect(firstVertex).toBeDefined();
+
+  const grainNumber = firstVertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!).find(tile => tile.terrain === "grain")!.number!;
+  const oreNumber = firstVertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!).find(tile => tile.terrain === "ore")!.number!;
+
+  const forbiddenForOthers = new Set<string>([...secondForbidden, firstVertex.id]);
+  for (const edgeId of firstVertex.edgeIds) {
+    const edge = board.edges.find(candidate => candidate.id === edgeId)!;
+    for (const vertexId of edge.vertexIds) forbiddenForOthers.add(vertexId);
+  }
 
   await seedBrowserRandom(page, randomSeed);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
 
-  // Complete snake setup, reserving devCardVertex for the first player's second settlement.
-  const forbidden = new Set<string>([devCardVertex.id]);
-  for (const edgeId of devCardVertex.edgeIds) {
-    const edge = board.edges.find(candidate => candidate.id === edgeId)!;
-    for (const vertexId of edge.vertexIds) forbidden.add(vertexId);
-  }
   while (state.phase.type.startsWith("setup")) {
     await revealHand(page);
     await showView(page, "board");
     const actor = state.activePlayerId;
+    const isFirstPlayersFirst = actor === firstPlayerId && state.setupIndex < state.players.length;
     const isFirstPlayersSecond = actor === firstPlayerId && state.setupIndex >= state.players.length;
     const legalVertices = legalSettlementVertices(state, actor);
-    const vertexId = isFirstPlayersSecond && legalVertices.includes(devCardVertex.id)
-      ? devCardVertex.id
-      : legalVertices.find(id => !forbidden.has(id)) ?? legalVertices[0]!;
+    const vertexId = isFirstPlayersFirst && legalVertices.includes(firstVertex.id)
+      ? firstVertex.id
+      : isFirstPlayersSecond && legalVertices.includes(secondVertex.id)
+        ? secondVertex.id
+        : legalVertices.find(id => !forbiddenForOthers.has(id)) ?? legalVertices[0]!;
     await page.getByRole("button", { name: `Place settlement at ${vertexId}`, exact: true }).click();
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     state = applyAction(state, actor, { type: "place-settlement", vertexId });
@@ -141,105 +153,98 @@ async function setupSabotageReadyGame(page: Page) {
     state = applyAction(state, actor, { type: "place-road", edgeId });
   }
 
-  // Turn 1: first player rolls non-7, buys the top Sabotage card, and passes around back to their turn.
+  // Turn 1: first player rolls grainNumber (+1 grain), then opponent 1 rolls oreNumber (+1 ore).
   await revealHand(page);
   await showView(page, "hand");
-  await chooseDice(page, [1, 2]);
+  await chooseDice(page, diceForTotal(grainNumber));
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
-  await page.getByRole("button", { name: "Buy a card" }).click();
-  await page.getByRole("button", { name: "Buy", exact: true }).click();
-  const sabotageCardButton = page.getByRole("button", { name: /Sabotage/ });
-  await expect(sabotageCardButton).toBeVisible();
-  await expect(sabotageCardButton.locator('svg[data-development-kind="sabotage"]')).toBeVisible();
-
-  // Clicking the newly bought Sabotage card shows it is available next turn.
-  await sabotageCardButton.click();
-  await expect(page.getByText("Available next turn", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirm Sabotage", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
-
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
-  // Two opponents roll and end turn so the first player gets their next turn.
-  for (let turn = 0; turn < 2; turn++) {
-    await revealHand(page);
-    await showView(page, "hand");
-    await chooseDice(page, [1, 2]);
-    await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
-    await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
-  }
 
   await revealHand(page);
+  await showView(page, "hand");
+  await chooseDice(page, diceForTotal(oreNumber));
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+
+  // Opponent 2 rolls a non-7 and passes back to first player.
+  await revealHand(page);
+  await showView(page, "hand");
+  await chooseDice(page, [1, 1]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+
+  // First player's turn 2: roll a non-7; player now has at least 1 of each resource.
+  await revealHand(page);
+  await showView(page, "hand");
+  await chooseDice(page, [1, 1]);
+  await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+
   return { firstPlayerName: state.players[0]!.name };
 }
 
-test("Custom World setup configures Sabotage cards and reflects them in Help", async ({ page }) => {
+test("Custom World setup toggles Sabotage and reflects it in Help", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Game version", exact: true }).click();
   await page.getByRole("listbox", { name: "Game version", exact: true }).getByRole("option", { name: "Custom World", exact: true }).click();
   const panel = page.getByRole("region", { name: "Customize the map", exact: true });
-  const sabotageGroup = panel.getByRole("group", { name: "Sabotage cards", exact: true });
-  await expect(sabotageGroup).toBeVisible();
-  await expect(sabotageGroup).toContainText("2");
-
-  await sabotageGroup.getByRole("button", { name: "Increase Sabotage cards", exact: true }).click();
-  await expect(sabotageGroup).toContainText("3");
-  await sabotageGroup.getByRole("button", { name: "Decrease Sabotage cards", exact: true }).click();
-  await sabotageGroup.getByRole("button", { name: "Decrease Sabotage cards", exact: true }).click();
-  await sabotageGroup.getByRole("button", { name: "Decrease Sabotage cards", exact: true }).click();
-  await expect(sabotageGroup).toContainText("0");
-  await expect(sabotageGroup.getByRole("button", { name: "Decrease Sabotage cards", exact: true })).toBeDisabled();
-
-  for (let count = 0; count < 4; count++) {
-    await sabotageGroup.getByRole("button", { name: "Increase Sabotage cards", exact: true }).click();
-  }
-  await expect(sabotageGroup).toContainText("4");
+  const sabotageCheckbox = panel.getByRole("checkbox", { name: "Sabotage", exact: true });
+  await expect(sabotageCheckbox).toBeVisible();
+  await expect(sabotageCheckbox).toBeChecked();
 
   await page.getByRole("button", { name: /Menu/ }).click();
   await page.getByRole("button", { name: "Help", exact: true }).click();
   const helpDialog = page.getByRole("dialog", { name: "Help", exact: true });
-  await expect(helpDialog).toContainText("There are 29 cards");
-  const sabotageRow = helpDialog.getByRole("listitem").filter({ has: page.locator('svg[data-development-kind="sabotage"]') });
-  await expect(sabotageRow).toContainText("Sabotage");
-  await expect(sabotageRow).toContainText("4 in starting deck");
+  await expect(helpDialog).toContainText("There are 25 cards");
+  const sabotageBuildItem = helpDialog.getByRole("listitem").filter({ has: page.locator('svg[data-piece="sabotage"]') });
+  await expect(sabotageBuildItem).toContainText("Sabotage");
+  await expect(sabotageBuildItem).toContainText("Pay 1 of each resource");
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  await sabotageCheckbox.uncheck();
+  await expect(sabotageCheckbox).not.toBeChecked();
+
+  await page.getByRole("button", { name: /Menu/ }).click();
+  await page.getByRole("button", { name: "Help", exact: true }).click();
+  await expect(helpDialog.locator('svg[data-piece="sabotage"]')).toHaveCount(0);
 });
 
-test("playing Sabotage destroys two opponent roads on the board", async ({ page }) => {
+test("Sabotage build action destroys one opponent road and plays destruction animation", async ({ page }) => {
   const { firstPlayerName } = await setupSabotageReadyGame(page);
   await showView(page, "hand");
-  await page.getByRole("button", { name: /Sabotage/ }).click();
-  await page.getByRole("button", { name: "Confirm Sabotage", exact: true }).click();
+  const sabotageButton = page.getByRole("button", { name: /^Sabotage\b/ });
+  await expect(sabotageButton).toBeEnabled();
+  await sabotageButton.click();
   await showView(page, "board");
 
-  await expect(page.getByRole("heading", { name: "Sabotage the opposition.", exact: true })).toBeVisible();
-  // Own roads are not targetable; opponent roads and settlements are highlighted.
+  // Own pieces are not targetable; opponent roads and settlements are highlighted.
   await expect(page.getByRole("button", { name: new RegExp(`^Destroy ${firstPlayerName}'s `) })).toHaveCount(0);
   const roadTargets = page.getByRole("button", { name: /^Destroy .+?'s road at edge-/ });
   const settlementTargets = page.getByRole("button", { name: /^Destroy .+?'s settlement at vertex-/ });
   expect(await roadTargets.count()).toBeGreaterThanOrEqual(2);
   expect(await settlementTargets.count()).toBeGreaterThanOrEqual(2);
 
-  // Destroy first opponent road.
+  // Destroy one opponent road.
   const firstRoadLabel = await roadTargets.first().getAttribute("aria-label");
   await roadTargets.first().click();
   await expect(page.getByRole("group", { name: "Placement confirmation", exact: true })).toContainText(/Destroy .+'s road\?/);
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
 
-  // Second step allows only 1 more road/ship and no buildings.
-  await expect(page.getByText("Destroy 1 more opponent road or ship on the board.", { exact: true })).toBeVisible();
+  // Destruction animation appears on the board and Sabotage finishes immediately in actions phase.
+  await expect(page.locator('svg [data-sabotage-burst="road"]').first()).toBeVisible();
   await expect(page.getByRole("button", { name: firstRoadLabel!, exact: true })).toHaveCount(0);
+  await expect(roadTargets).toHaveCount(0);
   await expect(settlementTargets).toHaveCount(0);
-
-  // Destroy second opponent road and return to pre-roll phase.
-  await roadTargets.first().click();
-  await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Let the dice decide.", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
 });
 
-test("playing Sabotage destroys an opponent settlement and finishes immediately", async ({ page }) => {
+test("Sabotage build action destroys an opponent settlement and plays destruction animation", async ({ page }) => {
   await setupSabotageReadyGame(page);
   await showView(page, "hand");
-  await page.getByRole("button", { name: /Sabotage/ }).click();
-  await page.getByRole("button", { name: "Confirm Sabotage", exact: true }).click();
+  await page.getByRole("button", { name: /^Sabotage\b/ }).click();
   await showView(page, "board");
 
   const settlementTargets = page.getByRole("button", { name: /^Destroy .+?'s settlement at vertex-/ });
@@ -250,6 +255,7 @@ test("playing Sabotage destroys an opponent settlement and finishes immediately"
   await expect(page.getByRole("group", { name: "Placement confirmation", exact: true })).toContainText(/Destroy .+'s settlement\?/);
   await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Let the dice decide.", exact: true })).toBeVisible();
+  await expect(page.locator('svg [data-sabotage-burst="settlement"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
   await expect(settlementTargets).toHaveCount(0);
 });

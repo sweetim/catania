@@ -125,7 +125,7 @@ export function Arrow({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "city" }) {
+export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "city" | "sabotage" }) {
   return (
     <svg className="piece-icon h-8 w-8 shrink-0" data-piece={piece} viewBox="0 0 32 32" aria-hidden="true" fill="none">
       {match(piece)
@@ -158,6 +158,13 @@ export function PieceIcon({ piece }: { piece: "road" | "ship" | "settlement" | "
             <path d="M2.5 16.8 9.5 10 14.5 7.5M16.5 6H24.5" stroke="white" strokeOpacity=".42" strokeWidth="1.1" strokeLinecap="round" />
             <path d="M7.1 28V22.5A2.4 2.4 0 0 1 11.9 22.5V28Z" fill="black" opacity=".24" />
             <path d="M19 16V13.2A1.5 1.5 0 0 1 22 13.2V16ZM19.4 22.5V20A1.1 1.1 0 0 1 21.6 20V22.5Z" fill="white" fillOpacity=".55" />
+          </>
+        ))
+        .with("sabotage", () => (
+          <>
+            <path d="M5 27V13l5-5 4 4-3 5 5 2-4 8H5Z" fill="currentColor" />
+            <path d="M27 27H16l4-7-5-2 3-5 4-5 5 5v14Z" fill="currentColor" opacity=".78" />
+            <path d="m17 4-4 8 5 2-5 11" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </>
         ))
         .exhaustive()}
@@ -225,13 +232,6 @@ export function DevelopmentCardIcon({ kind }: { kind: DevelopmentKind }) {
             <ellipse cx="16" cy="16" rx="12" ry="5" fill="currentColor" />
             <circle cx="16" cy="9" r="7" fill="currentColor" stroke="white" strokeWidth="1.5" />
             <path d="m16 5 3 4-3 4-3-4Z" fill="white" />
-          </>
-        ))
-        .with("sabotage", () => (
-          <>
-            <path d="M5 27V13l5-5 4 4-3 5 5 2-4 8H5Z" fill="currentColor" />
-            <path d="M27 27H16l4-7-5-2 3-5 4-5 5 5v14Z" fill="currentColor" opacity=".78" />
-            <path d="m17 4-4 8 5 2-5 11" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </>
         ))
         .exhaustive()}
@@ -563,7 +563,7 @@ export function CardStack({
 }
 
 export function BuildButton({ piece, color, resources, available, layout = "row", ...buttonProperties }: ComponentProps<"button"> & {
-  piece: "road" | "ship" | "settlement" | "city" | "development";
+  piece: "road" | "ship" | "settlement" | "city" | "sabotage" | "development";
   color: string;
   resources: Resources;
   available?: Resources;
@@ -577,6 +577,7 @@ export function BuildButton({ piece, color, resources, available, layout = "row"
     .with("city", () => translateText("Upgrade to city"))
     .with("road", () => translateText("Build road"))
     .with("settlement", () => translateText("Build settlement"))
+    .with("sabotage", () => translateText("Sabotage"))
     .exhaustive();
   if (layout === "tile") {
     return (

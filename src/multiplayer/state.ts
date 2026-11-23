@@ -43,11 +43,10 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
     .with({ type: "robber" }, phase => ({ type: "robber", returnPhase: phase.returnPhase } as const))
     .with({ type: "steal" }, phase => ({ type: "steal" as const, victimIds: [...phase.victimIds], returnPhase: phase.returnPhase }))
     .with({ type: "road-building" }, phase => ({ type: "road-building", remaining: phase.remaining, returnPhase: phase.returnPhase } as const))
-    .with({ type: "sabotage" }, phase => ({ type: "sabotage", remainingRoutes: phase.remainingRoutes, canTargetBuilding: phase.canTargetBuilding, returnPhase: phase.returnPhase } as const))
     .with({ type: "finished" }, () => ({ type: "finished" } as const))
     .exhaustive();
   return structuredClone({
-    variant: game.variant, victoryPointsToWin: game.victoryPointsToWin, gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
+    variant: game.variant, victoryPointsToWin: game.victoryPointsToWin, ...(game.sabotageEnabled ? { sabotageEnabled: true } : {}), gameId, pirateTileId: game.pirateTileId, shipMoved: game.shipMoved, shipsBuiltThisTurn: game.shipsBuiltThisTurn,
     board: publicBoard(game.board), bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, diceRollTotals: game.diceRollTotals, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
@@ -334,6 +333,7 @@ export class HostRoom {
     requireRoom(game.phase.type === "actions" || (isSeafarers(game.variant) && (game.phase.type === "setup-road" || game.phase.type === "road-building") &&
       (piece === "road" || piece === "ship")), "Finish the current phase before choosing a build.");
     requireRoom(piece === null || piece === "road" || piece === "settlement" || piece === "city" ||
+      (piece === "sabotage" && game.sabotageEnabled === true) ||
       (isSeafarers(game.variant) && (piece === "ship" || piece === "move-ship")), "Choose a valid build.");
     if (piece && piece !== "move-ship" && game.phase.type === "actions") {
       const player = game.players.find(player => player.id === game.activePlayerId)!;
@@ -365,8 +365,8 @@ export class HostRoom {
       .with({ type: "move-pirate" }, action => action.tileId === null
         ? isSeafarers(game.variant) && game.phase.type === "robber" && game.pirateTileId !== null
         : targets.tiles.includes(action.tileId))
-      .with({ type: "sabotage-route" }, action => game.phase.type === "sabotage" && targets.edges.includes(action.edgeId))
-      .with({ type: "sabotage-building" }, action => game.phase.type === "sabotage" && targets.vertices.includes(action.vertexId))
+      .with({ type: "sabotage-route" }, action => game.phase.type === "actions" && this.buildMode === "sabotage" && targets.edges.includes(action.edgeId))
+      .with({ type: "sabotage-building" }, action => game.phase.type === "actions" && this.buildMode === "sabotage" && targets.vertices.includes(action.vertexId))
       .otherwise(() => false);
     requireRoom(authorized, "Choose a highlighted board target for the current build or phase.");
     this.game = applyAction(game, game.activePlayerId, action);
@@ -448,7 +448,7 @@ export class HostRoom {
       targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
         ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
         : tile.id !== game.robberTileId)).map(tile => tile.id);
-    } else if (game.phase.type === "sabotage") {
+    } else if (game.phase.type === "actions" && this.buildMode === "sabotage") {
       targets.edges = legalSabotageEdges(game, game.activePlayerId);
       targets.vertices = legalSabotageVertices(game, game.activePlayerId);
     }

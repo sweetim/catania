@@ -12,7 +12,6 @@ export const DEVELOPMENT_NAMES = {
   "road-building": "Road building",
   "year-of-plenty": "Year of plenty",
   monopoly: "Monopoly",
-  sabotage: "Sabotage",
 } as const satisfies Record<DevelopmentKind, string>;
 export const DEVELOPMENT_DESCRIPTIONS = {
   knight:
@@ -25,8 +24,6 @@ export const DEVELOPMENT_DESCRIPTIONS = {
     "Choose two resources from the bank, or all that remain if fewer than two are available.",
   monopoly:
     "Name a resource. Every other player gives you all of that resource from their hand.",
-  sabotage:
-    "Destroy up to two opponent roads or ships, destroy one opponent settlement (not their last building), or reduce one opponent city to a settlement.",
 } as const satisfies Record<DevelopmentKind, string>;
 
 export function getDevelopmentNames(language: Language): Record<DevelopmentKind, string> {
@@ -58,7 +55,6 @@ export function DevelopmentDialog({
   phaseType,
   developmentPlayed,
   active,
-  hasSabotageTarget = true,
   disabled = false,
   initialCardId = null,
   error,
@@ -74,7 +70,6 @@ export function DevelopmentDialog({
   phaseType: GamePhase["type"];
   developmentPlayed: boolean;
   active: boolean;
-  hasSabotageTarget?: boolean;
   disabled?: boolean;
   initialCardId?: string | null;
   error?: string;
@@ -115,9 +110,7 @@ export function DevelopmentDialog({
             : selectedGroup.kind === "year-of-plenty" && resourceTotal(bank) === 0 ? translateText("The bank has no resources left.")
               : selectedGroup.kind === "year-of-plenty" && yearOfPlentyRemaining > 0
                 ? translateText(yearOfPlentyRemaining === 1 ? "Choose {count} more resource from the bank." : "Choose {count} more resources from the bank.", { count: yearOfPlentyRemaining })
-                : selectedGroup.kind === "sabotage" && !hasSabotageTarget
-                  ? translateText("There are no opponent pieces available to sabotage.")
-                  : null;
+                : null;
   const confirmDisabled = !selectedGroup || !developmentCard || disabled || Boolean(blockedReason) ||
     (selectedGroup.kind === "year-of-plenty" && (
       resourceTotal(chosenResources) !== yearOfPlentyRequired ||

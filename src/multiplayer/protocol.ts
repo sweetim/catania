@@ -1,7 +1,7 @@
 import { RESOURCES } from "../game/engine";
 import { GameError, isGameMessage } from "../game/messages";
 import type { GameMessage } from "../game/messages";
-import { DEVELOPMENT_DECK_MAXIMUM, isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
+import { isCustomMapConfigDraft, isFogWorld, isGameVariant, isVictoryPointsToWin, type GameAction, type Resources } from "../game/types";
 import { normalizeMapSeed } from "../game/board";
 import type { ProfileStats } from "../profile";
 import { isBoardThemeId } from "../themes";
@@ -58,7 +58,7 @@ function identifier(value: unknown, kind: "player" | "vertex" | "edge" | "tile" 
   return typeof value === "string" && (kind === "player" ? /^player-[1-4]$/ : new RegExp(`^${kind}-[0-9]{1,3}$`)).test(value);
 }
 function buildMode(value: unknown): value is BuildMode {
-  return value === null || value === "road" || value === "ship" || value === "move-ship" || value === "settlement" || value === "city";
+  return value === null || value === "road" || value === "ship" || value === "move-ship" || value === "settlement" || value === "city" || value === "sabotage";
 }
 function messageRecord(value: unknown, maximum: number): RecordValue {
   if (!record(value)) throw new GameError("Invalid network message.");
@@ -156,8 +156,8 @@ function roomPlayer(value: unknown, publicPlayer = false): boolean {
 function privatePlayer(value: unknown): boolean {
   return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed"]) &&
     roomPlayer({ id: value.id, name: value.name, color: value.color, control: value.control, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) &&
-    array(value.developmentCards, DEVELOPMENT_DECK_MAXIMUM, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
-      ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly", "sabotage"].includes(card.kind as string));
+    array(value.developmentCards, 25, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
+      ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"].includes(card.kind as string));
 }
 function phase(value: unknown): boolean {
   if (!record(value)) return false;
@@ -169,7 +169,6 @@ function phase(value: unknown): boolean {
     case "robber": return fields(value, ["type", "returnPhase"]) && ["roll", "actions"].includes(value.returnPhase as string);
     case "steal": return fields(value, ["type", "victimIds", "returnPhase"]) && array(value.victimIds, 3, value => identifier(value, "player")) && ["roll", "actions"].includes(value.returnPhase as string);
     case "road-building": return fields(value, ["type", "remaining", "returnPhase"]) && integer(value.remaining, 2) && ["roll", "actions"].includes(value.returnPhase as string);
-    case "sabotage": return fields(value, ["type", "remainingRoutes", "canTargetBuilding", "returnPhase"]) && integer(value.remainingRoutes, 2) && typeof value.canTargetBuilding === "boolean" && ["roll", "actions"].includes(value.returnPhase as string);
     default: return false;
   }
 }
@@ -192,9 +191,10 @@ function board(value: unknown): boolean {
       identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
 function publicGame(value: unknown): boolean {
-  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"])) return false;
+  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"], ["sabotageEnabled"])) return false;
   const trade = value.trade;
-  return isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) && token(value.gameId) &&
+  return isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) &&
+    (!Object.hasOwn(value, "sabotageEnabled") || typeof value.sabotageEnabled === "boolean") && token(value.gameId) &&
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
@@ -206,7 +206,7 @@ function publicGame(value: unknown): boolean {
       (!Object.hasOwn(trade, "expiresAt") || integer(trade.expiresAt)) && identifier(trade.offeredBy, "player") &&
       (trade.give === null || resources(trade.give)) && resources(trade.receive) && record(trade.responses) && Object.entries(trade.responses).every(([key, value]) => identifier(key, "player") && (value === false || resources(value))))) &&
     array(value.log, 100, isGameMessage) && typeof value.developmentPlayed === "boolean" &&
-    array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, DEVELOPMENT_DECK_MAXIMUM);
+    array(value.players, 4, value => roomPlayer(value, true)) && phase(value.phase) && typeof value.canCancelKnight === "boolean" && integer(value.developmentRemaining, 25);
 }
 function snapshot(value: unknown): value is RoomSnapshot {
   if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "version", "players", "game", "playerId", "privatePlayer", "privateThefts", "privateMonopolies", "privateScore", "buildMode", "boardTargets"], ["mapSeed", "customMapConfig", "boardThemeId"])) return false;

@@ -639,6 +639,17 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         value: developmentValue,
       });
     }
+    if (state.sabotageEnabled && hasLegalSabotageTarget(planningState, playerId)) {
+      const sabotageChoice = bestSabotageTarget(planningState);
+      const urgentLeader = highestOpponentScore >= state.victoryPointsToWin - 2;
+      if (sabotageChoice && (sabotageChoice.value >= 12 || urgentLeader)) {
+        targets.push({
+          action: sabotageChoice.action,
+          cost: COSTS.sabotage,
+          value: sabotageChoice.value,
+        });
+      }
+    }
     return targets.toSorted((first, second) => priority(second) - priority(first));
   }
 
@@ -997,7 +1008,6 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       const road = bestRoad(state);
       return road ? { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId } : { type: "skip-roads" };
     })
-    .with({ type: "sabotage" }, (): GameAction | null => bestSabotageTarget(state)?.action ?? null)
     .with({ type: "gold" }, (phase): GameAction => {
       const selected = emptyResources();
       const targets = buildTargets();
@@ -1204,19 +1214,6 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
             const minimumExpected = score >= state.victoryPointsToWin - 3 || cost[bestResource] > activePlayer.resources[bestResource] ? 2.0 : 2.8;
             return expected[bestResource] >= minimumExpected
               ? { action: { type: "play-development", cardId: card.id, resource: bestResource }, value: scoreMonopoly(bestResource) * 2.2 }
-              : null;
-          })
-          .with("sabotage", (): typeof developmentActions[number] | null => {
-            if (!hasLegalSabotageTarget(state, playerId)) return null;
-            const sabotagePreview: GameState = {
-              ...state,
-              phase: { type: "sabotage", remainingRoutes: 2, canTargetBuilding: true, returnPhase: "actions" },
-            };
-            const targetChoice = bestSabotageTarget(sabotagePreview);
-            if (!targetChoice) return null;
-            const urgentLeader = highestOpponentScore >= state.victoryPointsToWin - 2;
-            return targetChoice.value >= 12 || urgentLeader
-              ? { action: { type: "play-development", cardId: card.id }, value: targetChoice.value }
               : null;
           })
           .exhaustive();

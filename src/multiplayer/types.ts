@@ -5,7 +5,7 @@ import type { ProfileStats } from "../profile";
 import type { BoardThemeId } from "../themes";
 import type { TradeIdentity } from "./protocol";
 
-export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | null;
+export type BuildMode = "road" | "ship" | "move-ship" | "settlement" | "city" | "sabotage" | null;
 
 export type RoomPlayer = Pick<Player, "id" | "name" | "color" | "control"> & {
   connected: boolean;
@@ -34,7 +34,7 @@ export type ScoreBreakdown = {
 
 export type PublicGame = Pick<GameState,
   "bank" | "activePlayerId" | "turnNumber" | "dice" | "diceRollTotals" |
-  "robberTileId" | "pirateTileId" | "variant" | "victoryPointsToWin" | "shipMoved" | "shipsBuiltThisTurn" |
+  "robberTileId" | "pirateTileId" | "variant" | "victoryPointsToWin" | "sabotageEnabled" | "shipMoved" | "shipsBuiltThisTurn" |
   "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
 > & {
   board: Omit<Board, "fogDiscoveryDeck" | "fogDiscoveriesByTileId">;

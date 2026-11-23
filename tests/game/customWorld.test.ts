@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { createBoard, seededRandom } from "../../src/game/board";
 import { chooseComputerAction } from "../../src/game/computer";
 import {
-  applyAction, createGame, getLongestRoadLength, getScore, hasLegalSabotageTarget, legalSabotageEdges,
+  applyAction, COSTS, createGame, getLongestRoadLength, getScore, hasLegalSabotageTarget, legalSabotageEdges,
   legalSabotageVertices, legalSettlementVertices, legalSetupRevealTiles, RESOURCES,
 } from "../../src/game/engine";
 import {
-  CUSTOM_MAP_COUNT_FIELDS, CUSTOM_SABOTAGE_CARDS_MAXIMUM, DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig,
+  CUSTOM_MAP_COUNT_FIELDS, DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig,
   isCustomMapConfigDraft, type CustomMapConfig, type Player,
 } from "../../src/game/types";
 import type { GameState } from "../../src/game/types";
@@ -67,12 +67,10 @@ describe("Custom World configuration validation", () => {
     expect(isCustomMapConfigDraft(configWith({ wood: 7 }))).toBe(false);
     expect(isCustomMapConfig(configWith({ sea: 42, wood: 0, brick: 0, wool: 0, grain: 0, ore: 0, gold: 0, desert: 0 }))).toBe(false);
     expect(isCustomMapConfig({ ...visibleConfig, fog: "yes" as unknown as boolean })).toBe(false);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: 0 })).toBe(true);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: CUSTOM_SABOTAGE_CARDS_MAXIMUM })).toBe(true);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: -1 })).toBe(false);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: CUSTOM_SABOTAGE_CARDS_MAXIMUM + 1 })).toBe(false);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: 1.5 })).toBe(false);
-    expect(isCustomMapConfig({ ...visibleConfig, sabotageCards: "2" as unknown as number })).toBe(false);
+    expect(isCustomMapConfig({ ...visibleConfig, sabotage: true })).toBe(true);
+    expect(isCustomMapConfig({ ...visibleConfig, sabotage: false })).toBe(true);
+    expect(isCustomMapConfig({ ...visibleConfig, sabotage: "yes" as unknown as boolean })).toBe(false);
+    expect(isCustomMapConfig({ ...visibleConfig, sabotage: 2 as unknown as boolean })).toBe(false);
     expect(isCustomMapConfig({ wood: 1 } as unknown as CustomMapConfig)).toBe(false);
   });
 
@@ -273,8 +271,8 @@ describe("Custom World lobby", () => {
   });
 });
 
-describe("Custom World Sabotage development card", () => {
-  function finishSetup(config: CustomMapConfig = configWith({ sabotageCards: 2 }), seed = 21): GameState {
+describe("Custom World Sabotage build action", () => {
+  function finishSetup(config: CustomMapConfig = configWith({ sabotage: true }), seed = 21): GameState {
     const random = randomFromSeed(seed);
     let state = createGame(profiles, random, undefined, "custom-world", 12, config);
     while (state.phase.type.startsWith("setup")) {
@@ -289,74 +287,62 @@ describe("Custom World Sabotage development card", () => {
     return state;
   }
 
-  test("adds the configured Sabotage cards to the Custom World deck with unique valid IDs", () => {
+  test("enables Sabotage in Custom World when configured and keeps the standard 25-card deck", () => {
     const defaultGame = createGame(profiles, randomFromSeed(1), undefined, "custom-world", 12, DEFAULT_CUSTOM_MAP_CONFIG);
-    expect(defaultGame.developmentDeck).toHaveLength(27);
-    expect(defaultGame.developmentDeck.filter(kind => kind === "sabotage")).toHaveLength(2);
+    expect(defaultGame.sabotageEnabled).toBe(true);
+    expect(defaultGame.developmentDeck).toHaveLength(25);
 
-    const zeroGame = createGame(profiles, randomFromSeed(1), undefined, "custom-world", 12, configWith({ sabotageCards: 0 }));
-    expect(zeroGame.developmentDeck).toHaveLength(25);
-    expect(zeroGame.developmentDeck.filter(kind => kind === "sabotage")).toHaveLength(0);
+    const disabledGame = createGame(profiles, randomFromSeed(1), undefined, "custom-world", 12, configWith({ sabotage: false }));
+    expect(disabledGame.sabotageEnabled).toBeUndefined();
+    expect(disabledGame.developmentDeck).toHaveLength(25);
 
     const originalGame = createGame(profiles, randomFromSeed(1), undefined, "original");
+    expect(originalGame.sabotageEnabled).toBeUndefined();
     expect(originalGame.developmentDeck).toHaveLength(25);
-    expect(originalGame.developmentDeck.filter(kind => kind === "sabotage")).toHaveLength(0);
-
-    let maxGame = finishSetup(configWith({ sabotageCards: CUSTOM_SABOTAGE_CARDS_MAXIMUM }), 22);
-    expect(maxGame.developmentDeck).toHaveLength(31);
-    maxGame.phase = { type: "actions" };
-    const buyerId = maxGame.activePlayerId;
-    for (let index = 0; index < 31; index++) {
-      const buyer = maxGame.players.find(player => player.id === buyerId)!;
-      buyer.resources = { wood: 0, brick: 0, wool: 1, grain: 1, ore: 1 };
-      maxGame = applyAction(maxGame, buyerId, { type: "buy-development" });
-    }
-    const ids = maxGame.players.find(player => player.id === buyerId)!.developmentCards.map(card => card.id);
-    expect(ids).toHaveLength(31);
-    expect(new Set(ids).size).toBe(31);
-    expect(ids.every(id => /^development-[0-9]{1,3}$/.test(id))).toBe(true);
   });
 
-  test("follows standard timing rules and destroys up to two opponent roads or ships", () => {
+  test("costs 1 of each resource during actions and destroys one opponent road or ship", () => {
     let state = finishSetup();
     const activeId = state.activePlayerId;
     const opponent = state.players.find(player => player.id !== activeId)!;
     const activePlayer = state.players.find(player => player.id === activeId)!;
-
-    // Cannot play on the turn it was purchased.
-    activePlayer.developmentCards.push({ id: "development-99", kind: "sabotage", purchasedTurn: state.turnNumber });
-    expect(() => applyAction(state, activeId, { type: "play-development", cardId: "development-99" }))
-      .toThrow("You cannot play a development card bought this turn.");
-
-    // Playable before rolling when bought on an earlier turn; turn it into a mature card.
-    activePlayer.developmentCards = [{ id: "development-99", kind: "sabotage", purchasedTurn: 0 }];
-    // Convert one of opponent's roads into a ship so both road and ship destruction are verified.
     const opponentEdges = state.board.edges.filter(edge => edge.playerId === opponent.id);
     expect(opponentEdges.length).toBeGreaterThanOrEqual(2);
     opponentEdges[1]!.kind = "ship";
     const ownEdge = state.board.edges.find(edge => edge.playerId === activeId)!;
 
-    state = applyAction(state, activeId, { type: "play-development", cardId: "development-99" });
-    expect(state.phase).toEqual({ type: "sabotage", remainingRoutes: 2, canTargetBuilding: true, returnPhase: "roll" });
-    expect(state.developmentPlayed).toBe(true);
+    // Cannot sabotage before rolling.
+    activePlayer.resources = { ...COSTS.sabotage };
+    expect(legalSabotageEdges(state, activeId)).toEqual([]);
+    expect(() => applyAction(state, activeId, { type: "sabotage-route", edgeId: opponentEdges[0]!.id }))
+      .toThrow("Choose an opponent's road or ship to destroy.");
+
+    // Cannot sabotage without 1 of each resource.
+    state.phase = { type: "actions" };
+    activePlayer.resources = { wood: 1, brick: 1, wool: 1, grain: 1, ore: 0 };
+    expect(() => applyAction(state, activeId, { type: "sabotage-route", edgeId: opponentEdges[0]!.id }))
+      .toThrow("You do not have the resources required for this purchase.");
+
+    // With 1 of each resource, cannot target own road.
+    activePlayer.resources = { ...COSTS.sabotage };
     expect(legalSabotageEdges(state, activeId)).not.toContain(ownEdge.id);
     expect(() => applyAction(state, activeId, { type: "sabotage-route", edgeId: ownEdge.id }))
       .toThrow("Choose an opponent's road or ship to destroy.");
 
-    // Destroy opponent's road first; second pick is locked to routes only.
+    // Destroying an opponent's road spends 1 of each resource and stays in actions (no second free road).
     state = applyAction(state, activeId, { type: "sabotage-route", edgeId: opponentEdges[0]!.id });
+    expect(state.players.find(player => player.id === activeId)!.resources).toEqual({ wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 });
     expect(state.board.edges.find(edge => edge.id === opponentEdges[0]!.id)!.playerId).toBeNull();
-    expect(state.phase).toEqual({ type: "sabotage", remainingRoutes: 1, canTargetBuilding: false, returnPhase: "roll" });
-    expect(legalSabotageVertices(state, activeId)).toEqual([]);
-    const opponentSettlement = state.board.vertices.find(vertex => vertex.building?.playerId === opponent.id)!;
-    expect(() => applyAction(state, activeId, { type: "sabotage-building", vertexId: opponentSettlement.id }))
-      .toThrow("Choose an opponent's city or non-final settlement to sabotage.");
+    expect(state.phase).toEqual({ type: "actions" });
+    expect(() => applyAction(state, activeId, { type: "sabotage-route", edgeId: opponentEdges[1]!.id }))
+      .toThrow("You do not have the resources required for this purchase.");
 
-    // Destroy opponent's ship second; returns to pre-roll phase.
+    // Paying another 1 of each resource can destroy an opponent's ship.
+    state.players.find(player => player.id === activeId)!.resources = { ...COSTS.sabotage };
     state = applyAction(state, activeId, { type: "sabotage-route", edgeId: opponentEdges[1]!.id });
     expect(state.board.edges.find(edge => edge.id === opponentEdges[1]!.id)!.playerId).toBeNull();
     expect(state.board.edges.find(edge => edge.id === opponentEdges[1]!.id)!.kind).toBeUndefined();
-    expect(state.phase).toEqual({ type: "roll" });
+    expect(state.phase).toEqual({ type: "actions" });
   });
 
   test("destroys a non-final settlement, protects an opponent's last building, and reduces a city even if last", () => {
@@ -372,42 +358,45 @@ describe("Custom World Sabotage development card", () => {
     secondBuildings[0]!.building = { playerId: secondOpponent.id, kind: "city" };
 
     state.phase = { type: "actions" };
-    state.players.find(player => player.id === activeId)!.developmentCards = [
-      { id: "development-90", kind: "sabotage", purchasedTurn: 0 },
-    ];
-    state = applyAction(state, activeId, { type: "play-development", cardId: "development-90" });
+    state.players.find(player => player.id === activeId)!.resources = { ...COSTS.sabotage };
     const legalBuildings = legalSabotageVertices(state, activeId);
     expect(legalBuildings).not.toContain(firstBuildings[0]!.id);
     expect(legalBuildings).toContain(secondBuildings[0]!.id);
     expect(() => applyAction(state, activeId, { type: "sabotage-building", vertexId: firstBuildings[0]!.id }))
       .toThrow("Choose an opponent's city or non-final settlement to sabotage.");
 
-    // Reducing secondOpponent's city to a settlement ends the sabotage phase and lowers score by 1.
+    // Reducing secondOpponent's city to a settlement spends 1 of each resource and lowers score by 1.
     const scoreBefore = getScore(state, secondOpponent.id).public;
     state = applyAction(state, activeId, { type: "sabotage-building", vertexId: secondBuildings[0]!.id });
+    expect(state.players.find(player => player.id === activeId)!.resources).toEqual({ wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 });
     expect(state.board.vertices.find(vertex => vertex.id === secondBuildings[0]!.id)!.building)
       .toEqual({ playerId: secondOpponent.id, kind: "settlement" });
     expect(getScore(state, secondOpponent.id).public).toBe(scoreBefore - 1);
     expect(state.phase).toEqual({ type: "actions" });
 
-    // Destroying a non-final settlement removes it completely and ends the sabotage phase.
+    // Destroying a non-final settlement removes it completely and stays in actions.
     let settlementState = finishSetup();
     const actor = settlementState.activePlayerId;
     const victim = settlementState.players.find(player => player.id !== actor)!;
     const victimSettlement = settlementState.board.vertices.find(vertex => vertex.building?.playerId === victim.id)!;
     settlementState.phase = { type: "actions" };
-    settlementState.players.find(player => player.id === actor)!.developmentCards = [
-      { id: "development-91", kind: "sabotage", purchasedTurn: 0 },
-    ];
-    settlementState = applyAction(settlementState, actor, { type: "play-development", cardId: "development-91" });
+    settlementState.players.find(player => player.id === actor)!.resources = { ...COSTS.sabotage };
     expect(legalSabotageVertices(settlementState, actor)).toContain(victimSettlement.id);
     settlementState = applyAction(settlementState, actor, { type: "sabotage-building", vertexId: victimSettlement.id });
     expect(settlementState.board.vertices.find(vertex => vertex.id === victimSettlement.id)!.building).toBeNull();
     expect(settlementState.phase).toEqual({ type: "actions" });
   });
 
-  test("rejects Sabotage with no legal targets and ends early after the last opponent route", () => {
+  test("rejects Sabotage when disabled or with no targets, and finishes immediately after the last opponent route", () => {
+    const disabledState = finishSetup(configWith({ sabotage: false }));
+    disabledState.phase = { type: "actions" };
+    const disabledActor = disabledState.activePlayerId;
+    disabledState.players.find(player => player.id === disabledActor)!.resources = { ...COSTS.sabotage };
+    expect(legalSabotageEdges(disabledState, disabledActor)).toEqual([]);
+    expect(legalSabotageVertices(disabledState, disabledActor)).toEqual([]);
+
     const state = finishSetup();
+    state.phase = { type: "actions" };
     const activeId = state.activePlayerId;
     for (const edge of state.board.edges) {
       if (edge.playerId && edge.playerId !== activeId) edge.playerId = null;
@@ -418,20 +407,14 @@ describe("Custom World Sabotage development card", () => {
       for (const extra of buildings.slice(1)) extra.building = null;
     }
     expect(hasLegalSabotageTarget(state, activeId)).toBe(false);
-    state.players.find(player => player.id === activeId)!.developmentCards = [
-      { id: "development-92", kind: "sabotage", purchasedTurn: 0 },
-    ];
-    expect(() => applyAction(state, activeId, { type: "play-development", cardId: "development-92" }))
-      .toThrow("There are no opponent pieces available to sabotage.");
 
-    // Give one opponent a single road: playing Sabotage has canTargetBuilding=false and finishes after destroying that 1 road.
+    // Give one opponent a single road: destroying it finishes immediately without entering sabotage follow-up phase.
     const opponent = state.players.find(player => player.id !== activeId)!;
     const singleEdge = state.board.edges.find(edge => !edge.playerId)!;
     singleEdge.playerId = opponent.id;
-    let oneRouteState = applyAction(state, activeId, { type: "play-development", cardId: "development-92" });
-    expect(oneRouteState.phase).toEqual({ type: "sabotage", remainingRoutes: 2, canTargetBuilding: false, returnPhase: "roll" });
-    oneRouteState = applyAction(oneRouteState, activeId, { type: "sabotage-route", edgeId: singleEdge.id });
-    expect(oneRouteState.phase).toEqual({ type: "roll" });
+    state.players.find(player => player.id === activeId)!.resources = { ...COSTS.sabotage };
+    const oneRouteState = applyAction(state, activeId, { type: "sabotage-route", edgeId: singleEdge.id });
+    expect(oneRouteState.phase).toEqual({ type: "actions" });
   });
 
   test("recalculates Longest Route when Sabotage breaks the holder's road", () => {
@@ -453,16 +436,13 @@ describe("Custom World Sabotage development card", () => {
     expect(getLongestRoadLength(state, opponent.id)).toBeGreaterThanOrEqual(5);
     state.awards.longestRoad = opponent.id;
     state.phase = { type: "actions" };
-    state.players.find(player => player.id === activeId)!.developmentCards = [
-      { id: "development-93", kind: "sabotage", purchasedTurn: 0 },
-    ];
-    state = applyAction(state, activeId, { type: "play-development", cardId: "development-93" });
+    state.players.find(player => player.id === activeId)!.resources = { ...COSTS.sabotage };
     state = applyAction(state, activeId, { type: "sabotage-route", edgeId: chain[2]!.id });
     expect(getLongestRoadLength(state, opponent.id)).toBeLessThan(5);
     expect(state.awards.longestRoad).toBeNull();
   });
 
-  test("computers play and finish a Custom World game with 6 Sabotage cards enabled", () => {
+  test("computers play and finish a Custom World game with Sabotage enabled", () => {
     const random = randomFromSeed(19);
     let state = createGame(
       profiles.map(profile => ({ ...profile, control: "computer" })),
@@ -470,7 +450,7 @@ describe("Custom World Sabotage development card", () => {
       undefined,
       "custom-world",
       12,
-      configWith({ sabotageCards: CUSTOM_SABOTAGE_CARDS_MAXIMUM }),
+      configWith({ sabotage: true }),
     );
     let actions = 0;
     while (!state.winnerId && actions < 10000) {
@@ -485,10 +465,10 @@ describe("Custom World Sabotage development card", () => {
     expect(getScore(state, state.winnerId!).total).toBeGreaterThanOrEqual(12);
   }, 30000);
 
-  test("multiplayer host validates and resolves Sabotage on the shared board", () => {
+  test("multiplayer host validates and resolves Sabotage build mode on the shared board", () => {
     const room = new HostRoom("sabotage-secret");
     room.setVariant("custom-world");
-    room.setCustomMapConfig(configWith({ sabotageCards: 4 }));
+    room.setCustomMapConfig(configWith({ sabotage: true }));
     room.join("phone-1", { type: "join", secret: "sabotage-secret", name: "Alex" });
     room.admit("phone-1");
     room.addComputer();
@@ -509,23 +489,17 @@ describe("Custom World Sabotage development card", () => {
     room.game!.activePlayerId = humanId;
     room.game!.phase = { type: "actions" };
     room.game!.turnNumber = 2;
-    room.game!.players.find(player => player.id === humanId)!.developmentCards.push({
-      id: "development-30", kind: "sabotage", purchasedTurn: 1,
-    });
+    room.game!.players.find(player => player.id === humanId)!.resources = { ...COSTS.sabotage };
     room.version++;
 
-    // Phone snapshot with Sabotage card & >25 deck validates cleanly through protocol.
-    const beforeSnapshot = room.snapshot("phone-1");
-    expect(parseServerMessage({ type: "snapshot", snapshot: beforeSnapshot })).toEqual({ type: "snapshot", snapshot: beforeSnapshot });
-
-    // Phone plays Sabotage.
-    const playResult = room.command("phone-1", {
-      type: "action", requestId: "req-play", version: room.version,
-      action: { type: "play-development", cardId: "development-30" },
+    // Phone selects Sabotage build mode.
+    const selectResult = room.command("phone-1", {
+      type: "select-build", requestId: "req-select", version: room.version, piece: "sabotage",
     });
-    expect(playResult.error).toBeNull();
+    expect(selectResult.error).toBeNull();
     const sabotageSnapshot = room.snapshot("phone-1");
-    expect(sabotageSnapshot.game!.phase.type).toBe("sabotage");
+    expect(sabotageSnapshot.buildMode).toBe("sabotage");
+    expect(sabotageSnapshot.game!.sabotageEnabled).toBe(true);
     expect(sabotageSnapshot.boardTargets.edges.length).toBeGreaterThan(0);
     expect(sabotageSnapshot.boardTargets.vertices.length).toBeGreaterThan(0);
     expect(parseServerMessage({ type: "snapshot", snapshot: sabotageSnapshot })).toEqual({ type: "snapshot", snapshot: sabotageSnapshot });
@@ -537,10 +511,12 @@ describe("Custom World Sabotage development card", () => {
     });
     expect(phoneSabotage.error).not.toBeNull();
 
-    // Shared board resolves Sabotage building destruction.
+    // Shared board resolves Sabotage building destruction and spends 1 of each resource.
     const targetVertexId = sabotageSnapshot.boardTargets.vertices[0]!;
     room.performBoard({ type: "sabotage-building", vertexId: targetVertexId });
     expect(room.game!.board.vertices.find(vertex => vertex.id === targetVertexId)!.building).toBeNull();
+    expect(room.game!.players.find(player => player.id === humanId)!.resources).toEqual({ wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 });
     expect(room.game!.phase).toEqual({ type: "actions" });
+    expect(room.buildMode).toBeNull();
   });
 });

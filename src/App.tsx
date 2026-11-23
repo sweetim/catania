@@ -75,9 +75,9 @@ import {
 } from "./game/engine";
 import {
   CUSTOM_MAP_COUNT_FIELDS,
-  customSabotageCardCount,
   DEFAULT_CUSTOM_MAP_CONFIG,
   isCustomMapConfig,
+  isCustomSabotageEnabled,
   isGameVariant,
   isSeafarers,
 } from "./game/types";
@@ -129,7 +129,7 @@ function customMapConfigFromParameters(parameters: URLSearchParams): CustomMapCo
   const candidate = {
     ...Object.fromEntries(CUSTOM_MAP_COUNT_FIELDS.map(field => [field, Number(parameters.get(field))])),
     fog: parameters.get("fog") === "1",
-    ...(sabotageParameter !== null ? { sabotageCards: Number(sabotageParameter) } : {}),
+    ...(sabotageParameter !== null ? { sabotage: sabotageParameter !== "0" && sabotageParameter !== "false" } : {}),
   };
   return isCustomMapConfig(candidate) ? candidate : null;
 }
@@ -205,7 +205,7 @@ export function App() {
     "hand",
   );
   const [buildMode, setBuildMode] = useState<
-    "road" | "ship" | "move-ship" | "settlement" | "city" | null
+    "road" | "ship" | "move-ship" | "settlement" | "city" | "sabotage" | null
   >(null);
   const [movingShipId, setMovingShipId] = useState<string | null>(null);
   const [buildSectionOpen, setBuildSectionOpen] = useState(true);
@@ -488,8 +488,9 @@ export function App() {
     if (automatic && nextController !== viewerId &&
       !(next.phase.type === "discard" && (next.phase.required[viewerId ?? ""] ?? 0) > 0)) return;
     if (game?.phase.type === "roll" && next.phase.type === "actions") return;
+    if (next.phase.type === "actions" && buildMode === "sabotage") return;
     setMobileView(
-      ["setup-settlement", "setup-reveal", "setup-road", "road-building", "robber", "sabotage"].includes(
+      ["setup-settlement", "setup-reveal", "setup-road", "road-building", "robber"].includes(
         next.phase.type,
       )
         ? "board"
@@ -608,7 +609,7 @@ export function App() {
     : null;
   const legalVertices =
     game && viewer && isActive && !rollBusy
-      ? game.phase.type === "sabotage"
+      ? buildMode === "sabotage"
         ? legalSabotageVertices(game, viewer.id)
         : game.phase.type === "setup-settlement" || game.phase.type === "setup-reveal" || buildMode === "settlement"
           ? legalSettlementVertices(game, viewer.id)
@@ -621,11 +622,10 @@ export function App() {
       viewer &&
       isActive &&
       !rollBusy &&
-      (game.phase.type === "sabotage" ||
-        game.phase.type === "setup-road" ||
+      (game.phase.type === "setup-road" ||
         game.phase.type === "road-building" ||
-        buildMode === "road" || buildMode === "ship" || buildMode === "move-ship")
-      ? game.phase.type === "sabotage"
+        buildMode === "road" || buildMode === "ship" || buildMode === "move-ship" || buildMode === "sabotage")
+      ? buildMode === "sabotage"
         ? legalSabotageEdges(game, viewer.id)
         : buildMode === "move-ship"
           ? movingShipId ? legalShipDestinations(game, viewer.id, movingShipId)
@@ -651,12 +651,12 @@ export function App() {
       : selected.kind === "tile"
         ? { type: game.phase.type === "setup-reveal" ? "reveal-tile" : game.board.tiles.find(tile => tile.id === selected.id)?.terrain === "sea" ? "move-pirate" : "move-robber", tileId: selected.id }
         : selected.kind === "edge"
-          ? game.phase.type === "sabotage"
+          ? buildMode === "sabotage"
             ? { type: "sabotage-route", edgeId: selected.id }
             : buildMode === "move-ship" && movingShipId
               ? { type: "move-ship", edgeId: movingShipId, destinationEdgeId: selected.id }
               : { type: buildMode === "ship" || !legalRoadEdges(game, game.activePlayerId).includes(selected.id) ? "place-ship" : "place-road", edgeId: selected.id }
-          : game.phase.type === "sabotage"
+          : buildMode === "sabotage"
             ? { type: "sabotage-building", vertexId: selected.id }
             : {
               type: buildMode === "city" ? "place-city" : "place-settlement",
@@ -1224,7 +1224,6 @@ export function App() {
                       "setup-road",
                       "road-building",
                       "robber",
-                      "sabotage",
                     ].includes(game.phase.type)
                       ? "board"
                       : "hand",
@@ -1281,7 +1280,7 @@ export function App() {
                     robberTileId={game.robberTileId}
                     pirateTileId={game.pirateTileId}
                     routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
-                    sabotageMode={game.phase.type === "sabotage"}
+                    sabotageMode={buildMode === "sabotage"}
                     pirateIndicator={isSeafarers(game.variant) ? {
                       onBoard: game.pirateTileId !== null,
                       enabled: isActive && !rollBusy && game.phase.type === "robber",
@@ -1533,6 +1532,34 @@ export function App() {
                           setSelected(null);
                           setMobileView("board");
                         }}>{translateText("Move ship")}</button>}
+                      {game.sabotageEnabled && (
+                        <BuildButton
+                          piece="sabotage"
+                          color="#8a2f22"
+                          resources={COSTS.sabotage}
+                          title={
+                            !normalActions
+                              ? translateText("Available after rolling on your turn.")
+                              : !canAfford(COSTS.sabotage)
+                                ? translateText("You need more resources.")
+                                : !hasLegalSabotageTarget(game, viewer.id)
+                                  ? translateText("There are no opponent pieces available to sabotage.")
+                                  : translateText("Select a location on the board.")
+                          }
+                          disabled={
+                            !normalActions ||
+                            !canAfford(COSTS.sabotage) ||
+                            !hasLegalSabotageTarget(game, viewer.id)
+                          }
+                          aria-pressed={buildMode === "sabotage"}
+                          onClick={() => {
+                            setBuildMode(buildMode === "sabotage" ? null : "sabotage");
+                            setSelected(null);
+                            setMovingShipId(null);
+                            setMobileView("board");
+                          }}
+                        />
+                      )}
                       <BuildButton
                         piece="development"
                         color={viewer.color}
@@ -1748,7 +1775,7 @@ export function App() {
         {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}
         {dialog === "help" && <HelpDialog
           variant={game?.variant ?? variant}
-          sabotageCards={(game?.variant ?? variant) === "custom-world" ? customSabotageCardCount(game ? (gameCustomMapConfig ?? customMapConfig) : customMapConfig) : 0}
+          sabotageEnabled={game ? game.sabotageEnabled === true : variant === "custom-world" && isCustomSabotageEnabled(customMapConfig)}
           onClose={() => setDialog(null)}
         />}
         {dialog === "scan" && !game && <ScanToJoin onClose={() => setDialog(null)} />}
@@ -1855,7 +1882,6 @@ export function App() {
             phaseType={game.phase.type}
             developmentPlayed={game.developmentPlayed}
             active={isActive}
-            hasSabotageTarget={hasLegalSabotageTarget(game, viewer.id)}
             disabled={rollBusy}
             initialCardId={developmentCardId}
             error={errorText}

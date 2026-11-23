@@ -48,6 +48,7 @@ const pieceNames = {
   road: { en: "road", ja: "街道" },
   settlement: { en: "settlement", ja: "開拓地" },
   city: { en: "city", ja: "都市" },
+  sabotage: { en: "sabotage", ja: "破壊工作" },
   development: { en: "development", ja: "発展" },
 } satisfies Record<string, Record<Language, string>>;
 

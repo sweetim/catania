@@ -44,6 +44,22 @@ type HarvestBurst = {
   index: number;
 };
 
+type SabotageBurst = {
+  key: string;
+  kind: "road" | "ship" | "settlement" | "city";
+  color: string;
+  horizontal: number;
+  vertical: number;
+  rotation: number;
+};
+
+type BuildingSnapshot = {
+  playerId: string;
+  kind: "settlement" | "city";
+  horizontal: number;
+  vertical: number;
+};
+
 type EdgeSnapshot = {
   playerId: string;
   kind: "road" | "ship";
@@ -61,7 +77,7 @@ type BoardMotionTracker = {
   lastProducingKey: string;
   version: number;
   generation: number;
-  buildings: Map<string, "settlement" | "city">;
+  buildings: Map<string, BuildingSnapshot>;
   edges: Map<string, EdgeSnapshot>;
   visiblePortEdgeIds: Set<string>;
   tileCoordinates: Map<string, { horizontal: number; vertical: number }>;
@@ -77,6 +93,7 @@ type BoardMotionTracker = {
   pirateEnterGeneration: number | null;
   blockedRollGeneration: number | null;
   harvestBursts: HarvestBurst[];
+  sabotageBursts: SabotageBurst[];
   completedKeys: Set<string>;
 };
 
@@ -118,6 +135,7 @@ function createBoardMotionTracker(): BoardMotionTracker {
     pirateEnterGeneration: null,
     blockedRollGeneration: null,
     harvestBursts: [],
+    sabotageBursts: [],
     completedKeys: new Set(),
   };
 }
@@ -805,9 +823,16 @@ export function Board({
       tracker.lastProducingKey === producingKey;
 
     if (!sameInput) {
-      const currentBuildings = new Map<string, "settlement" | "city">();
+      const currentBuildings = new Map<string, BuildingSnapshot>();
       for (const vertex of board.vertices) {
-        if (vertex.building) currentBuildings.set(vertex.id, vertex.building.kind);
+        if (vertex.building) {
+          currentBuildings.set(vertex.id, {
+            playerId: vertex.building.playerId,
+            kind: vertex.building.kind,
+            horizontal: vertex.x,
+            vertical: vertex.y,
+          });
+        }
       }
       const currentEdges = new Map<string, EdgeSnapshot>();
       for (const item of edgeGeometry) {
@@ -828,19 +853,26 @@ export function Board({
       const currentTileTerrains = new Map(board.tiles.map(tile => [tile.id, tile.terrain]));
 
       const removedShips: { edgeId: string; snapshot: EdgeSnapshot }[] = [];
+      const removedRoads: { edgeId: string; snapshot: EdgeSnapshot }[] = [];
+      const removedBuildings: { vertexId: string; snapshot: BuildingSnapshot }[] = [];
+      const downgradedCities: { vertexId: string; snapshot: BuildingSnapshot }[] = [];
       const addedShips: { edgeId: string; snapshot: EdgeSnapshot }[] = [];
       const addedRoads: string[] = [];
-      let disappearedPiece = false;
 
       if (tracker.initialized) {
-        for (const [vertexId] of tracker.buildings) {
-          if (!currentBuildings.has(vertexId)) disappearedPiece = true;
+        for (const [vertexId, previousBuilding] of tracker.buildings) {
+          const nextBuilding = currentBuildings.get(vertexId);
+          if (!nextBuilding) {
+            removedBuildings.push({ vertexId, snapshot: previousBuilding });
+          } else if (previousBuilding.kind === "city" && nextBuilding.kind === "settlement" && previousBuilding.playerId === nextBuilding.playerId) {
+            downgradedCities.push({ vertexId, snapshot: previousBuilding });
+          }
         }
         for (const [edgeId, previousEdge] of tracker.edges) {
           const nextEdge = currentEdges.get(edgeId);
           if (!nextEdge) {
             if (previousEdge.kind === "ship") removedShips.push({ edgeId, snapshot: previousEdge });
-            else disappearedPiece = true;
+            else removedRoads.push({ edgeId, snapshot: previousEdge });
           }
         }
         for (const [edgeId, nextEdge] of currentEdges) {
@@ -855,6 +887,13 @@ export function Board({
         addedShips.length === 1 &&
         removedShips[0]!.snapshot.playerId === addedShips[0]!.snapshot.playerId;
 
+      const removedNonMovedShips = validSingleShipMove ? [] : removedShips;
+      const totalDestroyedCount = removedBuildings.length + removedRoads.length + removedNonMovedShips.length;
+      const sabotageRemoval = totalDestroyedCount > 0 &&
+        totalDestroyedCount <= 2 &&
+        addedRoads.length === 0 &&
+        (validSingleShipMove || addedShips.length === 0);
+
       const replacedBoard = !tracker.initialized ||
         board.tiles.length !== tracker.tileTerrains.size ||
         board.tiles.some(tile => {
@@ -863,8 +902,7 @@ export function Board({
             previousTerrain !== tile.terrain &&
             !(previousTerrain === "fog" && tile.terrain !== "fog");
         }) ||
-        disappearedPiece ||
-        (removedShips.length > 0 && !validSingleShipMove);
+        (totalDestroyedCount > 0 && !sabotageRemoval);
 
       if (replacedBoard) {
         tracker.version++;
@@ -879,17 +917,60 @@ export function Board({
         tracker.pirateEnterGeneration = null;
         tracker.blockedRollGeneration = null;
         tracker.harvestBursts = [];
+        tracker.sabotageBursts = [];
         tracker.completedKeys.clear();
       } else {
-        for (const [vertexId, kind] of currentBuildings) {
-          const previousKind = tracker.buildings.get(vertexId);
-          if (!previousKind && kind === "settlement") {
+        for (const [vertexId, current] of currentBuildings) {
+          const previous = tracker.buildings.get(vertexId);
+          if (!previous && current.kind === "settlement") {
             tracker.newSettlements.set(vertexId, ++tracker.generation);
-          } else if (previousKind !== "city" && kind === "city") {
+          } else if (previous?.kind !== "city" && current.kind === "city") {
             tracker.newSettlements.delete(vertexId);
             tracker.upgradedCities.set(vertexId, ++tracker.generation);
           }
         }
+
+        const pendingSabotageBursts = tracker.sabotageBursts.filter(burst => !tracker.completedKeys.has(burst.key));
+        for (const { vertexId, snapshot } of removedBuildings) {
+          tracker.newSettlements.delete(vertexId);
+          tracker.upgradedCities.delete(vertexId);
+          const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
+          pendingSabotageBursts.push({
+            key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
+            kind: snapshot.kind,
+            color,
+            horizontal: snapshot.horizontal,
+            vertical: snapshot.vertical,
+            rotation: 0,
+          });
+        }
+        for (const { vertexId, snapshot } of downgradedCities) {
+          tracker.upgradedCities.delete(vertexId);
+          const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
+          pendingSabotageBursts.push({
+            key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
+            kind: "city",
+            color,
+            horizontal: snapshot.horizontal,
+            vertical: snapshot.vertical,
+            rotation: 0,
+          });
+        }
+        for (const { edgeId, snapshot } of [...removedRoads, ...removedNonMovedShips]) {
+          tracker.newRoads.delete(edgeId);
+          tracker.newShips.delete(edgeId);
+          tracker.movedShips.delete(edgeId);
+          const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
+          pendingSabotageBursts.push({
+            key: `${tracker.version}:sabotage:${++tracker.generation}:${edgeId}`,
+            kind: snapshot.kind,
+            color,
+            horizontal: snapshot.horizontal,
+            vertical: snapshot.vertical,
+            rotation: snapshot.rotation,
+          });
+        }
+        tracker.sabotageBursts = pendingSabotageBursts;
 
         for (const edgeId of addedRoads) {
           tracker.newRoads.set(edgeId, ++tracker.generation);
@@ -1028,6 +1109,7 @@ export function Board({
     : `${boardMotion.version}:blocked-roll:${boardMotion.blockedRollGeneration}`;
   const blockedRollActive = isMotionActive(blockedRollKey);
   const activeHarvestBursts = boardMotion.harvestBursts.filter(burst => isMotionActive(burst.key));
+  const activeSabotageBursts = boardMotion.sabotageBursts.filter(burst => isMotionActive(burst.key));
   const selectedPoint = selectedId
     ? verticesById.get(selectedId) ??
     edgeGeometry.find(({ edge }) => edge.id === selectedId) ??
@@ -2491,6 +2573,71 @@ export function Board({
                     >
                       +{burst.amount}
                     </text>
+                  </g>
+                </g>
+              );
+            })}
+            {activeSabotageBursts.map((burst) => {
+              const shards = [
+                { horizontal: -26, vertical: -22, rotate: -48 },
+                { horizontal: 28, vertical: -20, rotate: 52 },
+                { horizontal: -30, vertical: 10, rotate: -70 },
+                { horizontal: 30, vertical: 14, rotate: 64 },
+                { horizontal: -12, vertical: -32, rotate: -25 },
+                { horizontal: 14, vertical: 28, rotate: 38 },
+              ];
+              return (
+                <g
+                  key={burst.key}
+                  transform={`translate(${burst.horizontal} ${burst.vertical})`}
+                  pointerEvents="none"
+                  aria-hidden="true"
+                  data-sabotage-burst={burst.kind}
+                >
+                  <circle className="board-sabotage-ring" r="14" fill="none" stroke="#d9483b" strokeWidth="3.2" />
+                  <circle className="board-sabotage-ring board-sabotage-ring-secondary" r="10" fill="none" stroke="#f59e0b" strokeWidth="2.4" />
+                  <g className="board-sabotage-piece">
+                    {burst.kind === "road" ? (
+                      <g transform={`rotate(${burst.rotation})`}>
+                        <rect x="-22" y="-5" width="44" height="10" rx="4" fill={burst.color} stroke="#3b1610" strokeWidth="1.5" />
+                        <path d="M-3 -6 L2 0 L-2 6" fill="none" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </g>
+                    ) : burst.kind === "ship" ? (
+                      <g transform={`rotate(${burst.rotation})`}>
+                        <path d="M-16 3 L16 3 L11 10 L-11 10 Z" fill={burst.color} stroke="#3b1610" strokeWidth="1.5" />
+                        <path d="M0 -13 L12 1 L0 1 Z" fill={burst.color} fillOpacity=".82" stroke="#3b1610" strokeWidth="1.2" />
+                        <path d="M-4 -10 L3 0 L-3 9" fill="none" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </g>
+                    ) : burst.kind === "city" ? (
+                      <path d={CITY_SILHOUETTE_PATH} fill={burst.color} stroke="#3b1610" strokeWidth="1.6" />
+                    ) : (
+                      <path d={SETTLEMENT_SILHOUETTE_PATH} fill={burst.color} stroke="#3b1610" strokeWidth="1.6" />
+                    )}
+                  </g>
+                  {shards.map((shard, index) => (
+                    <polygon
+                      key={index}
+                      className="board-sabotage-shard"
+                      points="-4,-2 4,-3 2,3 -3,2"
+                      fill={index % 2 === 0 ? burst.color : "#f59e0b"}
+                      stroke="#3b1610"
+                      strokeWidth="0.9"
+                      style={{
+                        "--shard-x": `${shard.horizontal}px`,
+                        "--shard-y": `${shard.vertical}px`,
+                        "--shard-rotate": `${shard.rotate}deg`,
+                      } as CSSProperties}
+                    />
+                  ))}
+                  <g
+                    className="board-sabotage-emblem"
+                    onAnimationEnd={event => {
+                      if (event.animationName === "board-sabotage-emblem") completeMotionKey(burst.key);
+                    }}
+                  >
+                    <circle r="13" fill="#8a2f22" stroke="#fff7ed" strokeWidth="2.2" />
+                    <path d="M-4.5 -5.5 L0.5 -0.5 L-2.5 0.5 L4.5 6" fill="none" stroke="#fde047" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M-5 5 L5 -5" fill="none" stroke="#fff7ed" strokeWidth="1.8" strokeLinecap="round" opacity=".85" />
                   </g>
                 </g>
               );

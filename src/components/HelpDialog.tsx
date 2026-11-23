@@ -5,13 +5,12 @@ import { helpTranslations } from "../translations/help";
 import { getDevelopmentNames, getDevelopmentDescriptions } from "./GameplayDialogs";
 import { CardTypeIcon, Cost, DevelopmentCardIcon, Dialog, PieceIcon } from "./GameUi";
 
-export function HelpDialog({ onClose, multiplayer = false, variant = "original", victoryPointsToWin = victoryTarget(variant), sabotageCards = 0 }: { onClose: () => void; multiplayer?: boolean; variant?: GameVariant; victoryPointsToWin?: number; sabotageCards?: number }) {
+export function HelpDialog({ onClose, multiplayer = false, variant = "original", victoryPointsToWin = victoryTarget(variant), sabotageEnabled = false }: { onClose: () => void; multiplayer?: boolean; variant?: GameVariant; victoryPointsToWin?: number; sabotageEnabled?: boolean }) {
   const { language } = useLanguage();
   const translateText = useTranslation(helpTranslations);
   const developmentNames = getDevelopmentNames(language);
   const developmentDescriptions = getDevelopmentDescriptions(language, variant, victoryPointsToWin);
-  const effectiveSabotageCards = variant === "custom-world" ? sabotageCards : 0;
-  const totalDevelopmentCards = 25 + effectiveSabotageCards;
+  const showSabotage = variant === "custom-world" && sabotageEnabled;
   const scenarioRules = variant === "four-islands"
     ? "Start on any of the four islands. Your first settlement on each island not occupied by either of your two starting settlements earns 2 extra points, even if another player settled there first. Reach {points} points on your own turn to win."
     : variant === "fog-islands"
@@ -21,7 +20,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original",
       : variant === "mystery-world"
         ? "Every map rolls its own hidden terrain mix before play: wood, wool, and grain get 2-6 hexes each, brick and ore 1-4 each, gold 0-2, and the remaining cells split randomly between at least one desert and at least 13 sea. Terrain and numbers are fixed before play and hidden under fog. Choose a hidden cell for your first settlement; for your second, place directly on a legal node on revealed land or choose a hidden cell. Reveal only the chosen cell. Sea stays revealed and lets you choose another cell. After revealing land, place your settlement at a legal node belonging to that cell. Cells without legal settlement nodes cannot be selected. If no eligible fog remains for your first settlement, choose a revealed land cell instead. Each resource discovery grants one matching available bank card, gold grants one available resource choice before settlement placement, and sea or desert grants nothing. Using revealed land grants no discovery reward. After placing a settlement, choose its edge, then Road or Ship. The route must touch your new settlement and border revealed land. All nine harbors keep their trade types and appear only on revealed land-sea coasts, including the outer map edge. Unplaced harbors move to the nearest available coast after each discovery, or wait hidden and inactive until space is available. Established coastal harbors stay in place. After setup, endpoints of newly placed roads or ships, and moved ships, reveal adjacent fog with the same rewards. Neither robber nor pirate may enter fog. There are no island bonuses. Reach {points} points on your own turn to win."
         : variant === "custom-world"
-          ? "Pick every terrain count yourself before starting: resources, gold, desert, sea, whether fog hides the whole map, and how many Sabotage development cards (0-6) join the deck. Without fog, you settle one connected island of your own design with nine harbors along its coasts. With fog, terrain and numbers are fixed before play and hidden; choose a hidden cell for your first settlement, reveal only that cell, and uncover the rest as your roads and ships explore. Sea discoveries let you choose again; each resource discovery grants one matching bank card, and gold grants one resource choice. Neither robber nor pirate may enter fog, and there are no island bonuses. Reach {points} points on your own turn to win."
+          ? "Pick every terrain count yourself before starting: resources, gold, desert, sea, whether fog hides the whole map, and whether Sabotage is enabled. Without fog, you settle one connected island of your own design with nine harbors along its coasts. With fog, terrain and numbers are fixed before play and hidden; choose a hidden cell for your first settlement, reveal only that cell, and uncover the rest as your roads and ships explore. Sea discoveries let you choose again; each resource discovery grants one matching bank card, and gold grants one resource choice. Neither robber nor pirate may enter fog, and there are no island bonuses. Reach {points} points on your own turn to win."
           : "Start on the main island. Your first settlement on each small island earns 2 extra points, even if another player settled there first. Reach {points} points on your own turn to win.";
   return (
     <Dialog title={translateText("Help")} onClose={onClose} wide>
@@ -78,28 +77,28 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original",
                   <h4 className="font-semibold text-ink">{translateText(name)}</h4>
                 </div>
                 <Cost resources={COSTS[piece]} />
-                <p className="mt-3 text-xs leading-6">{piece === "development" && effectiveSabotageCards > 0
-                  ? translateText("Draw a hidden card from the shuffled deck. There are {count} cards; purchases stop when the deck is empty. Cards cannot be traded.", { count: totalDevelopmentCards })
-                  : translateText(isSeafarers(variant) && piece === "settlement"
-                    ? "Build on an empty land intersection beside your roads or ships, at least two edges from every building. Worth 1 point; produces 1 resource per matching land hex. Limit: 5 settlements."
-                    : description)}</p>
+                <p className="mt-3 text-xs leading-6">{translateText(isSeafarers(variant) && piece === "settlement"
+                  ? "Build on an empty land intersection beside your roads or ships, at least two edges from every building. Worth 1 point; produces 1 resource per matching land hex. Limit: 5 settlements."
+                  : description)}</p>
               </li>
             ))}
+            {showSabotage && <li className="min-w-0 rounded-xl border border-line bg-white/30 p-4">
+              <div className="mb-3 flex items-center gap-3 text-clay"><PieceIcon piece="sabotage" /><h4 className="font-semibold text-ink">{translateText("Sabotage")}</h4></div>
+              <Cost resources={COSTS.sabotage} />
+              <p className="mt-3 text-xs leading-6">{translateText("Pay 1 of each resource after rolling to destroy one opponent road or ship, destroy one opponent settlement (not their last building), or reduce one opponent city to a settlement.")}</p>
+            </li>}
           </ul>
         </section>
 
         <section aria-labelledby="help-development-cards">
           <h3 id="help-development-cards" className="mb-4 font-serif text-2xl text-ink">{translateText("Development cards")}</h3>
           <p className="mb-4">
-            {translateText(variant === "custom-world"
-              ? "All development card types for this scenario are shown here, whether or not you own them. Counts show the starting deck, not the cards remaining. Play at most one action development card per turn, never on the turn you bought it. Finish mandatory choices before playing a card. Victory-point cards count automatically and do not use this allowance."
-              : "All five card types are shown here, whether or not you own them. Counts show the starting deck, not the cards remaining. Play at most one action development card per turn, never on the turn you bought it. Finish mandatory choices before playing a card. Victory-point cards count automatically and do not use this allowance.")}
+            {translateText("All five card types are shown here, whether or not you own them. Counts show the starting deck, not the cards remaining. Play at most one action development card per turn, never on the turn you bought it. Finish mandatory choices before playing a card. Victory-point cards count automatically and do not use this allowance.")}
           </p>
           <ul aria-label={translateText("All development cards")} className="space-y-3">
             {([
               ["knight", 14], ["victory-point", 5], ["road-building", 2],
               ["year-of-plenty", 2], ["monopoly", 2],
-              ...(variant === "custom-world" ? [["sabotage", effectiveSabotageCards] as const] : []),
             ] as const).map(([kind, count]) => (
               <li key={kind} className="flex gap-3 rounded-xl border border-line bg-white/30 p-4">
                 <span className="text-forest"><DevelopmentCardIcon kind={kind} /></span>
