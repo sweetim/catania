@@ -4,6 +4,7 @@ import { resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { ResourceCard } from "./GameUi";
+import { CloseIcon } from "./Icons";
 
 export type ResourceReceipt = {
   id: number;
@@ -43,9 +44,9 @@ export function ResourceCollection({ receipt, onDismiss }: {
               type="button"
               onClick={onDismiss}
               aria-label={translateText("Dismiss resource collection")}
-              className="pointer-events-auto -mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl text-muted hover:bg-moss"
+              className="pointer-events-auto -mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-moss"
             >
-              &times;
+              <CloseIcon className="h-4 w-4" />
             </button>
           </div>
           <ul aria-label={translateText("Collected resources")} className="flex justify-center gap-2 pb-1 pt-2">

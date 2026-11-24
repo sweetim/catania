@@ -9,8 +9,13 @@ import type { BuildMode, RoomSnapshot } from "./types";
 
 export type JoinMessage = { type: "join"; secret: string; name: string; credential?: string; userId?: string };
 export type ProfileStatsMessage = { type: "profile-stats"; stats: ProfileStats };
-/** Identifies the open trade a player is responding to, so responses survive unrelated version bumps. */
-export type TradeIdentity = { offeredBy: string; give: Resources | null; receive: Resources };
+/** Identifies the open trade a player is acting on, so concurrent trade actions survive unrelated version bumps. */
+export type TradeIdentity = {
+  offeredBy: string;
+  give: Resources | null;
+  receive: Resources;
+  partnerPrice?: Resources;
+};
 export type Command = { requestId: string; version: number } & (
   | { type: "action"; action: GameAction; trade?: TradeIdentity }
   | { type: "select-build"; piece: BuildMode }
@@ -50,9 +55,10 @@ function resources(value: unknown): boolean {
   return record(value) && fields(value, RESOURCES) && RESOURCES.every(resource => integer(value[resource], 19));
 }
 function tradeIdentity(value: unknown): value is TradeIdentity {
-  return record(value) && fields(value, ["offeredBy", "give", "receive"]) &&
+  return record(value) && fields(value, ["offeredBy", "give", "receive"], ["partnerPrice"]) &&
     identifier(value.offeredBy, "player") &&
-    (value.give === null || resources(value.give)) && resources(value.receive);
+    (value.give === null || resources(value.give)) && resources(value.receive) &&
+    (!Object.hasOwn(value, "partnerPrice") || resources(value.partnerPrice));
 }
 function identifier(value: unknown, kind: "player" | "vertex" | "edge" | "tile" | "development"): value is string {
   return typeof value === "string" && (kind === "player" ? /^player-[1-4]$/ : new RegExp(`^${kind}-[0-9]{1,3}$`)).test(value);

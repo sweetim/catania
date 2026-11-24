@@ -1,6 +1,27 @@
 import { Fragment, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { DiceIcon, EndTurnIcon } from "./components/ActionIcons";
+import {
+  CardsHandIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CrossDeviceIcon,
+  EditPencilIcon,
+  EyeIcon,
+  HexIslandIcon,
+  HomeIcon,
+  MapFoldIcon,
+  MoveShipIcon,
+  PlusIcon,
+  QrCodeIcon,
+  RobberIcon,
+  RobotIcon,
+  SlidersIcon,
+  TradeIcon,
+  UserIcon,
+  UsersIcon,
+  WarningIcon,
+} from "./components/Icons";
 import { Board, useFogRevealHistory } from "./components/Board";
 import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
@@ -816,19 +837,7 @@ export function App() {
                     aria-controls={`home-${view}`}
                     onClick={() => setHomeView(view)}
                   >
-                    <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      {view === "setup" ? (
-                        <>
-                          <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
-                          <path d="M14 2v4M8 10v4M16 18v4" />
-                        </>
-                      ) : (
-                        <>
-                          <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
-                          <path d="m7.5 14.5 3.5-6 3 4 2-2.5 2.5 4.5H7.5Z" />
-                        </>
-                      )}
-                    </svg>
+                    {view === "setup" ? <SlidersIcon /> : <HexIslandIcon />}
                     {translateText(view === "setup" ? "Setup" : "Island")}
                   </button>
                 ))}
@@ -848,12 +857,7 @@ export function App() {
                   <div className="home-table-options">
                     <div className="flex min-h-11 items-center gap-1 rounded-xl border border-line/80 bg-moss/75 p-1" role="group" aria-label={translateText("Number of players")}>
                       <span className="flex shrink-0 items-center pl-1.5 text-muted sm:pl-2" aria-hidden="true" title={translateText("Table size")}>
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                          <circle cx="9" cy="7" r="4" />
-                          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                        </svg>
+                        <UsersIcon />
                       </span>
                       {[3, 4].map((count) => (
                         <button
@@ -873,10 +877,7 @@ export function App() {
                     <label className="min-w-0 text-[11px] font-semibold text-muted">
                       <span className="sr-only">{translateText("Human players")}</span>
                       <span className="relative flex items-center">
-                        <svg aria-hidden="true" className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="8" r="4" />
-                          <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
-                        </svg>
+                        <UserIcon className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" />
                         <select
                           className="field !min-h-11 appearance-none !pl-7 !pr-6 !text-base font-medium text-ink transition-colors hover:border-ink/30 sm:!pl-8 sm:!pr-8 sm:!text-sm sm:font-semibold"
                           value={humanCount}
@@ -889,9 +890,7 @@ export function App() {
                               </option>
                             ))}
                         </select>
-                        <svg aria-hidden="true" className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted sm:right-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="m3 4.5 3 3 3-3" />
-                        </svg>
+                        <ChevronDownIcon className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted sm:right-2.5" />
                       </span>
                     </label>
                     <GameVariantSelector className="home-variant-selector" value={variant} onChange={nextVariant => {
@@ -941,10 +940,7 @@ export function App() {
                           }
                           className="min-h-11 w-full min-w-0 bg-transparent text-base font-medium text-ink focus-visible:outline-none sm:text-sm"
                         />
-                        <svg aria-hidden="true" className="hidden h-3.5 w-3.5 shrink-0 text-muted/45 transition-colors group-hover:text-muted group-focus-within:text-ink/70 sm:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 20h9" />
-                          <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
-                        </svg>
+                        <EditPencilIcon className="hidden h-3.5 w-3.5 shrink-0 text-muted/45 transition-colors group-hover:text-muted group-focus-within:text-ink/70 sm:block" />
                       </label>
                     ) : (
                       <div
@@ -955,23 +951,7 @@ export function App() {
                           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white"
                           style={{ background: PLAYER_COLORS[index] }}
                         >
-                          <svg
-                            role="img"
-                            aria-label={translateText("AI")}
-                            className="h-3 w-3"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <title>{translateText("AI")}</title>
-                            <path d="M12 3v4" />
-                            <rect x="5" y="7" width="14" height="13" rx="4" />
-                            <circle cx="9.5" cy="13" r="1" fill="currentColor" stroke="none" />
-                            <circle cx="14.5" cy="13" r="1" fill="currentColor" stroke="none" />
-                          </svg>
+                          <RobotIcon label={translateText("AI")} className="h-3.5 w-3.5" strokeWidth={2} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">
                           {defaultComputerName(language, index - humanCount + 1)}
@@ -984,9 +964,7 @@ export function App() {
                         onClick={() => setPlayerCount(4)}
                         className="flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-paper/45 px-2.5 text-xs font-semibold text-muted transition-colors hover:border-ink/35 hover:bg-moss/45 hover:text-ink"
                       >
-                        <svg aria-hidden="true" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <path d="M12 5v14M5 12h14" />
-                        </svg>
+                        <PlusIcon className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{translateText("Add 4th player")}</span>
                       </button>
                     )}
@@ -1014,9 +992,7 @@ export function App() {
                       <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
                       <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
                     </span>
-                    <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m9 6 6 6-6 6" />
-                    </svg>
+                    <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
                   </button>
                 </div>
                 <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
@@ -1034,11 +1010,7 @@ export function App() {
                 <div className="home-multiplayer-actions">
                   <a className="button-secondary home-multiplayer-link min-w-0 flex-1 justify-between" href="/?multiplayer=1">
                     <span className="flex min-w-0 items-center gap-2">
-                      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <rect width="12" height="16" x="2" y="4" rx="2" />
-                        <rect width="8" height="12" x="14" y="8" rx="1.5" />
-                        <path d="M8 17h.01M18 17h.01" />
-                      </svg>
+                      <CrossDeviceIcon className="h-4 w-4 shrink-0 text-muted" />
                       <span className="truncate">{translateText("Play across devices")}</span>
                     </span>
                     <Arrow className="h-4 w-4 shrink-0 text-muted" />
@@ -1051,20 +1023,7 @@ export function App() {
                     onClick={() => setDialog("scan")}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <rect width="5" height="5" x="3" y="3" rx="1" />
-                        <rect width="5" height="5" x="16" y="3" rx="1" />
-                        <rect width="5" height="5" x="3" y="16" rx="1" />
-                        <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
-                        <path d="M21 21v.01" />
-                        <path d="M12 7v3a2 2 0 0 1-2 2H7" />
-                        <path d="M3 12h.01" />
-                        <path d="M12 3h.01" />
-                        <path d="M12 16v.01" />
-                        <path d="M16 12h.01" />
-                        <path d="M21 12v.01" />
-                        <path d="M12 21v.01" />
-                      </svg>
+                      <QrCodeIcon className="h-4 w-4 shrink-0 text-muted" />
                       <span className="home-scan-label truncate">{translateText("Scan to join a board")}</span>
                     </span>
                     <Arrow className="home-scan-arrow h-4 w-4 shrink-0 text-muted" />
@@ -1230,6 +1189,7 @@ export function App() {
                   );
                 }}
               >
+                <EyeIcon />
                 {translateText("I'm {name}. Reveal my hand", { name: handoffPlayer.name })} <Arrow />
               </button>
               <p className="mt-4 text-[10px] text-muted">
@@ -1250,9 +1210,14 @@ export function App() {
                 <button
                   key={view}
                   aria-pressed={mobileView === view}
-                  className={`min-h-11 flex-1 rounded-lg text-sm capitalize ${mobileView === view ? "bg-forest text-ink" : "text-muted"}`}
+                  className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm capitalize ${mobileView === view ? "bg-forest text-ink" : "text-muted"}`}
                   onClick={() => setMobileView(view)}
                 >
+                  {match(view)
+                    .with("hand", () => <CardsHandIcon />)
+                    .with("board", () => <HexIslandIcon />)
+                    .with("players", () => <UsersIcon />)
+                    .exhaustive()}
                   {translateText(view)}
                 </button>
               ))}
@@ -1367,7 +1332,8 @@ export function App() {
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <h2 className="eyebrow min-w-0 truncate">{translateText("{name}'s hand", { name: viewer.name })}</h2>
                       <div className="flex shrink-0 items-center gap-2">
-                        <strong className={`rounded-md px-2 py-1 text-sm text-ink tabular-nums ${resourceTotal(viewer.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
+                        <strong className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-ink tabular-nums ${resourceTotal(viewer.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
+                          {resourceTotal(viewer.resources) > 7 && <WarningIcon className="h-3.5 w-3.5 shrink-0 text-clay" />}
                           {translateText("{count} cards", { count: resourceTotal(viewer.resources) })}
                         </strong>
                         <span
@@ -1436,7 +1402,8 @@ export function App() {
                     )}
                   {game.phase.type === "steal" && isActive && (
                     <section className="hand-task panel space-y-2 p-4">
-                      <h2 className="eyebrow mb-3">
+                      <h2 className="eyebrow mb-3 flex items-center gap-1.5">
+                        <RobberIcon className="h-4 w-4 shrink-0 text-clay" />
                         {translateText("Choose a player to steal from")}
                       </h2>
                       <TheftChoices
@@ -1531,7 +1498,10 @@ export function App() {
                           setMovingShipId(null);
                           setSelected(null);
                           setMobileView("board");
-                        }}>{translateText("Move ship")}</button>}
+                        }}>
+                        <MoveShipIcon />
+                        {translateText("Move ship")}
+                      </button>}
                       {game.sabotageEnabled && (
                         <BuildButton
                           piece="sabotage"
@@ -1590,6 +1560,7 @@ export function App() {
                         setError("");
                       }}
                     >
+                      <TradeIcon />
                       {translateText("Make a trade")}
                     </button>
                   </CollapsibleSection>
@@ -1727,9 +1698,11 @@ export function App() {
                 mapCode={gameMapSeed ?? undefined}
               >
                 <button className="button-secondary" onClick={returnToTable}>
+                  <HomeIcon />
                   {translateText("Back to home")}
                 </button>
                 <button className="button-secondary" onClick={() => setVictoryDismissed(true)}>
+                  <MapFoldIcon />
                   {translateText("View the island")}
                 </button>
                 <button className="button-primary" onClick={restartGame}>

@@ -19,7 +19,8 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/game/engine.ts` | Pure action validation and atomic transitions, placement previews, trading, awards, and victory. |
 | `src/game/computer.ts` | Pure computer action selection using its own hand and public information, plus required-action controller selection. |
 | `src/components/Board.tsx` | Locally drawn SVG terrain and pieces, keyboard/touch targets, and contained zoom/panning. |
-| `src/components/GameUi.tsx` | Resource controls, icons, and native accessible dialogs. |
+| `src/components/GameUi.tsx` | Resource controls, game-piece/card emblems, and native accessible dialogs. |
+| `src/components/Icons.tsx` | Unified UI chrome, navigation, terrain, and award SVG icons. |
 | `src/components/TradeDialog.tsx` | Shared bank/port and player-trade editor for both gameplay modes. |
 | `src/components/OpenTrade.tsx` | Shared offers, requests, response states, and price selection using only the viewer's private hand. |
 | `src/components/GameplayDialogs.tsx` | Shared development cards, discard selection, public theft choices, and action confirmations. |

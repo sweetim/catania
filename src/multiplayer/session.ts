@@ -248,6 +248,14 @@ export function hostSession(onChange: (view: SessionView) => void): MultiplayerS
     perform: (action, expectedVersion) => perform(() => room.performBoard(action, expectedVersion)),
     selectBuild: (piece, expectedVersion) => perform(() => room.selectBuild(piece, undefined, expectedVersion)),
     reconnect: () => { if (!closed) link.reconnect(); },
+    announceClose: () => {
+      if (closed) return;
+      for (const entry of connections.values()) {
+        if (entry.connection.open) {
+          send(entry.connection, { type: "error", error: { key: "The host closed this room." }, terminal: true }, () => {});
+        }
+      }
+    },
     close: () => {
       if (closed) return;
       closed = true;
@@ -388,10 +396,20 @@ export function joinSession(invitation: Invitation, name: string, onChange: (vie
             credential = null;
             try { sessionStorage.removeItem(storageKey); }
             catch { storageError = { key: "Session storage is blocked. The old seat credential could not be cleared." }; }
-            view = { ...view, snapshot: null };
             stopped = true;
             clearTimeout(retry); retry = undefined;
-            disconnect(message.error, false);
+            if (message.error.key === "The host closed this room.") {
+              const previous = connection;
+              connection = null;
+              previous?.removeAllListeners();
+              previous?.close();
+              clearPending();
+              view = { ...view, status: "closed", error: message.error };
+              publish();
+            } else {
+              view = { ...view, snapshot: null };
+              disconnect(message.error, false);
+            }
           }
           else publish();
           break;

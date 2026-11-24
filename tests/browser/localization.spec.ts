@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { expect, test as base } from "./fixtures";
+import { captureScreenshot, expect, test as base } from "./fixtures";
 
 const test = base.extend({
   page: async ({ page }, use, testInfo) => {
@@ -52,7 +52,7 @@ test.describe("Japanese browser locale", () => {
     await expect(page.getByRole("button", { name: "現在のプロフィールに戻る", exact: true })).toHaveCount(0);
     await expect(page.getByText("ゲームで使う名前を入力してください。", { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath("japanese-profile.png"), fullPage: true });
+    await captureScreenshot(page, testInfo, "japanese-profile.png");
     await page.getByRole("button", { name: "Alexの名前を変更", exact: true }).click();
     const renameForm = page.getByRole("list").locator("form");
     await renameForm.getByLabel("プロフィール名", { exact: true }).fill("太郎");
@@ -93,7 +93,7 @@ test.describe("Japanese browser locale", () => {
     await expect(page).toHaveTitle("Catania | 小さな島、無限の可能性");
     expect(await page.evaluate(() => localStorage.getItem("catania.language"))).toBeNull();
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath("japanese-home.png"), fullPage: true });
+    await captureScreenshot(page, testInfo, "japanese-home.png");
 
     await selectHomeLanguage(page, "ja", "en");
     await expectLanguage(page, "en");
@@ -111,12 +111,12 @@ test.describe("Japanese browser locale", () => {
     await expectLanguage(page, "ja");
     await expect(page.locator("h1")).toContainText(/[\u3040-\u30ff\u3400-\u9fff]/);
     await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath("japanese-multiplayer-setup.png"), fullPage: true });
+    await captureScreenshot(page, testInfo, "japanese-multiplayer-setup.png");
     await page.goto("/");
     await expectLanguage(page, "ja");
   });
 
-  test("ignores invalid saved languages and still switches when storage is blocked", async ({ page }) => {
+  test("ignores invalid saved languages and still switches when storage is blocked", { tag: "@desktop-only" }, async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem("catania.language", "jp"); } catch { /* Storage is blocked in the second visit. */ }
     });
@@ -135,7 +135,7 @@ test.describe("Japanese browser locale", () => {
   });
 });
 
-test("falls back to English for unsupported locales", async ({ page }) => {
+test("falls back to English for unsupported locales", { tag: "@desktop-only" }, async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "languages", { value: ["fr-FR", "de-DE"] });
     Object.defineProperty(navigator, "language", { value: "fr-FR" });
@@ -145,7 +145,7 @@ test("falls back to English for unsupported locales", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Let's settle in" })).toBeVisible();
 });
 
-test("uses the browser language when its preferred-language list is empty", async ({ page }) => {
+test("uses the browser language when its preferred-language list is empty", { tag: "@desktop-only" }, async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "languages", { value: [] });
     Object.defineProperty(navigator, "language", { value: "ja-JP" });
@@ -169,7 +169,7 @@ test("home language selection and help live inside the Menu dropdown", async ({ 
   await expect(menu.getByRole("button")).toHaveText(["Help", "Profile", "Settings"]);
   await expect(languageSelector).toBeVisible();
   await expect(languageSelector).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: testInfo.outputPath("home-menu-language-open.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "home-menu-language-open.png");
   await languageSelector.selectOption("ja");
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.getByRole("group", { name: "メインメニュー", exact: true })).toBeVisible();
@@ -248,7 +248,7 @@ test("in-game language selection lives inside the Game menu", async ({ page, isM
   await expect(menu.getByRole("button", { name: "Profile", exact: true, includeHidden: true })).toHaveCount(0);
   await page.keyboard.press("Tab");
   await expect(languageSelector).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath("game-menu-language-open.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "game-menu-language-open.png");
   await languageSelector.selectOption("ja");
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.getByRole("group", { name: "ゲームメニュー", exact: true })).toBeVisible();
@@ -287,7 +287,7 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await expect(help).toContainText("騎士");
   await expect(help).toContainText("最長交易路");
   await expect(help).toContainText("1台の端末で、みんなと遊ぶ。");
-  await page.screenshot({ path: testInfo.outputPath("japanese-help.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "japanese-help.png");
   await page.keyboard.press("Escape");
 
   await page.getByRole("region", { name: "ゲームの準備", exact: true }).getByRole("button", { name: "テーマを変更", exact: true }).click();
@@ -310,7 +310,7 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await page.getByRole("button", { name: "開拓を始めよう" }).click();
   await expect(page.getByRole("heading", { name: /に端末を渡してください。$/ })).toBeVisible();
   await expect(page.locator(".hand-resources")).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath("japanese-handoff.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "japanese-handoff.png");
   await page.getByRole("button", { name: /^私は.+です。手札を表示$/ }).click();
 
   await page.getByRole("button", { name: "ゲーム", exact: true }).click();
@@ -334,7 +334,7 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await selectInGameLanguage(page, "en", "ja");
   await expect(confirmation).toHaveAttribute("data-selection-id", selection!);
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("japanese-placement.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "japanese-placement.png");
   await confirmation.getByRole("button", { name: "配置を確定", exact: true }).click();
   await expect(board.getByRole("button", { name: /に街道を建設$/ }).first()).toBeVisible();
 
@@ -342,7 +342,7 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
     await page.getByRole("navigation", { name: "ゲームの表示切り替え", exact: true }).getByRole("button", { name: "手札", exact: true }).click();
   }
   await expect(page.locator(".hand-resource-card").filter({ hasText: "木材" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("japanese-hand.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "japanese-hand.png");
   await page.setViewportSize({ width: 320, height: 568 });
   await expectNoHorizontalOverflow(page);
   await expect(page.getByRole("button", { name: "ゲーム", exact: true })).toBeInViewport({ ratio: 1 });
@@ -350,5 +350,5 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await page.getByRole("button", { name: "ゲーム", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "言語", exact: true })).toBeInViewport({ ratio: 1 });
   await page.keyboard.press("Escape");
-  await page.screenshot({ path: testInfo.outputPath("japanese-narrow-hand.png"), fullPage: true });
+  await captureScreenshot(page, testInfo, "japanese-narrow-hand.png");
 });

@@ -3,6 +3,7 @@ import { match } from "ts-pattern";
 import { useTranslation } from "../localization";
 import { appTranslations } from "../translations/app";
 import { DevelopmentCardIcon, IslandIcon, PieceIcon } from "./GameUi";
+import { CheckIcon, CrownIcon, LargestArmyIcon, LongestRoadAwardIcon, MapFoldIcon } from "./Icons";
 
 export type VictoryBreakdownKind =
   | "settlements"
@@ -444,14 +445,11 @@ function BreakdownIcon({ kind }: { kind: VictoryBreakdownKind }) {
       <span className="victory-chip bg-forest/45 text-ink"><PieceIcon piece="city" /></span>
     ))
     .with("longest-road", () => (
-      <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]"><PieceIcon piece="road" /></span>
+      <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]"><LongestRoadAwardIcon /></span>
     ))
     .with("largest-army", () => (
       <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]">
-        <svg viewBox="0 0 24 28" className="h-6 w-5 shrink-0" fill="none" aria-hidden="true">
-          <path d="m3 3 5 2 11 13-3 3L5 8 3 3Zm18 0-5 2L5 18l3 3L19 8l2-5Z" fill="currentColor" />
-          <path d="m13 21 7-6M4 15l7 6m6 0 3 4M7 21l-3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
+        <LargestArmyIcon />
       </span>
     ))
     .with("islands", () => (
@@ -525,11 +523,7 @@ export function VictoryDialog({
                     }
                   }}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0">
-                    {copied
-                      ? <path d="m5 12 4 4L19 6" />
-                      : <><path d="M3 6l6-3 6 3 6-2v14l-6 2-6-2-6 3V6Z" /><path d="M9 3v15" /><path d="M15 6v14" /></>}
-                  </svg>
+                  {copied ? <CheckIcon className="h-3.5 w-3.5 shrink-0" /> : <MapFoldIcon className="h-3.5 w-3.5 shrink-0" />}
                   <span role="status" className="whitespace-nowrap">{copied ? translateText("Copied") : badgeCode}</span>
                 </button>
                 {eyebrowParts.slice(1).join(badgeCode)}
@@ -543,6 +537,9 @@ export function VictoryDialog({
               style={{ background: winnerColor, "--winner-color": winnerColor } as CSSProperties}
             >
               {winnerName.charAt(0).toUpperCase()}
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-paper bg-[#f5df9c] text-[#8b6425] shadow-xs">
+                <CrownIcon className="h-3 w-3" />
+              </span>
             </span>
             <h2 className="min-w-0 font-serif text-2xl leading-tight">{headline}</h2>
           </div>

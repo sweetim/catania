@@ -15,11 +15,11 @@ const mark = (width: number, height: number) =>
 </svg>`;
 
 const targets = [
-  { file: "public/icons/icon-192.png", size: 192, markHeight: 0.55 },
-  { file: "public/icons/icon-512.png", size: 512, markHeight: 0.55 },
-  { file: "public/icons/icon-maskable-192.png", size: 192, markHeight: 0.45 },
-  { file: "public/icons/icon-maskable-512.png", size: 512, markHeight: 0.45 },
-  { file: "public/apple-touch-icon.png", size: 180, markHeight: 0.55 },
+  { file: "public/icons/icon-192.png", size: 192, markHeight: 0.66 },
+  { file: "public/icons/icon-512.png", size: 512, markHeight: 0.66 },
+  { file: "public/icons/icon-maskable-192.png", size: 192, markHeight: 0.56 },
+  { file: "public/icons/icon-maskable-512.png", size: 512, markHeight: 0.56 },
+  { file: "public/apple-touch-icon.png", size: 180, markHeight: 0.66 },
 ];
 
 const browser = await chromium.launch();

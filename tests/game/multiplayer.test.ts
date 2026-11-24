@@ -1387,8 +1387,54 @@ describe("authoritative action permissions and ordering", () => {
     expect(send(room, connectionFor(responder!), { type: "respond-trade", accept: false }, viewedVersion).error?.key).toContain("game changed");
     expect(send(room, connectionFor(responder!), { type: "respond-trade", accept: false }, viewedVersion, identity).error).toBeNull();
     expect(room.game!.trade!.responses[responder!]).toBe(false);
-    // A trade identity is ignored for actions other than trade responses, so version checks still apply.
+    // A trade identity is ignored for actions other than trade actions, so version checks still apply.
     expect(send(room, connectionFor(actor), { type: "end-turn" }, viewedVersion, identity).error?.key).toContain("game changed");
+  });
+
+  test("complete-trade, cancel-trade, and trade edits survive unrelated opponent responses when matching open trade", () => {
+    const { room } = started();
+    room.game!.phase = { type: "actions" };
+    const actor = room.game!.activePlayerId;
+    const [partner, rival] = room.game!.players.filter(player => player.id !== actor).map(player => player.id);
+    give(room.game!, actor, { brick: 2, grain: 2 });
+    give(room.game!, partner!, { wood: 2 });
+    give(room.game!, rival!, { wood: 2 });
+
+    expect(send(room, connectionFor(actor), { type: "request-trade", receive: resources({ wood: 1 }) }).error).toBeNull();
+    const requestIdentity: TradeIdentity = { offeredBy: actor, give: null, receive: resources({ wood: 1 }) };
+    const price = resources({ brick: 1 });
+    expect(send(room, connectionFor(partner!), { type: "propose-trade", price }).error).toBeNull();
+    const versionBeforeRival = room.version;
+
+    // Rival answers while the offerer is reviewing or confirming partner's proposal.
+    expect(send(room, connectionFor(rival!), { type: "respond-trade", accept: false }).error).toBeNull();
+    expect(room.version).toBeGreaterThan(versionBeforeRival);
+
+    // Without partnerPrice, complete-trade is rejected on a stale version.
+    expect(send(room, connectionFor(actor), { type: "complete-trade", playerId: partner! }, versionBeforeRival, requestIdentity).error?.key).toContain("game changed");
+    // Editing the open request succeeds despite rival's response.
+    expect(send(room, connectionFor(actor), { type: "request-trade", receive: resources({ wood: 2 }) }, versionBeforeRival, requestIdentity).error).toBeNull();
+    const updatedIdentity: TradeIdentity = { offeredBy: actor, give: null, receive: resources({ wood: 2 }) };
+    expect(send(room, connectionFor(partner!), { type: "propose-trade", price }).error).toBeNull();
+    const versionBeforeSecondRival = room.version;
+    expect(send(room, connectionFor(rival!), { type: "respond-trade", accept: false }).error).toBeNull();
+
+    // If partner changes their price, confirming the old price is rejected.
+    expect(send(room, connectionFor(partner!), { type: "propose-trade", price: resources({ brick: 2 }) }).error).toBeNull();
+    expect(send(room, connectionFor(actor), { type: "complete-trade", playerId: partner! }, versionBeforeSecondRival, { ...updatedIdentity, partnerPrice: price }).error?.key).toContain("game changed");
+
+    // Confirming the current partner price succeeds even after another rival response.
+    const versionWithUpdatedPrice = room.version;
+    expect(send(room, connectionFor(rival!), { type: "propose-trade", price: resources({ grain: 1 }) }).error).toBeNull();
+    expect(send(room, connectionFor(actor), { type: "complete-trade", playerId: partner! }, versionWithUpdatedPrice, { ...updatedIdentity, partnerPrice: resources({ brick: 2 }) }).error).toBeNull();
+    expect(room.game!.trade).toBeNull();
+
+    // cancel-trade also survives an unrelated opponent response targeting the same open trade.
+    expect(send(room, connectionFor(actor), { type: "request-trade", receive: resources({ wood: 1 }) }).error).toBeNull();
+    const cancelVersion = room.version;
+    expect(send(room, connectionFor(rival!), { type: "respond-trade", accept: false }).error).toBeNull();
+    expect(send(room, connectionFor(actor), { type: "cancel-trade" }, cancelVersion, requestIdentity).error).toBeNull();
+    expect(room.game!.trade).toBeNull();
   });
 
   test("binds actor to the connection, never action payload playerId", () => {
@@ -1602,6 +1648,9 @@ describe("untrusted multiplayer protocol", () => {
     expect(parseClientMessage({ ...decline, trade })).toEqual({ ...decline, trade });
     const offer = { offeredBy: "player-2", give: resources({ brick: 1 }), receive: resources({ wood: 1 }) };
     expect((parseClientMessage({ ...decline, action: { type: "propose-trade", price: resources({ brick: 1 }) }, trade: offer }) as { trade?: TradeIdentity }).trade).toEqual(offer);
+    const completeTrade = { ...trade, partnerPrice: resources({ brick: 1 }) };
+    expect((parseClientMessage({ ...decline, action: { type: "complete-trade", playerId: "player-2" }, trade: completeTrade }) as { trade?: TradeIdentity }).trade).toEqual(completeTrade);
+    expect(() => parseClientMessage({ ...decline, trade: { ...trade, partnerPrice: { brick: 1 } } })).toThrow();
     expect(() => parseClientMessage({ ...decline, trade: { ...trade, offeredBy: "player-9" } })).toThrow();
     expect(() => parseClientMessage({ ...decline, trade: { offeredBy: "player-1" } })).toThrow();
     expect(() => parseClientMessage({ ...decline, trade: { ...trade, receive: { wood: 1 } } })).toThrow();

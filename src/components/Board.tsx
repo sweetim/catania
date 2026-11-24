@@ -18,6 +18,7 @@ import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
 import { getPlayerLabel } from "./GameUi";
+import { ChevronDownIcon, PaletteIcon, PirateShipIcon, TrophyIcon, ZoomInIcon, ZoomOutIcon } from "./Icons";
 import { HEX_ARTWORK_CLIP_PATH, ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
@@ -591,13 +592,9 @@ export function VictoryTargetBadge({ victoryTarget, disabled = false, onChange }
         }}
         className={`${victoryTargetPillClassName} min-h-11 cursor-pointer @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]`}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-          <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
-        </svg>
+        <TrophyIcon className="h-3 w-3 shrink-0 text-[#b58a2d]" />
         <VictoryTargetLabel victoryTarget={victoryTarget} />
-        <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="hidden shrink-0 @min-[120px]:block">
-          <path d="m3 4.5 3 3 3-3" />
-        </svg>
+        <ChevronDownIcon className="hidden h-2.5 w-2.5 shrink-0 @min-[120px]:block" />
       </button>
       {open && (
         <div
@@ -1802,7 +1799,7 @@ export function Board({
                           strokeWidth="1"
                         />
                         <text
-                          y="-2"
+                          y="-4"
                           textAnchor="middle"
                           fill="#425c4d"
                           fontSize="13"
@@ -1811,8 +1808,20 @@ export function Board({
                         >
                           {ratio}
                         </text>
+                        <g
+                          transform="translate(-19 1.5) scale(0.45)"
+                          fill="none"
+                          stroke="#567060"
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="5" r="2.5" />
+                          <path d="M12 7.5v13M7 12h10M5 15a7 7 0 0 0 14 0" />
+                        </g>
                         <text
-                          y="9"
+                          x="4"
+                          y="10"
                           textAnchor="middle"
                           fill="#61715c"
                           fontSize="7.5"
@@ -1858,7 +1867,7 @@ export function Board({
                           transform="translate(-23 0) scale(0.44)"
                           color="#ffffff"
                         >
-                          <ResourceArtwork resource={port.resource} theme={theme} />
+                          <ResourceArtwork resource={port.resource} theme={theme} compact />
                         </g>
                         <text
                           x="-5"
@@ -2705,10 +2714,7 @@ export function Board({
             aria-haspopup="dialog"
             title={translateText("Change theme: {theme}", { theme: getThemeName(theme, language) })}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-              <path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2a4 4 0 0 0 4-4C21 6 17 3 12 3Z" />
-              <circle cx="7.5" cy="10" r="1" /><circle cx="11" cy="6.5" r="1" /><circle cx="16" cy="8" r="1" /><circle cx="7.5" cy="15" r="1" />
-            </svg>
+            <PaletteIcon className="h-[18px] w-[18px] shrink-0" />
             <span className="board-theme-label">{translateText("Theme")}</span>
           </button>
         )}
@@ -2719,11 +2725,7 @@ export function Board({
             disabled={!pirateIndicator.enabled}
             onClick={pirateIndicator.onSelect}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-              <path d="M4 15h16l-2.5 4h-11Z" />
-              <path d="M12 15V4" />
-              <path d="M12 4l6 8h-6Z" />
-            </svg>
+            <PirateShipIcon className="h-4 w-4 shrink-0" />
             <span className="truncate">{translateText(pirateIndicator.onBoard ? "Move pirate off board" : "Pirate off board")}</span>
           </button>
         )}
@@ -2733,9 +2735,7 @@ export function Board({
               <VictoryTargetBadge victoryTarget={victoryTarget} disabled={victoryTargetDisabled} onChange={onChangeVictoryTarget} />
             ) : (
               <span className={victoryTargetPillClassName}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b58a2d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-                  <path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M7 6H4a3 3 0 0 0 3 4" /><path d="M17 6h3a3 3 0 0 1-3 4" />
-                </svg>
+                <TrophyIcon className="h-3 w-3 shrink-0 text-[#b58a2d]" />
                 <VictoryTargetLabel victoryTarget={victoryTarget} />
               </span>
             )}
@@ -2751,10 +2751,9 @@ export function Board({
             aria-label={translateText("Zoom out")}
             disabled={zoom === 1}
             onClick={() => changeZoom(zoom - 0.25)}
-            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
-            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            -
+            <ZoomOutIcon className="h-4 w-4" />
           </button>
           <output
             aria-live="polite"
@@ -2768,10 +2767,9 @@ export function Board({
             aria-label={translateText("Zoom in")}
             disabled={zoom === 2.5}
             onClick={() => changeZoom(zoom + 0.25)}
-            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-35"
-            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-xl text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex size-11 items-center justify-center rounded-xl border border-[#dcdccb] bg-[#fffdf5] text-[#455e4d] transition-colors hover:bg-[#e9edde] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            +
+            <ZoomInIcon className="h-4 w-4" />
           </button>
         </div>
       </div>

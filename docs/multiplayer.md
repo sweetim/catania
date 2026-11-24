@@ -118,18 +118,27 @@ lobby with the same island (including its map code and preview) and the same
 players, seats, and reconnect credentials, ready to admit changes and start
 again. All game progress is lost; player phones cannot return the room to the
 lobby. Cancelling leaves the current game unchanged.
-During play, the host can also choose **Show invitation** to reopen the room's
+During play, the host can also choose **Table activity** from the **Game** menu
+to review the recent public log in a dialog, or **Show invitation** to reopen the room's
 QR code and invitation link in a dialog, so a lost phone can scan or open it
 and rejoin a disconnected seat (see [Reconnect A Phone](#reconnect-a-phone)).
-**Leave room** opens the existing confirmation: leaving as host ends the room for
-everyone, while leaving as a player keeps their seat reserved while the host stays
+**Leave room** opens the existing confirmation: leaving as host notifies connected
+phones and closes the room for everyone (displaying a **Room closed** dialog on
+phones), while leaving as a player keeps their seat reserved while the host stays
 open. Escape, clicking outside, or tabbing away dismisses the menu; closing its
 dialogs returns focus to **Game**.
 
 Player seats show numbered colors, public points, card counts, played Knights,
 connected roads, and awards, with the same active-turn and public-score-leader
-highlights as single-device play. Disconnected human players are marked. The shared
-screen has no regular build controls, private hands, activity panel, or view tabs.
+highlights as single-device play (plus stat-change bumps and award-claim pops).
+Disconnected human players are marked. During active attention phases (discards,
+gold selection, theft, robber/pirate movement, Road Building, or active build
+placement), a compact floating phase pill appears over the board mat, and brief
+public event callouts announce claimed or stolen awards, island bonuses, played
+development cards, robberies, sabotage, and bank shortages. Dice rolls finish
+tumbling before matching tiles highlight and harvest bursts play, and accurate
+bank-shortage production filtering is applied. The shared screen has no regular
+build controls, private hands, or view tabs.
 In Seafarers, the map footer includes the free road/ship choice when needed and
 the pirate's off-board move during robber/pirate movement.
 Build selection, turn guidance, rolls, and private actions remain on players' phones.
@@ -157,9 +166,20 @@ narrower mobile screens, the heading and toggle are omitted so the controls stay
 directly visible. On portrait phones, your hand scrolls above the pinned turn/dice
 panel; on landscape phones, tablets, and wider screens (`min-width: 700px`), the
 player summary spans the top while the hand and turn controls sit side by side in
-two columns without page scrolling. Active turns highlight the turn panel with your
-player accent color, and selecting a build displays a placement banner with a
-one-tap **Cancel** button while awaiting confirmation on the shared board. Phase
+two columns without page scrolling. Active turns highlight the turn panel with your player accent color and a brief
+turn-arrival pulse, and board-placement phases (setup, robber/pirate moves, Road
+Building, or active builds) display an animated banner prompting you to act on
+the shared board (with a one-tap **Cancel** button during normal build modes).
+Resource gains animate into your hand with the same **Added to your hand**
+resource-collection overlay and dealt-card badges as single-device play, rolled
+sevens highlight the dice tray and wait for dice to settle before opening the
+discard dialog, and buying a development card opens a **Development card drawn**
+reveal dialog. Gold resource choices open in a modal dialog (with a **Choose
+gold** shortcut in the turn controls if dismissed, and queued waiting instructions
+when another player picks first). Private overlay notices also notify victims of
+sabotage alongside robberies, monopolies, and trade outcomes, with a five-second
+auto-dismiss progress bar, and phones display brief notices when a game starts
+(showing seat number and color), resets, returns to the lobby, or closes. Phase
 guidance uses the same green instruction panel, headings, and explanations as
 single-device play, with placement directions referring to the shared board. When a long
 instruction wraps past two lines on a phone, tap the toggle button in the instruction
@@ -175,16 +195,31 @@ rest of the hand; owning cards does not change the build layout or stretch the h
 
 Use **Game > Players & bank** or **Game > Table activity** from the turn menu to inspect
 all players, bank counts, or recent public table activity in a dialog at any time. Discard, theft, and
-incoming trade choices open in dialogs; dismissing one keeps its action available
-in the turn controls, even while builds are collapsed. Dialog contents can scroll on
-small screens. Trades use illustrated **Bank & ports** selectors with rates, counts,
-and an exchange preview, or **Player trade** with **Request cards** and **Exact
-offer** choices. Open trades show every opponent's response, proposed prices, and
-missing cards. **Change offer** edits a draft; closing it leaves the original offer
+incoming trade choices open in dialogs (without interrupting another open dialog on an
+off-turn phone); dismissing one keeps its action available
+in the turn controls, even while builds are collapsed. When an open trade is active, the
+shared board shows a compact trade banner with the cards on the table, any computer request
+countdown, and each opponent's response status. Off-turn phones show trade-aware turn
+instructions, vibrate briefly when a new incoming trade arrives (if vibration is enabled),
+and display a live status badge on **View trade** (unanswered, accepted, proposed, declined,
+or ready response count for the offerer). Dialog contents can scroll on
+small screens with sticky action bars. Trades use illustrated **Bank & ports** selectors
+defaulting to an affordable resource with rates, counts, an exchange preview, and a warning
+when an open player trade will be withdrawn, or **Player trade** with **Request cards** and
+**Exact offer** choices. Open trades show the requester's hand count, any active countdown,
+every opponent's response (including disconnected status), proposed prices, and
+missing cards; responders who lack requested cards see the missing cards directly without a
+price stepper, and reopening **View trade** after responding displays and prefills the
+submitted response. **Change offer** edits a draft in the current trade mode (**Request
+cards** or **Exact offer**); closing it leaves the original offer
 and responses unchanged. Choosing a trade partner or a theft victim opens a
 **Cancel** / **Confirm** dialog showing your name and color before sending the
 action; **Buy a card** opens a compact **Cancel** / **Buy** dialog showing only
-the card cost. Development cards
+the card cost. Concurrent trade actions (**Complete trade**, **Withdraw**, **Change offer**,
+and responses) survive unrelated version bumps such as another player answering, while still
+blocking stale confirmations if the trade or chosen partner's price changes. Completed,
+withdrawn, or closed trades display a brief dismissible outcome notice above the turn
+controls. Development cards
 remain selectable for inspection, including hidden victory points and cards that
 cannot yet be played; eligible action cards are confirmed in the same dialog.
 Resource-affecting choices show your hand, and discards show selected and remaining

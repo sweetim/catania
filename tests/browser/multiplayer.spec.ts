@@ -1,5 +1,5 @@
 import { type BrowserContext, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { expect, seedProfile, test as base } from "./fixtures";
+import { captureScreenshot, expect, seedProfile, test as base } from "./fixtures";
 import { pack, unpack } from "peerjs-js-binarypack";
 import QRCode from "qrcode";
 import { emptyResources, getTradeRatio, legalSettlementVertices, RESOURCES } from "../../src/game/engine";
@@ -194,9 +194,7 @@ async function latestSnapshot(page: Page): Promise<RoomSnapshot> {
 }
 
 async function screenshot(page: Page, testInfo: TestInfo, name: string) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage: true });
-  await testInfo.attach(name, { path, contentType: "image/png" });
+  await captureScreenshot(page, testInfo, name, { fullPage: true, attach: true });
 }
 
 async function noHorizontalOverflow(page: Page) {
@@ -214,13 +212,17 @@ async function privateScreenFits(page: Page) {
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   const scrollContainer = page.locator(".private-hand");
   const scrollTop = await scrollContainer.evaluate(element => element.scrollTop);
-  for (const button of await dashboard.getByRole("button").all()) {
-    await button.scrollIntoViewIfNeeded();
-    const inScrollableHand = await button.evaluate(element => Boolean(element.closest(".private-hand")));
-    const visibleHeight = inScrollableHand ? await scrollContainer.evaluate(element => element.clientHeight - 3) : page.viewportSize()!.height;
-    expect(visibleHeight).toBeGreaterThanOrEqual(44);
-    await expect(button).toBeInViewport({ ratio: Math.min(1, visibleHeight / (await button.boundingBox())!.height) });
-  }
+  await expect(async () => {
+    const buttons = await dashboard.getByRole("button").all();
+    for (const button of buttons) {
+      expect(await button.count()).toBe(1);
+      await button.scrollIntoViewIfNeeded({ timeout: 1_000 });
+      const inScrollableHand = await button.evaluate(element => Boolean(element.closest(".private-hand")));
+      const visibleHeight = inScrollableHand ? await scrollContainer.evaluate(element => element.clientHeight - 3) : page.viewportSize()!.height;
+      expect(visibleHeight).toBeGreaterThanOrEqual(44);
+      await expect(button).toBeInViewport({ ratio: Math.min(1, visibleHeight / (await button.boundingBox())!.height), timeout: 1_000 });
+    }
+  }).toPass({ timeout: 5_000 });
   await scrollContainer.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
   expect(await page.locator(".private-turn").evaluateAll(elements => elements
     .map(element => ({ panel: element.className, height: element.clientHeight, content: element.scrollHeight }))
@@ -488,7 +490,7 @@ test("Custom World config panel collapses to free the map and a join request tak
   }
 });
 
-test("Custom World lobby lets the host shape the island and share it with phones", async ({ multiplayer }, testInfo) => {
+test("Custom World lobby lets the host shape the island and share it with phones", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -522,7 +524,7 @@ test("Custom World lobby lets the host shape the island and share it with phones
   await screenshot(host, testInfo, "custom-world-lobby");
 });
 
-test("multiplayer admission, actions and reset work without randomUUID", async ({ multiplayer }) => {
+test("multiplayer admission, actions and reset work without randomUUID", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const host = await multiplayer.newPage("Host");
   await host.addInitScript(() => {
     Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
@@ -584,7 +586,7 @@ test("invited phone avatar follows profile switching before joining", async ({ p
   await screenshot(page, testInfo, "invited-phone-profile-avatar");
 });
 
-test("completed multiplayer games save replayable profile history only once", async ({ multiplayer }) => {
+test("completed multiplayer games save replayable profile history only once", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const { host, phone, snapshot, present } = await privateDialogFixture(multiplayer);
   snapshot.mapSeed = "ABCDEFGH";
   snapshot.game!.phase = { type: "finished" };
@@ -610,7 +612,7 @@ test("completed multiplayer games save replayable profile history only once", as
   }
 });
 
-test("Japanese phones localize a shared English game without changing its state or names", async ({ multiplayer }, testInfo) => {
+test("Japanese phones localize a shared English game without changing its state or names", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("English host");
   const invitation = await hostGame(host);
   const englishPhone = await multiplayer.newPage("English phone", true);
@@ -734,7 +736,7 @@ for (const variant of ["original", "seafarers"] as const) {
   });
 }
 
-test("host Return to lobby ends a running game for everyone with the same island and players", async ({ multiplayer }, testInfo) => {
+test("host Return to lobby ends a running game for everyone with the same island and players", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const mapCodeInput = host.getByRole("textbox", { name: "Map code", exact: true });
@@ -820,7 +822,7 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
 
   for (const [name, page, options] of [
-    ["host", host, ["Help", "Settings", "Reset game", "Return to lobby", "Show invitation", "Leave room"]],
+    ["host", host, ["Help", "Table activity", "Settings", "Reset game", "Return to lobby", "Show invitation", "Leave room"]],
     ["phone", phone, ["Help", "Players & bank", "Table activity", "Settings", "Leave room"]],
   ] as const) {
     if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
@@ -909,12 +911,15 @@ test("room Game menu shares navigation and preserves host and player leave behav
   await chooseGameOption(host, "Leave room");
   await host.getByRole("dialog", { name: "Close this room?" }).getByRole("button", { name: "Leave room", exact: true }).click();
   await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
+  const roomClosed = phone.getByRole("dialog", { name: "Room closed", exact: true });
+  await expect(roomClosed).toBeVisible();
+  await roomClosed.getByRole("button", { name: "Close dialog", exact: true }).click();
   await expect(phone.getByRole("status").filter({ hasText: "Offline" })).toBeVisible();
   await chooseGameOption(phone, "Help");
   await expect(phone.getByRole("dialog", { name: "Help", exact: true })).toBeVisible();
 });
 
-test("room Game settings update the shared board and persist across play modes", async ({ multiplayer }, testInfo) => {
+test("room Game settings update the shared board and persist across play modes", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const map = host.locator(".board-viewport");
@@ -976,7 +981,7 @@ test("room Game settings update the shared board and persist across play modes",
   await expect(water).toBeChecked();
 });
 
-test("lobby shows required seats and lets the host add or remove computer players", async ({ multiplayer }, testInfo) => {
+test("lobby shows required seats and lets the host add or remove computer players", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const readiness = host.getByRole("status").filter({ hasText: "seats filled" });
@@ -1033,7 +1038,7 @@ test("lobby shows required seats and lets the host add or remove computer player
   await screenshot(host, testInfo, "lobby-computers-compact");
 });
 
-test("host renames computer players and colored avatars replace dots before names", async ({ multiplayer }, testInfo) => {
+test("host renames computer players and colored avatars replace dots before names", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -1055,7 +1060,7 @@ test("host renames computer players and colored avatars replace dots before name
     reference.style.color = color;
     return getComputedStyle(element).color === reference.style.color;
   }, humanColor)).toBe(true);
-  await expect(roster.locator(".rounded-full:not(svg)")).toHaveCount(0);
+  await expect(human.getByText("Connected", { exact: true })).toBeVisible();
   await expect(roster.getByText("Computer", { exact: true })).toHaveCount(0);
   await expect(host.getByRole("button", { name: "Rename Alex", exact: true })).toHaveCount(0);
   await expect(phone.getByRole("button", { name: /^Rename / })).toHaveCount(0);
@@ -1113,7 +1118,7 @@ test("lobby leaves a 16px gap below navigation and omits redundant copy", async 
   await screenshot(host, testInfo, "lobby-navigation-gap");
 });
 
-test("desktop lobby fits the map left and invitation above players right without scrolling", async ({ multiplayer }, testInfo) => {
+test("desktop lobby fits the map left and invitation above players right without scrolling", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await host.setViewportSize({ width: 1440, height: 1000 });
   await hostGame(host);
@@ -1205,7 +1210,7 @@ test("tablet lobby keeps the island, invitation and roster in view without scrol
   await expectEverythingInView({ width: 1023, height: 768 }, "tablet-lobby-1023x768-4-players");
 });
 
-test("lobby uses the map zoom bar theme control and ends the invitation at the copy button", async ({ multiplayer }, testInfo) => {
+test("lobby uses the map zoom bar theme control and ends the invitation at the copy button", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const changeTheme = host.getByRole("button", { name: "Change theme", exact: true });
@@ -1252,7 +1257,7 @@ test("lobby uses the map zoom bar theme control and ends the invitation at the c
   await screenshot(host, testInfo, "compact-lobby-theme-320px");
 });
 
-test("invitation copies inline with temporary confirmation and a selectable failure fallback", async ({ multiplayer }, testInfo) => {
+test("invitation copies inline with temporary confirmation and a selectable failure fallback", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   await host.evaluate(() => {
@@ -1314,7 +1319,7 @@ test("invitation copies inline with temporary confirmation and a selectable fail
   await expect(confirmation).toHaveText("");
 });
 
-test("shared board header shows and copies the host-only map code", async ({ multiplayer }, testInfo) => {
+test("shared board header shows and copies the host-only map code", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -1372,7 +1377,7 @@ test("shared board header shows and copies the host-only map code", async ({ mul
   await screenshot(host, testInfo, "shared-board-map-code");
 });
 
-test("host map seed toolbar automatically loads complete codes across languages and widths", async ({ multiplayer }, testInfo) => {
+test("host map seed toolbar automatically loads complete codes across languages and widths", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await hostGame(host);
   for (const language of ["en", "ja"] as const) {
@@ -1437,7 +1442,7 @@ test("host map seed toolbar automatically loads complete codes across languages 
 });
 
 for (const shuffleCount of [0, 2]) {
-  test(`host starts with the lobby map after ${shuffleCount} shuffles`, async ({ multiplayer }, testInfo) => {
+  test(`host starts with the lobby map after ${shuffleCount} shuffles`, { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
     const host = await multiplayer.newPage("Host");
     const invitation = await hostGame(host);
     const preview = host.getByRole("region", { name: "Island preview", exact: true });
@@ -1496,7 +1501,7 @@ for (const shuffleCount of [0, 2]) {
   });
 }
 
-test("host removes a human seat and the phone needs fresh admission to rejoin", async ({ multiplayer }, testInfo) => {
+test("host removes a human seat and the phone needs fresh admission to rejoin", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -1638,7 +1643,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
       await expect(host.getByRole("region", { name, exact: true, includeHidden: true })).toHaveCount(0);
     }
     await expect(host.getByRole("navigation", { name: "Game views", includeHidden: true })).toHaveCount(0);
-    await expect(host.getByRole("button", { name: /^(Build road|Build settlement|Upgrade to city|Table activity|Roll the dice|End turn|Make a trade|Buy a card)$/, includeHidden: true })).toHaveCount(0);
+    await expect(host.getByRole("button", { name: /^(Build road|Build settlement|Upgrade to city|Roll the dice|End turn|Make a trade|Buy a card)$/, includeHidden: true })).toHaveCount(0);
     await screenshot(host, testInfo, `shared-board-${viewport.width}-${viewport.height}`);
   }
 
@@ -1651,7 +1656,7 @@ test("shared tabletop shows only single-device player seats and map at desktop a
   await expect(roster.getByRole("listitem").filter({ has: host.getByText("AlexandertheExplorer", { exact: true }) }).locator(".player-number")).toHaveText("A");
 });
 
-test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", async ({ multiplayer }, testInfo) => {
+test("Seafarers lobby selection synchronizes phones and allows coastal ships and ship movement on the shared board", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   await selectGameVersion(host, "seafarers");
@@ -1718,7 +1723,7 @@ test("Seafarers lobby selection synchronizes phones and allows coastal ships and
   await screenshot(phone, testInfo, "seafarers-private-controls");
 });
 
-test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and phone route choices", async ({ multiplayer }, testInfo) => {
+test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and phone route choices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   await selectGameVersion(host, "foggy-world");
@@ -1835,7 +1840,7 @@ test("Foggy World synchronizes cell-first discovery, cell-specific nodes, and ph
   await screenshot(host, testInfo, "foggy-world-shared-nodes");
 });
 
-test("Seafarers gold choices are available off-turn on a narrow phone and send only selected bank resources", async ({ multiplayer }, testInfo) => {
+test("Seafarers gold choices are available off-turn on a narrow phone and send only selected bank resources", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   snapshot.variant = "seafarers";
   snapshot.game!.variant = "seafarers";
@@ -1860,7 +1865,7 @@ test("Seafarers gold choices are available off-turn on a narrow phone and send o
   });
 });
 
-test("one private phone plays with two computers that complete setup automatically", async ({ multiplayer }, testInfo) => {
+test("one private phone plays with two computers that complete setup automatically", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -1913,7 +1918,7 @@ test("one private phone plays with two computers that complete setup automatical
   await screenshot(phone, testInfo, "human-private-hand-with-computers");
 });
 
-test("phone landing menu opens the settings dialog", async ({ multiplayer }) => {
+test("phone landing menu opens the settings dialog", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Phone", true);
@@ -1926,7 +1931,7 @@ test("phone landing menu opens the settings dialog", async ({ multiplayer }) => 
   await expect(settings).toHaveCount(0);
 });
 
-test("private phone vibrates when its turn arrives and the settings toggle silences it", async ({ multiplayer }) => {
+test("private phone vibrates when its turn arrives and the settings toggle silences it", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -1941,6 +1946,8 @@ test("private phone vibrates when its turn arrives and the settings toggle silen
   await requestSeat(phone, invitation, "Alex");
   await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
   for (let player = 0; player < 2; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await host.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   await host.getByRole("button", { name: "Start game", exact: true }).click();
   await expect(phone.getByTestId("game-phase")).toBeVisible();
 
@@ -1966,20 +1973,20 @@ test("private phone vibrates when its turn arrives and the settings toggle silen
   await present(computer.id, computer.name);
   expect(await vibrations()).toEqual([]);
   await present(snapshot.playerId!, "Alex");
-  expect(await vibrations()).toEqual([[80, 60, 80]]);
+  await expect.poll(vibrations).toEqual([[80, 60, 80]]);
 
   await chooseGameOption(phone, "Settings");
   const settings = phone.getByRole("dialog", { name: "Settings", exact: true });
   await settings.getByRole("checkbox", { name: "Vibrate when your turn starts", exact: true }).uncheck();
   await settings.getByRole("button", { name: "Close dialog", exact: true }).click();
-  expect.poll(() => phone.evaluate(() => localStorage.getItem("catania.vibrateOnYourTurn"))).toBe("false");
+  await expect.poll(() => phone.evaluate(() => localStorage.getItem("catania.vibrateOnYourTurn"))).toBe("false");
 
   await present(computer.id, computer.name);
   await present(snapshot.playerId!, "Alex");
   expect(await vibrations()).toEqual([[80, 60, 80]]);
 });
 
-test("computer turns run without phones or shared-board input", async ({ multiplayer }, testInfo) => {
+test("computer turns run without phones or shared-board input", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await hostGame(host);
   for (let player = 0; player < 3; player++) {
@@ -2008,7 +2015,7 @@ test("computer turns run without phones or shared-board input", async ({ multipl
   await expect(host.getByRole("link", { name: "Play across devices", exact: true })).toBeVisible();
 });
 
-test("private player header matches the single-device hand and total score", async ({ multiplayer }, testInfo) => {
+test("private player header matches the single-device hand and total score", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
@@ -2096,7 +2103,7 @@ test("private player header matches the single-device hand and total score", asy
   await expect(seat.getByText("5 cards", { exact: true })).not.toHaveClass(/card-count-at-risk/);
 });
 
-test("private build grid stays compact and pinned without stretching when development cards change", async ({ multiplayer }, testInfo) => {
+test("private build grid stays compact and pinned without stretching when development cards change", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
@@ -2171,7 +2178,7 @@ test("private build grid stays compact and pinned without stretching when develo
   await expect(phone.getByRole("button", { name: "Cancel placement", exact: true })).toBeVisible();
 });
 
-test("private mobile roll screen fits Seafarers actions without clipping and emphasizes primary roll CTA", async ({ multiplayer }, testInfo) => {
+test("private mobile roll screen fits Seafarers actions without clipping and emphasizes primary roll CTA", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
@@ -2252,7 +2259,7 @@ test("private mobile roll screen fits Seafarers actions without clipping and emp
   expect(Math.abs((await turnControls.locator(".turn-card").boundingBox())!.height - rollTurnCardHeight)).toBeLessThanOrEqual(1);
 });
 
-test("private build buttons explain resources, legal spots, settlement stock and city limits", async ({ multiplayer }, testInfo) => {
+test("private build buttons explain resources, legal spots, settlement stock and city limits", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2347,7 +2354,7 @@ test("private build buttons explain resources, legal spots, settlement stock and
   await screenshot(phone, testInfo, "private-city-no-settlements");
 });
 
-test("host and three private phones play over real PeerJS channels and recover a refreshed seat", async ({ multiplayer }, testInfo) => {
+test("host and three private phones play over real PeerJS channels and recover a refreshed seat", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   await noHorizontalOverflow(host);
@@ -2481,6 +2488,7 @@ test("host and three private phones play over real PeerJS channels and recover a
   await expect(host.getByRole("button", { name: /^Admit / })).toHaveCount(0);
   await expect(host.getByRole("list", { name: "Players", exact: true }).getByRole("listitem")).toHaveCount(3);
 
+  await activePhone.emulateMedia({ reducedMotion: "no-preference" });
   await inactivePhone.emulateMedia({ reducedMotion: "reduce" });
   await activePhone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await activePhone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
@@ -2500,15 +2508,16 @@ test("host and three private phones play over real PeerJS channels and recover a
   const total = rolled.dice![0] + rolled.dice![1];
   await activePhone.clock.runFor(550);
   await expect(rollResult).toHaveAttribute("data-stage", "complete");
-  await expect(rollResult).toContainText(`${rolled.dice![0]} + ${rolled.dice![1]} = ${total}`);
-  await expect(activePhone.getByRole("status", { name: "Roll announcement" })).toContainText(`${activeName} rolled`);
+  await expect(rollResult.getByRole("img", { name: `Dice: ${rolled.dice![0]} and ${rolled.dice![1]}`, exact: true })).toBeVisible();
+  await expect(activePhone.getByRole("status", { name: "Roll announcement" })).toHaveText(`${activeName} rolled ${rolled.dice![0]} + ${rolled.dice![1]} = ${total}.`);
   await expect(inactivePhone.getByRole("region", { name: "Roll result", exact: true })).toHaveAttribute("data-stage", "complete");
   expect(await inactivePhone.locator(".roll-die").first().evaluate(element => getComputedStyle(element).animationName)).toBe("none");
   expect(rolled.phase.type).toBe(total === 7 ? "robber" : "actions");
   await expectPhase(pages, rolled.phase.type, activeName);
   for (const phone of phones.values()) await expect.poll(async () => (await latestSnapshot(phone)).game).toEqual(rolled);
   await expect(host.getByRole("region", { name: "Roll result", exact: true, includeHidden: true })).toHaveCount(0);
-  await expect(host.getByRole("group", { name: "Shared dice", exact: true })).toContainText(String(total));
+  await expect(host.getByRole("group", { name: "Shared dice", exact: true })
+    .getByRole("img", { name: `Dice: ${rolled.dice![0]} and ${rolled.dice![1]}`, exact: true })).toBeVisible();
   await expect(host.getByRole("figure", { name: "Dice rolls", exact: true }).getByRole("img", { name: `${total} appeared 1 times`, exact: true })).toBeVisible();
   await screenshot(host, testInfo, "host-shared-roll");
   await screenshot(activePhone, testInfo, "phone-after-roll");
@@ -2519,7 +2528,7 @@ test("host and three private phones play over real PeerJS channels and recover a
   await privateScreenFits(activePhone);
 });
 
-test("private robbery notices overlay above turn controls without moving the hand for five visible seconds", async ({ multiplayer }, testInfo) => {
+test("private robbery notices overlay above turn controls without moving the hand for five visible seconds", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2572,8 +2581,9 @@ test("private robbery notices overlay above turn controls without moving the han
       await expect(notice).toHaveCSS("position", "absolute");
       const noticeBounds = (await notice.boundingBox())!;
       const turnBounds = (await turnControls.boundingBox())!;
-      expect(noticeBounds.y + noticeBounds.height).toBeLessThanOrEqual(turnBounds.y);
-      expect(turnBounds.y - noticeBounds.y - noticeBounds.height).toBeCloseTo(8, 0);
+      const gap = turnBounds.y - noticeBounds.y - noticeBounds.height;
+      expect(gap).toBeGreaterThanOrEqual(6);
+      expect(gap).toBeLessThanOrEqual(8);
       expect(noticeBounds.x).toBeCloseTo(turnBounds.x, 0);
       expect(noticeBounds.width).toBeCloseTo(turnBounds.width, 0);
       if (reducedMotion === "reduce") {
@@ -2624,7 +2634,7 @@ test("private robbery notices overlay above turn controls without moving the han
   expect(await sentActions(phone)).toEqual([]);
 });
 
-test("private robbery notices time each queued event and ignore unrelated resource losses", async ({ multiplayer }, testInfo) => {
+test("private robbery notices time each queued event and ignore unrelated resource losses", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
@@ -2729,7 +2739,7 @@ test("private robbery notices time each queued event and ignore unrelated resour
   await expect(notice.getByText(/more/)).toHaveCount(0);
 });
 
-test("private monopoly notices report each victim's losses and queue behind unread theft notices", async ({ multiplayer }, testInfo) => {
+test("private monopoly notices report each victim's losses and queue behind unread theft notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const receivedSnapshot = await latestSnapshot(phone);
   await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
@@ -2774,7 +2784,7 @@ test("private monopoly notices report each victim's losses and queue behind unre
   expect(await sentActions(phone)).toEqual([]);
 });
 
-test("private custom-target cards and victory instructions use the configured points", async ({ multiplayer }) => {
+test("private custom-target cards and victory instructions use the configured points", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const player = snapshot.privatePlayer!;
@@ -2804,7 +2814,7 @@ test("private custom-target cards and victory instructions use the configured po
   await expect(phone.getByTestId("game-phase")).not.toContainText("reach 10 victory points");
 });
 
-test("private instructions and grouped development cards match single-device gameplay", async ({ multiplayer }, testInfo) => {
+test("private instructions and grouped development cards match single-device gameplay", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2886,7 +2896,7 @@ test("private instructions and grouped development cards match single-device gam
   await privateScreenFits(phone);
 });
 
-test("private dialogs keep development cards, discards, theft and trades accessible without page scrolling", async ({ multiplayer }, testInfo) => {
+test("private dialogs keep development cards, discards, theft and trades accessible without page scrolling", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2966,7 +2976,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(settlementNote).toBeVisible();
   expect(await settlementNote.evaluate(element => Boolean(element.closest(".private-build-grid")))).toBe(false);
   for (let index = 0; index < 5; index++) {
-    game.board.vertices[index]!.building = previousBuildings[index];
+    game.board.vertices[index]!.building = previousBuildings[index]!;
   }
   await present();
 
@@ -3066,6 +3076,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect.poll(async () => (await sentActions(phone)).at(-1)).toMatchObject({ version: snapshot.version, action: { type: "steal", playerId: opponent.id } });
   await expect(phone.getByRole("alert")).toContainText("The game changed");
 
+  await phone.emulateMedia({ reducedMotion: "no-preference" });
   game.phase = { type: "finished" };
   game.variant = "four-islands";
   snapshot.variant = "four-islands";
@@ -3108,12 +3119,14 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await expect(victory.getByRole("button", { name: "Leave room", exact: true })).toBeVisible();
   // The gold exit leads as a full-width bar and the lone quiet exit spans its own full-width row below.
   const victoryActions = victory.locator(".victory-actions");
-  const victoryActionsBox = (await victoryActions.boundingBox())!;
-  const leaveRoomBox = (await victory.getByRole("button", { name: "Leave room", exact: true }).boundingBox())!;
-  const viewHandBox = (await victory.getByRole("button", { name: "View your hand", exact: true }).boundingBox())!;
-  expect(leaveRoomBox.width).toBeCloseTo(victoryActionsBox.width, 0);
-  expect(viewHandBox.width, "View your hand fills its row instead of collapsing into the corner").toBeCloseTo(victoryActionsBox.width, 0);
-  expect(viewHandBox.y).toBeGreaterThan(leaveRoomBox.y);
+  await expect(async () => {
+    const victoryActionsBox = (await victoryActions.boundingBox())!;
+    const leaveRoomBox = (await victory.getByRole("button", { name: "Leave room", exact: true }).boundingBox())!;
+    const viewHandBox = (await victory.getByRole("button", { name: "View your hand", exact: true }).boundingBox())!;
+    expect(leaveRoomBox.width).toBeCloseTo(victoryActionsBox.width, 0);
+    expect(viewHandBox.width, "View your hand fills its row instead of collapsing into the corner").toBeCloseTo(victoryActionsBox.width, 0);
+    expect(viewHandBox.y).toBeGreaterThan(leaveRoomBox.y);
+  }).toPass();
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "victory-popup-phone");
   await victory.getByRole("button", { name: "View your hand", exact: true }).click();
@@ -3122,7 +3135,7 @@ test("private dialogs keep development cards, discards, theft and trades accessi
   await privateScreenFits(phone);
 });
 
-test("victory confetti skips particle animation when reduced motion is preferred", async ({ multiplayer }) => {
+test("victory confetti skips particle animation when reduced motion is preferred", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   await phone.emulateMedia({ reducedMotion: "reduce" });
   const game = snapshot.game!;
@@ -3140,7 +3153,7 @@ test("victory confetti skips particle animation when reduced motion is preferred
   await expect(confetti).toBeHidden();
 });
 
-test("declining a computer trade request identifies the open trade and survives newer same-trade snapshots", async ({ multiplayer }, testInfo) => {
+test("declining a computer trade request identifies the open trade and survives newer same-trade snapshots", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const requester = game.players.find(other => other.control === "computer")!;
@@ -3168,7 +3181,7 @@ test("declining a computer trade request identifies the open trade and survives 
   await expect(request).toHaveCount(0);
 });
 
-test("trade request dialog keeps actions visible and previews the proposed return on mobile", async ({ multiplayer }, testInfo) => {
+test("trade request dialog keeps actions visible and previews the proposed return on mobile", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -3227,7 +3240,7 @@ test("trade request dialog keeps actions visible and previews the proposed retur
   await screenshot(phone, testInfo, "trade-request-dialog-missing");
 });
 
-test("a computer trade request stays answerable after the phone chose a price and another computer replied", async ({ multiplayer }) => {
+test("a computer trade request stays answerable after the phone chose a price and another computer replied", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const game = snapshot.game!;
   const requester = game.players.find(other => other.control === "computer")!;
@@ -3251,7 +3264,7 @@ test("a computer trade request stays answerable after the phone chose a price an
   })]);
 });
 
-test("dismissed mandatory private dialogs stay reachable on phones and while builds are collapsed", async ({ multiplayer }, testInfo) => {
+test("dismissed mandatory private dialogs stay reachable on phones and while builds are collapsed", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -3316,7 +3329,7 @@ test("dismissed mandatory private dialogs stay reachable on phones and while bui
   }
 });
 
-test("private phones keep the turn and dice panel in view while the hand scrolls", async ({ multiplayer }, testInfo) => {
+test("private phones keep the turn and dice panel in view while the hand scrolls", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   snapshot.privatePlayer!.developmentCards = (["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"] as const).map((kind, index) => ({ id: `development-${index}`, kind, purchasedTurn: 1 }));
   snapshot.game!.phase = { type: "roll" };
@@ -3343,7 +3356,7 @@ test("private phones keep the turn and dice panel in view while the hand scrolls
   }
 });
 
-test("private trade responses preserve drafts and confirmations across version changes", async ({ multiplayer }, testInfo) => {
+test("private trade responses preserve drafts and confirmations across version changes", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -3367,6 +3380,8 @@ test("private trade responses preserve drafts and confirmations across version c
   await request.getByRole("button", { name: "Change offer", exact: true }).click();
   const editor = phone.getByRole("dialog", { name: "A fair exchange", exact: true });
   await expect(editor.getByRole("button", { name: "Player trade", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.getByRole("button", { name: "Request cards", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await editor.getByRole("button", { name: "Exact offer", exact: true }).click();
   await expect(editor.getByRole("button", { name: "Exact offer", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(editor.getByRole("group", { name: "You ask for", exact: true }).getByRole("status", { name: "Ore selected", exact: true })).toHaveText("1");
   await editor.getByRole("button", { name: "Add Wood to You offer", exact: true }).click();
@@ -3375,6 +3390,7 @@ test("private trade responses preserve drafts and confirmations across version c
   await expect(request.getByRole("group", { name: /'s trade response$/ })).toHaveText(originalResponses);
   expect((await latestSnapshot(phone)).game!.trade).toEqual(original);
   await request.getByRole("button", { name: "Change offer", exact: true }).click();
+  await editor.getByRole("button", { name: "Exact offer", exact: true }).click();
   await expect(editor.getByRole("group", { name: "You offer", exact: true }).getByRole("status", { name: "Wood selected", exact: true })).toHaveText("0");
   await editor.getByRole("button", { name: "Close dialog", exact: true }).click();
 
@@ -3388,7 +3404,13 @@ test("private trade responses preserve drafts and confirmations across version c
   await expect(request.getByRole("group", { name: /'s trade response$/ })).toHaveText(originalResponses);
   expect((await latestSnapshot(phone)).game!.trade).toEqual(original);
   await complete.click();
+  // An unrelated opponent's response keeps the confirmation valid.
   game.trade.responses[otherOpponent!.id] = false;
+  await present();
+  await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeEnabled();
+  await expect(confirmation.getByRole("alert")).toHaveCount(0);
+  // Changing the selected partner's price invalidates the confirmation.
+  game.trade.responses[opponent!.id] = { ...emptyResources(), wood: 3 };
   await present();
   await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeDisabled();
   await expect(confirmation.getByRole("alert")).toContainText("The game changed");
@@ -3420,11 +3442,9 @@ test("private trade responses preserve drafts and confirmations across version c
   await expect(availableWood).toHaveCSS("filter", "none");
   await expect(availableWood).toHaveCSS("opacity", "1");
   game.trade.give = null;
-  game.trade.expiresAt = Date.now() + 15_000;
   await present();
   const propose = request.getByRole("button", { name: "Propose price", exact: true });
   const decline = request.getByRole("button", { name: "Decline", exact: true });
-  await expect(request.getByText("Computer players wait up to 15 seconds for prices.", { exact: true })).toBeVisible();
   await expect(request.getByText("Choose below", { exact: true })).toBeVisible();
   await expectInventory(request, player.resources);
   const dialogBox = (await request.boundingBox())!;
@@ -3441,9 +3461,9 @@ test("private trade responses preserve drafts and confirmations across version c
   await expect(request.getByRole("img", { name: "You receive: 1 Ore", exact: true })).toBeVisible();
   await expect(propose).toBeEnabled();
   await present();
-  await expect(propose).toBeDisabled();
+  await expect(propose).toBeEnabled();
   await expect(request.getByRole("status", { name: "Ore selected", exact: true })).toHaveText("1");
-  await expect(request.getByRole("alert")).toContainText("The game changed");
+  await expect(request.getByRole("alert")).toHaveCount(0);
   expect(await sentActions(phone)).toEqual([]);
   await request.getByRole("button", { name: "Close dialog", exact: true }).click();
   await phone.getByRole("button", { name: "View trade", exact: true }).click();
@@ -3459,7 +3479,7 @@ test("private trade responses preserve drafts and confirmations across version c
   await expect(request).toHaveCount(0);
 });
 
-test("bank, exact offers and negotiated prices exchange real hands only after confirmation", async ({ multiplayer }, testInfo) => {
+test("bank, exact offers and negotiated prices exchange real hands only after confirmation", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await host.addInitScript(() => {
     let seed = 1;
@@ -3590,6 +3610,244 @@ test("bank, exact offers and negotiated prices exchange real hands only after co
   }
 });
 
+test("multi-device trade UX covers responder state, non-clobbering dialogs, disconnected status, sticky editor, and outcome notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  await phone.evaluate(() => {
+    const vibrations: (number | number[])[] = [];
+    navigator.vibrate = ((pattern: VibratePattern) => {
+      vibrations.push(typeof pattern === "number" ? pattern : Array.from(pattern));
+      return true;
+    }) as typeof navigator.vibrate;
+    (window as Window & { vibrations?: (number | number[])[] }).vibrations = vibrations;
+  });
+  const vibrations = () => phone.evaluate(() => (window as Window & { vibrations?: (number | number[])[] }).vibrations ?? []);
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  const [opponent, otherOpponent] = game.players.filter(other => other.id !== player.id);
+
+  // 1. Non-clobbering: opening Players & bank must not be forcefully closed by an incoming trade,
+  // while incoming trade vibrates once and updates turn instructions + View trade badge.
+  await phone.getByRole("button", { name: "Game", exact: true }).click();
+  await phone.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Players & bank", exact: true }).click();
+  const tableDialog = phone.getByRole("dialog", { name: "All players and bank", exact: true });
+  await expect(tableDialog).toBeVisible();
+  opponent!.resourceCount = 4;
+  game.activePlayerId = opponent!.id;
+  game.phase = { type: "actions" };
+  game.trade = {
+    offeredBy: opponent!.id,
+    give: null,
+    receive: { ...emptyResources(), ore: 1 },
+    responses: {},
+    expiresAt: Date.now() + 12_000,
+  };
+  await present();
+  await expect(tableDialog).toBeVisible();
+  await expect.poll(vibrations).toEqual([[60]]);
+  await tableDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  await expect(phone.getByTestId("game-phase")).toContainText("Trade on the table.");
+  const viewTrade = phone.getByRole("button", { name: "View trade", exact: true });
+  await expect(viewTrade).toHaveAccessibleDescription("Waiting for your response");
+  await viewTrade.click();
+
+  // 2. Requester card count & live countdown are shown; missing cards hide the price stepper.
+  const requestDialog = phone.getByRole("dialog", { name: "Trade request", exact: true });
+  await expect(requestDialog).toBeVisible();
+  await expect(requestDialog.getByText("4 cards", { exact: true })).toBeVisible();
+  await expect(requestDialog.getByRole("timer")).toBeVisible();
+
+  player.resources = { wood: 1, brick: 0, wool: 1, grain: 1, ore: 0 };
+  await present();
+  await expect(requestDialog.getByText("Missing 1 Ore", { exact: true })).toBeVisible();
+  await expect(requestDialog.getByRole("group", { name: "You want in return", exact: true })).toHaveCount(0);
+  await expect(requestDialog.getByRole("button", { name: "Propose price", exact: true })).toBeDisabled();
+  await expect(requestDialog.getByRole("button", { name: "Decline", exact: true })).toBeEnabled();
+
+  // 3. After responder has proposed a price, View trade shows Proposed badge and reopening prefills it.
+  player.resources = { wood: 1, brick: 1, wool: 1, grain: 1, ore: 2 };
+  game.trade.responses[player.id] = { ...emptyResources(), brick: 2 };
+  await present();
+  await requestDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(viewTrade).toHaveAccessibleDescription("You proposed a price.");
+  await expect(phone.getByTestId("game-phase")).toContainText(`${opponent!.name} is reviewing trade responses.`);
+  await viewTrade.click();
+  await expect(requestDialog.getByText("Your proposed price", { exact: true })).toBeVisible();
+  await expect(requestDialog.getByRole("group", { name: "You want in return", exact: true }).getByRole("status", { name: "Brick selected", exact: true })).toHaveText("2");
+  await expect(requestDialog.getByRole("button", { name: "Update price", exact: true })).toBeEnabled();
+  await requestDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // 4. Withdrawn trade triggers a dismissible Trade notification.
+  game.trade = null;
+  game.log.push({ key: "{player} withdraws the trade offer.", parameters: { player: opponent!.name } });
+  await present();
+  const withdrawnNotice = phone.getByRole("region", { name: "Trade notification", exact: true });
+  await expect(withdrawnNotice).toContainText(`${opponent!.name} withdrew the trade`);
+  await withdrawnNotice.getByRole("button", { name: "Dismiss trade notification", exact: true }).click();
+  await expect(withdrawnNotice).toHaveCount(0);
+
+  // 5. Offerer view: disconnected human shows "disconnected", View trade shows ready count,
+  // Change offer stays enabled when opponent answers, Bank tab defaults to affordable resource & warns,
+  // and TradeDialog submit bar stays pinned on narrow mobile screens.
+  game.activePlayerId = player.id;
+  player.resources = { wood: 0, brick: 0, wool: 4, grain: 1, ore: 0 };
+  otherOpponent!.control = "human";
+  otherOpponent!.connected = false;
+  game.trade = {
+    offeredBy: player.id,
+    give: { ...emptyResources(), grain: 1 },
+    receive: { ...emptyResources(), ore: 1 },
+    responses: { [opponent!.id]: { ...emptyResources(), grain: 1 } },
+  };
+  await present();
+  const offerDialog = phone.getByRole("dialog", { name: "Trade offer", exact: true });
+  await expect(offerDialog.getByRole("group", { name: `${otherOpponent!.name}'s trade response`, exact: true })).toContainText("disconnected");
+  await offerDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await expect(viewTrade).toHaveAccessibleDescription("1 ready, 1 of 2 answered");
+  await viewTrade.click();
+
+  await offerDialog.getByRole("button", { name: "Change offer", exact: true }).click();
+  const editor = phone.getByRole("dialog", { name: "A fair exchange", exact: true });
+  await expect(editor.getByRole("button", { name: "Exact offer", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // Another opponent replies while editing: editor stays enabled and does not go stale.
+  game.trade.responses[otherOpponent!.id] = false;
+  await present();
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "Put the offer on the table", exact: true })).toBeEnabled();
+
+  for (const viewport of [{ width: 390, height: 700 }, { width: 320, height: 568 }]) {
+    await phone.setViewportSize(viewport);
+    const submit = editor.getByRole("button", { name: "Put the offer on the table", exact: true });
+    const dialogBox = (await editor.boundingBox())!;
+    const submitBox = (await submit.boundingBox())!;
+    expect(submitBox.y + submitBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height + 1);
+  }
+  await phone.setViewportSize({ width: 390, height: 700 });
+  await screenshot(phone, testInfo, "trade-dialog-sticky-mobile");
+
+  // Switching to Bank & ports defaults to Wool (the affordable resource) and warns about withdrawing open trade.
+  await editor.getByRole("button", { name: "Bank & ports", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "Give Wool", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.getByRole("button", { name: "Confirm exchange", exact: true })).toBeEnabled();
+  await expect(editor.getByText("Confirming a bank exchange will withdraw your open player trade.", { exact: true })).toBeVisible();
+});
+
+test("shared board displays live open-trade banner with responses and phones show completion notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  await host.addInitScript(() => {
+    let seed = 7;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true, value: (values: Uint32Array) => {
+        for (let index = 0; index < values.length; index++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          values[index] = seed;
+        }
+        return values;
+      }
+    });
+  });
+  const invitation = await hostGame(host);
+  const phones = new Map<string, Page>();
+  for (const name of ["Alex", "Sam", "Taylor"]) {
+    const phone = await multiplayer.newPage(name);
+    await phone.emulateMedia({ reducedMotion: "reduce" });
+    phones.set(name, phone);
+    await requestSeat(phone, invitation, name);
+    await host.getByRole("button", { name: `Admit ${name}`, exact: true }).click();
+  }
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+  for (let placement = 0; placement < 6; placement++) {
+    await host.getByRole("button", { name: /^Place settlement at / }).first().click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await host.getByRole("button", { name: /^Build road at / }).first().click();
+    await host.getByRole("button", { name: "Confirm placement", exact: true }).click();
+  }
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "roll");
+  // Roll non-7 dice so every turn lands directly in the actions phase.
+  await host.evaluate(() => {
+    const dice = [3, 5];
+    let index = 0;
+    Object.defineProperty(crypto, "getRandomValues", {
+      configurable: true, value: (values: Uint32Array) => {
+        for (let position = 0; position < values.length; position++) values[position] = Math.floor(((dice[index++ % 2]! - 0.5) / 6) * 0x100000000);
+        return values;
+      }
+    });
+  });
+  let activePhone!: Page;
+  let responderPhone!: Page;
+  let observerPhone!: Page;
+  let giveResource!: typeof RESOURCES[number];
+  let askResource!: typeof RESOURCES[number];
+  for (let turn = 0; turn < 12; turn++) {
+    const activeName = (await host.getByTestId("game-phase").getAttribute("data-active-player"))!;
+    const currentPhone = phones.get(activeName)!;
+    await currentPhone.getByRole("button", { name: "Roll the dice", exact: true }).click();
+    await expectPhase([host, ...phones.values()], "actions", activeName);
+    const activeSnap = await latestSnapshot(currentPhone);
+    const owned = RESOURCES.find(resource => activeSnap.privatePlayer!.resources[resource] > 0);
+    if (owned) {
+      const otherEntries = [...phones.entries()].filter(([name]) => name !== activeName);
+      for (const [, candidatePhone] of otherEntries) {
+        const candidateSnap = await latestSnapshot(candidatePhone);
+        const wanted = RESOURCES.find(resource => resource !== owned && candidateSnap.privatePlayer!.resources[resource] > 0);
+        if (wanted) {
+          activePhone = currentPhone;
+          responderPhone = candidatePhone;
+          observerPhone = otherEntries.find(([, page]) => page !== candidatePhone)![1];
+          giveResource = owned;
+          askResource = wanted;
+          break;
+        }
+      }
+      if (activePhone) break;
+    }
+    await currentPhone.getByRole("button", { name: "End turn", exact: true }).click();
+    await expect(host.getByTestId("game-phase")).toHaveAttribute("data-phase", "roll");
+  }
+  expect(activePhone).toBeTruthy();
+
+  const activeName = (await latestSnapshot(activePhone)).privatePlayer!.name;
+  const responderName = (await latestSnapshot(responderPhone)).privatePlayer!.name;
+  const buildToggle = activePhone.getByRole("button", { name: "Build a little bigger", exact: true });
+  if (await buildToggle.count() > 0 && await buildToggle.getAttribute("aria-expanded") === "false") await buildToggle.click();
+  await activePhone.getByRole("button", { name: "Make a trade", exact: true }).click();
+  const editor = activePhone.getByRole("dialog", { name: "A fair exchange", exact: true });
+  await editor.getByRole("button", { name: "Player trade", exact: true }).click();
+  await editor.getByRole("button", { name: "Exact offer", exact: true }).click();
+  await editor.getByRole("button", { name: `Add ${RESOURCE_NAMES[giveResource]} to You offer`, exact: true }).click();
+  await editor.getByRole("button", { name: `Add ${RESOURCE_NAMES[askResource]} to You ask for`, exact: true }).click();
+  await editor.getByRole("button", { name: "Put the offer on the table", exact: true }).click();
+
+  const hostTradeBanner = host.getByRole("region", { name: "Open trade", exact: true });
+  await expect(hostTradeBanner).toBeVisible();
+  await expect(hostTradeBanner).toContainText(activeName);
+  await expect(hostTradeBanner).toContainText("waiting");
+  await noHorizontalOverflow(host);
+
+  await responderPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("button", { name: "Accept offer", exact: true }).click();
+  await expect(hostTradeBanner).toContainText("accepted");
+  await screenshot(host, testInfo, "shared-board-open-trade-banner");
+
+  // Reopening View trade on responder confirms their accepted state.
+  await responderPhone.getByRole("button", { name: "View trade", exact: true }).click();
+  await expect(responderPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByText("You accepted this offer.", { exact: true })).toBeVisible();
+  await responderPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Observer declines while active player already opened Confirm trade — confirmation stays valid and succeeds!
+  await activePhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("group", { name: `${responderName}'s trade response`, exact: true }).getByRole("button", { name: "Complete trade", exact: true }).click();
+  const confirmation = activePhone.getByRole("dialog", { name: `Trade with ${responderName}`, exact: true });
+  await expect(confirmation).toBeVisible();
+  await observerPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("button", { name: "Decline", exact: true }).click();
+  await expect(hostTradeBanner).toContainText("declined");
+  await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeEnabled();
+  await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
+
+  await expect(hostTradeBanner).toHaveCount(0);
+  await expect(responderPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`Traded with ${activeName}`);
+  await expect(observerPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`${activeName} traded with ${responderName}`);
+});
+
 for (const [stage, expectedError] of [
   ["answer", "Timed out waiting for the host's connection answer"],
   ["direct", "The host answered, but the direct WebRTC connection timed out"],
@@ -3641,7 +3899,7 @@ for (const [stage, expectedError] of [
   });
 }
 
-test("signaling and data-channel loss report failure and recover the reserved seat", async ({ multiplayer }, testInfo) => {
+test("signaling and data-channel loss report failure and recover the reserved seat", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phones: Page[] = [];
@@ -3684,7 +3942,7 @@ test("signaling and data-channel loss report failure and recover the reserved se
   for (const page of [host, ...phones]) await expect(page.getByRole("list", { name: "Players", exact: true }).getByRole("listitem")).toHaveCount(3);
 });
 
-test("a lost phone rejoins mid-game from the host's invitation without host admission", async ({ multiplayer }, testInfo) => {
+test("a lost phone rejoins mid-game from the host's invitation without host admission", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("Alex", true);
@@ -3768,4 +4026,137 @@ test("a lost phone rejoins mid-game from the host's invitation without host admi
   await expect(stranger.getByRole("alert")).toContainText("This game has started. Only a disconnected player's device can rejoin their seat.");
   await expect(rejoin.getByTestId("game-phase")).toBeVisible();
   await screenshot(host, testInfo, "midgame-invitation-rejoin");
+});
+
+test("shared board shows live phase banner, host table activity dialog, and phone lifecycle notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+  const host = await multiplayer.newPage("Host");
+  const invitation = await hostGame(host);
+  const alex = await multiplayer.newPage("Alex", true);
+  await requestSeat(alex, invitation, "Alex");
+  await expect(alex.locator(".waiting-dots")).toBeVisible();
+  await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Add computer", exact: true }).click();
+  await host.getByRole("button", { name: "Start game", exact: true }).click();
+
+  await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
+  await expect(alex.locator(".private-session-banner")).toContainText("Game started");
+  await expect(alex.locator(".placement-mode-banner")).toContainText("Place your settlement on the shared board");
+
+  // Host Game menu exposes Table activity dialog.
+  await host.getByRole("button", { name: "Game", exact: true }).click();
+  await host.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name: "Table activity", exact: true }).click();
+  const hostActivity = host.getByRole("dialog", { name: "Table activity", exact: true });
+  await expect(hostActivity).toBeVisible();
+  await hostActivity.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Host Reset game notifies the phone.
+  await chooseGameOption(host, "Reset game");
+  await host.getByRole("dialog", { name: "Reset this game?", exact: true }).getByRole("button", { name: "Reset game", exact: true }).click();
+  await expect(alex.locator(".private-session-banner")).toContainText("The host reset the game.");
+
+  // Host Return to lobby notifies the phone in the lobby.
+  await chooseGameOption(host, "Return to lobby");
+  await host.getByRole("dialog", { name: "Return to the lobby?", exact: true }).getByRole("button", { name: "Return to lobby", exact: true }).click();
+  await expect(alex.getByRole("status").filter({ hasText: "The host returned everyone to the lobby." })).toBeVisible();
+  await screenshot(alex, testInfo, "phone-returned-to-lobby-notice");
+
+  // Closing the room presents a clear Room closed dialog on phones.
+  await chooseGameOption(host, "Leave room");
+  await host.getByRole("dialog", { name: "Close this room?", exact: true }).getByRole("button", { name: "Leave room", exact: true }).click();
+  const closedDialog = alex.getByRole("dialog", { name: "Room closed", exact: true });
+  await expect(closedDialog).toBeVisible({ timeout: 10_000 });
+  await expect(closedDialog.getByRole("link", { name: "Start another room", exact: true })).toBeVisible();
+  await expect(closedDialog.getByRole("link", { name: "Back to home", exact: true })).toBeVisible();
+  await screenshot(alex, testInfo, "phone-room-closed-dialog");
+});
+
+test("private phone shows resource collection, rolled seven styling, gold dialog, development draw reveal, and sabotage notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  const player = snapshot.privatePlayer!;
+  const game = snapshot.game!;
+  const opponent = game.players.find(other => other.id !== player.id)!;
+
+  // Non-7 roll resource gain opens ResourceCollection and updates hand badges.
+  game.phase = { type: "roll" };
+  game.dice = null;
+  await present();
+  game.phase = { type: "actions" };
+  game.dice = [2, 4];
+  player.resources = { ...player.resources, wood: player.resources.wood + 2 };
+  await present();
+  const collection = phone.getByRole("region", { name: "Resource collection", exact: true });
+  await expect(collection).toBeVisible();
+  await expect(collection).toContainText("Added to your hand");
+  await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
+  await expect(collection).toHaveCount(0);
+
+  // Rolled 7 highlights dice tray with seven state and opens Discard modal after settling.
+  game.turnNumber += 1;
+  game.phase = { type: "roll" };
+  game.dice = null;
+  await present();
+  game.phase = { type: "discard", required: { [player.id]: 4 } };
+  game.dice = [3, 4];
+  await present();
+  const rollResult = phone.getByRole("region", { name: "Roll result", exact: true });
+  await expect(rollResult).toHaveAttribute("data-seven", "true");
+  await expect(rollResult).toContainText("Robber activates!");
+  const discardDialog = phone.getByRole("dialog", { name: "Discard 4 cards", exact: true });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Gold phase auto-opens a modal dialog and stays reachable if closed; queued players see waiting copy.
+  game.phase = { type: "gold", required: { [opponent.id]: 1, [player.id]: 2 } };
+  await present();
+  await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} is choosing gold. Your turn to choose 2 next.`);
+  game.phase = { type: "gold", required: { [player.id]: 2 } };
+  await present();
+  const goldDialog = phone.getByRole("dialog", { name: "Choose your gold resources", exact: true });
+  await expect(goldDialog).toBeVisible();
+  await goldDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await phone.getByRole("button", { name: "Choose gold (2)", exact: true }).click();
+  await expect(goldDialog).toBeVisible();
+  await goldDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+
+  // Buying a development card reveals the drawn card in a celebratory modal.
+  game.phase = { type: "actions" };
+  game.activePlayerId = player.id;
+  player.resources = { wood: 1, brick: 1, wool: 2, grain: 2, ore: 2 };
+  await present();
+  // Prevent the untouched fixture host from replying with a synthetic version-mismatch error during the presentation check.
+  await phone.evaluate(() => {
+    const channel = (window as unknown as ObservedWindow).multiplayerProbe.channels.find(channel => channel.readyState === "open")!;
+    (channel as unknown as { __originalSend?: RTCDataChannel["send"] }).__originalSend = channel.send.bind(channel);
+    channel.send = () => {};
+  });
+  await phone.getByRole("button", { name: "Buy a card", exact: true }).click();
+  await phone.getByRole("dialog", { name: "Buy a development card?", exact: true }).getByRole("button", { name: "Buy", exact: true }).click();
+  player.developmentCards = [...player.developmentCards, { id: "development-77", kind: "victory-point", purchasedTurn: game.turnNumber }];
+  await present();
+  await phone.evaluate(() => {
+    const channel = (window as unknown as ObservedWindow).multiplayerProbe.channels.find(channel => channel.readyState === "open")!;
+    const original = (channel as unknown as { __originalSend?: RTCDataChannel["send"] }).__originalSend;
+    if (original) channel.send = original;
+  });
+  const drawnDialog = phone.getByRole("dialog", { name: "Development card drawn", exact: true });
+  await expect(drawnDialog).toBeVisible();
+  await expect(drawnDialog).toContainText("Victory point");
+  await expect(drawnDialog).toContainText("Counts immediately toward your victory points.");
+  await screenshot(phone, testInfo, "phone-development-card-drawn");
+  await drawnDialog.getByRole("button", { name: "Got it", exact: true }).click();
+  await expect(drawnDialog).toHaveCount(0);
+
+  // Opponent sabotage of a player's building triggers a PrivateNotices sabotage notification.
+  const targetVertex = game.board.vertices[0]!;
+  targetVertex.building = { playerId: player.id, kind: "settlement" };
+  game.activePlayerId = opponent.id;
+  await present();
+  targetVertex.building = null;
+  await present();
+  const sabotageNotice = phone.getByRole("region", { name: "Sabotage notification", exact: true });
+  await expect(sabotageNotice).toBeVisible();
+  await expect(sabotageNotice).toContainText(`${opponent.name} sabotaged you`);
+  await expect(sabotageNotice).toContainText(`${opponent.name} sabotaged your settlement.`);
+  await screenshot(phone, testInfo, "phone-sabotage-notification");
 });

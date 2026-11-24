@@ -1,19 +1,12 @@
+import { useEffect, useState } from "react";
 import { RESOURCES, resourceTotal } from "../game/engine";
 import type { GameAction, Player, Resources, TradeOffer } from "../game/types";
 import { resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { Arrow, CardStack, ResourceCardStepper } from "./GameUi";
-
-function WarningIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="8" cy="8" r="6" />
-      <path d="M8 5v3.5" />
-      <circle cx="8" cy="11.2" r="0.6" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
+import { WarningIcon } from "./Icons";
+import { DisconnectedIcon } from "./PlayerSeat";
 
 export function OpenTrade({
   trade,
@@ -31,7 +24,10 @@ export function OpenTrade({
 }: {
   trade: TradeOffer;
   viewer: Pick<Player, "id" | "resources">;
-  players: Pick<Player, "id" | "name" | "color" | "control">[];
+  players: (Pick<Player, "id" | "name" | "color" | "control"> & {
+    connected?: boolean;
+    resourceCount?: number;
+  })[];
   chosenResources: Resources;
   onChangeResources: (resources: Resources) => void;
   onComplete: (playerId: string, price: Resources) => void;
@@ -44,8 +40,19 @@ export function OpenTrade({
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (trade.expiresAt === undefined) return;
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(interval);
+  }, [trade.expiresAt]);
+  const secondsRemaining = trade.expiresAt !== undefined
+    ? Math.max(0, Math.ceil((trade.expiresAt - now) / 1000))
+    : null;
   const responding = viewer.id !== trade.offeredBy;
   const offeringPlayer = players.find(player => player.id === trade.offeredBy);
+  const myResponse = responding ? trade.responses[viewer.id] : undefined;
   const canAfford = (resources: Resources) => RESOURCES.every(resource => viewer.resources[resource] >= resources[resource]);
   const formatMissing = (resources: Resources) => RESOURCES
     .filter(resource => resources[resource] > viewer.resources[resource])
@@ -57,28 +64,66 @@ export function OpenTrade({
   const overlapHint = !missingRequested && !trade.give && hasOverlap
     ? translateText("Choose different resources than the ones you give.")
     : "";
+  const showReturnPreview = Boolean(trade.give || (responding && !missingRequested));
 
   return (
     <>
       {responding && (
-        <p className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-ink">
-          {offeringPlayer && (
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: offeringPlayer.color }}
-            />
+        <div className="mb-2.5 flex flex-wrap items-center gap-2 text-xs font-semibold text-ink">
+          <span className="flex min-w-0 items-center gap-2">
+            {offeringPlayer && (
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: offeringPlayer.color }}
+              />
+            )}
+            <span className="truncate">{translateText("From {player}", { player: offeringPlayer?.name ?? "" })}</span>
+          </span>
+          {offeringPlayer?.resourceCount !== undefined && (
+            <span className="shrink-0 rounded-full bg-moss px-2 py-0.5 text-[11px] font-medium text-muted tabular-nums">
+              {translateText(offeringPlayer.resourceCount === 1 ? "{count} card" : "{count} cards", { count: offeringPlayer.resourceCount })}
+            </span>
           )}
-          <span>{translateText("From {player}", { player: offeringPlayer?.name ?? "" })}</span>
-        </p>
+          {secondsRemaining !== null && (
+            <span
+              role="timer"
+              aria-label={translateText("Expires in {seconds}s", { seconds: secondsRemaining })}
+              className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${secondsRemaining <= 5 ? "border border-clay/35 bg-clay/15 text-clay" : "bg-moss text-ink/80"}`}
+            >
+              {translateText("{seconds}s left", { seconds: secondsRemaining })}
+            </span>
+          )}
+        </div>
+      )}
+      {responding && myResponse !== undefined && (
+        <div
+          role="status"
+          className={`mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+            myResponse === false
+              ? "border-line bg-ink/5 text-muted"
+              : "border-forest/40 bg-forest/20 text-ink"
+          }`}
+        >
+          <span>
+            {myResponse === false
+              ? translateText("You declined this trade.")
+              : trade.give
+                ? translateText("You accepted this offer.")
+                : translateText("Your proposed price")}
+          </span>
+          {myResponse && !trade.give && (
+            <CardStack resources={myResponse} />
+          )}
+        </div>
       )}
       <div className={`my-2.5 rounded-xl border bg-moss/65 px-3 py-2.5 ${missingRequested ? "border-clay/35" : "border-line/70"}`}>
-        <div className={trade.give || responding ? "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center justify-items-center gap-2" : "flex items-center justify-center"}>
+        <div className={showReturnPreview ? "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center justify-items-center gap-2" : "flex items-center justify-center"}>
           {trade.give ? <>
             <CardStack label={translateText("You give")} resources={responding ? trade.receive : trade.give} available={responding ? viewer.resources : undefined} />
             <Arrow className="h-4 w-4 shrink-0 text-ink/60" />
             <CardStack label={translateText("You receive")} resources={responding ? trade.give : trade.receive} />
-          </> : responding ? <>
+          </> : responding && !missingRequested ? <>
             <CardStack label={translateText("You give")} resources={trade.receive} available={viewer.resources} />
             <Arrow className={`h-4 w-4 shrink-0 transition-colors ${hasChosenResources ? "text-ink" : "text-ink/35"}`} />
             {hasChosenResources ? (
@@ -93,7 +138,9 @@ export function OpenTrade({
                 </span>
               </span>
             )}
-          </> : <CardStack label={translateText("You receive")} resources={trade.receive} />}
+          </> : responding ? (
+            <CardStack label={translateText("You give")} resources={trade.receive} available={viewer.resources} />
+          ) : <CardStack label={translateText("You receive")} resources={trade.receive} />}
         </div>
         {missingRequested && (
           <div className="mt-2.5 flex justify-center border-t border-clay/20 pt-2">
@@ -112,8 +159,9 @@ export function OpenTrade({
           <div className="space-y-2">
             {players.filter(player => player.id !== viewer.id).map(player => {
               const response = trade.responses[player.id];
+              const disconnected = player.control === "human" && player.connected === false;
               const status = response ? trade.give ? "accepted" : null
-                : response === false ? "declined" : "not answered";
+                : response === false ? "declined" : disconnected ? "disconnected" : "not answered";
               const missingCards = response ? formatMissing(response) : "";
               return (
                 <div
@@ -127,8 +175,14 @@ export function OpenTrade({
                     <span className="truncate text-xs font-semibold">{player.name}</span>
                   </span>
                   {status && <span
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${response ? "bg-forest text-ink" : response === false ? "bg-ink/10 text-muted" : "border border-line text-muted"}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                      response ? "bg-forest text-ink"
+                        : response === false ? "bg-ink/10 text-muted"
+                          : disconnected ? "border border-clay/30 bg-clay/10 text-clay"
+                            : "border border-line text-muted"
+                    }`}
                   >
+                    {disconnected && !response && response !== false && <DisconnectedIcon className="h-3 w-3 shrink-0" />}
                     {translateText(status)}
                   </span>}
                   {response ? (
@@ -190,7 +244,7 @@ export function OpenTrade({
         </>
       ) : (
         <>
-          {!trade.give && (
+          {!trade.give && !missingRequested && (
             <fieldset disabled={disabled} className="mt-3">
               <ResourceCardStepper label={translateText("You want in return")} values={chosenResources} onChange={onChangeResources} />
             </fieldset>
@@ -208,14 +262,14 @@ export function OpenTrade({
             )}
             <div className="grid grid-cols-2 gap-2.5">
               <button
-                className="button-secondary"
+                className={missingRequested ? "button-primary" : "button-secondary"}
                 disabled={disabled}
                 onClick={() => onRespond({ type: "respond-trade", accept: false })}
               >
                 {translateText("Decline")}
               </button>
               <button
-                className="button-primary"
+                className={missingRequested ? "button-secondary" : "button-primary"}
                 aria-describedby={missingRequested ? "trade-missing-requested" : overlapHint ? "trade-overlap-hint" : undefined}
                 disabled={disabled || !canAfford(trade.receive) || (!trade.give && (
                   !hasChosenResources || hasOverlap
@@ -224,7 +278,7 @@ export function OpenTrade({
                   ? { type: "respond-trade", accept: true }
                   : { type: "propose-trade", price: chosenResources })}
               >
-                {translateText(trade.give ? "Accept offer" : "Propose price")}
+                {translateText(trade.give ? "Accept offer" : myResponse && typeof myResponse === "object" ? "Update price" : "Propose price")}
               </button>
             </div>
           </div>

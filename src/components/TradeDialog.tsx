@@ -13,6 +13,7 @@ import {
   ResourceInventory,
   SelectableResourceCard,
 } from "./GameUi";
+import { BankHarborIcon, TradeIcon } from "./Icons";
 
 export function TradeDialog({
   game,
@@ -38,9 +39,14 @@ export function TradeDialog({
   const { language } = useLanguage();
   const translateText = useTranslation(gameplayTranslations);
   const [tradeMode, setTradeMode] = useState<"bank" | "players">(() => initialOffer ? "players" : initialMode);
-  const [playerTradeMode, setPlayerTradeMode] = useState<"request" | "offer">(() => initialOffer ? "offer" : "request");
-  const [giveResource, setGiveResource] = useState<Resource>("wood");
-  const [receiveResource, setReceiveResource] = useState<Resource>("brick");
+  const [playerTradeMode, setPlayerTradeMode] = useState<"request" | "offer">(() => initialOffer?.give ? "offer" : "request");
+  const [giveResource, setGiveResource] = useState<Resource>(() =>
+    RESOURCES.find(resource => player.resources[resource] >= getTradeRatio(game, player.id, resource)) ?? "wood",
+  );
+  const [receiveResource, setReceiveResource] = useState<Resource>(() => {
+    const initialGive = RESOURCES.find(resource => player.resources[resource] >= getTradeRatio(game, player.id, resource)) ?? "wood";
+    return RESOURCES.find(resource => resource !== initialGive && game.bank[resource] > 0) ?? (initialGive === "brick" ? "wood" : "brick");
+  });
   const [giveResources, setGiveResources] = useState(() => ({ ...(initialOffer?.give ?? emptyResources()) }));
   const [receiveResources, setReceiveResources] = useState(() => ({ ...(initialOffer?.receive ?? emptyResources()) }));
   const ratio = getTradeRatio(game, player.id, giveResource);
@@ -58,21 +64,27 @@ export function TradeDialog({
           <button
             key={mode}
             aria-pressed={tradeMode === mode}
-            className={`min-h-10 flex-1 rounded-lg text-sm ${tradeMode === mode ? "bg-white shadow-sm" : "text-muted"}`}
+            className={`flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm ${tradeMode === mode ? "bg-white shadow-sm" : "text-muted"}`}
             onClick={() => {
               setTradeMode(mode);
               onModeChange?.(mode);
             }}
           >
+            {mode === "bank" ? <BankHarborIcon /> : <TradeIcon />}
             {translateText(mode === "bank" ? "Bank & ports" : "Player trade")}
           </button>
         ))}
       </div>
       {tradeMode === "bank" ? (
         <>
-          <p className="mb-5 text-sm leading-6 text-muted">
+          <p className="mb-4 text-sm leading-6 text-muted">
             {translateText("Your best bank or port rate is shown on each card.")}
           </p>
+          {initialOffer && (
+            <p className="mb-4 rounded-lg border border-clay/30 bg-clay/10 px-3 py-2 text-xs font-medium text-clay">
+              {translateText("Confirming a bank exchange will withdraw your open player trade.")}
+            </p>
+          )}
           <fieldset className="mb-5" disabled={disabled}>
             <legend className="mb-3 text-sm font-semibold">
               {translateText("You give")}
@@ -135,7 +147,7 @@ export function TradeDialog({
             />
           </div>
           {canExchange && (
-            <p role="status" aria-label={translateText("Hand after exchange")} className="mb-4 text-xs leading-5 text-ink">
+            <p role="status" aria-label={translateText("Hand after exchange")} className="mb-3 text-xs leading-5 text-ink">
               {translateText("After exchange: {giveCount} {giveResource}, {receiveCount} {receiveResource} in your hand. Other cards stay the same.", {
                 giveCount: player.resources[giveResource] - ratio,
                 giveResource: resourceName(language, giveResource),
@@ -144,16 +156,23 @@ export function TradeDialog({
               })}
             </p>
           )}
-          <button
-            className="button-primary w-full"
-            disabled={disabled || !canExchange}
-            onClick={() => onSubmit({ type: "bank-trade", give: giveResource, receive: receiveResource })}
-          >
-            {translateText("Confirm exchange")}
-          </button>
-          <p className="mt-3 text-xs text-muted">
-            {translateText("Choose different resources and enough cards to make the exchange.")}
-          </p>
+          <div className="trade-dialog-actions mt-4 space-y-2">
+            {error && (
+              <p role="alert" className="text-xs font-medium text-clay">
+                {error}
+              </p>
+            )}
+            <button
+              className="button-primary w-full"
+              disabled={disabled || !canExchange}
+              onClick={() => onSubmit({ type: "bank-trade", give: giveResource, receive: receiveResource })}
+            >
+              {translateText("Confirm exchange")}
+            </button>
+            <p className="text-xs text-muted">
+              {translateText("Choose different resources and enough cards to make the exchange.")}
+            </p>
+          </div>
         </>
       ) : (
         <>
@@ -192,35 +211,37 @@ export function TradeDialog({
               onChange={setReceiveResources}
             />
           </fieldset>
-          <p className="my-4 text-xs leading-6 text-muted">
-            {translateText(playerTradeMode === "request"
-              ? "Players name a price. You choose whether to trade."
-              : "No cards move until you confirm a trade.")}
-          </p>
-          <button
-            className="button-primary w-full"
-            disabled={disabled || !resourceTotal(receiveResources) ||
-              (playerTradeMode === "offer" && (!resourceTotal(giveResources) || RESOURCES.some(
-                resource => giveResources[resource] > player.resources[resource] ||
-                  (giveResources[resource] > 0 && receiveResources[resource] > 0),
-              )))}
-            onClick={() => onSubmit(playerTradeMode === "request" ? {
-              type: "request-trade",
-              receive: receiveResources,
-            } : {
-              type: "offer-trade",
-              give: giveResources,
-              receive: receiveResources,
-            })}
-          >
-            {translateText(playerTradeMode === "request" ? "Ask for these cards" : "Put the offer on the table")}
-          </button>
+          <div className="trade-dialog-actions mt-4 space-y-2">
+            {error && (
+              <p role="alert" className="text-xs font-medium text-clay">
+                {error}
+              </p>
+            )}
+            <p className="text-xs leading-5 text-muted">
+              {translateText(playerTradeMode === "request"
+                ? "Players name a price. You choose whether to trade."
+                : "No cards move until you confirm a trade.")}
+            </p>
+            <button
+              className="button-primary w-full"
+              disabled={disabled || !resourceTotal(receiveResources) ||
+                (playerTradeMode === "offer" && (!resourceTotal(giveResources) || RESOURCES.some(
+                  resource => giveResources[resource] > player.resources[resource] ||
+                    (giveResources[resource] > 0 && receiveResources[resource] > 0),
+                )))}
+              onClick={() => onSubmit(playerTradeMode === "request" ? {
+                type: "request-trade",
+                receive: receiveResources,
+              } : {
+                type: "offer-trade",
+                give: giveResources,
+                receive: receiveResources,
+              })}
+            >
+              {translateText(playerTradeMode === "request" ? "Ask for these cards" : "Put the offer on the table")}
+            </button>
+          </div>
         </>
-      )}
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-clay">
-          {error}
-        </p>
       )}
     </Dialog>
   );

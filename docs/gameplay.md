@@ -17,7 +17,7 @@ the setup card while its start button stays visible in the card footer.
 
 The **On this device** card contains the local player settings and **Let's settle
 in**, beneath the theme selector.
-Under **Separate multiplayer setup**, **Play across devices** immediately hosts a shared
+Under **Or play across devices**, **Play across devices** immediately hosts a shared
 board for phones. It does not carry over these names, player counts, or the island
 preview; multiplayer players and a new island are set up independently.
 
@@ -387,12 +387,13 @@ players propose a price, or choose **Exact offer** to specify both sides.
 AI responds automatically; pass the device for human responses. Compare prices
 as **You give / You receive** cards and confirm one exchange. Unaffordable
 prices show the exact missing cards and cannot be completed. Use **Change offer**
-to keep the requested cards and choose payment from your hand. Closing the editor
+to edit the current request or exact offer while keeping its requested cards. Closing the editor
 keeps the original trade; submitting replaces it and asks for new responses.
 No cards move until the active player confirms; withdraw to reject every response.
 
-Bank trades show available quantities on the selection cards and preview the
-resulting quantities without a duplicate hand summary. Player trades show what
+Bank trades default to an affordable resource when available, show available quantities on
+the selection cards, preview the resulting quantities without a duplicate hand summary, and
+warn if confirming will withdraw an open player trade. Player trades show what
 **you give** and **you receive**, with current resources available through confirmation.
 
 ## Hand And Resource Selection

@@ -396,16 +396,28 @@ export class HostRoom {
     if (previous) return previous;
     try {
       const action = command.type === "action" ? parseAction(command.action) : null;
-      // A trade response may race unrelated version bumps (another responder, a computer move);
-      // it is accepted whenever it targets the same open trade the player saw.
-      const tradeResponse = command.type === "action" && command.trade !== undefined &&
-        action !== null && (action.type === "respond-trade" || action.type === "propose-trade");
+      // Trade actions targeting the same open trade survive unrelated version bumps
+      // (another responder answering, a computer move, or a reconnection).
       const trade = this.game?.trade ?? null;
-      const sameTrade = tradeResponse && command.trade !== undefined && trade !== null &&
+      const isTradeScopedAction = command.type === "action" && command.trade !== undefined && action !== null && (
+        action.type === "respond-trade" || action.type === "propose-trade" ||
+        action.type === "cancel-trade" || action.type === "complete-trade" ||
+        action.type === "offer-trade" || action.type === "request-trade"
+      );
+      const sameTrade = isTradeScopedAction && command.trade !== undefined && trade !== null &&
         trade.offeredBy === command.trade.offeredBy &&
         JSON.stringify(trade.give) === JSON.stringify(command.trade.give) &&
         JSON.stringify(trade.receive) === JSON.stringify(command.trade.receive);
-      requireRoom(!tradeResponse ? command.version === this.version : sameTrade,
+      const tradeScopedValid = isTradeScopedAction && action !== null && match(action)
+        .with({ type: "respond-trade" }, { type: "propose-trade" }, { type: "cancel-trade" }, () => sameTrade)
+        .with({ type: "offer-trade" }, { type: "request-trade" }, () => sameTrade && trade !== null && trade.offeredBy === seat.player.id)
+        .with({ type: "complete-trade" }, complete => {
+          if (!sameTrade || !command.trade?.partnerPrice || trade === null) return false;
+          const partnerResponse = trade.responses[complete.playerId];
+          return Boolean(partnerResponse) && JSON.stringify(partnerResponse) === JSON.stringify(command.trade.partnerPrice);
+        })
+        .otherwise(() => false);
+      requireRoom(!isTradeScopedAction ? command.version === this.version : tradeScopedValid,
         "The game changed. Review the latest state and try again.");
       if (command.type === "select-build") this.selectBuild(command.piece, connectionId);
       else {

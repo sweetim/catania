@@ -5,6 +5,7 @@ import { isFogWorld, isSeafarers, type GamePhase, type GameVariant } from "../ga
 import { translate, type Language } from "../i18n";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
+import { ChevronDownIcon } from "./Icons";
 
 export function getPhaseInstructions({
   phase,
@@ -165,18 +166,7 @@ export function TurnInstructions({
             title={translateText(expanded ? "Collapse instructions" : "Expand instructions")}
             onClick={() => setExpanded(current => !current)}
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m4 6 4 4 4-4" />
-            </svg>
+            <ChevronDownIcon className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </button>
         )}
         {onCancelKnight && (

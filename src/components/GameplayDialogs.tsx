@@ -5,6 +5,7 @@ import { translate, type Language } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { Arrow, CardStack, DevelopmentCardIcon, Dialog, ResourceCardStepper, ResourceInventory, SelectableResourceCard } from "./GameUi";
+import { DiscardCardIcon } from "./Icons";
 
 export const DEVELOPMENT_NAMES = {
   knight: "Knight",
@@ -335,6 +336,7 @@ export function DiscardSelection({
           RESOURCES.some(resource => chosenResources[resource] > resources[resource])}
         onClick={onConfirm}
       >
+        <DiscardCardIcon />
         {translateText("Confirm discard")}
       </button>
     </>

@@ -56,11 +56,18 @@ The separate `bun run test:browser:pwa` run builds `dist/` and serves it with
 [`playwright.pwa.config.ts`](../playwright.pwa.config.ts). Its checks cover the
 web app manifest fields, PNG icon responses, the injected manifest and icon
 links, service-worker registration, and an offline reload of the cached shell;
-the service worker registers only in production builds, so the main dev-server
-suite never exercises it.
-Tests exercise the interface in desktop and mobile Chromium viewports and write
-diagnostic screenshots to `test-results/`, including each theme's preview, actual
-game board, and resource cards, plus the theme dialog.
+the main browser suite runs the app server with `NODE_ENV=production` (avoiding
+HMR and React dev-mode overhead) while blocking service workers in Playwright so
+only the PWA suite exercises service-worker caching.
+Responsive tests exercise both desktop and mobile Chromium projects, while
+viewport-independent, self-resizing, and fixed-phone fixture tests are tagged
+`@desktop-only` so the mobile project skips redundant duplicate runs. The main
+suite defaults to `reducedMotion: "reduce"` and `trace: "off"` (animation tests
+opt back into `reducedMotion: "no-preference"`, and `--trace=retain-on-failure`
+can be passed on the CLI when debugging). Failure screenshots are always written
+to `test-results/`; set `CAPTURE_SCREENSHOTS=1` to also capture passing
+diagnostic screenshots (including theme previews, game boards, resource cards,
+and dialogs).
 Deterministic single-device fixtures enter an explicit map code and press Enter,
 and build the mirrored engine board with `seededRandom` using that same code.
 Turn order and development-card randomness are seeded separately from the map.

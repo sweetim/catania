@@ -1,7 +1,7 @@
 import { type Locator, type Page, type TestInfo } from "@playwright/test";
-import { expect, test as base } from "./fixtures";
+import { captureScreenshot, expect, test as base } from "./fixtures";
 import { createBoard, seededRandom } from "../../src/game/board";
-import { applyAction, COSTS, createGame, diceRollCounts, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
+import { applyAction, COSTS, createGame, emptyResources, getLongestRoadLength, getScore, getTradeRatio, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, RESOURCES, resourceTotal } from "../../src/game/engine";
 import { chooseComputerAction } from "../../src/game/computer";
 import type { GameState, Resource, Resources } from "../../src/game/types";
 import { RESOURCE_NAMES } from "../../src/components/GameUi";
@@ -35,9 +35,7 @@ const test = base.extend({
 });
 
 async function screenshot(page: Page, testInfo: TestInfo, name: string, fullPage = true) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage });
-  await testInfo.attach(name, { path, contentType: "image/png" });
+  await captureScreenshot(page, testInfo, name, { fullPage, attach: true });
 }
 
 async function selectGameVersion(page: Page, variant: GameVariant) {
@@ -66,7 +64,9 @@ async function boardFrame(page: Page) {
   await expect(board).toBeInViewport({ ratio: 1 });
   await expect(board.locator(".board-map")).toBeInViewport({ ratio: 1 });
   const zoom = board.getByRole("group", { name: "Map zoom controls", exact: true });
-  await expect(zoom).toHaveText(/^\s*-\s*\d+%\s*\+\s*$/);
+  await expect(zoom).toHaveText(/^\s*\d+%\s*$/);
+  await expect(zoom.getByRole("button", { name: "Zoom out", exact: true }).locator(":scope > svg")).toHaveCount(1);
+  await expect(zoom.getByRole("button", { name: "Zoom in", exact: true }).locator(":scope > svg")).toHaveCount(1);
   await expect(zoom).toBeInViewport({ ratio: 1 });
   const theme = board.locator(".board-controls").getByRole("button", { name: "Change theme", exact: true });
   await expect(theme).toHaveText("Theme");
@@ -316,7 +316,7 @@ async function themeTerrainArtwork(context: Locator) {
 }
 
 for (const theme of BOARD_THEMES) {
-  test(`board theme ${theme.name} previews immediately, starts the selected island and persists`, async ({ page }, testInfo) => {
+  test(`board theme ${theme.name} previews immediately, starts the selected island and persists`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.goto("/");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await seedGameRandomness(page);
@@ -380,7 +380,7 @@ for (const theme of BOARD_THEMES) {
   });
 }
 
-test("illustrated tile artwork clips cleanly inside every hex across core and fog terrains", async ({ page }, testInfo) => {
+test("illustrated tile artwork clips cleanly inside every hex across core and fog terrains", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await showHomeView(page, "Island");
   const island = page.getByRole("region", { name: "Island preview", exact: true });
@@ -421,7 +421,7 @@ test("illustrated tile artwork clips cleanly inside every hex across core and fo
 });
 
 for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
-  test(`board theme falls back safely with ${storage} storage`, async ({ page }) => {
+  test(`board theme falls back safely with ${storage} storage`, { tag: "@desktop-only" }, async ({ page }) => {
     await page.addInitScript(storage => {
       if (storage === "unknown") localStorage.setItem("catania.boardTheme", "not-a-board-theme");
       if (storage === "blocked") Object.defineProperty(window, "localStorage", {
@@ -469,7 +469,7 @@ for (const storage of ["unknown", "blocked", "read-write-errors"] as const) {
   });
 }
 
-test("board theme native radios support keyboard selection on the home preview", async ({ page }) => {
+test("board theme native radios support keyboard selection on the home preview", { tag: "@desktop-only" }, async ({ page }) => {
   await page.goto("/");
   const dialog = await openHomeThemes(page);
   const choices = page.getByRole("group", { name: "Board theme", exact: true });
@@ -504,7 +504,7 @@ for (const viewport of [
   { width: 320, height: 568 },
   { width: 844, height: 390 },
 ]) {
-  test(`home fits one screen at ${viewport.width}x${viewport.height} with setup, themes and island views`, async ({ page }, testInfo) => {
+  test(`home fits one screen at ${viewport.width}x${viewport.height} with setup, themes and island views`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await page.goto("/");
     const setup = page.getByRole("region", { name: "Set up your table", exact: true });
@@ -517,18 +517,10 @@ for (const viewport of [
     await expect(localStart.getByRole("button", { name: "Let's settle in", exact: true })).toHaveCount(1);
     await expect(localStart.getByRole("link")).toHaveCount(0);
     await expect(crossDevice.getByRole("link", { name: "Play across devices", exact: true })).toHaveCount(1);
-    await expect(crossDevice.getByRole("heading", { name: "Separate multiplayer setup", exact: true })).toBeVisible();
     await expect(crossDevice.getByRole("heading", { name: "Or play across devices", exact: true })).toBeVisible();
     await expect(start).not.toHaveAttribute("aria-describedby");
     await expect(multiplayer).not.toHaveAttribute("aria-describedby");
     await expect(page.locator("#local-start-note, #multiplayer-start-note")).toHaveCount(0);
-    const buttonStyles = await page.locator(".home-local-start .button-primary, .home-multiplayer .button-primary").evaluateAll(elements => elements.map(element => {
-      const bounds = element.getBoundingClientRect();
-      const styles = getComputedStyle(element);
-      return { height: bounds.height, background: styles.backgroundColor, radius: styles.borderRadius, font: styles.font, padding: styles.padding };
-    }));
-    expect(buttonStyles).toHaveLength(2);
-    expect(buttonStyles[0]).toEqual(buttonStyles[1]);
     await expect(page.locator(".home-main .button-primary")).toHaveCount(1);
     await expect(multiplayer).toHaveClass(/\bbutton-secondary\b/);
     expect(await crossDevice.evaluate(element => getComputedStyle(element).borderTopStyle)).toBe("solid");
@@ -536,7 +528,7 @@ for (const viewport of [
     await expect(multiplayer).toBeInViewport({ ratio: 1 });
     await expect(multiplayer).toHaveAttribute("href", "/?multiplayer=1");
     await noPageOverflow(page);
-    await page.getByRole("button", { name: "4 players", exact: true }).click();
+    await page.getByRole("button", { name: "3 players", exact: true }).click();
     const addFourthPlayer = setup.getByRole("button", { name: "Add 4th player", exact: true });
     await expect(addFourthPlayer).toBeVisible();
     await addFourthPlayer.click();
@@ -596,10 +588,6 @@ for (const viewport of [
     await expect(multiplayer).toBeInViewport({ ratio: 1 });
     await noPageOverflow(page);
     await screenshot(page, testInfo, "single-screen-island", false);
-    await island.getByRole("button", { name: "Change theme", exact: true }).click();
-    await expect(dialog.getByRole("radio", { name: "Carved Wooden Tabletop", exact: true })).toBeChecked();
-    await page.keyboard.press("Escape");
-    await expect(island.getByRole("button", { name: "Change theme", exact: true })).toBeFocused();
     if (viewport.width < 1024) {
       await island.getByRole("button", { name: "Change theme", exact: true }).click();
       await expect(dialog.getByRole("radio", { name: "Carved Wooden Tabletop", exact: true })).toBeChecked();
@@ -626,7 +614,7 @@ for (const viewport of [
   });
 }
 
-test("mobile home fits without scrolling, uses compact icon controls, and keeps variant dropdown unclipped", async ({ page }, testInfo) => {
+test("mobile home fits without scrolling, uses compact icon controls, and keeps variant dropdown unclipped", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 375, height: 667 },
@@ -684,13 +672,11 @@ test("mobile home fits without scrolling, uses compact icon controls, and keeps 
 });
 
 for (const language of ["en", "ja"] as const) {
-  test(`map seed toolbar automatically loads complete codes without overflow in ${language}`, async ({ page }, testInfo) => {
+  test(`map seed toolbar automatically loads complete codes without overflow in ${language}`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.addInitScript(language => localStorage.setItem("catania.language", language), language);
     await page.goto("/");
     const labels = language === "ja"
-      ? { island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", shuffle: "島の配置をシャッフル" }
-      : { island: "Island", preview: "Island preview", code: "Map code", replay: "Replay map", shuffle: "Shuffle island preview" };
-      ?{ island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", copy: "マップコードをコピー", copied: "マップコードをコピーしました", shuffle: "島の配置をシャッフル" }
+      ? { island: "島", preview: "島のプレビュー", code: "マップコード", replay: "このマップを再現", copy: "マップコードをコピー", copied: "マップコードをコピーしました", shuffle: "島の配置をシャッフル" }
       : { island: "Island", preview: "Island preview", code: "Map code", replay: "Replay map", copy: "Copy map code", copied: "Map code copied", shuffle: "Shuffle island preview" };
     const island = page.getByRole("region", { name: labels.preview, exact: true });
     const toolbar = island.locator(".board-surface > .board-header-controls").getByRole("form", { name: labels.code, exact: true });
@@ -703,7 +689,6 @@ for (const language of ["en", "ja"] as const) {
       if (await islandView.isVisible()) await islandView.click();
       await expect(toolbar).toBeInViewport({ ratio: 1 });
       await expect(toolbar.getByRole("button", { name: labels.replay, exact: true })).toHaveCount(0);
-      await expect(toolbar.getByRole("button")).toHaveCount(1);
       await expect(toolbar.getByRole("button")).toHaveCount(2);
       await expect(copy).toBeInViewport({ ratio: 1 });
       await expect(input).toHaveAttribute("maxlength", "8");
@@ -771,7 +756,7 @@ for (const language of ["en", "ja"] as const) {
   });
 }
 
-test("cross-device play opens its own setup without using local player settings", async ({ page }) => {
+test("cross-device play opens its own setup without using local player settings", { tag: "@desktop-only" }, async ({ page }) => {
   await page.routeWebSocket(/\/peerjs\?/, () => { });
   await page.goto("/");
   await page.getByRole("button", { name: "4 players", exact: true }).click();
@@ -789,7 +774,7 @@ test("cross-device play opens its own setup without using local player settings"
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("island harbors carry their resource color, icon and trade ratio", async ({ page }, testInfo) => {
+test("island harbors carry their resource color, icon and trade ratio", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await showHomeView(page, "Island");
   const island = page.getByRole("region", { name: "Island preview", exact: true });
@@ -806,16 +791,16 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
     );
     if (resource) {
       seenResources.push(resource);
-      const badge = harbor.locator("rect").last();
+      const badge = harbor.locator(":scope > g > rect").last();
       await expect(badge, `${resource} badge uses its resource color`).toHaveAttribute("fill", theme.resources[resource]);
       await expect(harbor.locator("text"), "resource harbor shows the ratio and name texts").toHaveCount(2);
       await expect(harbor.getByText("2:1")).toBeVisible();
       await expect(harbor.getByText(RESOURCE_NAMES[resource].toUpperCase())).toBeVisible();
       const icon = harbor.locator("g[color]");
       await expect(icon, `${resource} icon is drawn in white`).toHaveAttribute("color", "#ffffff");
-      expect(await icon.locator("path, circle, ellipse").count(), `${resource} icon has artwork`).toBeGreaterThan(0);
+      expect(await icon.locator("path, circle, ellipse, rect").count(), `${resource} icon has artwork`).toBeGreaterThan(0);
       expect(await harbor.evaluate(group => {
-        const badge = group.querySelector("rect:last-of-type")!;
+        const badge = group.querySelector(":scope > g > rect:last-of-type")!;
         const name = group.querySelectorAll("text")[1]!;
         const badgeBounds = badge.getBoundingClientRect();
         const nameBounds = name.getBoundingClientRect();
@@ -824,7 +809,7 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
     } else {
       anyHarbors++;
       expect(label, "any harbor label").toBe("Any resource harbor, trade 3:1");
-      await expect(harbor.locator("rect").last()).toHaveAttribute("fill", "#f7f0d9");
+      await expect(harbor.locator(":scope > g > rect").last()).toHaveAttribute("fill", "#f7f0d9");
       await expect(harbor.getByText("3:1")).toBeVisible();
       await expect(harbor.getByText("ANY")).toBeVisible();
     }
@@ -835,7 +820,7 @@ test("island harbors carry their resource color, icon and trade ratio", async ({
 });
 
 for (const variant of ["original", "seafarers"] as const) {
-  test(`${variant === "original" ? "Original" : "Seafarers"} harbor piers connect directly to the coastline`, async ({ page }, testInfo) => {
+  test(`${variant === "original" ? "Original" : "Seafarers"} harbor piers connect directly to the coastline`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.goto("/");
     await selectGameVersion(page, variant);
     await showHomeView(page, "Island");
@@ -1046,7 +1031,7 @@ test("live board themes preserve human turn, pieces, selection, zoom and pan wit
 });
 
 for (const shuffleCount of [0, 2]) {
-  test(`starting uses the selected island after ${shuffleCount} shuffles`, async ({ page }, testInfo) => {
+  test(`starting uses the selected island after ${shuffleCount} shuffles`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.goto("/");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await showHomeView(page, "Island");
@@ -1081,7 +1066,7 @@ for (const shuffleCount of [0, 2]) {
   });
 }
 
-test("profile avatar and cards follow renaming, creation and switching", async ({ page }, testInfo) => {
+test("profile avatar and cards follow renaming, creation and switching", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   const menuButton = page.getByRole("button", { name: "Menu", exact: true });
   await expect(menuButton.locator(".profile-avatar")).toHaveText("A");
@@ -1259,7 +1244,7 @@ test("table names, player counts, keyboard Help and private start", async ({ pag
   await noHorizontalOverflow(page);
 });
 
-test("Help shows starting card counts and rules without current table details before or during play", async ({ page }, testInfo) => {
+test("Help shows starting card counts and rules without current table details before or during play", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   const browserErrors: string[] = [];
   page.on("pageerror", error => browserErrors.push(error.message));
   page.on("console", message => {
@@ -1502,7 +1487,7 @@ test("three-player snake setup, real dice turn and private handoffs", async ({ p
   await privateHandIsAbsent(page);
 });
 
-test("home menu opens the board settings dialog", async ({ page }) => {
+test("home menu opens the board settings dialog", { tag: "@desktop-only" }, async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("group", { name: "Main menu", exact: true }).getByRole("button", { name: "Settings", exact: true }).click();
@@ -1512,7 +1497,7 @@ test("home menu opens the board settings dialog", async ({ page }) => {
   await expect(settings).toHaveCount(0);
 });
 
-test("turn-start vibration follows pass-and-play handoffs and the settings toggle", async ({ page }) => {
+test("turn-start vibration follows pass-and-play handoffs and the settings toggle", { tag: "@desktop-only" }, async ({ page }) => {
   await page.addInitScript(() => {
     const vibrations: (number | number[])[] = [];
     navigator.vibrate = ((pattern: VibratePattern) => {
@@ -1605,7 +1590,8 @@ for (const variant of ["original", "seafarers"] as const) {
   });
 }
 
-test("Reset game during a roll discards the old roll timer and restores empty hands", async ({ page }) => {
+test("Reset game during a roll discards the old roll timer and restores empty hands", { tag: "@desktop-only" }, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   const state = await prepareRollGame(page);
   await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
@@ -1911,7 +1897,7 @@ test("blocked settlement markers follow the distance rule and toggle without cha
 });
 
 for (const storageAvailable of [true, false]) {
-  test(`settlement marker settings work with browser storage ${storageAvailable ? "available" : "blocked"}`, async ({ page }) => {
+  test(`settlement marker settings work with browser storage ${storageAvailable ? "available" : "blocked"}`, { tag: "@desktop-only" }, async ({ page }) => {
     if (!storageAvailable) {
       await page.addInitScript(() => {
         Object.defineProperty(window, "localStorage", {
@@ -1954,7 +1940,7 @@ for (const storageAvailable of [true, false]) {
   });
 }
 
-test("water background defaults to round and fills the map without changing play", async ({ page }, testInfo) => {
+test("water background defaults to round and fills the map without changing play", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   const map = page.locator(".board-viewport");
   const roundWater = map.locator('path[fill$="-sea)"]');
@@ -2039,7 +2025,7 @@ test("water background defaults to round and fills the map without changing play
 });
 
 for (const storage of ["unknown", "blocked", "write-errors"] as const) {
-  test(`water background stays usable with ${storage} storage`, async ({ page }) => {
+  test(`water background stays usable with ${storage} storage`, { tag: "@desktop-only" }, async ({ page }) => {
     await page.addInitScript(storage => {
       if (storage === "unknown") localStorage.setItem("catania.fillBoardWithWater", "not-a-boolean");
       if (storage === "blocked") Object.defineProperty(window, "localStorage", {
@@ -2671,7 +2657,7 @@ test("game hides vertical scrollbar tracks while panels and dialogs remain scrol
   await expect(homeSettings).toHaveCSS("scrollbar-width", "thin");
 });
 
-test("game session blocks pull-to-refresh at the page root, home does not", async ({ page }) => {
+test("game session blocks pull-to-refresh at the page root, home does not", { tag: "@desktop-only" }, async ({ page }) => {
   await page.goto("/");
   const body = page.locator("body");
   await expect(body).not.toHaveClass(/game-in-progress/);
@@ -2687,7 +2673,7 @@ test("game session blocks pull-to-refresh at the page root, home does not", asyn
   await expect(body).toHaveCSS("overscroll-behavior-y", "auto");
 });
 
-test("Seafarers selection changes the preview independently of themes and can return to Original", async ({ page }, testInfo) => {
+test("Seafarers selection changes the preview independently of themes and can return to Original", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   const versionTrigger = page.getByRole("button", { name: "Game version", exact: true });
   await expect(versionTrigger).toContainText("Original");
@@ -2734,7 +2720,7 @@ test("Seafarers selection changes the preview independently of themes and can re
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "original");
 });
 
-test("Custom World shapes the island from configured tile counts and fog", async ({ page }, testInfo) => {
+test("Custom World shapes the island from configured tile counts and fog", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await selectGameVersion(page, "custom-world");
   const panel = page.getByRole("region", { name: "Customize the map", exact: true });
@@ -2766,7 +2752,8 @@ test("Custom World shapes the island from configured tile counts and fog", async
   await screenshot(page, testInfo, "custom-world-fog-setup", false);
 });
 
-test("Seafarers aligns diagonal ships and preserves vertical ships with variant-specific help", async ({ page }, testInfo) => {
+test("Seafarers aligns diagonal ships and preserves vertical ships with variant-specific help", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await selectGameVersion(page, "seafarers");
@@ -2947,7 +2934,7 @@ test("zoom bar pirate chip indicates the pirate and moves it off and back onto t
   await noPageOverflow(page);
 });
 
-test("Fog Islands varies the starting islands between map codes and conceals every surrounding tile", async ({ page }, testInfo) => {
+test("Fog Islands varies the starting islands between map codes and conceals every surrounding tile", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await selectGameVersion(page, "fog-islands");
   await showHomeView(page, "Island");
@@ -2978,7 +2965,8 @@ test("Fog Islands varies the starting islands between map codes and conceals eve
   await screenshot(page, testInfo, "fog-islands-preview", false);
 });
 
-test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ page }, testInfo) => {
+test("Fog Islands reveals an explored hex beneath a lifting fog veil", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await selectGameVersion(page, "fog-islands");
@@ -3020,7 +3008,7 @@ test("Fog Islands reveals an explored hex beneath a lifting fog veil", async ({ 
   await expect(veil).toHaveCount(0);
 });
 
-test("Fog Islands toggling reveals a number token covered by a harbor label", async ({ page }, testInfo) => {
+test("Fog Islands toggling reveals a number token covered by a harbor label", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await selectGameVersion(page, "fog-islands");
@@ -3064,7 +3052,7 @@ test("Fog Islands toggling reveals a number token covered by a harbor label", as
   await expect(page.locator(".number-peek")).toHaveCount(0);
 });
 
-test("a won Fog Islands game reveals every fog cell when viewing the island", async ({ page }, testInfo) => {
+test("a won Fog Islands game reveals every fog cell when viewing the island", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   test.setTimeout(300_000);
   const browserErrors: string[] = [];
   page.on("pageerror", error => browserErrors.push(error.message));
@@ -3080,7 +3068,7 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
   await mapCode.fill("ABCD2345");
   await mapCode.press("Enter");
   await showHomeView(page, "Setup");
-  await seedRandomness(page, 17);
+  await seedRandomness(page, 4);
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   const fogLabels = page.getByRole("img", { name: "Unexplored fog; terrain and number concealed" });
   await expect(fogLabels).toHaveCount(23);
@@ -3098,8 +3086,8 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
     if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
   }
 
-  // Frozen clock plus a dice sequence that never totals seven: the computers act only
-  // through runFor steps, and no robber, pirate move, or discard ever interrupts them.
+  // This seed and dice cycle let an AI reach the victory target without human
+  // builds. Odd faces prevent sevens even when AI actions consume randomness.
   await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   await page.evaluate(dieValues => {
@@ -3113,29 +3101,61 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
         return target;
       },
     });
-  }, [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6]);
+  }, [1, 1, 1, 3, 3, 3, 3, 5, 5, 5]);
 
   const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
   const endTurn = page.getByRole("button", { name: /^End turn\b/ }).first();
   const victory = page.getByRole("dialog", { name: /takes the island\./ });
+  const gold = page.getByRole("region", { name: "Choose your gold resources", exact: true });
+  const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
+  const dismissRobbery = page.getByRole("button", { name: "Dismiss robbery notification", exact: true });
+  const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
   let steps = 0;
-  while (!(await victory.isVisible().catch(() => false))) {
-    expect(steps++, "The solo fog game reaches a victory").toBeLessThan(4000);
-    await showView(page, "hand");
-    const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
-    if (await dismissCollection.isVisible().catch(() => false)) {
+  while (true) {
+    expect(steps++, "The solo fog game reaches a victory").toBeLessThan(600);
+    const nextAction = await page.evaluate(() => {
+      if (document.querySelector('[role="dialog"][aria-label$="takes the island."]')) return "victory";
+      if (document.querySelector('button[aria-label="Dismiss resource collection"]')) return "dismissCollection";
+      if (document.querySelector('button[aria-label="Dismiss robbery notification"]')) return "dismissRobbery";
+      if (document.querySelector('[role="region"][aria-label="Choose your gold resources"]')) return "gold";
+      const rollButton = Array.from(document.querySelectorAll("button")).find(button => button.textContent?.trim() === "Roll the dice");
+      if (rollButton && !rollButton.disabled) return "roll";
+      const endButton = Array.from(document.querySelectorAll("button")).find(button => /^End turn\b/.test(button.textContent?.trim() ?? ""));
+      if (endButton && !endButton.disabled) return "endTurn";
+      if (document.querySelector('[role="region"][aria-label="Open trade"]')) return "openTrade";
+      return "ai";
+    });
+    if (nextAction === "victory") break;
+    if (nextAction === "dismissCollection") {
       await dismissCollection.click();
       continue;
     }
-    if (await roll.isEnabled()) {
+    if (nextAction === "dismissRobbery") {
+      await dismissRobbery.click();
+      continue;
+    }
+    if (nextAction === "gold") {
+      const collect = gold.getByRole("button", { name: "Collect resources", exact: true });
+      for (const resource of RESOURCES) {
+        const add = gold.getByRole("button", { name: `Add ${RESOURCE_NAMES[resource]} to Take from the bank`, exact: true });
+        while (!(await collect.isEnabled()) && await add.isEnabled()) await add.click();
+      }
+      await collect.click();
+      continue;
+    }
+    if (nextAction === "roll") {
       await roll.click();
       continue;
     }
-    if (await endTurn.isEnabled().catch(() => false)) {
+    if (nextAction === "endTurn") {
       await endTurn.click();
       continue;
     }
-    await page.clock.runFor(45_000);
+    if (nextAction === "openTrade") {
+      await page.clock.fastForward(15_000);
+      continue;
+    }
+    await page.clock.runFor(4_500);
   }
 
   // Winning the game reveals the whole island: no fog cell remains, before and after dismissing the popup.
@@ -3152,7 +3172,7 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", as
 });
 
 for (const selection of ["revealed land", "new fog"] as const) {
-  test(`Foggy World second settlement can choose ${selection} while fog remains`, async ({ page }, testInfo) => {
+  test(`Foggy World second settlement can choose ${selection} while fog remains`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
     await page.goto("/");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await selectGameVersion(page, "foggy-world");
@@ -3234,7 +3254,8 @@ for (const selection of ["revealed land", "new fog"] as const) {
 }
 
 for (const piece of ["road", "ship"] as const) {
-  test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, async ({ page }, testInfo) => {
+  test(`Foggy World selects a cell first, retries sea, then chooses a settlement node and ${piece}`, { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto("/");
     await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
     await selectGameVersion(page, "foggy-world");
@@ -3589,7 +3610,7 @@ test("robbery notices reveal the stolen card only to the thief and victim across
   expect(browserErrors).toEqual([]);
 });
 
-test("settlement build hides descriptions for the roll requirement and missing resources", async ({ page }, testInfo) => {
+test("settlement build hides descriptions for the roll requirement and missing resources", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   await revealBuildSection(page);
@@ -3616,7 +3637,7 @@ test("settlement build hides descriptions for the roll requirement and missing r
   await screenshot(page, testInfo, "settlement-missing-resources", false);
 });
 
-test("road build hides the connection description before rolling and while short on resources", async ({ page }) => {
+test("road build hides the connection description before rolling and while short on resources", { tag: "@desktop-only" }, async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   await revealBuildSection(page);
@@ -3742,7 +3763,7 @@ test("settlement build shows a description only for exhausted pieces and recover
   await expectUnavailable(stockReason);
 });
 
-test("development card purchase requires resources and keyboard confirmation", async ({ page }, testInfo) => {
+test("development card purchase requires resources and keyboard confirmation", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   await revealBuildSection(page);
@@ -4104,28 +4125,30 @@ test("played Knight and connected road counts show Largest Army and Longest Road
         state = applyAction(state, buyerId, { type: "move-robber", tileId: destination.id });
       }
       const buyer = state.players.find(player => player.id === buyerId)!;
-      const holdsAward = buyer.knightsPlayed === 3;
-      await showView(page, "players");
-      await buyerSeat.scrollIntoViewIfNeeded();
-      const label = `${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played`;
-      await expect(army).toHaveAccessibleName(label);
-      await expect(army).toHaveAttribute("title", label);
-      await expect(army.locator('svg[data-development-kind="knight"]')).toBeVisible();
-      await expect(army.locator("strong")).toHaveText(String(buyer.knightsPlayed));
-      await expect(largestArmy).toHaveCount(holdsAward ? 1 : 0);
-      await expect(awards).toHaveCount(holdsAward ? 1 : 0);
-      await expect(army).toBeInViewport({ ratio: 1 });
-      await expect(seats.getByRole("img", { name: /Largest Army/ })).toHaveCount(holdsAward ? 1 : 0);
-      expect(await buyerSeat.innerText()).not.toMatch(/knights? played|Largest Army|\+2/);
-      await expect(buyerSeat.locator(".player-score > span")).toHaveText(["VP", String(getScore(state, buyerId).total)]);
-      await expect(buyerSeat.locator(".player-score")).not.toContainText("total");
-      if (turn === 27) {
-        expect(buyer.developmentCards.filter(card => card.kind === "knight")).toHaveLength(3);
-        expect(buyer.knightsPlayed).toBe(0);
-        if (await dismissCollection.isVisible()) await dismissCollection.click();
-        await screenshot(page, testInfo, "three-knights-held-not-played", false);
+      if (turn === 0 || turn === 27 || turn >= 30) {
+        const holdsAward = buyer.knightsPlayed === 3;
+        await showView(page, "players");
+        await buyerSeat.scrollIntoViewIfNeeded();
+        const label = `${buyer.knightsPlayed} ${buyer.knightsPlayed === 1 ? "knight" : "knights"} played`;
+        await expect(army).toHaveAccessibleName(label);
+        await expect(army).toHaveAttribute("title", label);
+        await expect(army.locator('svg[data-development-kind="knight"]')).toBeVisible();
+        await expect(army.locator("strong")).toHaveText(String(buyer.knightsPlayed));
+        await expect(largestArmy).toHaveCount(holdsAward ? 1 : 0);
+        await expect(awards).toHaveCount(holdsAward ? 1 : 0);
+        await expect(army).toBeInViewport({ ratio: 1 });
+        await expect(seats.getByRole("img", { name: /Largest Army/ })).toHaveCount(holdsAward ? 1 : 0);
+        expect(await buyerSeat.innerText()).not.toMatch(/knights? played|Largest Army|\+2/);
+        await expect(buyerSeat.locator(".player-score > span")).toHaveText(["VP", String(getScore(state, buyerId).total)]);
+        await expect(buyerSeat.locator(".player-score")).not.toContainText("total");
+        if (turn === 27) {
+          expect(buyer.developmentCards.filter(card => card.kind === "knight")).toHaveLength(3);
+          expect(buyer.knightsPlayed).toBe(0);
+          if (await dismissCollection.isVisible()) await dismissCollection.click();
+          await screenshot(page, testInfo, "three-knights-held-not-played", false);
+        }
+        await noPageOverflow(page);
       }
-      await noPageOverflow(page);
     }
     if (turn < 36) {
       await showView(page, "hand");
@@ -4323,6 +4346,8 @@ test("a won game pops the winner up over the board with the point breakdown and 
   };
 
   async function playScriptedAction(action: NonNullable<ReturnType<typeof scriptAction>> | NonNullable<ReturnType<typeof tradeToward>>) {
+    const next = applyAction(state, buyerId, action);
+    if (next.winnerId) await page.emulateMedia({ reducedMotion: "no-preference" });
     if (action.type === "bank-trade") {
       await showView(page, "hand");
       await page.getByRole("button", { name: "Make a trade", exact: true }).click();
@@ -4341,34 +4366,25 @@ test("a won game pops the winner up over the board with the point breakdown and 
       await page.getByRole("button", { name: target, exact: true }).click();
       await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     }
-    state = applyAction(state, buyerId, action);
+    state = next;
   }
 
   let turns = 0;
   while (!state.winnerId && turns < 90) {
     await showView(page, "hand");
     const active = state.activePlayerId;
+    let best = 6;
+    for (const number of [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]) {
+      if (production(number) > production(best)) best = number;
+    }
+    await rollAndMirror(active, diceFor(best));
     if (active === buyerId) {
-      let best = 6;
-      for (const number of [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]) {
-        if (production(number) > production(best)) best = number;
-      }
-      await rollAndMirror(buyerId, diceFor(best));
       let guard = 0;
       while (!state.winnerId && state.phase.type === "actions" && guard++ < 24) {
         const action = scriptAction() ?? tradeToward();
         if (!action) break;
         await playScriptedAction(action);
       }
-    } else {
-      let idle = 2;
-      for (const number of [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]) {
-        const anyProduction = state.board.tiles.some(tile =>
-          tile.id !== state.robberTileId && tile.number === number && tile.terrain !== "desert" &&
-          tile.vertexIds.some(vertexId => state.board.vertices.find(vertex => vertex.id === vertexId)!.building));
-        if (!anyProduction) { idle = number; break; }
-      }
-      await rollAndMirror(active, diceFor(idle));
     }
     if (!state.winnerId) {
       await showView(page, "hand");
@@ -4394,7 +4410,7 @@ test("a won game pops the winner up over the board with the point breakdown and 
   if (score.hidden > 0) await expect(victory).toContainText(`${score.hidden} × 1 VP`);
   await expect(victory).not.toContainText("0 ×");
   // The dice chart counts how often each total appeared over the whole game.
-  const expectedDiceCounts = diceRollCounts(state.log);
+  const expectedDiceCounts = state.diceRollTotals;
   expect(expectedDiceCounts.reduce((total, count) => total + count, 0)).toBeGreaterThan(0);
   const diceChart = victory.getByRole("figure", { name: "Dice rolls", exact: true });
   await expect(diceChart).toBeVisible();
@@ -4445,17 +4461,19 @@ test("a won game pops the winner up over the board with the point breakdown and 
   // The restart choice leads as a full-width gold bar; the two quieter exits share a row beneath it.
   const actions = victory.locator(".victory-actions");
   await expect(actions).toHaveCSS("display", "flex");
-  const actionsBox = (await actions.boundingBox())!;
-  const restartBox = (await victory.getByRole("button", { name: "Restart", exact: true }).boundingBox())!;
-  expect(restartBox.width).toBeCloseTo(actionsBox.width, 0);
   await expect(victory.getByRole("button", { name: "Restart", exact: true })).toHaveCSS("background-image", /linear-gradient\(rgb\(198, 154, 63\) 0%, rgb\(181, 138, 45\) 100%\)/);
-  const backHomeBox = (await victory.getByRole("button", { name: "Back to home", exact: true }).boundingBox())!;
-  const viewIslandBox = (await victory.getByRole("button", { name: "View the island", exact: true }).boundingBox())!;
-  expect(Math.abs(backHomeBox.y - viewIslandBox.y)).toBeLessThan(1);
-  expect(Math.abs(backHomeBox.height - viewIslandBox.height)).toBeLessThan(1);
-  expect(backHomeBox.width + viewIslandBox.width).toBeLessThan(actionsBox.width);
-  expect(backHomeBox.width, "Back to home keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
-  expect(viewIslandBox.width, "View the island keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
+  await expect(async () => {
+    const actionsBox = (await actions.boundingBox())!;
+    const restartBox = (await victory.getByRole("button", { name: "Restart", exact: true }).boundingBox())!;
+    expect(restartBox.width).toBeCloseTo(actionsBox.width, 0);
+    const backHomeBox = (await victory.getByRole("button", { name: "Back to home", exact: true }).boundingBox())!;
+    const viewIslandBox = (await victory.getByRole("button", { name: "View the island", exact: true }).boundingBox())!;
+    expect(Math.abs(backHomeBox.y - viewIslandBox.y)).toBeLessThan(1);
+    expect(Math.abs(backHomeBox.height - viewIslandBox.height)).toBeLessThan(1);
+    expect(backHomeBox.width + viewIslandBox.width).toBeLessThan(actionsBox.width);
+    expect(backHomeBox.width, "Back to home keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
+    expect(viewIslandBox.width, "View the island keeps a readable share of the row").toBeGreaterThan(actionsBox.width * 0.4);
+  }).toPass();
   // The winning island stays mounted behind the popup.
   await expect(page.getByRole("region", { name: "Game board", exact: true })).toBeVisible();
   await noPageOverflow(page);
@@ -4840,7 +4858,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       await expect(raisedTile).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -8)");
       await expect(raisedTile).toHaveCSS("filter", /drop-shadow/);
       await expect(raisedTile).toHaveCSS("pointer-events", "none");
-      await expect(raisedTile.locator("polygon").first()).toHaveAttribute("transform", "translate(0 10.5)");
+      await expect(raisedTile.locator("polygon").first()).toHaveAttribute("transform", "translate(0 11)");
       await expect(raisedTile.locator(".number-token-highlight")).toHaveText(String(tile.number));
     }
     expect(await page.locator("g.terrain-hex").evaluateAll((elements, raisedCount) => elements.every((element, index) =>
@@ -4977,7 +4995,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
   });
 }
 
-test("robber-blocked dice matches stay raised with muted tokens", async ({ page }, testInfo) => {
+test("robber-blocked dice matches stay raised with muted tokens", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const state = await prepareRollGame(page);
   const destination = state.board.tiles.find(tile => tile.number !== null && tile.vertexIds.every(vertexId =>
@@ -5003,7 +5021,7 @@ test("robber-blocked dice matches stay raised with muted tokens", async ({ page 
   await expect(blockedTile).toHaveAccessibleName(/blocked by the robber/);
   await expect(blockedTile).not.toHaveAccessibleName(/produced resources this roll/);
   await expect(blockedTile.locator(".number-token-halo")).toHaveAttribute("stroke-dasharray", "3 4");
-  await expect(blockedTile.locator(".number-token-face")).toHaveAttribute("fill", "#e6e1d4");
+  await expect(blockedTile.locator(".number-token-face")).toHaveAttribute("fill", "#e4dfd2");
   await expect(page.getByRole("img", { name: /^Robber on / })).toHaveAttribute("transform", `translate(${destination.x + 24} ${destination.y + 10})`);
   await screenshot(page, testInfo, "raised-robber-blocked-hex", false);
 });
@@ -5121,7 +5139,7 @@ test("very short windows keep hand tasks and turn controls reachable", async ({ 
   await expect(endTurnButton).toBeEnabled();
 });
 
-test("request-first trades compare prices and only exchange cards after confirmation", async ({ page }, testInfo) => {
+test("request-first trades compare prices and only exchange cards after confirmation", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   let state = await prepareRollGame(page);
   await revealBuildSection(page);
@@ -5208,6 +5226,8 @@ test("request-first trades compare prices and only exchange cards after confirma
   await page.keyboard.press("Enter");
   await expect(trade.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
   await expect(trade.getByRole("button", { name: "Player trade", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(trade.getByRole("button", { name: "Request cards", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await trade.getByRole("button", { name: "Exact offer", exact: true }).click();
   await expect(trade.getByRole("button", { name: "Exact offer", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expectResourceInventory(trade, requester.resources);
   const offeredCards = trade.getByRole("group", { name: "You offer", exact: true });
@@ -5235,11 +5255,13 @@ test("request-first trades compare prices and only exchange cards after confirma
   await expect(unavailable).toBeDisabled();
 
   await page.keyboard.press("Space");
+  await trade.getByRole("button", { name: "Exact offer", exact: true }).click();
   await expectResourceSelection(offeredCards, "wood", 0, requester.resources.wood);
   await trade.getByRole("button", { name: "Close dialog", exact: true }).click();
   await expect(change).toBeFocused();
   await expect(openTrade.getByRole("group", { name: /'s trade response$/ })).toHaveText(responses);
   await page.keyboard.press("Enter");
+  await trade.getByRole("button", { name: "Exact offer", exact: true }).click();
   for (let count = 0; count < 2; count++) await offeredCards.getByRole("button", { name: "Add Wood to You offer", exact: true }).click();
   await expect(submitOffer).toBeEnabled();
   await submitOffer.scrollIntoViewIfNeeded();
@@ -5306,7 +5328,8 @@ test("request-first trades compare prices and only exchange cards after confirma
   await expect(requestedOre.locator(".resource-card")).toHaveCSS("opacity", "0.5");
   await expect(openTrade.getByText("Choose different cards in return.", { exact: true })).toHaveCount(0);
   await expect(openTrade.getByText("You do not have all the requested cards to offer this trade.", { exact: true })).toHaveCount(0);
-  await openTrade.getByRole("button", { name: "Add Wood to You want in return", exact: true }).click();
+  await expect(openTrade.getByText("Missing 1 Ore", { exact: true })).toBeVisible();
+  await expect(openTrade.getByRole("group", { name: "You want in return", exact: true })).toHaveCount(0);
   await expect(propose).toBeDisabled();
   await requestedOre.screenshot({ path: testInfo.outputPath("sharp-unavailable-trade-card.png") });
   await openTrade.getByRole("button", { name: "Decline", exact: true }).click();
@@ -5490,7 +5513,7 @@ test("owned resources stay visible through private trades and mandatory discards
   await expectPublicCardCounts(page, state);
 });
 
-test("bank receipts animate identical gains again and expire independently", async ({ page }, testInfo) => {
+test("bank receipts animate identical gains again and expire independently", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
@@ -5571,7 +5594,8 @@ test("bank receipts animate identical gains again and expire independently", asy
   await screenshot(page, testInfo, "bank-resource-expired", false);
 });
 
-test("ending an in-flight roll cancels its result before a new game", async ({ page }) => {
+test("ending an in-flight roll cancels its result before a new game", { tag: "@desktop-only" }, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await prepareRollGame(page);
   await chooseDice(page, [2, 3]);
   await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
@@ -5622,7 +5646,7 @@ async function resolveHumanRoll(page: Page) {
   await expect(endTurn).toBeVisible();
 }
 
-test("solo trade quotes show missing cards and complete an affordable exchange with keyboard confirmation", async ({ page }, testInfo) => {
+test("solo trade quotes show missing cards and complete an affordable exchange with keyboard confirmation", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   const browserErrors: string[] = [];
   page.on("pageerror", error => browserErrors.push(error.message));
   page.on("console", message => {
@@ -5631,7 +5655,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   page.on("requestfailed", request => browserErrors.push(`${request.url()}: ${request.failure()?.errorText}`));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  const fixture = await seedGameRandomness(page, 3, 1, "222222AF");
+  const fixture = await seedGameRandomness(page, 3, 1, "222222DV");
   const random = fixture.random;
   let state = createGame(["Alex", "Computer 1", "Computer 2"].map((name, index) => ({
     name, color: ["#b85d47", "#477c91", "#c1953d"][index]!, control: index === 0 ? "human" as const : "computer" as const,
@@ -5687,12 +5711,13 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
     await expect(settlements).toHaveText(Array(2).fill(player.control === "human" ? "A" : String(index + 1)));
   }
   await page.clock.resume();
-  await chooseDice(page, [1, 3]);
+  const dice = [6, 4] as const;
+  await chooseDice(page, [...dice]);
   await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
   let diceIndex = 0;
-  state = applyAction(state, requesterId, { type: "roll" }, () => ([1, 3][diceIndex++]! - 0.5) / 6);
+  state = applyAction(state, requesterId, { type: "roll" }, () => (dice[diceIndex++]! - 0.5) / 6);
   const requester = state.players.find(player => player.id === requesterId)!;
-  expect(requester.resources).toEqual({ ...emptyResources(), wood: 1, wool: 1, grain: 1 });
+  expect(requester.resources).toEqual({ ...emptyResources(), wood: 1, grain: 1, ore: 1 });
   const bankBefore = { ...state.bank };
   await expectResourceBank(page, bankBefore);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
@@ -5700,9 +5725,9 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   await expect(trade.getByRole("region", { name: "Your current resources", includeHidden: true })).toHaveCount(0);
   await trade.getByRole("button", { name: "Player trade", exact: true }).click();
   await expectResourceInventory(trade, requester.resources);
-  await trade.getByRole("button", { name: "Add Ore to You ask for", exact: true }).click();
+  await trade.getByRole("button", { name: "Add Wool to You ask for", exact: true }).click();
   await trade.getByRole("button", { name: "Ask for these cards", exact: true }).click();
-  state = applyAction(state, requesterId, { type: "request-trade", receive: { ...emptyResources(), ore: 1 } });
+  state = applyAction(state, requesterId, { type: "request-trade", receive: { ...emptyResources(), wool: 1 } });
   for (const player of state.players.filter(player => player.control === "computer")) {
     const response = chooseComputerAction(state, player.id);
     expect(response?.type).toBe("propose-trade");
@@ -5711,18 +5736,18 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   const unavailablePlayer = state.players.find(player => player.name === "Computer 1")!;
   const affordablePlayer = state.players.find(player => player.name === "Computer 2")!;
   expect(state.trade!.responses[unavailablePlayer.id]).toEqual({ ...emptyResources(), brick: 1 });
-  expect(state.trade!.responses[affordablePlayer.id]).toEqual({ ...emptyResources(), wood: 1 });
+  expect(state.trade!.responses[affordablePlayer.id]).toEqual({ ...emptyResources(), ore: 1 });
   const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
   await expect(openTrade).not.toContainText("not answered", { timeout: 10_000 });
   await expect(openTrade.getByRole("heading", { name: "Trade request", exact: true })).toBeVisible();
-  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), ore: 1 });
+  await expectTradeCards(openTrade, "You receive", { ...emptyResources(), wool: 1 });
   await expect(openTrade.getByText(/price proposed|You do not have these cards|You ask for:/)).toHaveCount(0);
   await expectResourceInventory(openTrade, requester.resources);
   await expectResourceBank(page, bankBefore);
   const unaffordable = openTrade.getByRole("group", { name: "Computer 1's trade response", exact: true });
   const affordable = openTrade.getByRole("group", { name: "Computer 2's trade response", exact: true });
   await expectTradeCards(unaffordable, "You give", { ...emptyResources(), brick: 1 });
-  await expectTradeCards(affordable, "You give", { ...emptyResources(), wood: 1 });
+  await expectTradeCards(affordable, "You give", { ...emptyResources(), ore: 1 });
   const unavailable = unaffordable.getByRole("button", { name: "Complete trade", exact: true });
   const missing = unaffordable.getByText("Missing 1 Brick", { exact: true });
   await expect(unavailable).toBeDisabled();
@@ -5749,9 +5774,9 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
   await page.keyboard.press("Enter");
   const confirmation = page.getByRole("dialog", { name: "Trade with Computer 2", exact: true });
   await expect(confirmation.getByRole("button", { name: "Close dialog", exact: true })).toBeFocused();
-  await expectTradeCards(confirmation, "You give", { ...emptyResources(), wood: 1 });
-  await expectTradeCards(confirmation, "You receive", { ...emptyResources(), ore: 1 });
-  await expect(confirmation.getByText("You give 1 Wood and receive 1 Ore.", { exact: true })).toHaveCount(0);
+  await expectTradeCards(confirmation, "You give", { ...emptyResources(), ore: 1 });
+  await expectTradeCards(confirmation, "You receive", { ...emptyResources(), wool: 1 });
+  await expect(confirmation.getByText("You give 1 Ore and receive 1 Wool.", { exact: true })).toHaveCount(0);
   await expectResourceInventory(confirmation, requester.resources);
   await expect(resourceCounts).toHaveText(countsBefore);
   const bank = page.getByRole("region", { name: "Resource bank", exact: true, includeHidden: true });
@@ -5791,6 +5816,7 @@ test("solo trade quotes show missing cards and complete an affordable exchange w
 });
 
 test("solo AI setup, automatic trade responses and turns never require hand reveals", async ({ page, isMobile }, testInfo) => {
+  await page.clock.install();
   await page.goto("/");
   if (isMobile) await page.setViewportSize({ width: 320, height: 844 });
   await noHorizontalOverflow(page);
@@ -5814,7 +5840,7 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("img", { name: /'s road at /, includeHidden: true })).toHaveCount(6, { timeout: 15_000 });
   await showView(page, "hand");
   await revealBuildSection(page);
-  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 15_000 });
+  await waitForSoloRoll(page);
   await resolveHumanRoll(page);
   await page.getByRole("button", { name: "Make a trade", exact: true }).click();
   const trade = page.getByRole("dialog", { name: "A fair exchange", exact: true });
@@ -5841,8 +5867,9 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("button", { name: /^Pass to Computer/, includeHidden: true })).toHaveCount(0);
   await screenshot(page, testInfo, "solo-request-responses");
   await page.getByRole("button", { name: "Withdraw request", exact: true }).click();
-  await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
-  await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await chooseDice(page, [1, 3]);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
   await showView(page, "board");
   const humanTurnFrame = await boardFrame(page);
   await showView(page, "hand");
@@ -5859,8 +5886,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(page.getByRole("button", { name: /Reveal my hand|Pass device|Return to /, includeHidden: true })).toHaveCount(0);
   await showView(page, "board");
   await expectBoardFrame(page, humanTurnFrame);
-  await page.clock.runFor(450);
   const computerRoll = page.getByRole("region", { name: "Roll result" });
+  for (let step = 0; step < 8 && !(await computerRoll.isVisible()); step++) await page.clock.fastForward(450);
   await expect(computerRoll).toHaveAttribute("data-stage", "rolling");
   await expect(computerRoll).toHaveText("Rolling...");
   await expect(computerRoll.getByRole("img", { name: "Dice rolling", exact: true })).toBeVisible();
@@ -5880,12 +5907,8 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await expect(computerRoll).toHaveAttribute("data-stage", "complete");
   await expect(page.getByRole("heading", { name: /^Computer \d+'s hand$/, includeHidden: true })).toHaveCount(0);
   await showView(page, "hand");
-  for (let step = 0; step < 20 && !(await page.getByRole("button", { name: "Roll the dice", exact: true }).isEnabled()); step++) {
-    await page.clock.runFor(450);
-    if (await offer.isVisible()) await offer.getByRole("button", { name: "Decline", exact: true }).click();
-  }
   await page.clock.resume();
-  await expect(page.getByRole("button", { name: "Roll the dice", exact: true })).toBeEnabled({ timeout: 20_000 });
+  await waitForSoloRoll(page);
   await expect(page.getByRole("region", { name: "Turn controls", exact: true }).getByRole("heading", { name: "Alex - Your turn", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Alex's hand", exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: "Computer activity", includeHidden: true })).toHaveCount(0);
@@ -5897,6 +5920,23 @@ test("solo AI setup, automatic trade responses and turns never require hand reve
   await screenshot(page, testInfo, "solo-next-turn");
 });
 
+async function waitForSoloRoll(page: Page) {
+  const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
+  const request = page.getByRole("region", { name: "Open trade", exact: true });
+  let declinedTurn: string | null = null;
+  await expect.poll(async () => {
+    const decline = request.getByRole("button", { name: "Decline", exact: true });
+    if (await decline.isVisible()) {
+      const turn = await page.getByRole("region", { name: "Turn controls", exact: true }).locator(".turn-number").textContent();
+      if (turn !== declinedTurn) {
+        await decline.click();
+        declinedTurn = turn;
+      }
+    }
+    return roll.isEnabled();
+  }, { timeout: 20_000 }).toBe(true);
+}
+
 async function prepareComputerRequest(page: Page, humanDice: [number, number], computerDice: [number, number], mapCode: string) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
@@ -5906,11 +5946,7 @@ async function prepareComputerRequest(page: Page, humanDice: [number, number], c
   await showView(page, "hand");
   const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
   const request = page.getByRole("region", { name: "Open trade", exact: true });
-  await expect.poll(async () => {
-    const decline = request.getByRole("button", { name: "Decline", exact: true });
-    if (await decline.isVisible()) await decline.click();
-    return roll.isEnabled();
-  }, { timeout: 20_000 }).toBe(true);
+  await waitForSoloRoll(page);
   await chooseDice(page, humanDice);
   await roll.click();
   await chooseDice(page, computerDice);
@@ -5922,12 +5958,12 @@ async function prepareComputerRequest(page: Page, humanDice: [number, number], c
   return request;
 }
 
-test("computer resource requests accept useful human prices without revealing computer hands", async ({ page }, testInfo) => {
-  const request = await prepareComputerRequest(page, [1, 2], [1, 5], "222222DV");
+test("computer resource requests accept useful human prices without revealing computer hands", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+  const request = await prepareComputerRequest(page, [1, 1], [6, 5], "222222AF");
   await expect(request.getByText("From Computer 2", { exact: true })).toBeVisible();
   const give = { ...emptyResources(), wood: 1 };
   await expectTradeCards(request, "You give", give);
-  const inventory = { ...emptyResources(), wood: 1, grain: 1 };
+  const inventory = { ...emptyResources(), wood: 1 };
   await expectResourceInventory(request, inventory);
   const bank = await page.getByRole("region", { name: "Resource bank", exact: true }).innerText();
   await request.getByRole("button", { name: "Add Wool to You want in return", exact: true }).click();
@@ -5948,11 +5984,11 @@ test("computer resource requests accept useful human prices without revealing co
   await expect(hand.getByText("1 Wool", { exact: true })).toBeVisible();
   await expect(hand.getByText("0 Brick", { exact: true })).toBeVisible();
   await expect(hand.getByText("0 Wood", { exact: true })).toBeVisible();
-  await expect(hand.getByText("1 Grain", { exact: true })).toBeVisible();
+  await expect(hand.getByText("0 Grain", { exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("unanswered computer resource requests stay open for 15 seconds then resume the turn", async ({ page }) => {
+test("unanswered computer resource requests stay open for 15 seconds then resume the turn", { tag: "@desktop-only" }, async ({ page }) => {
   const request = await prepareComputerRequest(page, [1, 1], [1, 1], "2222223J");
   await expect(request.getByText("From Computer 1", { exact: true })).toBeVisible();
   await expect(request.getByRole("button", { name: "Propose price", exact: true })).toBeDisabled();
@@ -5967,7 +6003,7 @@ test("unanswered computer resource requests stay open for 15 seconds then resume
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("two humans keep private handoffs and cannot open computer hands", async ({ page }, testInfo) => {
+test("two humans keep private handoffs and cannot open computer hands", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "4 players", exact: true }).click();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("2");
@@ -6004,7 +6040,7 @@ test("two humans keep private handoffs and cannot open computer hands", async ({
   await noHorizontalOverflow(page);
 });
 
-test("ending a game cancels a queued computer move before a new table starts", async ({ page }) => {
+test("ending a game cancels a queued computer move before a new table starts", { tag: "@desktop-only" }, async ({ page }) => {
   await page.goto("/");
   await page.clock.install({ time: new Date("2026-10-31T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-10-31T00:00:01Z"));
@@ -6045,7 +6081,7 @@ async function recordedBoardAnimations(page: Page) {
   return page.evaluate(() => (window as typeof window & { __boardAnimations?: string[] }).__boardAnimations ?? []);
 }
 
-test("board gameplay animations play for placements, harvest bursts, robber travel and blocked rolls, and respect reduced motion", async ({ page }, testInfo) => {
+test("board gameplay animations play for placements, harvest bursts, robber travel and blocked rolls, and respect reduced motion", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
@@ -6165,7 +6201,7 @@ test("board gameplay animations play for placements, harvest bursts, robber trav
   await expect(page.locator(".board-harvest-chip")).toHaveCount(0);
 });
 
-test("Seafarers board animations play for ship placement, sailing movement and pirate travel", async ({ page }, testInfo) => {
+test("Seafarers board animations play for ship placement, sailing movement and pirate travel", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");

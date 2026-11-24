@@ -186,7 +186,7 @@ async function setupSabotageReadyGame(page: Page) {
   return { firstPlayerName: state.players[0]!.name };
 }
 
-test("Custom World setup toggles Sabotage and reflects it in Help", async ({ page }) => {
+test("Custom World setup toggles Sabotage and reflects it in Help", { tag: "@desktop-only" }, async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Game version", exact: true }).click();
   await page.getByRole("listbox", { name: "Game version", exact: true }).getByRole("option", { name: "Custom World", exact: true }).click();
@@ -212,8 +212,9 @@ test("Custom World setup toggles Sabotage and reflects it in Help", async ({ pag
   await expect(helpDialog.locator('svg[data-piece="sabotage"]')).toHaveCount(0);
 });
 
-test("Sabotage build action destroys one opponent road and plays destruction animation", async ({ page }) => {
+test("Sabotage build action destroys one opponent road and plays destruction animation", { tag: "@desktop-only" }, async ({ page }) => {
   const { firstPlayerName } = await setupSabotageReadyGame(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await showView(page, "hand");
   const sabotageButton = page.getByRole("button", { name: /^Sabotage\b/ });
   await expect(sabotageButton).toBeEnabled();
@@ -241,8 +242,9 @@ test("Sabotage build action destroys one opponent road and plays destruction ani
   await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
 });
 
-test("Sabotage build action destroys an opponent settlement and plays destruction animation", async ({ page }) => {
+test("Sabotage build action destroys an opponent settlement and plays destruction animation", { tag: "@desktop-only" }, async ({ page }) => {
   await setupSabotageReadyGame(page);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await showView(page, "hand");
   await page.getByRole("button", { name: /^Sabotage\b/ }).click();
   await showView(page, "board");

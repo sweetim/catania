@@ -17,17 +17,19 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
     browserName: "chromium",
     locale: "en-US",
+    reducedMotion: "reduce",
+    serviceWorkers: "block",
     actionTimeout: 10_000,
-    trace: "retain-on-failure",
+    trace: "off",
     screenshot: "only-on-failure",
   },
   projects: [
     { name: "desktop", use: { viewport: { width: 1440, height: 1000 } } },
-    { name: "mobile", use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    { name: "mobile", grepInvert: /@desktop-only/, use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
   webServer: [
     {
-      command: `PORT=${port} bun run src/index.ts`,
+      command: `NODE_ENV=production PORT=${port} bun run src/index.ts`,
       wait: { stdout: new RegExp(`Server running at http://localhost:${port}/`) },
       reuseExistingServer: false,
       timeout: 30_000,

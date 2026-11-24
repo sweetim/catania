@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "../localization";
 import { boardTranslations } from "../translations/board";
 import { Dialog } from "./GameUi";
+import { BlockedCornerIcon, SeaIcon, VibrateIcon } from "./Icons";
 
 const BLOCKED_SETTLEMENT_LOCATIONS_STORAGE_KEY = "catania.showBlockedSettlementLocations";
 const FILL_BOARD_WITH_WATER_STORAGE_KEY = "catania.fillBoardWithWater";
@@ -65,12 +66,14 @@ export function useBoardSettings() {
 }
 
 function SettingRow({
+  icon,
   label,
   descriptionId,
   description,
   checked,
   onChange,
 }: {
+  icon: ReactNode;
   label: string;
   descriptionId: string;
   description: string;
@@ -80,7 +83,10 @@ function SettingRow({
   return (
     <div className="rounded-xl border border-line bg-white/40 p-4">
       <label className="flex min-h-11 cursor-pointer items-center justify-between gap-4 text-sm font-semibold">
-        {label}
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden="true" className="text-muted">{icon}</span>
+          <span>{label}</span>
+        </span>
         <span className="relative inline-flex h-6 w-11 shrink-0">
           <input
             type="checkbox"
@@ -119,6 +125,7 @@ export function BoardSettingsDialog({
       <h3 className="eyebrow">{translateText("Board")}</h3>
       <div className="mt-2 space-y-2">
         <SettingRow
+          icon={<BlockedCornerIcon />}
           label={translateText("Show blocked settlement locations")}
           descriptionId="blocked-settlement-locations-description"
           description={translateText("Crosses mark corners where the distance rule prevents building.")}
@@ -126,6 +133,7 @@ export function BoardSettingsDialog({
           onChange={setShowBlockedSettlementLocations}
         />
         <SettingRow
+          icon={<SeaIcon />}
           label={translateText("Fill board with water")}
           descriptionId="fill-board-with-water-description"
           description={translateText("Extend water to the entire map area instead of the round shape. Off by default.")}
@@ -136,6 +144,7 @@ export function BoardSettingsDialog({
       <h3 className="eyebrow mt-5">{translateText("Feedback")}</h3>
       <div className="mt-2 space-y-2">
         <SettingRow
+          icon={<VibrateIcon />}
           label={translateText("Vibrate when your turn starts")}
           descriptionId="vibrate-on-your-turn-description"
           description={translateText("A short vibration when the turn passes to you on this device. On by default.")}

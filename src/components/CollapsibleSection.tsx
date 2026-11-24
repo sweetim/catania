@@ -1,4 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { ChevronDownIcon } from "./Icons";
 
 // Phone layouts omit the collapsible header and keep controls visible; larger screens can collapse the section.
 export const COLLAPSIBLE_EXPANDED_MEDIA = "(min-width: 700px)";
@@ -39,16 +40,7 @@ export function CollapsibleSection({ title, className, inert = false, defaultOpe
             }}
           >
             <span className="min-w-0 flex-1 truncate">{title}</span>
-            <svg
-              aria-hidden="true"
-              className={`h-3 w-3 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="m3 4.5 3 3 3-3" />
-            </svg>
+            <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </button>
         </h2>
       )}

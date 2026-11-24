@@ -2,30 +2,104 @@ import { match } from "ts-pattern";
 import type { Resource, Terrain } from "../game/types";
 import type { BoardTheme } from "../themes";
 
-export function ResourceArtwork({ resource, theme }: { resource: Resource; theme: BoardTheme }) {
+export function ResourceArtwork({
+  resource,
+  theme,
+  compact = false,
+}: {
+  resource: Resource;
+  theme: BoardTheme;
+  compact?: boolean;
+}) {
   return (
-    <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <g fill="none" stroke="currentColor" strokeWidth={compact ? "1.9" : "1.5"} strokeLinecap="round" strokeLinejoin="round">
       {match(theme.id)
         .with("illustrated", () => match(resource)
-          .with("wood", () => <><path d="M16 3 6 17h5l-6 8h22l-6-8h5L16 3Z" fill="currentColor" stroke="none" /><path d="M16 24v6" strokeWidth="3" /></>)
-          .with("brick", () => <><path d="m3 16 17-8 10 6-17 9-10-7Z" fill="currentColor" stroke="none" /><path d="M3 19v5l10 6 17-9v-5l-17 9-10-6Z" fill="currentColor" stroke="none" opacity=".7" /></>)
-          .with("wool", () => <><path d="M8 24a6 6 0 0 1-2-11 6 6 0 0 1 10-6 7 7 0 0 1 11 8 5 5 0 0 1-1 9H8Z" fill="currentColor" stroke="none" /><path d="M10 24v5m12-5v5" strokeWidth="3" /><path d="M25 17h4v6h-4z" fill="currentColor" stroke="none" /></>)
-          .with("grain", () => <><path d="M16 5v25" strokeWidth="2" />{[7, 13, 19].map((position) => <g key={position} fill="currentColor" stroke="none"><path d={`M16 ${position + 7}Q4 ${position + 5} 6 ${position - 1}Q15 ${position} 16 ${position + 7}`} /><path d={`M16 ${position + 7}Q28 ${position + 5} 26 ${position - 1}Q17 ${position} 16 ${position + 7}`} /></g>)}</>)
-          .with("ore", () => <><path d="m3 24 8-17 10-3 9 20-14 5L3 24Z" fill="currentColor" stroke="none" /><path d="m11 7 5 22 5-25" stroke="white" strokeOpacity=".45" /></>)
+          .with("wood", () => <>
+            <path d="M16 3 7 15.5h4.5L5.5 24h21l-6-8.5H25L16 3Z" fill="currentColor" stroke="none" />
+            <path d="M16 23v6.5" strokeWidth="3.2" />
+          </>)
+          .with("brick", () => <>
+            <rect x="8.5" y="6" width="15" height="6.2" rx="1.4" fill="currentColor" stroke="none" />
+            <rect x="3" y="13.9" width="12.2" height="6.2" rx="1.4" fill="currentColor" stroke="none" />
+            <rect x="16.8" y="13.9" width="12.2" height="6.2" rx="1.4" fill="currentColor" stroke="none" />
+            <rect x="5.5" y="21.8" width="12.2" height="6.2" rx="1.4" fill="currentColor" stroke="none" />
+            <rect x="19.3" y="21.8" width="7.2" height="6.2" rx="1.4" fill="currentColor" stroke="none" opacity=".78" />
+          </>)
+          .with("wool", () => <>
+            <path d="M7.5 23.5a5.2 5.2 0 0 1-2-9.8 5.6 5.6 0 0 1 9.8-5 5.8 5.8 0 0 1 9.6 4.8 4.8 4.8 0 0 1-1.6 10H7.5Z" fill="currentColor" stroke="none" />
+            <path d="M10.5 23v5.5m9-5.5v5.5" strokeWidth="2.8" />
+            <ellipse cx="25.5" cy="18.2" rx="3.4" ry="4" fill="currentColor" stroke="none" />
+            <path d="M23.2 14.8 21.5 13m6 2 1.8-1" strokeWidth="1.8" />
+          </>)
+          .with("grain", () => <>
+            <path d="M16 5v24.5" strokeWidth="2" />
+            {[7, 13, 19].map((position) => (
+              <g key={position} fill="currentColor" stroke="none">
+                <path d={`M16 ${position + 6.5}Q4.5 ${position + 4.5} 6.5 ${position - 1}Q15 ${position} 16 ${position + 6.5}`} />
+                <path d={`M16 ${position + 6.5}Q27.5 ${position + 4.5} 25.5 ${position - 1}Q17 ${position} 16 ${position + 6.5}`} />
+              </g>
+            ))}
+          </>)
+          .with("ore", () => <>
+            <path d="m3 24 7.5-16.5L21 4l8 19.5-13.5 5.5L3 24Z" fill="currentColor" stroke="none" />
+            <path d="m10.5 7.5 5 21.5L21 4" stroke="currentColor" strokeOpacity=".22" strokeWidth="1.6" />
+            <path d="m10.5 7.5 5 21.5L21 4" stroke="white" strokeOpacity=".5" strokeWidth="1.4" />
+            <path d="m3 24 12.5-6.5L29 23.5" stroke="white" strokeOpacity=".35" strokeWidth="1.2" />
+          </>)
           .exhaustive())
         .with("ceramic", () => match(resource)
-          .with("wood", () => <><path d="M16 28V7M16 19 8 12m8 3 8-8" strokeWidth="2" /><path d="M15 15C3 17 3 7 5 5c7 0 10 4 10 10Zm3-2C17 4 23 2 27 3c1 7-2 10-9 10ZM15 23C6 25 3 20 4 16c7-2 11 1 11 7Zm3-2c0-7 5-9 10-8 0 6-4 10-10 8Z" fill="currentColor" stroke="none" /><path d="M10 29q6-3 12 0M7 7l5 5m9-2 3-4" /></>)
-          .with("brick", () => <><path d="M4 15h24v12H4Zm4-9h16v9H8Zm8 9v12M12 6v9m8 0V6" strokeWidth="2" /><path d="m7 19 3-2 3 2-3 3Zm12 0 3-2 3 2-3 3Z" fill="currentColor" stroke="none" /><path d="M5 29h22M11 3h10" /></>)
-          .with("wool", () => <><path d="M7 22c-6-3-5-9 0-10-1-6 7-8 10-4 6-3 11 2 8 7 4 6-2 10-6 8-4 4-9 3-12-1Z" fill="currentColor" fillOpacity=".14" strokeWidth="2" /><path d="M9 23v5m10-4v4m3-14q9-3 7 5l-5 3-3-3M9 14c-4 4 3 7 5 3s-5-6-5-1m5-7q5 0 4 5" /><circle cx="26" cy="16" r=".8" fill="currentColor" stroke="none" /><path d="M3 29h24" /></>)
-          .with("grain", () => <><path d="M16 29V4M12 29l8-1" strokeWidth="2" /><path d="M15 12C7 12 5 8 6 4c7 0 10 4 9 8Zm2 5c0-7 4-10 10-10 0 6-4 10-10 10Zm-2 6c-8 0-11-4-10-9 6 0 10 3 10 9Zm2 3c0-6 4-9 10-8 0 5-4 9-10 8Z" fill="currentColor" stroke="none" /><path d="M2 29h5m17 0h5" /></>)
-          .with("ore", () => <><path d="M4 23 10 8l9-4 9 18-12 7Z" strokeWidth="2" /><path d="m10 8 6 21 3-25M4 23l12-4 12 3M10 8l7 6 7-1" /><path d="m8 20 2-5 3 8Zm12-5 4 5-6 4Z" fill="currentColor" stroke="none" /></>)
+          .with("wood", () => <>
+            <path d="M16 28V7M16 19 8 12m8 3 8-8" strokeWidth="2" />
+            <path d="M15 15C3 17 3 7 5 5c7 0 10 4 10 10Zm3-2C17 4 23 2 27 3c1 7-2 10-9 10ZM15 23C6 25 3 20 4 16c7-2 11 1 11 7Zm3-2c0-7 5-9 10-8 0 6-4 10-10 8Z" fill="currentColor" stroke="none" />
+            {!compact && <path d="M10 29q6-3 12 0M7 7l5 5m9-2 3-4" />}
+          </>)
+          .with("brick", () => <>
+            <path d="M4 15h24v12H4Zm4-9h16v9H8Zm8 9v12M12 6v9m8 0V6" strokeWidth="2" />
+            {!compact && <><path d="m7 19 3-2 3 2-3 3Zm12 0 3-2 3 2-3 3Z" fill="currentColor" stroke="none" /><path d="M5 29h22M11 3h10" /></>}
+          </>)
+          .with("wool", () => <>
+            <path d="M7 22c-6-3-5-9 0-10-1-6 7-8 10-4 6-3 11 2 8 7 4 6-2 10-6 8-4 4-9 3-12-1Z" fill="currentColor" fillOpacity={compact ? ".24" : ".14"} strokeWidth="2" />
+            <path d="M9 23v5m10-4v4m3-14q9-3 7 5l-5 3-3-3" />
+            {!compact && <><path d="M9 14c-4 4 3 7 5 3s-5-6-5-1m5-7q5 0 4 5" /><circle cx="26" cy="16" r=".8" fill="currentColor" stroke="none" /><path d="M3 29h24" /></>}
+          </>)
+          .with("grain", () => <>
+            <path d="M16 29V4M12 29l8-1" strokeWidth="2" />
+            <path d="M15 12C7 12 5 8 6 4c7 0 10 4 9 8Zm2 5c0-7 4-10 10-10 0 6-4 10-10 10Zm-2 6c-8 0-11-4-10-9 6 0 10 3 10 9Zm2 3c0-6 4-9 10-8 0 5-4 9-10 8Z" fill="currentColor" stroke="none" />
+            {!compact && <path d="M2 29h5m17 0h5" />}
+          </>)
+          .with("ore", () => <>
+            <path d="M4 23 10 8l9-4 9 18-12 7Z" strokeWidth="2" />
+            <path d="m10 8 6 21 3-25M4 23l12-4 12 3" />
+            {!compact && <><path d="m10 8 7 6 7-1" /><path d="m8 20 2-5 3 8Zm12-5 4 5-6 4Z" fill="currentColor" stroke="none" /></>}
+          </>)
           .exhaustive())
         .with("wooden", () => match(resource)
-          .with("wood", () => <><path d="m5 12 12-7c9-4 17 10 8 15l-12 7Z" fill="currentColor" fillOpacity=".12" /><ellipse cx="10" cy="20" rx="5.5" ry="7.5" transform="rotate(-29 10 20)" strokeWidth="2" /><ellipse cx="10" cy="20" rx="2.5" ry="4" transform="rotate(-29 10 20)" /><path d="m13 12 7-4m-4 7 8-5m-6 8 9-5m-8 9 10-6M4 18l6-3m-5 9 7-4" /></>)
-          .with("brick", () => <><path d="m3 15 16-9 10 6v11l-16 7L3 24Z" strokeWidth="2" /><path d="m3 15 10 7 16-10M13 22v8m-7-7 4 3m-4-7 4 3m6 2 3-2m0 5 3-2m0-5 4-2M9 14l10-5m-6 8 10-5" /></>)
-          .with("wool", () => <><path d="M5 21c-5-4-1-10 3-9-1-6 7-7 10-3 8-3 12 4 8 9 1 7-7 9-10 6-3 4-10 3-11-3Z" strokeWidth="2" /><path d="M8 26v3m11-4v4m5-14 6 1-2 7-5-2M7 16l5-4m-7 9 13-10M9 23l12-10m-6 11 7-6m-12-5 8 10m-3-12 6 8" /></>)
-          .with("grain", () => <><path d="M15 29 18 4M11 29l-2-16m11 15 7-12M16 11 10 5l-1 6 7 5m1-7 7-5 1 5-9 7m-1 4-9-7 1 7 7 5m2-7 10-7-1 7-11 7M11 27l9 1" strokeWidth="1.8" /><path d="m12 9 3 3m4-2 3-3M10 19l3 3m5-1 4-3" /></>)
-          .with("ore", () => <><path d="m3 24 7-15 12-4 7 16-13 8Z" strokeWidth="2" /><path d="m10 9 6 20 6-24M3 24l10-4m7 3 9-2M7 17l5-4m-7 9 9-6m-6 9 7-6m9-8-3 4m5 1-7 6m5 3-5-2" /></>)
+          .with("wood", () => <>
+            <path d="m5 12 12-7c9-4 17 10 8 15l-12 7Z" fill="currentColor" fillOpacity={compact ? ".2" : ".12"} strokeWidth={compact ? "2" : "1.5"} />
+            <ellipse cx="10" cy="20" rx="5.5" ry="7.5" transform="rotate(-29 10 20)" strokeWidth="2" />
+            <ellipse cx="10" cy="20" rx="2.5" ry="4" transform="rotate(-29 10 20)" />
+            {!compact && <path d="m13 12 7-4m-4 7 8-5m-6 8 9-5m-8 9 10-6M4 18l6-3m-5 9 7-4" />}
+          </>)
+          .with("brick", () => <>
+            <path d="m3 15 16-9 10 6v11l-16 7L3 24Z" strokeWidth="2" />
+            <path d="m3 15 10 7 16-10M13 22v8" />
+            {!compact && <path d="m6 23 4 3m-4-7 4 3m6 2 3-2m0 5 3-2m0-5 4-2M9 14l10-5m-6 8 10-5" />}
+          </>)
+          .with("wool", () => <>
+            <path d="M5 21c-5-4-1-10 3-9-1-6 7-7 10-3 8-3 12 4 8 9 1 7-7 9-10 6-3 4-10 3-11-3Z" fill="currentColor" fillOpacity={compact ? ".18" : "0"} strokeWidth="2" />
+            <path d="M8 26v3m11-4v4m5-14 6 1-2 7-5-2" />
+            {!compact && <path d="m7 16 5-4m-7 9 13-10M9 23l12-10m-6 11 7-6m-12-5 8 10m-3-12 6 8" />}
+          </>)
+          .with("grain", () => <>
+            <path d="M15 29 18 4M11 29l-2-16m11 15 7-12M16 11 10 5l-1 6 7 5m1-7 7-5 1 5-9 7m-1 4-9-7 1 7 7 5m2-7 10-7-1 7-11 7M11 27l9 1" strokeWidth="1.8" />
+            {!compact && <path d="m12 9 3 3m4-2 3-3M10 19l3 3m5-1 4-3" />}
+          </>)
+          .with("ore", () => <>
+            <path d="m3 24 7-15 12-4 7 16-13 8Z" strokeWidth="2" />
+            <path d="m10 9 6 20 6-24M3 24l10-4m7 3 9-2" />
+            {!compact && <path d="m7 17 5-4m-7 9 9-6m-6 9 7-6m9-8-3 4m5 1-7 6m5 3-5-2" />}
+          </>)
           .exhaustive())
         .with("pixel", () => (
           <g fill="currentColor" stroke="none" shapeRendering="crispEdges">
@@ -41,22 +115,65 @@ export function ResourceArtwork({ resource, theme }: { resource: Resource; theme
         .with("space", () => (
           <>
             {match(resource)
-              .with("wood", () => <><path d="M3 25V16a13 13 0 0 1 26 0v9Z" fill="currentColor" fillOpacity=".1" /><path d="M7 25v-7M25 25v-7M16 25V8m0 12-5-5m5 1 5-4" /><path d="M16 17C8 18 7 11 10 8c5 0 7 4 6 9Zm1-5c0-6 5-7 7-6 0 5-2 7-7 6Z" fill="currentColor" stroke="none" /><path d="M2 28h28M5 31h5m12 0h5" strokeWidth="2" /></>)
-              .with("brick", () => <><path d="M5 9h22l3 5v13H2V14Z" /><path d="M7 14h18v9H7Zm9 0v9M7 18h18M11 5h10M16 2v3" strokeWidth="2" /><circle cx="5" cy="26" r="1" fill="currentColor" /><circle cx="27" cy="26" r="1" fill="currentColor" /><path d="M9 30h14" /></>)
-              .with("wool", () => <><path d="M3 25V16a13 13 0 0 1 26 0v9ZM2 28h28" /><path d="M9 21c-5-1-4-6-1-7-1-4 5-6 7-3 5-3 10 1 7 6 2 5-4 7-6 4-2 3-5 3-7 0Z" fill="currentColor" fillOpacity=".25" /><path d="M10 22v3m9-4v4m2-10 5 1-1 4-4-1" /><path d="M7 31h5m8 0h5M10 5h12" /></>)
-              .with("grain", () => <><path d="M4 25V12L9 5h14l5 7v13ZM2 28h28M4 12h24" /><path d="M12 24V10m0 9-4-4m4 1 4-5m4 13V10m0 10 4-5m-4 1-4-4" strokeWidth="2" /><path d="M6 31h6m8 0h6" /><path d="M7 26h18" strokeWidth="3" /></>)
-              .with("ore", () => <><path d="m4 23 5-12 8-3 8 14-10 7Z" fill="currentColor" fillOpacity=".2" /><path d="m9 11 6 18 2-21M4 23l11-5 10 4M21 3h8v5h-8Zm4 5v9l-5 4m2-9h7" strokeWidth="2" /><path d="m23 23 4 1M3 29h24" /><circle cx="26" cy="27" r="2" /></>)
+              .with("wood", () => <>
+                <path d="M16 4 7 15h4l-5 8h20l-5-8h4L16 4Z" fill="currentColor" fillOpacity=".22" strokeWidth="2" />
+                <path d="M16 11v17" strokeWidth="2.2" />
+                <path d="M6 28h20" strokeWidth="2" />
+                {!compact && <path d="M10 28v3m12-3v3M5 7h4M7 5v4" />}
+              </>)
+              .with("brick", () => <>
+                <path d="M5 9h22l3 5v13H2V14Z" strokeWidth="2" />
+                <path d="M7 14h18v9H7Zm9 0v9M7 18h18" strokeWidth="1.8" />
+                {!compact && <><path d="M11 5h10M16 2v3M9 30h14" /><circle cx="5" cy="25" r="1" fill="currentColor" stroke="none" /><circle cx="27" cy="25" r="1" fill="currentColor" stroke="none" /></>}
+              </>)
+              .with("wool", () => <>
+                <path d="M7 22c-5-2-4-7 0-8-1-5 6-7 9-3 6-3 11 2 8 7 2 5-4 8-7 5-3 3-7 2-10-1Z" fill="currentColor" fillOpacity=".24" strokeWidth="2" />
+                <path d="M10 23v5m9-5v5m4-11 5 1-1 5-4-1" strokeWidth="1.8" />
+                {!compact && <path d="M4 12a12 12 0 0 1 24 0" strokeOpacity=".55" />}
+              </>)
+              .with("grain", () => <>
+                <path d="M5 26V11L10 4h12l5 7v15Z" strokeWidth="2" />
+                <path d="M12 24V10m0 8-4-4m4 1 4-4m4 13V10m0 9 4-4m-4 1-4-4" strokeWidth="1.9" />
+                <path d="M3 28h26" strokeWidth="2" />
+                {!compact && <path d="M5 11h22" strokeOpacity=".55" />}
+              </>)
+              .with("ore", () => <>
+                <path d="m4 23 5-12 8-3 8 14-10 7Z" fill="currentColor" fillOpacity=".22" strokeWidth="2" />
+                <path d="m9 11 6 18 2-21M4 23l11-5 10 4" strokeWidth="1.8" />
+                {!compact && <><path d="M21 3h8v5h-8Zm4 5v8l-4 3" /><circle cx="26" cy="26" r="2" /></>}
+              </>)
               .exhaustive()}
           </>
         ))
         .with("underwater", () => (
           <>
             {match(resource)
-              .with("wood", () => <><path d="M4 26V15a12 12 0 0 1 24 0v11ZM2 29h28" /><path d="M16 25V10m0 9-6-5m6 2 6-5" strokeWidth="2" /><path d="M16 17C8 19 6 13 9 9c5 0 8 3 7 8Zm1-4c-1-6 4-8 7-7 1 5-2 8-7 7Z" fill="currentColor" stroke="none" /><path d="M7 23h4m10 0h4M7 9l3-3" /><circle cx="29" cy="4" r="2" /></>)
-              .with("brick", () => <><path d="M4 17h24v11H4Zm4-8h16v9H8Zm8 9v11M16 8v9" strokeWidth="2" /><path d="M6 21h7m6 0h7M11 12h3m5 0h3M2 30h28M4 26V12m0 5L1 14" /><circle cx="27" cy="5" r="2.5" /><circle cx="5" cy="5" r="1.5" /></>)
-              .with("wool", () => <><path d="M3 26V16a13 13 0 0 1 26 0v10ZM1 29h30" /><path d="M9 22c-5-2-5-6-1-8-1-4 5-6 7-3 5-3 9 2 6 6 3 4-2 7-5 5-3 3-5 2-7 0Z" fill="currentColor" fillOpacity=".2" /><path d="M10 23v3m8-4v4m3-10h5v5h-5M6 10l4-4" /><circle cx="27" cy="3" r="2" /></>)
-              .with("grain", () => <><path d="M4 26V16a12 12 0 0 1 24 0v10ZM2 29h28" /><path d="M12 25V10m0 7-4-4m4 8-4-3m4-3 4-4m4 14V10m0 7-4-4m4 8 4-4m-4-3 4-4" strokeWidth="1.8" /><path d="M6 26h20" strokeWidth="3" /><circle cx="3" cy="4" r="2" /><circle cx="27" cy="8" r="1.5" /></>)
-              .with("ore", () => <><path d="m5 24 6-14 9-2 8 16-12 5Z" fill="currentColor" fillOpacity=".16" strokeWidth="2" /><path d="m11 10 5 19 4-21M5 24l11-6 12 6M3 28V15m0 6 4-4m21 10 2-5" /><circle cx="6" cy="7" r="2.5" /><circle cx="25" cy="3" r="1.5" /><path d="M2 31h28" /></>)
+              .with("wood", () => <>
+                <path d="M16 28V6M16 22c-5-1-8-5-8-10M16 17c5-1 8-5 8-10" strokeWidth="2.4" />
+                <path d="M8 12c-3 0-4-3-2-5M24 7c3 0 4 3 2 5M16 6c-2-2 0-4 2-3" strokeWidth="1.8" />
+                <path d="M6 28h20" strokeWidth="2" />
+                {!compact && <circle cx="27" cy="18" r="2" />}
+              </>)
+              .with("brick", () => <>
+                <path d="M4 17h24v11H4Zm4-8h16v9H8Zm8 9v11M16 9v8" strokeWidth="2" />
+                {!compact && <><path d="M6 21h7m6 0h7M2 30h28" /><circle cx="27" cy="5" r="2.2" /><circle cx="5" cy="5" r="1.4" /></>}
+              </>)
+              .with("wool", () => <>
+                <path d="M7 22c-5-2-5-7-1-8-1-5 6-7 8-3 6-3 10 2 7 7 3 4-3 8-6 5-3 3-6 2-8-1Z" fill="currentColor" fillOpacity=".24" strokeWidth="2" />
+                <path d="M10 23v5m8-5v5m4-11h5v5h-5" strokeWidth="1.8" />
+                {!compact && <><circle cx="27" cy="4" r="2" /><circle cx="5" cy="6" r="1.4" /></>}
+              </>)
+              .with("grain", () => <>
+                <path d="M11 28c-2-8 2-15 0-23M16 28c2-8-2-15 0-24M21 28c-2-8 2-14 0-21" strokeWidth="2.2" />
+                <path d="M11 18l-5-3M16 14l5-3M21 19l5-3M11 11l-4-3" strokeWidth="1.8" />
+                <path d="M5 29h22" strokeWidth="2" />
+                {!compact && <><circle cx="4" cy="5" r="1.8" /><circle cx="27" cy="7" r="1.5" /></>}
+              </>)
+              .with("ore", () => <>
+                <path d="m5 24 6-14 9-2 8 16-12 5Z" fill="currentColor" fillOpacity=".2" strokeWidth="2" />
+                <path d="m11 10 5 19 4-21M5 24l11-6 12 6" strokeWidth="1.8" />
+                {!compact && <><circle cx="6" cy="6" r="2" /><circle cx="26" cy="4" r="1.5" /><path d="M3 30h26" /></>}
+              </>)
               .exhaustive()}
           </>
         ))

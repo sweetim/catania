@@ -101,5 +101,6 @@ export type MultiplayerSession = {
   perform: (action: GameAction, expectedVersion?: number, trade?: TradeIdentity) => void;
   selectBuild: (piece: BuildMode, expectedVersion?: number) => void;
   reconnect: () => void;
+  announceClose?: () => void;
   close: () => void;
 };

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Dialog, Logo } from "./GameUi";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditPencilIcon, ReplayIcon, TrashIcon, TurnsIcon } from "./Icons";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { GAME_VARIANT_LABELS } from "./GameVariantSelector";
 import { useLanguage, useTranslation } from "../localization";
@@ -107,9 +108,7 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                 title={translateText("Rename")}
                                 onClick={() => { setRenaming(profile); setRenameValue(profile.name); }}
                               >
-                                <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15l-1 6Z" strokeLinejoin="round" />
-                                </svg>
+                                <EditPencilIcon />
                               </button>
                               <button
                                 className="pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-clay/10 hover:text-clay"
@@ -117,16 +116,12 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                 title={translateText("Delete profile")}
                                 onClick={() => { setDeleting(profile); setDeleteError(false); }}
                               >
-                                <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                  <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6m4-6v6" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                                <TrashIcon />
                               </button>
                             </div>
                             {profile.id === activeProfileId && <span className="mt-1 block text-xs text-muted">{translateText("Current profile")}</span>}
                           </div>
-                          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path d="m9 6 6 6-6 6" />
-                          </svg>
+                          <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
                         </div>
                         <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line/70 pt-3">
                           {([
@@ -144,9 +139,10 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                       </div>
                     </div>
                   )}
-                  <details className="mt-4 border-t border-line/70 pt-1">
-                    <summary className="min-h-11 cursor-pointer content-center rounded-lg text-xs font-semibold text-muted">
-                      {translateText("Game history")} <span className="tabular-nums">({profile.history.length})</span>
+                  <details className="group mt-4 border-t border-line/70 pt-1">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg text-xs font-semibold text-muted [&::-webkit-details-marker]:hidden">
+                      <span>{translateText("Game history")} <span className="tabular-nums">({profile.history.length})</span></span>
+                      <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
                     </summary>
                     {profile.history.length === 0 ? (
                       <p className="py-3 text-xs leading-5 text-muted">{translateText("Completed games will appear here.")}</p>
@@ -162,9 +158,7 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                   title={translateText(game.won ? "Won" : "Lost")}
                                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${game.won ? "bg-forest/50 text-ink" : "bg-clay/15 text-clay"}`}
                                 >
-                                  <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    {game.won ? <path d="m5 13 4 4L19 7" /> : <path d="M6 6l12 12M18 6 6 18" />}
-                                  </svg>
+                                  {game.won ? <CheckIcon /> : <CloseIcon />}
                                 </span>
                                 <span className="truncate text-sm font-medium">{translateText(GAME_VARIANT_LABELS[game.variant])}</span>
                               </div>
@@ -179,10 +173,7 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                 title={translateText("{turns} turns", { turns: game.turnCount })}
                                 className="mr-3 flex items-center gap-1.5"
                               >
-                                <svg aria-hidden="true" className="h-3.5 w-3.5 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.9 1 6.7 2.7L21 8" />
-                                  <path d="M21 3v5h-5" />
-                                </svg>
+                                <TurnsIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
                                 <span className="font-serif text-2xl leading-none tabular-nums">{game.turnCount}</span>
                               </span>
                               <span className="flex items-center gap-1">
@@ -195,9 +186,7 @@ export function ProfileGate({ profiles, activeProfileId, onSelect, onCreate, onR
                                 title={translateText("Replay map")}
                                 onClick={() => onReplay(profile, game)}
                               >
-                                <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M8 5.5v13l10-6.5Z" />
-                                </svg>
+                                <ReplayIcon />
                               </button>
                             </div>
                           </li>

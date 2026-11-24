@@ -37,7 +37,7 @@ function dicePairForTotal(total: number): [number, number] {
   return [firstDie, total - firstDie];
 }
 
-test("board settlements and cities render 3D architectural pieces with player labels and upgrade animation", async ({ page }) => {
+test("board settlements and cities render 3D architectural pieces with player labels and upgrade animation", { tag: "@desktop-only" }, async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");

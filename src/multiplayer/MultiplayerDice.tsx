@@ -8,7 +8,7 @@ import { useLanguage, useTranslation } from "../localization";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import type { PublicGame } from "./types";
 
-function useDiceRollAnimation(rollIdentity: string | null): boolean {
+export function useDiceRollAnimation(rollIdentity: string | null): boolean {
   // A first snapshot is already settled, including when reconnecting.
   const lastRoll = useRef(rollIdentity);
   const [rollingIdentity, setRollingIdentity] = useState<string | null>(null);
@@ -46,26 +46,33 @@ export function SharedBoardDice({ game }: { game: PublicGame }) {
   const dice = game.dice;
   const rollIdentity = dice ? `${game.gameId}:${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
   const rolling = useDiceRollAnimation(rollIdentity);
+  const sevenRolled = Boolean(dice && !rolling && dice[0] + dice[1] === 7);
   return (
     <div
       className="shared-board-dice"
       role="group"
       aria-label={translateText("Shared dice")}
       data-stage={dice ? rolling ? "rolling" : "complete" : "idle"}
+      data-seven={sevenRolled ? "true" : undefined}
     >
       <Dice key={rollIdentity} dice={dice} rolling={rolling} />
     </div>
   );
 }
 
-export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Resources | null }) {
+export function MultiplayerDice({ game, gains, rollSettled = false }: {
+  game: PublicGame;
+  gains?: Resources | null;
+  rollSettled?: boolean;
+}) {
   const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
   const dice = game.dice;
-  const rollIdentity = dice ? `${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
+  const rollIdentity = dice ? `${game.gameId}:${game.turnNumber}:${game.activePlayerId}:${dice[0]}:${dice[1]}` : null;
   const rolling = useDiceRollAnimation(rollIdentity);
   const playerName = game.players.find(player => player.id === game.activePlayerId)!.name;
   const total = dice ? dice[0] + dice[1] : null;
+  const sevenRolled = Boolean(dice && !rolling && total === 7);
   const result = dice ? `${dice[0]} + ${dice[1]} = ${total}` : "";
   const gainedResources = dice && total !== 7 && gains ? RESOURCES.filter(resource => gains[resource] > 0) : [];
 
@@ -74,7 +81,12 @@ export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Res
       <p role="status" aria-label={translateText("Roll announcement")} aria-atomic="true" className="sr-only">
         {dice && <span key={rollIdentity}>{translateText("{name} rolled {result}.", { name: playerName, result })}</span>}
       </p>
-      <section aria-label={translateText(dice ? "Roll result" : "Dice tray")} data-stage={dice ? rolling ? "rolling" : "complete" : "idle"} className="roll-summary">
+      <section
+        aria-label={translateText(dice ? "Roll result" : "Dice tray")}
+        data-stage={dice ? rolling ? "rolling" : "complete" : "idle"}
+        data-seven={sevenRolled ? "true" : undefined}
+        className="roll-summary"
+      >
         <Dice key={rollIdentity} dice={dice} rolling={rolling} />
         <div className="roll-summary-content">
           {!rolling && gainedResources.length > 0 && gains ? (
@@ -89,10 +101,20 @@ export function MultiplayerDice({ game, gains }: { game: PublicGame; gains?: Res
                 ))}
               </ul>
             </div>
+          ) : sevenRolled ? (
+            <>
+              <p className="roll-summary-label">{translateText("{name} rolled {result}", { name: playerName, result })}</p>
+              <p className="roll-summary-title text-clay">{translateText("Robber activates!")}</p>
+            </>
+          ) : !rolling && dice && rollSettled && total !== 7 ? (
+            <>
+              <p className="roll-summary-label">{translateText("{name} rolled {result}", { name: playerName, result })}</p>
+              <p className="roll-summary-title">{translateText("No resources received.")}</p>
+            </>
           ) : (
             <>
               {dice && <p className="roll-summary-label">{translateText("{name} rolled", { name: playerName })}</p>}
-              <p className="roll-summary-title">{dice ? result : translateText("Waiting for the next roll.")}</p>
+              <p className="roll-summary-title">{dice ? (rolling ? translateText("Rolling...") : result) : translateText("Waiting for the next roll.")}</p>
             </>
           )}
         </div>

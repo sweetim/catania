@@ -173,6 +173,7 @@ export const gameMessages = {
   "The game started before you were admitted.": "承認される前にゲームが開始されました。",
   "The host declined your join request.": "ホストが参加申請を拒否しました。",
   "The host removed you from the lobby. Use Reconnect to request a new seat.": "ホストがあなたをロビーから削除しました。「再接続」で新たに参加申請してください。",
+  "The host closed this room.": "ホストがこのルームを閉じました。",
   "Session storage is blocked. Refreshing this page will lose your seat credential.": "セッションストレージがブロックされています。ページを再読み込みすると参加枠の認証情報が失われます。",
   "Connection to the host was lost. Keep both pages open. Reconnecting automatically.": "ホストとの接続が失われました。両方のページを開いたままにしてください。自動的に再接続します。",
   "Connection to the host was lost. Keep both pages open. Connection details: ICE {iceState}; gathering {gatheringState}. Reconnecting automatically.": "ホストとの接続が失われました。両方のページを開いたままにしてください。接続の詳細: ICE {iceState}、収集 {gatheringState}。自動的に再接続します。",
@@ -197,7 +198,7 @@ export const gameMessages = {
 export type GameMessage = { key: keyof typeof gameMessages; parameters?: TranslationParameters };
 
 const developmentNames: Record<DevelopmentKind, string> = {
-  knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占", sabotage: "破壊工作",
+  knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占",
 };
 const awardNames = { "Longest Road": "最長交易路", "Longest Route": "最長交易路", "Largest Army": "最大騎士力" } as const;
 const resourceNames: Resource[] = ["wood", "brick", "wool", "grain", "ore"];

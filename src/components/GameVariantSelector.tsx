@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { type GameVariant } from "../game/types";
 import { useTranslation } from "../localization";
 import { seafarersTranslations } from "../translations/seafarers";
+import { ChevronDownIcon, GameVariantIcon } from "./Icons";
 
 type ListboxPosition = {
   left: number;
@@ -131,15 +132,10 @@ export function GameVariantSelector({ value, onChange, disabled = false, classNa
           className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-[#dfcfab] bg-gradient-to-b from-[#fdf8e7] to-[#f6ecd0] px-3.5 py-2 text-left text-sm font-semibold text-[#6e4f1d] shadow-[inset_0_1px_0_#fffdf6,0_1px_2px_#423d2810] transition-colors hover:border-[#cfb986] hover:from-[#fbf3da] hover:to-[#f1e2ba] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed"
         >
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-[#9c732d]">
-              <path d="M12 2 4 6.5v11L12 22l8-4.5v-11Z" />
-              <path d="M12 22V12m0 0 8-4.5M12 12 4 7.5" />
-            </svg>
+            <GameVariantIcon className="h-4 w-4 shrink-0 text-[#9c732d]" />
             <span className="min-w-0 flex-1 truncate">{translateText(GAME_VARIANT_LABELS[value])}</span>
           </span>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#8b6425" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-            <path d="m3 4.5 3 3 3-3" />
-          </svg>
+          <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-[#8b6425]" />
         </button>
         {open && listboxPosition && (
           <div

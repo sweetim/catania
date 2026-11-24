@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { ChevronDownIcon, GlobeIcon } from "./components/Icons";
 import { detectLanguage, LANGUAGE_STORAGE_KEY, translate, type Language, type TranslationCatalog, type TranslationParameters } from "./i18n";
 
 const LanguageContext = createContext<{
@@ -49,13 +50,19 @@ export function useTranslation<Catalog extends TranslationCatalog>(catalog: Cata
 
 export function LanguageSelector() {
   const { language, setLanguage } = useLanguage();
-  return <select
-    aria-label={language === "ja" ? "言語" : "Language"}
-    className="min-h-11 min-w-0 max-w-28 rounded-lg border border-line bg-paper px-2 text-xs text-ink"
-    value={language}
-    onChange={event => setLanguage(event.target.value as Language)}
-  >
-    <option value="en" lang="en">English</option>
-    <option value="ja" lang="ja">日本語</option>
-  </select>;
+  return (
+    <span className="relative flex w-full items-center">
+      <GlobeIcon className="pointer-events-none absolute left-3 h-4 w-4 text-ink" />
+      <select
+        aria-label={language === "ja" ? "言語" : "Language"}
+        className="min-h-11 w-full min-w-0 appearance-none rounded-lg border border-line bg-paper pl-9 pr-8 text-xs font-medium text-ink transition-colors hover:bg-moss/45"
+        value={language}
+        onChange={event => setLanguage(event.target.value as Language)}
+      >
+        <option value="en" lang="en">English</option>
+        <option value="ja" lang="ja">日本語</option>
+      </select>
+      <ChevronDownIcon className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-muted" />
+    </span>
+  );
 }

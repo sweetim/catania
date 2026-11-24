@@ -10,6 +10,7 @@ export const appTranslations = {
   "{name} is playing. You can inspect your hand and the island while you wait.": "{name}の手番です。待っている間も手札や島を確認できます。",
   "All 5 settlements are on the board. Upgrade one to a city to free a settlement piece.": "5個すべての開拓地が盤上にあります。1つを都市に発展させると、開拓地の駒を再び使えます。",
   "All 4 cities are on the board.": "4つすべての都市が盤上にあります。",
+  "There are no opponent pieces available to sabotage.": "破壊工作の対象にできる相手のコマがありません。",
   "You have no settlements to upgrade. Build a settlement first.": "都市に発展させる開拓地がありません。まず開拓地を建設してください。",
   "All 15 roads are on the board.": "15本すべての街道が盤上にあります。",
   "No legal position. Roads must connect to your roads, settlements, or cities.": "建設できる場所がありません。街道は自分の街道・開拓地・都市につながっている必要があります。",

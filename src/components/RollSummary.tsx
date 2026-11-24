@@ -27,11 +27,14 @@ export function Dice({ dice, rolling = false }: {
           <rect x="2" y="4" width="44" height="42" rx="10" fill={dice ? "#c9b983" : "#ddd4be"} />
           <rect x="2" y="2" width="44" height="42" rx="10" fill={dice ? "#fffaf0" : "#faf6ec"} stroke={dice ? "#b8a777" : "#c6bba1"} strokeDasharray={dice ? undefined : "4 3"} />
           {dice ? (
-            DIE_PIPS[value]!.map(position => (
-              <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
-            ))
+            <>
+              <path d="M12 5.5h24" stroke="#ffffff" strokeOpacity="0.85" strokeWidth="1.5" strokeLinecap="round" />
+              {DIE_PIPS[value]!.map(position => (
+                <circle key={position} cx={14 + (position % 3) * 10} cy={13 + Math.floor(position / 3) * 10} r="3" fill="#315e49" />
+              ))}
+            </>
           ) : (
-            <text x="24" y="29" textAnchor="middle" fill="#7d8072" fontSize="18" fontWeight="700" fontFamily="serif">?</text>
+            <path d="M19.5 18a4.8 4.8 0 0 1 9.2 1.8c0 2.6-3.7 3.2-3.7 5.7M24 30.2v.6" fill="none" stroke="#7d8072" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
           )}
         </svg>
       ))}
