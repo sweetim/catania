@@ -197,9 +197,7 @@ Use **Game > Players & bank** or **Game > Table activity** from the turn menu to
 all players, bank counts, or recent public table activity in a dialog at any time. Discard, theft, and
 incoming trade choices open in dialogs (without interrupting another open dialog on an
 off-turn phone); dismissing one keeps its action available
-in the turn controls, even while builds are collapsed. When an open trade is active, the
-shared board shows a compact trade banner with the cards on the table, any computer request
-countdown, and each opponent's response status. Off-turn phones show trade-aware turn
+in the turn controls, even while builds are collapsed. Off-turn phones show trade-aware turn
 instructions, vibrate briefly when a new incoming trade arrives (if vibration is enabled),
 and display a live status badge on **View trade** (unanswered, accepted, proposed, declined,
 or ready response count for the offerer). Dialog contents can scroll on

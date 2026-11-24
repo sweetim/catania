@@ -32,7 +32,7 @@ import { GameMenu } from "../components/GameMenu";
 import { HelpDialog } from "../components/HelpDialog";
 import { GameVariantSelector } from "../components/GameVariantSelector";
 import { GoldSelection } from "../components/SeafarersControls";
-import { Arrow, BankSupply, BuildButton, CardStack, Cost, DevelopmentCardIcon, Dialog, IslandIcon, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
+import { Arrow, BankSupply, BuildButton, Cost, DevelopmentCardIcon, Dialog, IslandIcon, Logo, PieceIcon, ResourceCard, ResourceInventory } from "../components/GameUi";
 import { ActionConfirmation, DevelopmentDialog, DiscardSelection, getDevelopmentDescriptions, getDevelopmentNames, TheftChoices } from "../components/GameplayDialogs";
 import { OpenTrade } from "../components/OpenTrade";
 import { DisconnectedIcon, PlayerSeat } from "../components/PlayerSeat";
@@ -158,97 +158,6 @@ function victoryBreakdownRows(
     ...(variant === "seafarers" || variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: breakdown.islands ? translateText("{count} × {points} VP", { count: breakdown.islands / 2, points: 2 }) : undefined, points: breakdown.islands ?? 0 }] : []),
     { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: breakdown.hidden ? translateText("{count} × {points} VP", { count: breakdown.hidden, points: 1 }) : undefined, points: breakdown.hidden },
   ];
-}
-
-function SharedTableTradeBanner({ game }: { game: PublicGame }) {
-  const translateText = useTranslation(multiplayerUiTranslations);
-  const trade = game.trade!;
-  const offeringPlayer = game.players.find(player => player.id === trade.offeredBy);
-  const opponents = game.players.filter(player => player.id !== trade.offeredBy);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (trade.expiresAt === undefined) return;
-    setNow(Date.now());
-    const interval = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(interval);
-  }, [trade.expiresAt]);
-  const secondsRemaining = trade.expiresAt !== undefined
-    ? Math.max(0, Math.ceil((trade.expiresAt - now) / 1000))
-    : null;
-
-  return (
-    <div
-      className="shared-table-trade"
-      role="region"
-      aria-label={translateText("Open trade")}
-    >
-      <div className="shared-table-trade-summary">
-        <span className="shared-table-trade-offerer">
-          {offeringPlayer && (
-            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: offeringPlayer.color }} />
-          )}
-          <strong className="truncate">{offeringPlayer?.name ?? ""}</strong>
-          <span className="text-muted">{translateText(trade.give ? "offers" : "asks for")}</span>
-        </span>
-        <div className="shared-table-trade-cards">
-          {trade.give ? (
-            <>
-              <CardStack label={translateText("Offers")} resources={trade.give} />
-              <Arrow className="h-3.5 w-3.5 shrink-0 text-ink/60" />
-              <CardStack label={translateText("Wants")} resources={trade.receive} />
-            </>
-          ) : (
-            <CardStack label={translateText("Wants")} resources={trade.receive} />
-          )}
-        </div>
-        {secondsRemaining !== null && (
-          <span
-            role="timer"
-            aria-label={translateText("Expires in {seconds}s", { seconds: secondsRemaining })}
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${secondsRemaining <= 5 ? "border border-clay/35 bg-clay/15 text-clay" : "bg-moss text-ink/80"}`}
-          >
-            {translateText("{seconds}s left", { seconds: secondsRemaining })}
-          </span>
-        )}
-      </div>
-      <ul className="shared-table-trade-responses" aria-label={translateText("Trade responses")}>
-        {opponents.map(opponent => {
-          const response = trade.responses[opponent.id];
-          const disconnected = opponent.control === "human" && !opponent.connected;
-          return (
-            <li key={opponent.id} className="shared-table-trade-responder">
-              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: opponent.color }} />
-              <span className="truncate font-semibold">{opponent.name}</span>
-              {response ? (
-                trade.give ? (
-                  <span className="rounded-full bg-forest px-2 py-0.5 text-[10px] font-semibold text-ink">
-                    {translateText("accepted")}
-                  </span>
-                ) : (
-                  <span className="shared-table-trade-proposal">
-                    <CardStack label={translateText("Proposed")} resources={response} />
-                  </span>
-                )
-              ) : response === false ? (
-                <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-semibold text-muted">
-                  {translateText("declined")}
-                </span>
-              ) : disconnected ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-clay/30 bg-clay/10 px-2 py-0.5 text-[10px] font-semibold text-clay">
-                  <DisconnectedIcon className="h-2.5 w-2.5 shrink-0" />
-                  {translateText("disconnected")}
-                </span>
-              ) : (
-                <span className="rounded-full border border-line px-2 py-0.5 text-[10px] font-semibold text-muted">
-                  {translateText("waiting")}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
 }
 
 function SharedBoardPhaseBanner({ game, buildMode }: { game: PublicGame; buildMode: BuildMode }) {
@@ -413,14 +322,12 @@ function SharedTableStatus({ game, highlightedRolledNumber, onShowInvitation }: 
   const blockingDisconnectedPlayers = disconnectedPlayers.filter(player => waitingPlayerIds.includes(player.id));
   const activePlayerDisconnected = Boolean(!winner && activePlayer?.control === "human" && !activePlayer.connected);
   const showDisconnectedNotice = !winner && disconnectedPlayers.length > 0;
-  const showTradeBanner = !winner && Boolean(game.trade);
   const rolledTotal = highlightedRolledNumber;
 
   return (
     <section
       className="shared-table-status"
       data-has-disconnected={showDisconnectedNotice ? "true" : undefined}
-      data-has-trade={showTradeBanner ? "true" : undefined}
       aria-label={translateText("Table status")}
     >
       <div className="shared-status-island">
@@ -440,7 +347,6 @@ function SharedTableStatus({ game, highlightedRolledNumber, onShowInvitation }: 
       </div>
       <DiceChart diceCounts={game.diceRollTotals} compact highlightedNumber={rolledTotal} />
       <BankSupply resources={game.bank} developmentCards={game.developmentRemaining} />
-      {showTradeBanner && <SharedTableTradeBanner game={game} />}
       {showDisconnectedNotice && (
         <div
           className="shared-table-disconnected"

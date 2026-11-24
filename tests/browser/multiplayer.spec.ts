@@ -3732,7 +3732,7 @@ test("multi-device trade UX covers responder state, non-clobbering dialogs, disc
   await expect(editor.getByText("Confirming a bank exchange will withdraw your open player trade.", { exact: true })).toBeVisible();
 });
 
-test("shared board displays live open-trade banner with responses and phones show completion notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+test("open trades do not render a shared-board banner or shift layout while phones show completion notices", { tag: "@desktop-only" }, async ({ multiplayer }) => {
   const host = await multiplayer.newPage("Host");
   await host.addInitScript(() => {
     let seed = 7;
@@ -3809,6 +3809,10 @@ test("shared board displays live open-trade banner with responses and phones sho
 
   const activeName = (await latestSnapshot(activePhone)).privatePlayer!.name;
   const responderName = (await latestSnapshot(responderPhone)).privatePlayer!.name;
+  const sharedBoard = host.getByRole("region", { name: "Shared game board", exact: true });
+  const boardBoxBeforeTrade = await sharedBoard.boundingBox();
+  expect(boardBoxBeforeTrade).not.toBeNull();
+
   const buildToggle = activePhone.getByRole("button", { name: "Build a little bigger", exact: true });
   if (await buildToggle.count() > 0 && await buildToggle.getAttribute("aria-expanded") === "false") await buildToggle.click();
   await activePhone.getByRole("button", { name: "Make a trade", exact: true }).click();
@@ -3819,15 +3823,13 @@ test("shared board displays live open-trade banner with responses and phones sho
   await editor.getByRole("button", { name: `Add ${RESOURCE_NAMES[askResource]} to You ask for`, exact: true }).click();
   await editor.getByRole("button", { name: "Put the offer on the table", exact: true }).click();
 
-  const hostTradeBanner = host.getByRole("region", { name: "Open trade", exact: true });
-  await expect(hostTradeBanner).toBeVisible();
-  await expect(hostTradeBanner).toContainText(activeName);
-  await expect(hostTradeBanner).toContainText("waiting");
+  await expect(responderPhone.getByRole("dialog", { name: "Trade offer", exact: true })).toBeVisible();
+  await expect(host.getByRole("region", { name: "Open trade", exact: true })).toHaveCount(0);
+  const boardBoxDuringTrade = await sharedBoard.boundingBox();
+  expect(boardBoxDuringTrade).toEqual(boardBoxBeforeTrade);
   await noHorizontalOverflow(host);
 
   await responderPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("button", { name: "Accept offer", exact: true }).click();
-  await expect(hostTradeBanner).toContainText("accepted");
-  await screenshot(host, testInfo, "shared-board-open-trade-banner");
 
   // Reopening View trade on responder confirms their accepted state.
   await responderPhone.getByRole("button", { name: "View trade", exact: true }).click();
@@ -3839,11 +3841,10 @@ test("shared board displays live open-trade banner with responses and phones sho
   const confirmation = activePhone.getByRole("dialog", { name: `Trade with ${responderName}`, exact: true });
   await expect(confirmation).toBeVisible();
   await observerPhone.getByRole("dialog", { name: "Trade offer", exact: true }).getByRole("button", { name: "Decline", exact: true }).click();
-  await expect(hostTradeBanner).toContainText("declined");
   await expect(confirmation.getByRole("button", { name: "Confirm", exact: true })).toBeEnabled();
   await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
 
-  await expect(hostTradeBanner).toHaveCount(0);
+  await expect(host.getByRole("region", { name: "Open trade", exact: true })).toHaveCount(0);
   await expect(responderPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`Traded with ${activeName}`);
   await expect(observerPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`${activeName} traded with ${responderName}`);
 });
