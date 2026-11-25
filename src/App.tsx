@@ -1436,7 +1436,7 @@ export function App() {
                       </button>
                     )}
                   {game.phase.type === "gold" && getController(game) === viewer.id && !rollBusy && <GoldSelection
-                    key={`${viewer.id}-${JSON.stringify(game.phase.required)}`} bank={game.bank} count={game.phase.required[viewer.id]!}
+                    key={`${viewer.id}-${JSON.stringify(game.phase.required)}`} hand={viewer.resources} bank={game.bank} count={game.phase.required[viewer.id]!}
                     onSubmit={resources => perform({ type: "choose-gold", resources })} />}
 
                   <CollapsibleSection

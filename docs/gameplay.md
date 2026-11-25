@@ -132,8 +132,11 @@ Game version cannot change during play and is not saved across reloads.
   before either token moves.
 - Gold fields produce any available bank resource: one card per settlement or two
   per city. Eligible players choose in turn order, starting with the active player;
-  pass-and-play hands switch to the next chooser. Finish these choices before
-  continuing the turn. If the bank has fewer cards than owed, take what remains.
+  pass-and-play hands switch to the next chooser. The picker shows how many of
+  each resource you hold and marks resources that are out of stock. Use **+**
+  and **−** to adjust your picks, then confirm once you reach the required
+  count. If the bank has fewer cards than
+  owed, take what remains before continuing the turn.
   The robber blocks gold production as it does ordinary terrain.
 - Your first settlement on each small island earns two extra points, independently
   for every player. Further settlements on that island do not repeat the bonus,

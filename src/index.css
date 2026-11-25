@@ -1448,6 +1448,48 @@
   background-color: #6d766c;
 }
 
+.gold-picker,
+.game-dialog:has(.gold-picker-actions) {
+  scroll-padding-bottom: 4.5rem;
+}
+
+.gold-picker-step {
+  @apply flex size-11 items-center justify-center rounded-lg focus-visible:outline-offset-[-2px];
+}
+
+.gold-picker-step > svg {
+  @apply size-8 rounded-lg border border-line bg-white/60 p-1.5;
+}
+
+.gold-picker-step:not(:disabled):hover > svg {
+  @apply border-forest bg-forest;
+}
+
+.gold-picker-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-paper);
+  padding-block: 10px 12px;
+}
+
+.dialog-body:has(.gold-picker-actions) {
+  padding-bottom: 0;
+}
+
+.dialog-body .gold-picker-actions {
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .dialog-body .gold-picker-actions {
+    margin-inline: -1.5rem;
+    padding-inline: 1.5rem;
+  }
+}
+
 .dialog-body:has(.open-trade-actions),
 .dialog-body:has(.trade-dialog-actions) {
   padding-bottom: 0;
@@ -2555,6 +2597,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.private-instructions[data-phase="setup-settlement"] .turn-title {
+  white-space: normal;
 }
 
 .private-instructions .turn-description {
@@ -3735,6 +3781,48 @@
   width: 100%;
 }
 
+.private-hand-notices {
+  position: absolute;
+  inset: 8px 0 auto;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.private-hand-notices .private-notice {
+  position: relative;
+  bottom: auto;
+  padding: 9px 12px;
+  box-shadow: 0 2px 8px #253b3626;
+}
+
+.private-hand-notices .private-notice h2 {
+  font-size: 1rem;
+}
+
+.private-hand-notices .private-notice button {
+  pointer-events: auto;
+}
+
+.private-hand-notices :is(.private-resource-notice, .private-sabotage-notice) .private-notice-body > div {
+  margin-top: 0;
+}
+
+.private-hand-notices .private-resource-notice .resource-card,
+.private-hand-notices .private-sabotage-notice .private-notice-body div > span {
+  width: 26px;
+  height: 34px;
+}
+
+.private-hand-notices .private-resource-notice .resource-card svg {
+  width: 16px;
+  height: 16px;
+}
+
+.private-hand-notices .private-sabotage-notice .private-notice-body .piece-icon {
+  width: 24px;
+  height: 24px;
+}
+
 .resource-collection {
   position: fixed;
   z-index: 40;
@@ -4361,25 +4449,6 @@
   animation: drawn-card-flip 480ms cubic-bezier(0.2, 1.1, 0.3, 1) both;
 }
 
-.private-session-banner {
-  position: fixed;
-  top: max(10px, env(safe-area-inset-top));
-  left: 50%;
-  z-index: 45;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: min(calc(100% - 24px), 24rem);
-  padding: 8px 10px 8px 14px;
-  border: 1px solid #88a895;
-  border-radius: 14px;
-  background: rgba(250, 246, 236, 0.97);
-  box-shadow: 0 12px 28px -12px #253b3659;
-  transform: translateX(-50%);
-  animation: session-banner-in 260ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
-}
-
 .private-syncing-indicator {
   display: inline-flex;
   align-items: center;
@@ -4558,18 +4627,6 @@
   100% {
     opacity: 1;
     transform: perspective(600px) rotateY(0deg) scale(1);
-  }
-}
-
-@keyframes session-banner-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
   }
 }
 

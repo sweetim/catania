@@ -2603,8 +2603,8 @@ export function Board({
                   aria-hidden="true"
                   data-sabotage-burst={burst.kind}
                 >
-                  <circle className="board-sabotage-ring" r="14" fill="none" stroke="#d9483b" strokeWidth="3.2" />
-                  <circle className="board-sabotage-ring board-sabotage-ring-secondary" r="10" fill="none" stroke="#f59e0b" strokeWidth="2.4" />
+                  <circle className="board-sabotage-ring" r="28" fill="none" stroke="#d9483b" strokeWidth="3.2" />
+                  <circle className="board-sabotage-ring board-sabotage-ring-secondary" r="20" fill="none" stroke="#f59e0b" strokeWidth="2.4" />
                   <g className="board-sabotage-piece">
                     {burst.kind === "road" ? (
                       <g transform={`rotate(${burst.rotation})`}>

@@ -6,16 +6,13 @@ import { resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { Arrow, CardStack, DevelopmentCardIcon, PieceIcon, ResourceCard } from "./GameUi";
-import { CloseIcon, RobberIcon, TradeIcon } from "./Icons";
+import { CloseIcon, RobberIcon, TradeIcon, WarningIcon } from "./Icons";
 
 export type TradeOutcomeEvent = {
   id: number;
-  kind: "completed" | "withdrawn" | "closed";
-  actorName: string;
-  otherName?: string;
-  partnerName?: string;
-  gave?: Resources;
-  received?: Resources;
+  partnerName: string;
+  gave: Resources;
+  received: Resources;
 };
 
 export type SabotageNoticeEvent = {
@@ -112,29 +109,14 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
     : "";
   const sabotageDescription = sabotage && saboteur
     ? match(sabotage.kind)
-      .with("road", () => translateText("{player} sabotaged your road.", { player: saboteur.name }))
-      .with("ship", () => translateText("{player} sabotaged your ship.", { player: saboteur.name }))
-      .with("settlement", () => translateText("{player} sabotaged your settlement.", { player: saboteur.name }))
+      .with("road", () => translateText("{player} destroyed your road.", { player: saboteur.name }))
+      .with("ship", () => translateText("{player} destroyed your ship.", { player: saboteur.name }))
+      .with("settlement", () => translateText("{player} destroyed your settlement.", { player: saboteur.name }))
       .with("city", () => translateText("{player} reduced your city to a settlement.", { player: saboteur.name }))
       .exhaustive()
     : "";
-  const tradeOutcomeTitle = tradeOutcome
-    ? tradeOutcome.kind === "completed"
-      ? tradeOutcome.partnerName
-        ? translateText("Traded with {player}", { player: tradeOutcome.partnerName })
-        : translateText("{player} traded with {other}", { player: tradeOutcome.actorName, other: tradeOutcome.otherName ?? "" })
-      : tradeOutcome.kind === "withdrawn"
-        ? translateText("{player} withdrew the trade", { player: tradeOutcome.actorName })
-        : translateText("Trade closed")
-    : "";
   const tradeOutcomeDescription = tradeOutcome
-    ? tradeOutcome.kind === "completed"
-      ? tradeOutcome.partnerName
-        ? translateText("You completed a trade with {player}.", { player: tradeOutcome.partnerName })
-        : translateText("{player} completed a trade with {other}.", { player: tradeOutcome.actorName, other: tradeOutcome.otherName ?? "" })
-      : tradeOutcome.kind === "withdrawn"
-        ? translateText("{player} withdrew the open trade.", { player: tradeOutcome.actorName })
-        : translateText("The open trade ended.")
+    ? translateText("You completed a trade with {player}.", { player: tradeOutcome.partnerName })
     : "";
   const remainingCount = pendingThefts.length + pendingMonopolies.length + pendingSabotages.length + pendingTradeOutcomes.length - (head ? 1 : 0);
   const footer = remainingCount > 0
@@ -160,7 +142,7 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
       <span key={tradeOutcome ? `${playerId}-trade-${tradeOutcome.id}` : "empty"}>{tradeOutcomeDescription}</span>
     </p>
     {theft && theftPlayer && <section ref={notice} aria-label={translateText("Robbery notification")}
-      className={`private-notice overflow-hidden rounded-xl border bg-paper p-4 shadow-lg ${lostResources ? "border-clay" : "border-[#91ad9b]"}`}>
+      className={`private-notice private-resource-notice overflow-hidden rounded-xl border bg-paper p-4 shadow-lg ${lostResources ? "border-clay" : "border-[#91ad9b]"}`}>
       <div className="flex items-start justify-between gap-2">
         <h2 className="flex min-w-0 items-center gap-2 break-words font-serif text-xl leading-tight">
           <RobberIcon className={`h-5 w-5 shrink-0 ${lostResources ? "text-clay" : "text-ink"}`} />
@@ -184,7 +166,7 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
       {progressBar}
     </section>}
     {monopoly && monopolist && <section ref={notice} aria-label={translateText("Monopoly notification")}
-      className="private-notice overflow-hidden rounded-xl border border-clay bg-paper p-4 shadow-lg">
+      className="private-notice private-resource-notice overflow-hidden rounded-xl border border-clay bg-paper p-4 shadow-lg">
       <div className="flex items-start justify-between gap-2">
         <h2 className="flex min-w-0 items-center gap-2 break-words font-serif text-xl leading-tight">
           <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-clay [&>svg]:h-5 [&>svg]:w-5">
@@ -210,9 +192,12 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
       {progressBar}
     </section>}
     {sabotage && saboteur && <section ref={notice} aria-label={translateText("Sabotage notification")}
-      className="private-notice overflow-hidden rounded-xl border border-clay bg-paper p-4 shadow-lg">
+      className="private-notice private-sabotage-notice overflow-hidden rounded-xl border border-clay bg-paper p-4 shadow-lg">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="min-w-0 break-words font-serif text-xl leading-tight">{translateText("{player} sabotaged you", { player: saboteur.name })}</h2>
+        <h2 className="flex min-w-0 items-center gap-2 break-words font-serif text-xl leading-tight">
+          <WarningIcon className="h-5 w-5 shrink-0 text-clay" />
+          <span className="min-w-0">{translateText("Sabotage")}</span>
+        </h2>
         <button type="button" aria-label={translateText("Dismiss sabotage notification")}
           className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-moss"
           onClick={() => setDismissedSabotages(previous => ({ ...previous, [playerId]: sabotage.id }))}>
@@ -231,11 +216,11 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
       {progressBar}
     </section>}
     {tradeOutcome && <section ref={notice} aria-label={translateText("Trade notification")}
-      className={`private-notice overflow-hidden rounded-xl border bg-paper px-3.5 py-2.5 shadow-lg ${tradeOutcome.kind === "completed" && tradeOutcome.partnerName ? "border-[#91ad9b]" : "border-line"}`}>
+      className="private-notice overflow-hidden rounded-xl border border-[#91ad9b] bg-paper px-3.5 py-2.5 shadow-lg">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex min-w-0 items-center gap-2 break-words font-serif text-lg leading-tight">
           <TradeIcon className="h-4 w-4 shrink-0 text-muted" />
-          <span className="min-w-0">{tradeOutcomeTitle}</span>
+          <span className="min-w-0">{translateText("Traded with {player}", { player: tradeOutcome.partnerName })}</span>
         </h2>
         <button type="button" aria-label={translateText("Dismiss trade notification")}
           className="-mr-1.5 -my-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-moss"
@@ -244,15 +229,11 @@ export function PrivateNotices({ thefts, monopolies, sabotages = [], tradeOutcom
         </button>
       </div>
       <div key={`trade-${tradeOutcome.id}`} className="private-notice-body">
-        {tradeOutcome.gave && tradeOutcome.received ? (
-          <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center justify-items-center gap-2 rounded-lg bg-moss/65 px-2.5 py-1.5">
-            <CardStack label={translateText("You give")} resources={tradeOutcome.gave} />
-            <Arrow className="h-4 w-4 shrink-0 text-ink/60" />
-            <CardStack label={translateText("You receive")} resources={tradeOutcome.received} />
-          </div>
-        ) : (
-          <p className="mt-1 text-xs text-muted">{tradeOutcomeDescription}</p>
-        )}
+        <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center justify-items-center gap-2 rounded-lg bg-moss/65 px-2.5 py-1.5">
+          <CardStack label={translateText("You gave")} resources={tradeOutcome.gave} />
+          <Arrow className="h-4 w-4 shrink-0 text-ink/60" />
+          <CardStack label={translateText("You received")} resources={tradeOutcome.received} />
+        </div>
         {footer}
       </div>
       {progressBar}

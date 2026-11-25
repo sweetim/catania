@@ -1,7 +1,8 @@
 import { chooseComputerAction as baselineAction } from "./computer-baseline";
 import { chooseComputerAction as challengerAction } from "./computer-challenger";
 import { applyAction, createGame, getScore } from "../src/game/engine";
-import type { GameState, Player } from "../src/game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isGameVariant } from "../src/game/types";
+import type { GameState, GameVariant, Player } from "../src/game/types";
 
 type Chooser = typeof baselineAction;
 
@@ -33,9 +34,12 @@ function playGame(
   seed: number,
   profiles: Pick<Player, "name" | "color" | "control">[],
   chooser: (name: string) => Chooser,
+  variant: GameVariant,
 ): GameResult | null {
   const random = seededRandom(seed);
-  let state: GameState = createGame(profiles, random);
+  let state: GameState = variant === "custom-world"
+    ? createGame(profiles, random, undefined, variant, undefined, DEFAULT_CUSTOM_MAP_CONFIG)
+    : createGame(profiles, random, undefined, variant);
   let steps = 0;
   const counts = new Map(state.players.map(player => [player.name, new Map<string, number>()]));
   while (!state.winnerId && steps < 5000) {
@@ -43,7 +47,7 @@ function playGame(
     const decision = state.players
       .map(player => ({ player, action: chooser(player.name)(state, player.id, now) }))
       .find(decision => decision.action);
-    if (!decision) throw new Error(`Seed ${seed} deadlocked at step ${steps}, phase ${state.phase.type}`);
+    if (!decision) throw new Error(`Seed ${seed} (${variant}) deadlocked at step ${steps}, phase ${state.phase.type}`);
     state = applyAction(state, decision.player.id, decision.action!, random, now);
     const playerCounts = counts.get(decision.player.name)!;
     playerCounts.set(decision.action!.type, (playerCounts.get(decision.action!.type) ?? 0) + 1);
@@ -92,6 +96,8 @@ const offset = Number(process.argv[3] ?? 1);
 const mode = process.argv[4] ?? "4p";
 const sanity = process.argv[5] === "sanity";
 const diag = process.argv[6] === "diag";
+const variantArgument = process.argv[7] ?? "original";
+const variant: GameVariant = isGameVariant(variantArgument) ? variantArgument : "original";
 // Sanity mode plays the full seat-rotation families with the baseline AI in
 // every seat: the "New" label then covers each seat exactly once per family,
 // so its null win rate is exactly its seat share, and wins above that
@@ -113,7 +119,7 @@ for (let seed = offset; seed < offset + seeds; seed++) {
   let challengerFamilyWins = 0;
   let familyGames = 0;
   for (const profiles of families) {
-    const result = playGame(seed, profiles, chooser);
+    const result = playGame(seed, profiles, chooser, variant);
     if (!result) {
       timeouts++;
       continue;
@@ -146,7 +152,7 @@ const decisiveFamilies = familyWins + familyLosses;
 const binomialP = finished > 0
   ? Math.min(1, 2 * Math.min(binomialTailAtMost(newWins, finished, nullRate), binomialTailAtLeast(newWins, finished, nullRate)))
   : 1;
-console.log(`mode=${mode} sanity=${sanity} seeds=${seeds} (x${families.length} seat${families.length > 1 ? "s" : ""} each) seeds=${offset}..${offset + seeds - 1}`);
+console.log(`mode=${mode} variant=${variant} sanity=${sanity} seeds=${seeds} (x${families.length} seat${families.length > 1 ? "s" : ""} each) seeds=${offset}..${offset + seeds - 1}`);
 console.log(`finished=${finished} timeouts=${timeouts}`);
 console.log(`new wins=${newWins} old wins=${oldWins} new win rate=${(rate * 100).toFixed(1)}% (null ${(nullRate * 100).toFixed(1)}%) 95% CI [${(low * 100).toFixed(1)}%, ${(high * 100).toFixed(1)}%] z=${z.toFixed(2)} p=${binomialP.toFixed(4)}`);
 if (sanity) {

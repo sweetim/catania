@@ -31,13 +31,13 @@ export function getPhaseInstructions({
   const fogGame = isFogWorld(variant) || fogWorld;
   return match(phase)
     .with({ type: "setup-settlement" }, () => ({
-      title: translateText("Find a place to call home."),
+      title: translateText(sharedBoard ? "Place your settlement on the shared board" : "Find a place to call home."),
       description: translateText(fogGame
         ? "Choose a highlighted node on the selected land cell for your settlement."
         : sharedBoard
           ? secondSettlement
-            ? "Place your second settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
-            : "Place your first settlement on a highlighted intersection on the shared board. Leave at least two edges between settlements."
+            ? "Choose a highlighted intersection for your second settlement. Leave at least two edges between settlements."
+            : "Choose a highlighted intersection for your first settlement. Leave at least two edges between settlements."
           : secondSettlement
             ? "Place your second settlement on a highlighted intersection. Leave at least two edges between settlements."
             : "Place your first settlement on a highlighted intersection. Leave at least two edges between settlements."),

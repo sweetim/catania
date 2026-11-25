@@ -218,66 +218,27 @@ export function detectPlayerSabotages(
   return events;
 }
 
-export function detectTradeOutcome(
+export function detectCompletedTrade(
   previous: PublicGame,
   next: PublicGame,
-  previousResources: Resources,
-  nextResources: Resources,
   playerId: string,
   allocateId: () => number,
 ): TradeOutcomeEvent | null {
-  if (previous.gameId !== next.gameId || !previous.trade || next.trade) return null;
-  const entries = newLogEntries(previous, next);
-  const completedEntry = entries.find(entry => entry.key === "{player} trades with {other}.");
-  const withdrawnEntry = entries.find(entry => entry.key === "{player} withdraws the trade offer.");
-  const offeringPlayer = next.players.find(player => player.id === previous.trade!.offeredBy);
-  const self = next.players.find(player => player.id === playerId);
-
-  if (completedEntry) {
-    const actorName = typeof completedEntry.parameters?.player === "string"
-      ? completedEntry.parameters.player
-      : offeringPlayer?.name ?? "";
-    const otherName = typeof completedEntry.parameters?.other === "string"
-      ? completedEntry.parameters.other
-      : "";
-    const involved = self && (actorName === self.name || otherName === self.name);
-    const partnerName = involved ? (actorName === self.name ? otherName : actorName) : undefined;
-    const gave = emptyResources();
-    const received = emptyResources();
-    if (involved) {
-      for (const resource of RESOURCES) {
-        const delta = nextResources[resource] - previousResources[resource];
-        if (delta > 0) received[resource] = delta;
-        else if (delta < 0) gave[resource] = -delta;
-      }
-    }
-    return {
-      id: allocateId(),
-      kind: "completed",
-      actorName,
-      otherName,
-      ...(partnerName ? { partnerName } : {}),
-      ...(involved && resourceTotal(gave) > 0 && resourceTotal(received) > 0 ? { gave, received } : {}),
-    };
-  }
-
-  if (withdrawnEntry) {
-    const actorName = typeof withdrawnEntry.parameters?.player === "string"
-      ? withdrawnEntry.parameters.player
-      : offeringPlayer?.name ?? "";
-    // Do not show a withdrawal toast to the player who just clicked Withdraw themselves.
-    if (previous.trade.offeredBy === playerId) return null;
-    return {
-      id: allocateId(),
-      kind: "withdrawn",
-      actorName,
-    };
-  }
-
-  if (previous.trade.offeredBy === playerId) return null;
+  const trade = previous.trade;
+  if (!trade || next.trade) return null;
+  const offerer = next.players.find(player => player.id === trade.offeredBy);
+  if (!offerer) return null;
+  const completed = newLogEntries(previous, next).findLast(entry =>
+    entry.key === "{player} trades with {other}." && entry.parameters?.player === offerer.name);
+  const partner = next.players.find(player => player.id !== offerer.id && player.name === completed?.parameters?.other);
+  if (!partner || (playerId !== offerer.id && playerId !== partner.id)) return null;
+  const price = trade.responses[partner.id];
+  if (!price) return null;
+  const offered = playerId === offerer.id;
   return {
     id: allocateId(),
-    kind: "closed",
-    actorName: offeringPlayer?.name ?? "",
+    partnerName: offered ? partner.name : offerer.name,
+    gave: offered ? price : trade.receive,
+    received: offered ? trade.receive : price,
   };
 }

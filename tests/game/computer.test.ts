@@ -377,6 +377,120 @@ describe("computer strategic planning", () => {
     ];
     expect(chooseAndApply(state).action).toEqual({ type: "move-ship", edgeId: "ship-old", destinationEdgeId: "ship-fog" });
   });
+
+  test("executes a multi-action winning sequence immediately instead of requesting a trade", () => {
+    let state = strategicGame();
+    state.computerTradeRequested = false;
+    const playerId = state.activePlayerId;
+    state.players.find(player => player.id === playerId)!.developmentCards =
+      Array.from({ length: 7 }, (_, index) => ({ id: `point-${index}`, kind: "victory-point" as const, purchasedTurn: 0 }));
+    // 8 points currently: can build both a city and a settlement this turn to reach 10 points immediately.
+    setResources(state, playerId, resources({ wood: 1, brick: 1, wool: 1, grain: 3, ore: 3 }));
+    const first = chooseAndApply(state);
+    expect(["place-city", "place-settlement"]).toContain(first.action.type);
+    state = first.state;
+    const second = chooseAndApply(state);
+    expect(["place-city", "place-settlement"]).toContain(second.action.type);
+    expect(second.state.winnerId).toBe(playerId);
+  });
+
+  test("avoids playing a Knight before rolling when holding 7 cards unless winning or heavily blocked", () => {
+    const state = strategicGame();
+    state.phase = { type: "roll" };
+    state.robberTileId = "wool";
+    const player = state.players.find(candidate => candidate.id === state.activePlayerId)!;
+    const opponent = state.players.find(candidate => candidate.id !== player.id)!;
+    state.board.vertices.push({
+      id: "opponent-spot", x: 0, y: 0, tileIds: ["opponent-tile"], edgeIds: [],
+      building: { playerId: opponent.id, kind: "city" },
+    });
+    state.board.tiles.push({
+      id: "opponent-tile", x: 0, y: 0, terrain: "ore", number: 8, vertexIds: ["opponent-spot"],
+    });
+    setResources(state, opponent.id, resources({ ore: 2 }));
+    setResources(state, player.id, resources({ wood: 2, brick: 2, wool: 1, grain: 1, ore: 1 }));
+    player.developmentCards = [
+      { id: "knight-1", kind: "knight", purchasedTurn: 0 },
+      { id: "knight-2", kind: "knight", purchasedTurn: 0 },
+    ];
+    expect(chooseAndApply(state).action).toEqual({ type: "roll" });
+  });
+
+  test("splits an opponent's Longest Road with a settlement when it swings the award", () => {
+    const state = strategicGame();
+    const playerId = state.activePlayerId;
+    const opponentId = state.players.find(other => other.id !== playerId)!.id;
+    state.board.vertices = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        id: `opponent-vertex-${index}`, x: 0, y: 0, tileIds: ["low-tile"],
+        edgeIds: [
+          index > 0 ? `opponent-edge-${index - 1}` : null,
+          index < 6 ? `opponent-edge-${index}` : null,
+          index === 3 ? "player-branch-2" : null,
+        ].filter((id): id is string => id !== null),
+        building: index === 0 ? { playerId: opponentId, kind: "settlement" as const } : null,
+      })),
+      { id: "player-home", x: 0, y: 0, tileIds: ["rich-tile"], edgeIds: ["player-branch-1", "alt-edge"], building: { playerId, kind: "settlement" } },
+      { id: "player-mid", x: 0, y: 0, tileIds: [], edgeIds: ["player-branch-1", "player-branch-2"], building: null },
+      { id: "alt-mid", x: 0, y: 0, tileIds: [], edgeIds: ["alt-edge", "alt-edge-2"], building: null },
+      { id: "alt-site", x: 0, y: 0, tileIds: ["mid-tile"], edgeIds: ["alt-edge-2"], building: null },
+    ];
+    state.board.edges = [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `opponent-edge-${index}`, vertexIds: [`opponent-vertex-${index}`, `opponent-vertex-${index + 1}`] as [string, string],
+        playerId: opponentId,
+      })),
+      { id: "player-branch-1", vertexIds: ["player-home", "player-mid"], playerId },
+      { id: "player-branch-2", vertexIds: ["player-mid", "opponent-vertex-3"], playerId },
+      { id: "alt-edge", vertexIds: ["player-home", "alt-mid"], playerId },
+      { id: "alt-edge-2", vertexIds: ["alt-mid", "alt-site"], playerId },
+    ];
+    state.board.tiles = [
+      { id: "low-tile", x: 0, y: 0, terrain: "wool", number: 3, vertexIds: state.board.vertices.filter(vertex => vertex.id.startsWith("opponent-")).map(vertex => vertex.id) },
+      { id: "mid-tile", x: 0, y: 0, terrain: "wood", number: 6, vertexIds: ["alt-site"] },
+      { id: "rich-tile", x: 0, y: 0, terrain: "ore", number: 8, vertexIds: ["player-home"] },
+    ];
+    state.awards.longestRoad = opponentId;
+    setResources(state, playerId, resources({ wood: 1, brick: 1, wool: 1, grain: 1 }));
+    expect(chooseAndApply(state).action).toEqual({ type: "place-settlement", vertexId: "opponent-vertex-3" });
+  });
+
+  test("settles on a strong revealed intersection on second Foggy World placement instead of gambling on fog", () => {
+    const state = createGame(profiles.slice(0, 3), seededRandom(17), undefined, "foggy-world");
+    const playerId = state.activePlayerId;
+    state.phase = { type: "setup-reveal" };
+    state.setupIndex = 3;
+    const firstVertex = state.board.vertices[0]!;
+    firstVertex.building = { playerId, kind: "settlement" };
+    const candidateVertex = state.board.vertices.find(vertex =>
+      !vertex.building &&
+      vertex.tileIds.length === 3 &&
+      !vertex.edgeIds.some(edgeId => state.board.edges.find(edge => edge.id === edgeId)!.vertexIds.includes(firstVertex.id)),
+    )!;
+    const chosenTerrains = ["ore", "grain", "wood"] as const;
+    const chosenNumbers = [6, 8, 9] as const;
+    candidateVertex.tileIds.forEach((tileId, index) => {
+      const tile = state.board.tiles.find(candidate => candidate.id === tileId)!;
+      tile.terrain = chosenTerrains[index]!;
+      tile.number = chosenNumbers[index]!;
+    });
+    expect(chooseAndApply(state).action).toEqual({ type: "place-settlement", vertexId: candidateVertex.id });
+  });
+
+  test("accepts a 2-for-1 counter-proposal when it beats a 4-for-1 bank trade to finish a city", () => {
+    let state = strategicGame();
+    state.computerTradeRequested = false;
+    state.board.ports = [];
+    const requesterId = state.activePlayerId;
+    const opponent = state.players.find(other => other.id !== requesterId)!;
+    opponent.control = "human";
+    setResources(state, requesterId, resources({ wood: 4, grain: 2, ore: 2 }));
+    setResources(state, opponent.id, resources({ ore: 1 }));
+    const requested = chooseAndApply(state);
+    expect(requested.action).toEqual({ type: "request-trade", receive: resources({ ore: 1 }) });
+    state = applyAction(requested.state, opponent.id, { type: "propose-trade", price: resources({ wood: 2 }) });
+    expect(chooseAndApply(state).action).toEqual({ type: "complete-trade", playerId: opponent.id });
+  });
 });
 
 describe("computer identity and authority", () => {

@@ -75,13 +75,27 @@ work") require constant clarification.
 
 - After code changes that affect documented behavior, update the relevant docs
   (README, AGENTS.md, inline docs) to match the new behavior.
+- Invoke Bun via `mise exec -- bun ...` (or with `$HOME/.local/share/mise/shims`
+  on `PATH`), since `bun` is managed by `mise.toml` and may not be on the
+  default non-interactive `PATH`.
+- After any UI or `RoomSnapshot`/protocol change, check single-device and
+  multi-device parity, both `en` and `ja` localization, and desktop + narrow
+  mobile (`320px`) / unfolded layouts.
 - After UI-related changes, add or update automated UI tests for the affected
-  behavior and run them. When browser tooling is available, verify the affected
-  UI directly. Report test results and any verification that could not be
-  completed.
-- Multiple agents work on this workspace concurrently. When running Playwright
-  browser tests, use your own port if the default one is in use, and scope the
-  tests to your own changes only.
+  behavior and run them. When modifying shared components, visible labels,
+  selectors, or snapshot fields, grep `tests/browser/` for all affected
+  assertions and run every impacted test—not only newly added tests. Always run
+  `mise exec -- bun run typecheck` and `mise exec -- bun run test:browser --list`
+  after editing browser specs. Report test results and any verification that
+  could not be completed.
+- Multiple agents work on this workspace concurrently. For every Playwright run,
+  always isolate ports, output directories, and worker count:
+  `PLAYWRIGHT_PORT=<p1> PLAYWRIGHT_SIGNALING_PORT=<p2> PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/<run> mise exec -- bun run test:browser --output=test-results/<run> --workers=4 <spec-or-grep>`
+- This workspace runs over Remote SSH, where arbitrary `127.0.0.1:<port>` or
+  `localhost:<port>` dev servers are not reachable from VS Code's integrated
+  browser (`openBrowserPage`). Verify UI changes via Playwright browser tests
+  and inspect their captured screenshots; only use `openBrowserPage` with a
+  known reachable host/IP (`HOST=<host>`).
 
 ## 6. Learn From User Feedback
 

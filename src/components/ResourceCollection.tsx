@@ -12,6 +12,18 @@ export type ResourceReceipt = {
   gains: Resources;
 };
 
+export function ResourceReceiptAnnouncement({ receipt }: { receipt: ResourceReceipt | null }) {
+  const { language } = useLanguage();
+  const translateText = useTranslation(gameplayTranslations);
+  const resources = receipt ? RESOURCES.filter(resource => receipt.gains[resource] > 0) : [];
+  const description = receipt
+    ? translateText("You received {resources}.", { resources: resources.map(resource => translateText("+{count} {resource}", { count: receipt.gains[resource], resource: resourceName(language, resource) })).join(language === "ja" ? "、" : ", ") })
+    : "";
+  return <p role="status" aria-label={translateText("Resource receipt")} aria-atomic="true" className="sr-only">
+    <span key={receipt?.id ?? "empty"}>{description}</span>
+  </p>;
+}
+
 export function ResourceCollection({ receipt, onDismiss }: {
   receipt: ResourceReceipt | null;
   onDismiss: () => void;
@@ -20,15 +32,10 @@ export function ResourceCollection({ receipt, onDismiss }: {
   const translateText = useTranslation(gameplayTranslations);
   const resources = receipt ? RESOURCES.filter(resource => receipt.gains[resource] > 0) : [];
   const total = receipt ? resourceTotal(receipt.gains) : 0;
-  const description = receipt
-    ? translateText("You received {resources}.", { resources: resources.map(resource => translateText("+{count} {resource}", { count: receipt.gains[resource], resource: resourceName(language, resource) })).join(language === "ja" ? "、" : ", ") })
-    : "";
 
   return (
     <>
-      <p role="status" aria-label={translateText("Resource receipt")} aria-atomic="true" className="sr-only">
-        <span key={receipt?.id ?? "empty"}>{description}</span>
-      </p>
+      <ResourceReceiptAnnouncement receipt={receipt} />
       {receipt && (
         <section
           key={receipt.id}

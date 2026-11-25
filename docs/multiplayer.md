@@ -167,21 +167,25 @@ directly visible. On portrait phones, your hand scrolls above the pinned turn/di
 panel; on landscape phones, tablets, and wider screens (`min-width: 700px`), the
 player summary spans the top while the hand and turn controls sit side by side in
 two columns without page scrolling. Active turns highlight the turn panel with your player accent color and a brief
-turn-arrival pulse, and board-placement phases (setup, robber/pirate moves, Road
+turn-arrival pulse. During settlement setup, **Place your settlement on the shared
+board** appears as the title of the instruction card, without a separate banner.
+Other board-placement phases (road setup, robber/pirate moves, Road
 Building, or active builds) display an animated banner prompting you to act on
 the shared board (with a one-tap **Cancel** button during normal build modes).
-Resource gains animate into your hand with the same **Added to your hand**
-resource-collection overlay and dealt-card badges as single-device play, rolled
+Resource gains appear as dealt-card badges in your hand, and roll gains also
+appear in the dice tray. Phones do not show a separate collection pop-up. Rolled
 sevens highlight the dice tray and wait for dice to settle before opening the
 discard dialog, and buying a development card opens a **Development card drawn**
 reveal dialog. Gold resource choices open in a modal dialog (with a **Choose
 gold** shortcut in the turn controls if dismissed, and queued waiting instructions
-when another player picks first). Private overlay notices also notify victims of
-sabotage alongside robberies, monopolies, and trade outcomes, with a five-second
-auto-dismiss progress bar, and phones display brief notices when a game starts
-(showing seat number and color), resets, returns to the lobby, or closes. Phase
-guidance uses the same green instruction panel, headings, and explanations as
-single-device play, with placement directions referring to the shared board. When a long
+when another player picks first). Each resource row shows how many you have and
+lets you adjust your picks if the resource is in stock. The **Collect** button
+stays at the bottom and becomes available once you've made all your picks.
+Starting or resetting a game takes phones
+straight to setup without a separate notice. Returning to the lobby or closing
+the room is reported on the resulting screen. Phase
+guidance uses the same green instruction panel as single-device play, with
+placement directions referring to the shared board. When a long
 instruction wraps past two lines on a phone, tap the toggle button in the instruction
 card to expand or collapse the full text. Build-unavailable explanations appear neatly
 beneath the two-column build grid.
@@ -215,9 +219,11 @@ and responses unchanged. Choosing a trade partner or a theft victim opens a
 action; **Buy a card** opens a compact **Cancel** / **Buy** dialog showing only
 the card cost. Concurrent trade actions (**Complete trade**, **Withdraw**, **Change offer**,
 and responses) survive unrelated version bumps such as another player answering, while still
-blocking stale confirmations if the trade or chosen partner's price changes. Completed,
-withdrawn, or closed trades display a brief dismissible outcome notice above the turn
-controls. Development cards
+blocking stale confirmations if the trade or chosen partner's price changes. A
+completed trade shows a receipt over each partner's resource cards; other players
+can see the exchange in **Table activity**. An offer that ends while you're
+viewing it closes the dialog without showing a banner.
+Development cards
 remain selectable for inspection, including hidden victory points and cards that
 cannot yet be played; eligible action cards are confirmed in the same dialog.
 Resource-affecting choices show your hand, and discards show selected and remaining
@@ -233,10 +239,15 @@ result without replaying an old roll.
 
 Successful thefts show a dismissible private notice on both involved phones:
 the victim sees who robbed them and the exact card lost (**-1**), and the thief
-sees who they stole from and the card gained (**+1**). Notices overlay immediately
-above the turn/dice panel without shifting the hand or controls, one at a time,
-and disappear after five seconds
-on-screen or manual dismissal. Off-screen notices wait until scrolled into view.
+sees who they stole from and the card gained (**+1**). Robbery, Monopoly,
+sabotage and completed-trade notices appear one at a time over the resource
+cards, without moving the hand, build buttons, or turn controls. They disappear after
+five seconds on-screen or on manual dismissal. Off-screen notices wait until
+scrolled into view.
+Robbery and Monopoly show the resource and signed count beneath their titles.
+The **Sabotage** notice names the attacker and explains what happened in one
+sentence beside the affected piece.
+The trade receipt shows **You gave** and **You received** side by side.
 Public log entries remain generic and the shared
 board receives no private theft details. Theft events and notice dismissals survive
 reconnecting in the same page; reloading the page resets local notice dismissals.

@@ -44,12 +44,12 @@ import { getPhaseInstructions, TurnInstructions } from "../components/TurnInstru
 import { TradeDialog } from "../components/TradeDialog";
 import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices, type SabotageNoticeEvent, type TradeOutcomeEvent } from "../components/PrivateNotices";
-import { ResourceCollection, type ResourceReceipt } from "../components/ResourceCollection";
+import { ResourceReceiptAnnouncement, type ResourceReceipt } from "../components/ResourceCollection";
 import { CollapsibleSection } from "../components/CollapsibleSection";
 import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
 import { COSTS, emptyResources, hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { DEFAULT_CUSTOM_MAP_CONFIG, isCustomSabotageEnabled, isSeafarers, type DevelopmentKind, type GameAction, type GameVariant, type Resources, type TradeOffer } from "../game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isCustomSabotageEnabled, isSeafarers, type DevelopmentKind, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -61,7 +61,7 @@ import { hostSession, joinSession } from "./session";
 import { parseInvitationUrl } from "./invitation";
 import { validName, type TradeIdentity } from "./protocol";
 import { MultiplayerDice, SharedBoardDice, useDiceRollAnimation } from "./MultiplayerDice";
-import { computeSharedRollProduction, detectPlayerSabotages, detectSharedPublicEvents, type SharedPublicEvent } from "./presentation";
+import { computeSharedRollProduction, detectCompletedTrade, detectPlayerSabotages, detectSharedPublicEvents, type SharedPublicEvent } from "./presentation";
 import type { BuildMode, Invitation, MultiplayerSession, PublicGame, RoomSnapshot, SessionView } from "./types";
 import "../index.css";
 
@@ -373,7 +373,7 @@ function SharedTableStatus({ game, highlightedRolledNumber, onShowInvitation }: 
   );
 }
 
-function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBuild, onPrivateNoticeTarget, onOpenDialog, externalDialogOpen, vibrateOnYourTurn, sessionBanner, onDismissSessionBanner }: {
+function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBuild, onPrivateNoticeTarget, onOpenDialog, externalDialogOpen, vibrateOnYourTurn }: {
   snapshot: RoomSnapshot;
   disabled: boolean;
   syncing?: boolean;
@@ -384,8 +384,6 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
   onOpenDialog: (dialog: "help" | "settings" | "leave") => void;
   externalDialogOpen: boolean;
   vibrateOnYourTurn: boolean;
-  sessionBanner?: { title: string; subtitle?: string; color?: string } | null;
-  onDismissSessionBanner?: () => void;
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(multiplayerUiTranslations);
@@ -723,11 +721,6 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
       text: translateText("Place your {piece} on the shared board", { piece: pieceName(language, snapshot.buildMode) }),
       cancelable: true,
     } : null)
-    .with({ type: "setup-settlement" }, () => ({
-      iconPiece: "settlement" as const,
-      text: translateText("Place your settlement on the shared board"),
-      cancelable: false,
-    }))
     .with({ type: "setup-reveal" }, () => ({
       iconPiece: "settlement" as const,
       text: translateText("Choose a cell or settlement on the shared board"),
@@ -785,7 +778,8 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
         </>} />
     </section>
     <section className="hand-content private-hand" aria-label={translateText("Your cards")}>
-      <section className="hand-resources" aria-label={translateText("Your current resources")}>
+      <ResourceReceiptAnnouncement receipt={resourceReceipt} />
+      <section className="hand-resources relative" aria-label={translateText("Your current resources")}>
         <ul aria-label={translateText("Cards in hand")} className="grid grid-cols-5 gap-1.5 sm:gap-2">
           {RESOURCES.map(resource => {
             const count = player.resources[resource];
@@ -811,6 +805,7 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
             </li>;
           })}
         </ul>
+        <div ref={onPrivateNoticeTarget} className="private-hand-notices" />
       </section>
       <CollapsibleSection title={translateText("Build a little bigger")} className="hand-building" defaultOpen>
         <div className="build-options private-build-grid grid grid-cols-2 gap-2">
@@ -911,7 +906,6 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
           )}
         </div>
       )}
-      <div ref={onPrivateNoticeTarget} className="private-notice-anchor" />
       <div className="turn-header">
         <h2 className="turn-owner">
           {game.winnerId ? (
@@ -983,9 +977,9 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
     {details === "discard" && discardCount !== undefined && <Dialog title={translateText("Discard {count} cards", { count: discardCount })} onClose={() => setDetails(null)} summary={<ResourceInventory resources={player.resources} />}>
       <DiscardSelection resources={player.resources} required={discardCount} chosenResources={chosen} onChangeResources={setChosen} disabled={disabled} onConfirm={() => send({ type: "discard", resources: chosen })} />
     </Dialog>}
-    {details === "gold" && choosingGold && game.phase.type === "gold" && <Dialog title={translateText("Choose your gold resources")} onClose={() => setDetails(null)} summary={<ResourceInventory resources={player.resources} />}>
-      <GoldSelection key={JSON.stringify(game.phase.required)} bank={game.bank} count={game.phase.required[player.id]!} disabled={disabled} onSubmit={resources => send({ type: "choose-gold", resources })} />
-    </Dialog>}
+    {details === "gold" && choosingGold && game.phase.type === "gold" && <GoldSelection
+      key={JSON.stringify(game.phase.required)} hand={player.resources} bank={game.bank} count={game.phase.required[player.id]!}
+      disabled={disabled} onClose={() => setDetails(null)} onSubmit={resources => send({ type: "choose-gold", resources })} />}
     {details === "steal" && active && game.phase.type === "steal" && <Dialog title={translateText("Choose a player to steal from")} onClose={() => setDetails(null)}>
       <div className="space-y-2"><TheftChoices players={game.phase.victimIds.map(playerId => {
         const victim = game.players.find(other => other.id === playerId)!;
@@ -1046,24 +1040,7 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
       confirmLabel={confirmation.confirmLabel ? translateText(confirmation.confirmLabel) : undefined}
       disabled={disabled || confirmationStale} error={confirmationStale ? staleMessage : error}
       onClose={() => { setConfirmation(null); if (confirmation.returnTo) setDetails(confirmation.returnTo); }} onConfirm={() => send(confirmation.action, confirmation.version, confirmation.trade)} />}
-  </div>
-  {sessionBanner && (
-    <div role="status" className="private-session-banner">
-      <span className="flex min-w-0 items-center gap-2">
-        {sessionBanner.color && (
-          <span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: sessionBanner.color }} />
-        )}
-        <span className="min-w-0">
-          <strong className="block truncate text-xs font-semibold text-ink">{sessionBanner.title}</strong>
-          {sessionBanner.subtitle && <span className="block truncate text-[11px] text-muted">{sessionBanner.subtitle}</span>}
-        </span>
-      </span>
-      <button type="button" aria-label={translateText("Dismiss notice")} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-moss" onClick={onDismissSessionBanner}>
-        <CloseIcon className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  )}
-  <ResourceCollection receipt={resourceReceipt} onDismiss={() => setResourceReceipt(null)} /></>;
+  </div></>;
 }
 
 export function MultiplayerApp() {
@@ -1093,15 +1070,9 @@ export function MultiplayerApp() {
   const [playerSabotages, setPlayerSabotages] = useState<SabotageNoticeEvent[]>([]);
   const nextSabotageId = useRef(1);
   const nextTradeOutcomeId = useRef(1);
-  const previousTradeReference = useRef<{
-    gameId: string;
-    trade: TradeOffer | null;
-    logLength: number;
-    lastLogSerialized: string;
-  } | null>(null);
+  const previousTradeReference = useRef<PublicGame | null>(null);
   const previousPrivateGameReference = useRef<PublicGame | null>(null);
-  const previousLifecycleReference = useRef<{ connected: boolean; gameId: string | null } | null>(null);
-  const [sessionBanner, setSessionBanner] = useState<{ title: string; subtitle?: string; color?: string } | null>(null);
+  const previousConnectedGameId = useRef<string | null>(null);
   const [lobbyNotice, setLobbyNotice] = useState<keyof typeof multiplayerUiTranslations | null>(null);
   const [roomClosedDismissed, setRoomClosedDismissed] = useState(false);
   const [sharedEvents, setSharedEvents] = useState<SharedPublicEvent[]>([]);
@@ -1254,42 +1225,19 @@ export function MultiplayerApp() {
 
   useEffect(() => {
     if (host) {
-      previousLifecycleReference.current = null;
-      setSessionBanner(null);
+      previousConnectedGameId.current = null;
       setLobbyNotice(null);
       return;
     }
-    const connected = view?.status === "connected" && Boolean(snapshot?.playerId);
+    if (view?.status !== "connected" || !snapshot?.playerId) return;
     const currentGameId = game?.gameId ?? null;
-    const previous = previousLifecycleReference.current;
-    if (previous && previous.connected && connected) {
-      if (!previous.gameId && currentGameId && snapshot?.privatePlayer) {
-        const seatNumber = game!.players.findIndex(player => player.id === snapshot.privatePlayer!.id) + 1;
-        setLobbyNotice(null);
-        setSessionBanner({
-          title: translateText("Game started — Seat {number}", { number: seatNumber }),
-          subtitle: translateText("Look for your color on the shared board."),
-          color: snapshot.privatePlayer.color,
-        });
-      } else if (previous.gameId && !currentGameId) {
-        setSessionBanner(null);
-        setLobbyNotice("The host returned everyone to the lobby.");
-      } else if (previous.gameId && currentGameId && previous.gameId !== currentGameId && game?.turnNumber === 0) {
-        setSessionBanner({
-          title: translateText("The host reset the game."),
-        });
-      }
+    if (currentGameId) {
+      setLobbyNotice(null);
+    } else if (previousConnectedGameId.current) {
+      setLobbyNotice("The host returned everyone to the lobby.");
     }
-    if (connected) {
-      previousLifecycleReference.current = { connected: true, gameId: currentGameId };
-    }
-  }, [host, view?.status, snapshot?.playerId, game?.gameId, game?.turnNumber]);
-
-  useEffect(() => {
-    if (!sessionBanner) return;
-    const timer = window.setTimeout(() => setSessionBanner(null), 4500);
-    return () => window.clearTimeout(timer);
-  }, [sessionBanner]);
+    previousConnectedGameId.current = currentGameId;
+  }, [host, view?.status, snapshot?.playerId, game?.gameId]);
 
   useEffect(() => {
     const privatePlayer = snapshot?.privatePlayer;
@@ -1298,87 +1246,14 @@ export function MultiplayerApp() {
       setTradeOutcomes([]);
       return;
     }
-    const lastLogSerialized = game.log.length ? JSON.stringify(game.log[game.log.length - 1]) : "";
     const previous = previousTradeReference.current;
+    previousTradeReference.current = game;
     if (!previous || previous.gameId !== game.gameId) {
       setTradeOutcomes([]);
-      previousTradeReference.current = {
-        gameId: game.gameId,
-        trade: game.trade,
-        logLength: game.log.length,
-        lastLogSerialized,
-      };
       return;
     }
-    if (previous.trade && !game.trade) {
-      const offerer = game.players.find(candidate => candidate.id === previous.trade!.offeredBy);
-      const offererName = offerer?.name ?? "";
-      const newLogs = game.log.length > previous.logLength
-        ? game.log.slice(previous.logLength)
-        : lastLogSerialized !== previous.lastLogSerialized
-          ? game.log.slice(-3)
-          : [];
-      const completedEntry = [...newLogs].reverse().find(entry =>
-        entry.key === "{player} trades with {other}." && String(entry.parameters?.player ?? "") === offererName,
-      );
-      const withdrawnEntry = !completedEntry
-        ? [...newLogs].reverse().find(entry =>
-          entry.key === "{player} withdraws the trade offer." && String(entry.parameters?.player ?? "") === offererName,
-        )
-        : undefined;
-      if (completedEntry) {
-        const otherName = String(completedEntry.parameters?.other ?? "");
-        const otherPlayer = game.players.find(candidate => candidate.name === otherName);
-        if (previous.trade.offeredBy === privatePlayer.id) {
-          const partnerResponse = otherPlayer ? previous.trade.responses[otherPlayer.id] : undefined;
-          setTradeOutcomes(current => [...current.slice(-9), {
-            id: nextTradeOutcomeId.current++,
-            kind: "completed",
-            actorName: offererName,
-            otherName,
-            partnerName: otherName,
-            gave: partnerResponse && typeof partnerResponse === "object" ? partnerResponse : undefined,
-            received: previous.trade!.receive,
-          }]);
-        } else if (privatePlayer.name === otherName) {
-          const ownResponse = previous.trade.responses[privatePlayer.id];
-          setTradeOutcomes(current => [...current.slice(-9), {
-            id: nextTradeOutcomeId.current++,
-            kind: "completed",
-            actorName: offererName,
-            otherName,
-            partnerName: offererName,
-            gave: previous.trade!.receive,
-            received: ownResponse && typeof ownResponse === "object" ? ownResponse : undefined,
-          }]);
-        } else {
-          setTradeOutcomes(current => [...current.slice(-9), {
-            id: nextTradeOutcomeId.current++,
-            kind: "completed",
-            actorName: offererName,
-            otherName,
-          }]);
-        }
-      } else if (withdrawnEntry && previous.trade.offeredBy !== privatePlayer.id) {
-        setTradeOutcomes(current => [...current.slice(-9), {
-          id: nextTradeOutcomeId.current++,
-          kind: "withdrawn",
-          actorName: offererName,
-        }]);
-      } else if (!game.winnerId && newLogs.length > 0 && previous.trade.offeredBy !== privatePlayer.id) {
-        setTradeOutcomes(current => [...current.slice(-9), {
-          id: nextTradeOutcomeId.current++,
-          kind: "closed",
-          actorName: offererName,
-        }]);
-      }
-    }
-    previousTradeReference.current = {
-      gameId: game.gameId,
-      trade: game.trade,
-      logLength: game.log.length,
-      lastLogSerialized,
-    };
+    const completed = detectCompletedTrade(previous, game, privatePlayer.id, () => nextTradeOutcomeId.current++);
+    if (completed) setTradeOutcomes(current => [...current.slice(-9), completed]);
   }, [host, game, snapshot?.privatePlayer]);
 
   useEffect(() => {
@@ -1782,7 +1657,7 @@ export function MultiplayerApp() {
           )}
         </div>}
         {!host && game && snapshot && <div className={privateGame ? "private-game-content" : "space-y-4"}>
-          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} syncing={Boolean(view?.pending)} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} onOpenDialog={setDialog} externalDialogOpen={dialog !== null} vibrateOnYourTurn={boardSettings.vibrateOnYourTurn} sessionBanner={sessionBanner} onDismissSessionBanner={() => setSessionBanner(null)} />
+          {snapshot.privatePlayer ? <PlayerControls key={`${view?.status}:${game.gameId}`} snapshot={snapshot} disabled={disabled} syncing={Boolean(view?.pending)} error={sessionError} perform={(action, expectedVersion, trade) => session.current?.perform(action, expectedVersion, trade)} selectBuild={piece => session.current?.selectBuild(piece, snapshot.version)} onPrivateNoticeTarget={setPrivateNoticeTarget} onOpenDialog={setDialog} externalDialogOpen={dialog !== null} vibrateOnYourTurn={boardSettings.vibrateOnYourTurn} />
             : <p className="text-sm text-muted">{translateText("Waiting for your private player information.")}</p>}
           {victoryWinner && !victoryDismissed && (
             <VictoryDialog

@@ -3106,7 +3106,7 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", { 
   const roll = page.getByRole("button", { name: "Roll the dice", exact: true });
   const endTurn = page.getByRole("button", { name: /^End turn\b/ }).first();
   const victory = page.getByRole("dialog", { name: /takes the island\./ });
-  const gold = page.getByRole("region", { name: "Choose your gold resources", exact: true });
+  const gold = page.getByRole("region", { name: /^Choose (?:\d+ gold resources?|your gold resources)$/ });
   const openTrade = page.getByRole("region", { name: "Open trade", exact: true });
   const dismissRobbery = page.getByRole("button", { name: "Dismiss robbery notification", exact: true });
   const dismissCollection = page.getByRole("button", { name: "Dismiss resource collection", exact: true });
@@ -3117,7 +3117,7 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", { 
       if (document.querySelector('[role="dialog"][aria-label$="takes the island."]')) return "victory";
       if (document.querySelector('button[aria-label="Dismiss resource collection"]')) return "dismissCollection";
       if (document.querySelector('button[aria-label="Dismiss robbery notification"]')) return "dismissRobbery";
-      if (document.querySelector('[role="region"][aria-label="Choose your gold resources"]')) return "gold";
+      if (document.querySelector(".gold-picker")) return "gold";
       const rollButton = Array.from(document.querySelectorAll("button")).find(button => button.textContent?.trim() === "Roll the dice");
       if (rollButton && !rollButton.disabled) return "roll";
       const endButton = Array.from(document.querySelectorAll("button")).find(button => /^End turn\b/.test(button.textContent?.trim() ?? ""));
@@ -3135,10 +3135,10 @@ test("a won Fog Islands game reveals every fog cell when viewing the island", { 
       continue;
     }
     if (nextAction === "gold") {
-      const collect = gold.getByRole("button", { name: "Collect resources", exact: true });
+      const collect = gold.getByRole("button", { name: /^(Collect \d+ resources?|Continue)$/ });
       for (const resource of RESOURCES) {
-        const add = gold.getByRole("button", { name: `Add ${RESOURCE_NAMES[resource]} to Take from the bank`, exact: true });
-        while (!(await collect.isEnabled()) && await add.isEnabled()) await add.click();
+        const add = gold.getByRole("button", { name: `Add ${RESOURCE_NAMES[resource]}`, exact: true });
+        while (!(await collect.isEnabled()) && await add.count() && await add.isEnabled()) await add.click();
       }
       await collect.click();
       continue;
@@ -3360,10 +3360,27 @@ for (const piece of ["road", "ship"] as const) {
     await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
     await showView(page, "hand");
     if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-    const gold = page.getByRole("region", { name: "Choose your gold resources", exact: true });
-    await expect(gold).toBeVisible();
-    await gold.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
-    await gold.getByRole("button", { name: "Collect resources", exact: true }).click();
+    const japanese = piece === "ship";
+    if (japanese) {
+      await page.setViewportSize({ width: 320, height: 568 });
+      await showView(page, "hand");
+      await page.getByRole("button", { name: "Game", exact: true }).click();
+      await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+      await page.keyboard.press("Escape");
+    }
+    const gold = page.getByRole("region", { name: japanese ? "金鉱から資源を1枚選ぶ" : "Choose 1 gold resource", exact: true });
+    const collect = gold.getByRole("button", { name: japanese ? "資源を1枚受け取る" : "Collect 1 resource", exact: true });
+    await expect(gold.getByRole("columnheader")).toHaveText(japanese ? ["資源", "手札", "選択"] : ["Resource", "In hand", "Pick"]);
+    await expect(collect).toBeDisabled();
+    await gold.getByRole("button", { name: japanese ? "木材を追加" : "Add Wood", exact: true }).click();
+    await expect(collect).toBeInViewport({ ratio: 1 });
+    await collect.click();
+    if (japanese) {
+      await page.getByRole("button", { name: "ゲーム", exact: true }).click();
+      await page.getByRole("combobox", { name: "言語", exact: true }).selectOption("en");
+      await page.keyboard.press("Escape");
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    }
     if (await collection.isVisible()) await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
     await showView(page, "board");
     await expect(fogLabels).toHaveCount(37);

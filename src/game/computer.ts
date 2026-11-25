@@ -48,6 +48,36 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     RESOURCES.map(resource => [resource, getTradeRatio(state, playerId, resource)]),
   ) as Resources;
 
+  const opponents = state.players.filter(other => other.id !== playerId);
+  const playerNameToId = new Map(state.players.map(candidate => [candidate.name, candidate.id]));
+  const opponentUnplayedDevelopmentCount = new Map<string, number>(opponents.map(other => [other.id, 0]));
+  for (const entry of state.log) {
+    const actorName = entry.parameters?.player;
+    const actorId = typeof actorName === "string" ? playerNameToId.get(actorName) : undefined;
+    if (entry.key === "{player} buys a development card." && actorId && actorId !== playerId) {
+      opponentUnplayedDevelopmentCount.set(actorId, (opponentUnplayedDevelopmentCount.get(actorId) ?? 0) + 1);
+    } else if (entry.key === "{player} plays {kind}.") {
+      if (actorId && actorId !== playerId) {
+        opponentUnplayedDevelopmentCount.set(actorId, Math.max(0, (opponentUnplayedDevelopmentCount.get(actorId) ?? 0) - 1));
+      }
+    } else if (entry.key === "{player} cancels Knight.") {
+      if (actorId && actorId !== playerId) {
+        opponentUnplayedDevelopmentCount.set(actorId, (opponentUnplayedDevelopmentCount.get(actorId) ?? 0) + 1);
+      }
+    }
+  }
+  const ownVictoryPointCards = activePlayer.developmentCards.filter(card => card.kind === "victory-point").length;
+  const totalOpponentUnplayedDevelopment = [...opponentUnplayedDevelopmentCount.values()].reduce((sum, count) => sum + count, 0);
+  const remainingVictoryPointsInPool = Math.max(0, 5 - ownVictoryPointCards);
+  const estimatedHiddenThreat = (otherId: string): number => {
+    const unplayed = opponentUnplayedDevelopmentCount.get(otherId) ?? 0;
+    if (unplayed === 0) return 0;
+    const expectedHiddenPoints = Math.min(unplayed * 0.42, remainingVictoryPointsInPool);
+    const otherPlayer = state.players.find(candidate => candidate.id === otherId)!;
+    const armyThreat = state.awards.largestArmy !== otherId && otherPlayer.knightsPlayed >= 2 ? 0.65 : 0;
+    return expectedHiddenPoints + armyThreat;
+  };
+
   const boardProduction = emptyResources();
   for (const tile of state.board.tiles) {
     if (isResource(tile.terrain) && tile.number !== null) {
@@ -135,12 +165,15 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     return value + pipCount(tile.number) * engineWeight;
   }, 0);
 
-  const islandBonus = (vertexId: string): number =>
-    (state.variant === "seafarers" || state.variant === "four-islands") && !inSetupPlacement
-      ? new Set(vertices.get(vertexId)!.tileIds.map(id => tiles.get(id)!.islandId).filter(island =>
-        island && (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(island) : island !== "main") &&
-        !state.board.vertices.some(vertex => vertex.building?.playerId === playerId &&
-          vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2 : 0;
+  function islandBonusOnBoard(board: GameState["board"], vertexId: string): number {
+    if ((state.variant !== "seafarers" && state.variant !== "four-islands") || inSetupPlacement) return 0;
+    return new Set(vertices.get(vertexId)!.tileIds.map(id => tiles.get(id)!.islandId).filter(island =>
+      island && (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(island) : island !== "main") &&
+      !board.vertices.some(vertex => vertex.building?.playerId === playerId &&
+        vertex.tileIds.some(id => tiles.get(id)!.islandId === island)))).size * 2;
+  }
+
+  const islandBonus = (vertexId: string): number => islandBonusOnBoard(state.board, vertexId);
 
   const explorationValue = (vertexId: string): number => state.variant === "fog-islands" || isFogBoard(state.board)
     ? vertices.get(vertexId)!.tileIds.filter(id => tiles.get(id)!.terrain === "fog").length * 8 : 0;
@@ -152,29 +185,120 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
 
   const isSecondSetup = state.setupIndex >= state.players.length;
   const blockedVerticesSet = new Set(blockedSettlementVertices(state.board));
-
-  const setupExpansionPotential = (vertexId: string): number => {
-    if (state.board.edges.length === 0) return 0;
-    const origin = vertices.get(vertexId)!;
-    const immediateNeighbors = new Set<string>();
-    for (const edgeId of origin.edgeIds) {
-      const edge = edges.get(edgeId)!;
-      immediateNeighbors.add(edge.vertexIds[0] === vertexId ? edge.vertexIds[1] : edge.vertexIds[0]);
-    }
-    let bestNearby = 0;
-    for (const neighborId of immediateNeighbors) {
-      const neighbor = vertices.get(neighborId)!;
-      for (const edgeId of neighbor.edgeIds) {
+  const adjacentVertexIds = new Map<string, string[]>(
+    state.board.vertices.map(vertex => [
+      vertex.id,
+      vertex.edgeIds.map(edgeId => {
         const edge = edges.get(edgeId)!;
-        const candidateId = edge.vertexIds[0] === neighborId ? edge.vertexIds[1] : edge.vertexIds[0];
+        return edge.vertexIds[0] === vertex.id ? edge.vertexIds[1] : edge.vertexIds[0];
+      }),
+    ]),
+  );
+
+  const setupExpansionPotential = (vertexId: string, excludedVertices: Set<string> = blockedVerticesSet): number => {
+    if (state.board.edges.length === 0) return 0;
+    const immediateNeighbors = new Set(adjacentVertexIds.get(vertexId) ?? []);
+    let bestNearby = 0;
+    let secondNearby = 0;
+    for (const neighborId of immediateNeighbors) {
+      for (const candidateId of adjacentVertexIds.get(neighborId) ?? []) {
         if (candidateId === vertexId || immediateNeighbors.has(candidateId)) continue;
         const candidate = vertices.get(candidateId)!;
-        if (candidate.building || blockedVerticesSet.has(candidateId)) continue;
+        if (candidate.building || excludedVertices.has(candidateId)) continue;
         if (isSeafarers(state.variant) && !candidate.tileIds.some(id => isLand(tiles.get(id)!.terrain))) continue;
-        bestNearby = Math.max(bestNearby, vertexValue(candidateId));
+        const siteScore = vertexValue(candidateId);
+        if (siteScore > bestNearby) {
+          secondNearby = bestNearby;
+          bestNearby = siteScore;
+        } else if (siteScore > secondNearby) {
+          secondNearby = siteScore;
+        }
       }
     }
-    return bestNearby * 0.08;
+    return bestNearby * 0.14 + secondNearby * 0.04;
+  };
+
+  const evaluateSetupPair = (firstVertexId: string, secondVertexId: string): number => {
+    const combined = emptyResources();
+    const combinedNumbers = new Map<number, number>();
+    const secondResources = new Set<Resource>();
+    const pairVertices = [firstVertexId, secondVertexId];
+    let weightedYield = 0;
+
+    for (let placementIndex = 0; placementIndex < pairVertices.length; placementIndex++) {
+      const currentVertexId = pairVertices[placementIndex]!;
+      for (const tileId of vertices.get(currentVertexId)!.tileIds) {
+        const tile = tiles.get(tileId)!;
+        if (tile.terrain === "desert" || tile.terrain === "sea" || tile.terrain === "fog" || tile.number === null) continue;
+        const pips = pipCount(tile.number);
+        const terrainWeight = PIP_MULTIPLIER_BY_TERRAIN[tile.terrain] *
+          (isResource(tile.terrain) ? scarcityWeight[tile.terrain] : 1);
+        const existingNumberPips = combinedNumbers.get(tile.number) ?? 0;
+        const numberDiversityFactor = 1 / (1 + existingNumberPips / 15);
+        weightedYield += pips * terrainWeight * numberDiversityFactor;
+        combinedNumbers.set(tile.number, existingNumberPips + pips);
+        if (isResource(tile.terrain)) {
+          combined[tile.terrain] += pips;
+          if (placementIndex === 1) secondResources.add(tile.terrain);
+        } else if (tile.terrain === "gold") {
+          for (const resource of RESOURCES) combined[resource] += pips * 0.48;
+        }
+      }
+    }
+
+    const totalCombined = resourceTotal(combined);
+    if (totalCombined === 0) return 0;
+
+    const breadth = RESOURCES.reduce((sum, resource) => sum + Math.min(combined[resource], 3.5), 0);
+    const missingCorePenalty = (combined.grain === 0 ? 3.2 : 0) + (combined.ore === 0 ? 2.4 : 0) +
+      (combined.wood === 0 ? 1.1 : 0) + (combined.brick === 0 ? 1.1 : 0) + (combined.wool === 0 ? 0.9 : 0);
+    const concentration = Math.max(...RESOURCES.map(resource => combined[resource])) / totalCombined;
+    const concentrationPenalty = Math.max(0, concentration - 0.5) * totalCombined * 2.1;
+    const roadSettlementSynergy = Math.min(combined.wood, combined.brick) * 0.28;
+    const shipSynergy = isSeafarers(state.variant) ? Math.min(combined.wood, combined.wool) * 0.26 : 0;
+    const cityDevelopmentSynergy = Math.min(combined.ore, combined.grain, combined.wool) * 0.34 +
+      Math.min(combined.ore, combined.grain) * 0.22;
+    const synergyBonus = Math.min(2.8, roadSettlementSynergy + shipSynergy + cityDevelopmentSynergy);
+    const hasSeaLaunch = isSeafarers(state.variant) && !isFogBoard(state.board) && pairVertices.some(vertexId =>
+      vertices.get(vertexId)!.tileIds.some(tileId => {
+        const terrain = tiles.get(tileId)!.terrain;
+        return terrain === "sea" || terrain === "fog";
+      }));
+    const seaLaunchBonus = hasSeaLaunch ? 0.75 : 0;
+
+    let pairPortBonus = 0;
+    const seenGeneralPort = { value: false };
+    const seenSpecialtyPorts = new Set<Resource>();
+    for (const currentVertexId of pairVertices) {
+      for (const port of state.board.ports) {
+        const edge = revealedPortEdges.has(port.edgeId) ? edges.get(port.edgeId) : undefined;
+        if (!edge || !edge.vertexIds.includes(currentVertexId)) continue;
+        if (port.resource === "any") {
+          if (!seenGeneralPort.value) {
+            seenGeneralPort.value = true;
+            pairPortBonus += 1.1 + Math.min(2.2, totalCombined / 12);
+          }
+        } else if (!seenSpecialtyPorts.has(port.resource)) {
+          seenSpecialtyPorts.add(port.resource);
+          const supply = combined[port.resource];
+          pairPortBonus += supply >= 5 ? Math.min(4.8, supply * 0.45) : supply * 0.16;
+        }
+      }
+    }
+
+    const startingRoadBonus = secondResources.has("wood") && secondResources.has("brick") ? 0.9 : 0;
+    const startingVarietyBonus = secondResources.size * 0.22;
+    const pairBlocked = new Set(blockedVerticesSet);
+    for (const currentVertexId of pairVertices) {
+      pairBlocked.add(currentVertexId);
+      for (const neighborId of adjacentVertexIds.get(currentVertexId) ?? []) pairBlocked.add(neighborId);
+    }
+    const expansion = setupExpansionPotential(firstVertexId, pairBlocked) +
+      setupExpansionPotential(secondVertexId, pairBlocked);
+    const islands = (islandBonus(firstVertexId) + islandBonus(secondVertexId)) * 10;
+
+    return weightedYield + breadth + synergyBonus + seaLaunchBonus + pairPortBonus + startingRoadBonus +
+      startingVarietyBonus + expansion + islands - missingCorePenalty - concentrationPenalty;
   };
 
   const coverageValue = (vertexId: string): number => {
@@ -205,15 +329,92 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     return breadth + coreResourceBonus + synergyBonus + startingRoadBonus - concentrationPenalty;
   };
 
-  const bestSetupVertex = (locations: string[]): string | undefined =>
-    locations.toSorted((first, second) =>
-      (vertexValue(second) + islandBonus(second) * 10 + coverageValue(second) + setupExpansionPotential(second)) -
-      (vertexValue(first) + islandBonus(first) * 10 + coverageValue(first) + setupExpansionPotential(first)))[0];
+  const singleSetupScore = (vertexId: string): number =>
+    vertexValue(vertexId) + islandBonus(vertexId) * 10 + coverageValue(vertexId) + setupExpansionPotential(vertexId);
+
+  const ownExistingSettlementIds = state.board.vertices
+    .filter(vertex => vertex.building?.playerId === playerId)
+    .map(vertex => vertex.id);
+
+  const bestSetupVertex = (locations: string[]): string | undefined => {
+    if (locations.length <= 1) return locations[0];
+
+    // Second setup settlement: directly maximize the combined two-settlement portfolio.
+    if (ownExistingSettlementIds.length === 1 && !isFogBoard(state.board)) {
+      const firstSettlementId = ownExistingSettlementIds[0]!;
+      return locations.toSorted((first, second) =>
+        evaluateSetupPair(firstSettlementId, second) - evaluateSetupPair(firstSettlementId, first))[0];
+    }
+
+    // First setup settlement on visible boards: anticipate snake-draft return pick.
+    if (!isSecondSetup && state.phase.type === "setup-settlement" && !isFogBoard(state.board) && state.board.edges.length > 0) {
+      const sortedCandidates = locations.toSorted((first, second) => singleSetupScore(second) - singleSetupScore(first));
+      const topFirstCandidates = sortedCandidates.slice(0, state.setupIndex === state.players.length - 1 ? 12 : 8);
+
+      // Last picker in round 1 places two settlements back-to-back with no intervening opponents.
+      if (state.setupIndex === state.players.length - 1) {
+        let bestFirst = topFirstCandidates[0]!;
+        let bestPairScore = -Infinity;
+        for (const firstCandidate of topFirstCandidates) {
+          const forbidden = new Set<string>([firstCandidate, ...(adjacentVertexIds.get(firstCandidate) ?? [])]);
+          for (const secondCandidate of topFirstCandidates) {
+            if (forbidden.has(secondCandidate)) continue;
+            const pairScore = evaluateSetupPair(firstCandidate, secondCandidate);
+            if (pairScore > bestPairScore) {
+              bestPairScore = pairScore;
+              bestFirst = firstCandidate;
+            }
+          }
+        }
+        return bestFirst;
+      }
+
+      // Earlier seats simulate greedy opponent picks until their own second placement.
+      const interveningOpponentPicks = (state.players.length - 1 - state.setupIndex) * 2;
+      const opponentBaseScore = new Map(sortedCandidates.map(vertexId => [vertexId, singleSetupScore(vertexId)]));
+      let bestFirst = topFirstCandidates[0]!;
+      let bestLookaheadScore = -Infinity;
+      for (const firstCandidate of topFirstCandidates) {
+        const unavailable = new Set<string>([firstCandidate, ...(adjacentVertexIds.get(firstCandidate) ?? [])]);
+        let simulatedPicks = 0;
+        for (const opponentChoice of sortedCandidates) {
+          if (simulatedPicks >= interveningOpponentPicks) break;
+          if (unavailable.has(opponentChoice)) continue;
+          unavailable.add(opponentChoice);
+          for (const neighborId of adjacentVertexIds.get(opponentChoice) ?? []) unavailable.add(neighborId);
+          simulatedPicks++;
+        }
+        let bestSecondScore = -Infinity;
+        let checkedSecond = 0;
+        for (const secondCandidate of sortedCandidates) {
+          if (unavailable.has(secondCandidate)) continue;
+          const pairScore = evaluateSetupPair(firstCandidate, secondCandidate);
+          if (pairScore > bestSecondScore) bestSecondScore = pairScore;
+          checkedSecond++;
+          if (checkedSecond >= 10) break;
+        }
+        const combinedScore = bestSecondScore === -Infinity
+          ? opponentBaseScore.get(firstCandidate)!
+          : bestSecondScore + opponentBaseScore.get(firstCandidate)! * 0.12;
+        if (combinedScore > bestLookaheadScore) {
+          bestLookaheadScore = combinedScore;
+          bestFirst = firstCandidate;
+        }
+      }
+      return bestFirst;
+    }
+
+    return locations.toSorted((first, second) => singleSetupScore(second) - singleSetupScore(first))[0];
+  };
 
   const planningState: GameState = { ...state, activePlayerId: playerId, phase: { type: "actions" } };
   const publicScores = new Map(state.players.map(other => [other.id, getPublicScore(state, other.id).public]));
-  const opponents = state.players.filter(other => other.id !== playerId);
+  const effectiveScores = new Map(state.players.map(other => [
+    other.id,
+    publicScores.get(other.id)! + (other.id === playerId ? 0 : estimatedHiddenThreat(other.id)),
+  ]));
   const highestOpponentScore = Math.max(0, ...opponents.map(other => publicScores.get(other.id)!));
+  const highestOpponentEffectiveScore = Math.max(0, ...opponents.map(other => effectiveScores.get(other.id)!));
   const highestOpponentKnights = Math.max(0, ...opponents.map(other => other.knightsPlayed));
   const knightsPlayed = activePlayer.knightsPlayed;
   const score = getScore(state, playerId).total;
@@ -281,8 +482,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const roadBoard = roadState.board;
     const roadEdgesById = new Map(roadBoard.edges.map(edge => [edge.id, edge]));
     const blocked = new Set(blockedSettlementVertices(roadBoard));
+    const canPlaceMoreSettlements = settlementCount < 5;
     const destinationSet = new Set(roadBoard.vertices.filter(vertex => !vertex.building && !blocked.has(vertex.id) &&
-      (!isSeafarers(state.variant) || vertex.tileIds.some(id => isLand(tiles.get(id)!.terrain)) || explorationValue(vertex.id) > 0))
+      (canPlaceMoreSettlements
+        ? (!isSeafarers(state.variant) || vertex.tileIds.some(id => isLand(tiles.get(id)!.terrain)) || explorationValue(vertex.id) > 0)
+        : explorationValue(vertex.id) > 0))
       .map(vertex => vertex.id));
 
     type Path = { vertexId: string; kind: "road" | "ship"; distance: number; firstEdge: string; firstKind: "road" | "ship" };
@@ -556,21 +760,79 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     return target.value / (1 + effort);
   };
 
+  function settlementRoadSplitImpact(vertexId: string): { bonus: number; gainedPoints: number } {
+    const vertex = vertices.get(vertexId)!;
+    const opponentEdgeCounts = new Map<string, number>();
+    for (const edgeId of vertex.edgeIds) {
+      const edge = edges.get(edgeId)!;
+      if (edge.playerId && edge.playerId !== playerId) {
+        opponentEdgeCounts.set(edge.playerId, (opponentEdgeCounts.get(edge.playerId) ?? 0) + 1);
+      }
+    }
+    const splitTargets = [...opponentEdgeCounts.entries()].filter(([, count]) => count >= 2).map(([ownerId]) => ownerId);
+    if (splitTargets.length === 0) return { bonus: 0, gainedPoints: 0 };
+
+    const nextState: GameState = {
+      ...planningState,
+      board: {
+        ...state.board,
+        vertices: state.board.vertices.map(candidate =>
+          candidate.id === vertexId ? { ...candidate, building: { playerId, kind: "settlement" } } : candidate),
+      },
+    };
+    const ownRouteLength = getLongestRoadLength(nextState, playerId);
+    let bonus = 0;
+    let gainedPoints = 0;
+    for (const ownerId of splitTargets) {
+      const beforeLength = getLongestRoadLength(planningState, ownerId);
+      const afterLength = getLongestRoadLength(nextState, ownerId);
+      const lengthDrop = Math.max(0, beforeLength - afterLength);
+      if (lengthDrop === 0) continue;
+      if (state.awards.longestRoad === ownerId) {
+        const otherMaximum = Math.max(0, ...opponents.filter(other => other.id !== ownerId).map(other => getLongestRoadLength(nextState, other.id)));
+        if (ownRouteLength >= 5 && ownRouteLength > Math.max(afterLength, otherMaximum)) {
+          gainedPoints = 2;
+          bonus += 24;
+        } else if (afterLength < 5 || afterLength <= otherMaximum) {
+          bonus += 16;
+        } else {
+          bonus += lengthDrop * 3;
+        }
+      } else if (beforeLength >= 4) {
+        bonus += lengthDrop * 2.5;
+      }
+    }
+    return { bonus, gainedPoints };
+  }
+
   function buildTargets(cachedRoad?: RouteCandidate | null): BuildTarget[] {
     const targets: BuildTarget[] = [];
-    const settlement = bestVertex(legalSettlementVertices(planningState, playerId));
+    const legalSettlements = legalSettlementVertices(planningState, playerId);
+    const settlementCandidates = legalSettlements.map(vertexId => {
+      const split = settlementRoadSplitImpact(vertexId);
+      return {
+        vertexId,
+        splitBonus: split.bonus,
+        splitGainedPoints: split.gainedPoints,
+        rankScore: vertexValue(vertexId) + islandBonus(vertexId) * 12 + split.bonus,
+      };
+    });
+    const bestSettlementCandidate = settlementCandidates.toSorted((first, second) => second.rankScore - first.rankScore)[0];
+    const settlement = bestSettlementCandidate?.vertexId;
     const city = bestVertex(legalCityVertices(planningState, playerId), false);
     const road = cachedRoad !== undefined ? cachedRoad : bestRoad(planningState, true, true);
-    const settlementSiteValue = settlement ? vertexValue(settlement) + islandBonus(settlement) * 12 : 0;
+    const settlementSiteValue = bestSettlementCandidate?.rankScore ?? 0;
 
-    if (settlement) {
+    if (bestSettlementCandidate) {
       const earlyExpansionBoost = settlementCount + cityCount <= 3 ? 3.5 : 0;
+      const settlementPoints = 1 + islandBonus(bestSettlementCandidate.vertexId) + bestSettlementCandidate.splitGainedPoints;
       targets.push({
-        action: { type: "place-settlement", vertexId: settlement },
+        action: { type: "place-settlement", vertexId: bestSettlementCandidate.vertexId },
         cost: COSTS.settlement,
-        value: winsWith(1 + islandBonus(settlement))
+        value: winsWith(settlementPoints)
           ? 10000
-          : 19.5 + vertexValue(settlement) * 0.56 + islandBonus(settlement) * 12 + earlyExpansionBoost,
+          : 19.5 + vertexValue(bestSettlementCandidate.vertexId) * 0.56 +
+            islandBonus(bestSettlementCandidate.vertexId) * 12 + bestSettlementCandidate.splitBonus * 0.8 + earlyExpansionBoost,
       });
     }
     let cityTarget: BuildTarget | null = null;
@@ -595,17 +857,19 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       : null;
     const canComboRoadAndSettlement = Boolean(
       road && comboCost && road.expansion && !settlement && road.distance === 1 &&
-      deficit(activePlayer.resources, comboCost) === 0,
+      (deficit(activePlayer.resources, comboCost) === 0 || maritimeAffordable(comboCost)),
     );
     if (road && ((road.expansion && !settlement) || road.points > 0 || road.defendsLongestRoad || roadOpensMuchBetterSite)) {
       const comboWins = canComboRoadAndSettlement && winsWith(1 + road.destinationIslandBonus);
+      const lateSpeculativePenalty = road.points === 0 && !road.defendsLongestRoad && !canComboRoadAndSettlement &&
+        !road.revealsFog && road.destinationIslandBonus === 0 && settlementCount + cityCount >= 4 ? -3.0 : 0;
       targets.push({
         action: { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId },
         cost: COSTS[road.kind],
         value: (road.points > 0 && winsWith(road.points)) || comboWins
           ? 10000
-          : 8 + road.value * 1.15 + road.points * 9 + (road.defendsLongestRoad ? 14 : 0) +
-            (road.revealsFog ? 4 : 0) + (canComboRoadAndSettlement ? 12 : 0),
+          : Math.max(4, 8 + road.value * 1.15 + road.points * 9 + (road.defendsLongestRoad ? 14 : 0) +
+            (road.revealsFog ? 4 : 0) + (canComboRoadAndSettlement ? 12 : 0) + lateSpeculativePenalty),
       });
     }
     if (state.developmentDeck.length > 0) {
@@ -622,12 +886,18 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         ? 6.0 : 0;
       const engineReadyBonus = cityCount >= 2 ? 3.5
         : cityCount >= 1 || (production.ore >= 4 && production.grain >= 4 && production.wool >= 3) ? 2.4 : 0;
+      const estimatedRemainingVictoryPoints = Math.max(0, remainingVictoryPointsInPool - totalOpponentUnplayedDevelopment * 0.25);
+      const immediateVictoryPointChance = score === state.victoryPointsToWin - 1
+        ? Math.min(1, estimatedRemainingVictoryPoints / state.developmentDeck.length)
+        : 0;
+      const winningDrawBonus = immediateVictoryPointChance * 28;
       let developmentValue = 4.4 + 2.6 * state.developmentDeck.length / 25 + 8.0 * urgency +
-        armyBonus + armyDefenseBonus + engineReadyBonus;
+        armyBonus + armyDefenseBonus + engineReadyBonus + winningDrawBonus;
       // Avoid spending ore and grain on a speculative development card when 1 producible card away from a city.
       const almostFinishedCity = !responding && cityTarget !== null && cityCount < 3 &&
         deficit(activePlayer.resources, COSTS.city) === 1 &&
         !(armyDistance === 1 && winsWith(2)) &&
+        immediateVictoryPointChance < 0.25 &&
         ((activePlayer.resources.ore < COSTS.city.ore && production.ore >= 3) ||
           (activePlayer.resources.grain < COSTS.city.grain && production.grain >= 3));
       if (cityTarget && almostFinishedCity) {
@@ -670,27 +940,114 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       opponentProduction.set(other.id, visible);
     }
 
-    // Weight recent dice rolls from the public game log to sharpen Monopoly estimates without reading private hands.
-    const recentRolls: number[] = [];
-    for (let index = state.log.length - 1; index >= 0 && recentRolls.length < state.players.length * 3; index--) {
-      const entry = state.log[index]!;
-      if (entry.key === "{player} rolls {first} + {second} = {total}.") {
-        const total = entry.parameters?.total;
-        if (typeof total === "number" && total !== 7) recentRolls.push(total);
+    // Track public inflows and outflows from the game log without reading private opponent hands.
+    const trackedByOpponent = new Map<string, Resources>(opponents.map(other => [other.id, emptyResources()]));
+    let lastRobberMoveIndex = -1;
+    for (let index = state.log.length - 1; index >= 0; index--) {
+      if (state.log[index]!.key === "{player} moves the robber.") {
+        lastRobberMoveIndex = index;
+        break;
       }
     }
 
-    const recentByOpponent = new Map<string, Resources>(opponents.map(other => [other.id, emptyResources()]));
-    for (let rollIndex = 0; rollIndex < recentRolls.length; rollIndex++) {
-      const rolledNumber = recentRolls[rollIndex]!;
-      const recencyWeight = Math.pow(0.82, rollIndex);
-      for (const tile of state.board.tiles) {
-        if (tile.number !== rolledNumber || !isResource(tile.terrain)) continue;
-        for (const vertexId of tile.vertexIds) {
-          const building = vertices.get(vertexId)!.building;
-          if (!building || building.playerId === playerId) continue;
-          const bucket = recentByOpponent.get(building.playerId);
-          if (bucket) bucket[tile.terrain] += (building.kind === "city" ? 2 : 1) * recencyWeight;
+    let setupComplete = false;
+    let freeRoadsRemaining = 0;
+    let freeRoadOwnerId: string | null = null;
+    const subtractCost = (bucket: Resources, spent: Resources): void => {
+      for (const resource of RESOURCES) {
+        bucket[resource] = Math.max(0, bucket[resource] - spent[resource]);
+      }
+    };
+
+    const logStart = Math.max(0, state.log.length - state.players.length * 16);
+    if (logStart > 0) setupComplete = true;
+    for (let index = logStart; index < state.log.length; index++) {
+      const entry = state.log[index]!;
+      const actorName = entry.parameters?.player;
+      const actorId = typeof actorName === "string" ? playerNameToId.get(actorName) : undefined;
+      if (entry.key === "{player} begins a turn.") {
+        setupComplete = true;
+        freeRoadsRemaining = 0;
+        freeRoadOwnerId = null;
+        continue;
+      }
+      if (entry.key === "{player} rolls {first} + {second} = {total}.") {
+        setupComplete = true;
+        const total = entry.parameters?.total;
+        if (typeof total !== "number" || total === 7) continue;
+        for (const bucket of trackedByOpponent.values()) {
+          for (const resource of RESOURCES) bucket[resource] *= 0.92;
+        }
+        const respectCurrentRobber = index > lastRobberMoveIndex;
+        for (const tile of state.board.tiles) {
+          if (tile.number !== total || !isResource(tile.terrain)) continue;
+          if (respectCurrentRobber && tile.id === state.robberTileId) continue;
+          for (const vertexId of tile.vertexIds) {
+            const building = vertices.get(vertexId)!.building;
+            if (!building || building.playerId === playerId) continue;
+            const bucket = trackedByOpponent.get(building.playerId);
+            if (bucket) bucket[tile.terrain] += building.kind === "city" ? 2 : 1;
+          }
+        }
+        continue;
+      }
+      if (!actorId || actorId === playerId) continue;
+      const bucket = trackedByOpponent.get(actorId);
+      if (!bucket) continue;
+
+      if (entry.key === "{player} plays {kind}.") {
+        if (entry.parameters?.kind === "road-building") {
+          freeRoadsRemaining = 2;
+          freeRoadOwnerId = actorId;
+        }
+      } else if (setupComplete && entry.key === "{player} builds a settlement.") {
+        subtractCost(bucket, COSTS.settlement);
+      } else if (entry.key === "{player} upgrades a settlement to a city.") {
+        subtractCost(bucket, COSTS.city);
+      } else if (setupComplete && entry.key === "{player} builds a road.") {
+        if (freeRoadOwnerId === actorId && freeRoadsRemaining > 0) freeRoadsRemaining--;
+        else subtractCost(bucket, COSTS.road);
+      } else if (setupComplete && entry.key === "{player} builds a ship.") {
+        if (freeRoadOwnerId === actorId && freeRoadsRemaining > 0) freeRoadsRemaining--;
+        else subtractCost(bucket, COSTS.ship);
+      } else if (entry.key === "{player} buys a development card.") {
+        subtractCost(bucket, COSTS.development);
+      } else if (entry.key === "{player} destroys {victim}'s road." ||
+        entry.key === "{player} destroys {victim}'s ship." ||
+        entry.key === "{player} destroys {victim}'s settlement." ||
+        entry.key === "{player} reduces {victim}'s city to a settlement.") {
+        subtractCost(bucket, COSTS.sabotage);
+      } else if (entry.key === "{player} trades {ratio} {give} for one {receive} with the bank.") {
+        const ratio = entry.parameters?.ratio;
+        const give = entry.parameters?.give;
+        const receive = entry.parameters?.receive;
+        if (typeof ratio === "number" && typeof give === "string" && RESOURCES.includes(give as Resource)) {
+          const giveResource = give as Resource;
+          bucket[giveResource] = Math.max(0, bucket[giveResource] - ratio);
+        }
+        if (typeof receive === "string" && RESOURCES.includes(receive as Resource)) {
+          bucket[receive as Resource] += 1;
+        }
+      } else if (entry.key === "{player} discards {count} resource cards.") {
+        const count = entry.parameters?.count;
+        const trackedTotal = resourceTotal(bucket);
+        if (typeof count === "number" && trackedTotal > 0) {
+          const keepFraction = Math.max(0.2, (trackedTotal - count) / trackedTotal);
+          for (const resource of RESOURCES) bucket[resource] *= keepFraction;
+        }
+      }
+    }
+
+    // Apply the most recent public Monopoly event if any occurred.
+    const latestMonopoly = state.monopolies.at(-1);
+    if (latestMonopoly) {
+      for (const other of opponents) {
+        const bucket = trackedByOpponent.get(other.id)!;
+        if (other.id === latestMonopoly.playerId) {
+          const gained = Object.values(latestMonopoly.losses).reduce((sum, count) => sum + count, 0);
+          bucket[latestMonopoly.resource] += gained * 0.5;
+        } else if (latestMonopoly.losses[other.id]) {
+          bucket[latestMonopoly.resource] *= 0.2;
         }
       }
     }
@@ -701,14 +1058,14 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       const result = emptyResources();
       if (cardCount > 0) {
         const baseline = opponentProduction.get(other.id)!;
-        const recent = recentByOpponent.get(other.id)!;
+        const tracked = trackedByOpponent.get(other.id)!;
         const baselineTotal = resourceTotal(baseline);
-        const recentTotal = resourceTotal(recent);
+        const trackedTotal = resourceTotal(tracked);
         const combined = emptyResources();
         for (const resource of RESOURCES) {
           const baselineShare = baselineTotal > 0 ? baseline[resource] / baselineTotal : 1 / RESOURCES.length;
-          const recentShare = recentTotal > 0 ? recent[resource] / recentTotal : baselineShare;
-          combined[resource] = recentTotal > 0 ? baselineShare * 0.45 + recentShare * 0.55 : baselineShare;
+          const trackedShare = trackedTotal > 0 ? tracked[resource] / trackedTotal : baselineShare;
+          combined[resource] = trackedTotal > 0 ? baselineShare * 0.3 + trackedShare * 0.7 : baselineShare;
         }
         const combinedTotal = resourceTotal(combined);
         for (const resource of RESOURCES) {
@@ -757,11 +1114,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
           return total - 5.5 * buildingMultiplier * tilePips * terrainPriority;
         }
         owners.add(building.playerId);
-        const opponentScore = publicScores.get(building.playerId)!;
-        const isLeader = opponentScore === highestOpponentScore && opponentScore >= 3;
-        const contenderMultiplier = opponentScore >= state.victoryPointsToWin - 1 ? 3.0
-          : opponentScore >= state.victoryPointsToWin - 2 ? 2.1
-          : isLeader ? 1.35 : 1.0;
+        const opponentScore = effectiveScores.get(building.playerId)!;
+        const isLeader = opponentScore >= highestOpponentEffectiveScore - 0.01 && opponentScore >= 3;
+        const contenderMultiplier = opponentScore >= state.victoryPointsToWin - 1 ? 3.2
+          : opponentScore >= state.victoryPointsToWin - 2 ? 2.2
+          : isLeader ? 1.4 : 1.0;
         const opponentTotals = opponentResourceSources.get(building.playerId)!;
         const isBottleneck = isResource(tile.terrain) &&
           opponentTotals[tile.terrain] <= tilePips * buildingMultiplier * 1.1;
@@ -776,8 +1133,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         const owner = state.players.find(other => other.id === ownerId)!;
         const handSize = resourceTotal(owner.resources);
         if (handSize === 0) continue;
-        const opponentScore = publicScores.get(ownerId)!;
-        const isLeader = opponentScore === highestOpponentScore && opponentScore >= 3;
+        const opponentScore = effectiveScores.get(ownerId)!;
+        const isLeader = opponentScore >= highestOpponentEffectiveScore - 0.01 && opponentScore >= 3;
         const opponentTotals = opponentResourceSources.get(ownerId)!;
         const opponentTotalProduction = resourceTotal(opponentTotals);
         let neededChance = 0;
@@ -828,8 +1185,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const ownRouteLength = getLongestRoadLength(sabotageState, playerId);
     const opponentRouteLengths = new Map(opponents.map(other => [other.id, getLongestRoadLength(sabotageState, other.id)]));
     const contenderMultiplier = (ownerId: string): number => {
-      const opponentScore = publicScores.get(ownerId) ?? 0;
-      const isLeader = opponentScore === highestOpponentScore && opponentScore >= 3;
+      const opponentScore = effectiveScores.get(ownerId) ?? 0;
+      const isLeader = opponentScore >= highestOpponentEffectiveScore - 0.01 && opponentScore >= 3;
       return opponentScore >= state.victoryPointsToWin - 1 ? 3.0
         : opponentScore >= state.victoryPointsToWin - 2 ? 2.0
         : isLeader ? 1.4 : 1.0;
@@ -902,8 +1259,585 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     return bestChoice;
   }
 
+  function applyMaritimeTrades(
+    inventory: Resources,
+    bankInventory: Resources,
+    ratios: Resources,
+    cost: Resources,
+  ): { hand: Resources; bank: Resources; firstTrade: { give: Resource; receive: Resource } | null } | null {
+    const workingHand = { ...inventory };
+    const workingBank = { ...bankInventory };
+    let firstTrade: { give: Resource; receive: Resource } | null = null;
+    for (let step = 0; step < 8; step++) {
+      const missingResources = RESOURCES.filter(resource => workingHand[resource] < cost[resource]);
+      if (missingResources.length === 0) return { hand: workingHand, bank: workingBank, firstTrade };
+      if (missingResources.some(resource => workingBank[resource] <= 0)) return null;
+      const receive = missingResources.toSorted((first, second) =>
+        ((cost[second] - workingHand[second]) / (1 + production[second])) -
+        ((cost[first] - workingHand[first]) / (1 + production[first])))[0]!;
+      const giveCandidates = RESOURCES.filter(resource =>
+        resource !== receive && workingHand[resource] - cost[resource] >= ratios[resource]);
+      if (giveCandidates.length === 0) return null;
+      const give = giveCandidates.toSorted((first, second) =>
+        ratios[first] - ratios[second] ||
+        ((workingHand[second] - cost[second]) / ratios[second]) - ((workingHand[first] - cost[first]) / ratios[first]) ||
+        production[second] - production[first])[0]!;
+      workingHand[give] -= ratios[give];
+      workingBank[give] += ratios[give];
+      workingBank[receive] -= 1;
+      workingHand[receive] += 1;
+      firstTrade ??= { give, receive };
+    }
+    return null;
+  }
+
+  type SimulationNode = {
+    board: GameState["board"];
+    hand: Resources;
+    bank: Resources;
+    deckRemaining: number;
+    awards: GameState["awards"];
+    boughtDevelopment: number;
+    accumulatedDevelopmentValue: number;
+    accumulatedSabotageValue: number;
+    accumulatedRoadSplitBonus: number;
+    accumulatedFogBonus: number;
+    firstAction: GameAction | null;
+  };
+
+  function recomputeNodeLongestRoad(nodeState: GameState): string | null {
+    const lengths = nodeState.players.map(candidate => ({
+      id: candidate.id,
+      length: getLongestRoadLength(nodeState, candidate.id),
+    }));
+    const maximum = Math.max(...lengths.map(entry => entry.length));
+    const leaders = lengths.filter(entry => entry.length === maximum && entry.length >= 5);
+    const previous = nodeState.awards.longestRoad;
+    return leaders.some(entry => entry.id === previous)
+      ? previous
+      : leaders.length === 1 ? leaders[0]!.id : null;
+  }
+
+  function simulateNodeState(node: SimulationNode): GameState {
+    return {
+      ...planningState,
+      board: node.board,
+      bank: node.bank,
+      awards: node.awards,
+    };
+  }
+
+  const initialMaximumOpponentRouteLength = Math.max(0, ...opponents.map(other => getLongestRoadLength(planningState, other.id)));
+
+  function evaluateTurnEndNode(
+    node: SimulationNode,
+    depth: number,
+    opponentRoutesChanged: boolean,
+    cachedRootRoute?: RouteCandidate | null,
+  ): number {
+    const nodeState = simulateNodeState(node);
+    const nodeScore = getScore(nodeState, playerId).total;
+    if (nodeScore >= state.victoryPointsToWin) {
+      return 1_000_000 - depth * 10 + resourceTotal(node.hand) * 0.5;
+    }
+
+    const nodeRatios = Object.fromEntries(
+      RESOURCES.map(resource => [resource, getTradeRatio(nodeState, playerId, resource)]),
+    ) as Resources;
+    const nodeProduction = emptyResources();
+    const nodeNumbers = new Map<number, number>();
+    let nodeSettlements = 0;
+    let nodeCities = 0;
+    let weightedProduction = 0;
+
+    for (const vertex of node.board.vertices) {
+      if (vertex.building?.playerId !== playerId) continue;
+      const multiplier = vertex.building.kind === "city" ? 2 : 1;
+      if (vertex.building.kind === "city") nodeCities++;
+      else nodeSettlements++;
+      for (const tileId of vertex.tileIds) {
+        const tile = tiles.get(tileId)!;
+        if (tile.number === null || tile.terrain === "desert" || tile.terrain === "sea" || tile.terrain === "fog") continue;
+        const pips = pipCount(tile.number) * multiplier;
+        const terrainWeight = PIP_MULTIPLIER_BY_TERRAIN[tile.terrain] *
+          (isResource(tile.terrain) ? scarcityWeight[tile.terrain] : 1);
+        const existingResource = isResource(tile.terrain) ? nodeProduction[tile.terrain] : 0;
+        const balanceDivisor = isResource(tile.terrain) && nodeRatios[tile.terrain] === 2 ? 16 : 7.5;
+        const balanceFactor = isResource(tile.terrain) ? 1 / (1 + existingResource / balanceDivisor) : 1;
+        const numberFactor = 1 / (1 + (nodeNumbers.get(tile.number) ?? 0) / 18);
+        weightedProduction += pips * terrainWeight * balanceFactor * numberFactor;
+        nodeNumbers.set(tile.number, (nodeNumbers.get(tile.number) ?? 0) + pips);
+        if (isResource(tile.terrain)) nodeProduction[tile.terrain] += pips;
+        else if (tile.terrain === "gold") {
+          for (const resource of RESOURCES) nodeProduction[resource] += pips / RESOURCES.length;
+        }
+      }
+    }
+
+    const totalNodeProduction = resourceTotal(nodeProduction);
+    let portScore = 0;
+    if (RESOURCES.every(resource => nodeRatios[resource] <= 3)) {
+      portScore += 1.6 + Math.min(2.2, totalNodeProduction / 11);
+    }
+    for (const resource of RESOURCES) {
+      if (nodeRatios[resource] === 2) {
+        portScore += Math.min(5.5, nodeProduction[resource] * 0.55);
+      }
+    }
+
+    const productionMultiplier = nodeScore <= 5 ? 1.45 : nodeScore <= 7 ? 1.25 : 0.95;
+    const earlyCityBonus = nodeCities >= 1 ? 2.5 : 0;
+    const scorePoints = nodeScore * 26 + (weightedProduction + portScore) * productionMultiplier + earlyCityBonus;
+
+    // Evaluate route positioning: open settlement readiness, island/fog sea lanes, and Longest Road defense.
+    const legalNodeSettlements = legalSettlementVertices(nodeState, playerId);
+    const bestOpenSettlement = legalNodeSettlements.length > 0
+      ? legalNodeSettlements.toSorted((first, second) =>
+        (vertexValue(second) + islandBonusOnBoard(node.board, second) * 14) -
+        (vertexValue(first) + islandBonusOnBoard(node.board, first) * 14))[0]
+      : undefined;
+    let routeValue = 0;
+    const expansionBuildingCap = isSeafarers(state.variant) ? 5 : 3;
+    const expansionMultiplier = nodeSettlements + nodeCities <= expansionBuildingCap ? 1.15 : 0.85;
+    if (bestOpenSettlement) {
+      const openIslandPoints = islandBonusOnBoard(node.board, bestOpenSettlement);
+      const openValue = vertexValue(bestOpenSettlement);
+      const islandMultiplier = openIslandPoints > 0 ? 1.15 : expansionMultiplier;
+      routeValue = (14 + openValue * 0.85 + openIslandPoints * 22) / 1.5 * islandMultiplier;
+    }
+    const openAlreadyHasIsland = bestOpenSettlement !== undefined && islandBonusOnBoard(node.board, bestOpenSettlement) > 0;
+    if (nodeSettlements < 5 && (!bestOpenSettlement || (isSeafarers(state.variant) && !openAlreadyHasIsland))) {
+      const nextRoute = node.board === state.board && cachedRootRoute !== undefined
+        ? cachedRootRoute
+        : bestRoad(nodeState, false, false);
+      if (nextRoute && nextRoute.expansion) {
+        const hasIslandGoal = nextRoute.destinationIslandBonus > 0;
+        const baseDestinationValue = Math.max(0, nextRoute.destinationValue - nextRoute.destinationIslandBonus * 12);
+        const sitePotential = 14 + baseDestinationValue * 0.85 + nextRoute.destinationIslandBonus * 26;
+        const routeMultiplier = hasIslandGoal || nextRoute.revealsFog ? 1.15 : expansionMultiplier;
+        const candidateRouteValue = sitePotential / (nextRoute.distance + 1.5) * routeMultiplier;
+        if (!bestOpenSettlement) {
+          routeValue = candidateRouteValue;
+        } else if (hasIslandGoal || nextRoute.revealsFog) {
+          routeValue += candidateRouteValue * 0.65;
+        }
+      }
+    }
+    if (node.awards.longestRoad === playerId) {
+      const ownLength = getLongestRoadLength(nodeState, playerId);
+      const maximumOpponentLength = opponentRoutesChanged
+        ? Math.max(0, ...opponents.map(other => getLongestRoadLength(nodeState, other.id)))
+        : initialMaximumOpponentRouteLength;
+      if (maximumOpponentLength >= Math.max(4, ownLength - 1)) {
+        routeValue += Math.min(2, ownLength - maximumOpponentLength) * 5.0;
+      }
+    }
+
+    // Evaluate remaining hand progress toward the best future build (always discounted below building now).
+    const handSize = resourceTotal(node.hand);
+    const futureCandidates: { cost: Resources; worth: number }[] = [];
+    const legalNodeCities = legalCityVertices(nodeState, playerId);
+    const bestFutureCity = legalNodeCities.length > 0 ? bestVertex(legalNodeCities, false) : undefined;
+    if (bestFutureCity) {
+      futureCandidates.push({
+        cost: COSTS.city,
+        worth: 26 + cityValue(bestFutureCity) * productionMultiplier * 0.85 + (nodeSettlements >= 5 ? 8 : 0) + (nodeCities === 0 ? 2.5 : 0),
+      });
+    }
+    if (bestOpenSettlement) {
+      futureCandidates.push({
+        cost: COSTS.settlement,
+        worth: 26 * (1 + islandBonusOnBoard(node.board, bestOpenSettlement)) + vertexValue(bestOpenSettlement) * productionMultiplier * 0.75,
+      });
+    }
+    if (node.deckRemaining > 0) {
+      futureCandidates.push({
+        cost: COSTS.development,
+        worth: 11 + (nodeScore >= state.victoryPointsToWin - 2 ? 5 : 0),
+      });
+    }
+
+    let bestHandProgress = 0;
+    for (const candidate of futureCandidates) {
+      const missingCount = deficit(node.hand, candidate.cost);
+      let waitRounds: number;
+      if (missingCount === 0) {
+        // Ending the turn without building delays value by at least one full round.
+        waitRounds = 1.6;
+      } else {
+        const tradePlan = applyMaritimeTrades(node.hand, node.bank, nodeRatios, candidate.cost);
+        if (tradePlan) {
+          const cardsSpent = handSize - resourceTotal(tradePlan.hand) + missingCount;
+          waitRounds = 1.6 + cardsSpent / 8;
+        } else {
+          waitRounds = 0.8 + missingCount * 0.5 + Math.max(...RESOURCES.map(resource =>
+            Math.max(0, candidate.cost[resource] - node.hand[resource]) * 36 /
+            ((0.35 + nodeProduction[resource]) * state.players.length)));
+        }
+      }
+      const progressValue = candidate.worth * 0.62 / (1 + waitRounds * 0.42);
+      if (progressValue > bestHandProgress) bestHandProgress = progressValue;
+    }
+
+    const sevenProbabilityBeforeNextTurn = 1 - Math.pow(5 / 6, Math.max(1, state.players.length - 1));
+    const discardRiskPenalty = handSize > 7
+      ? sevenProbabilityBeforeNextTurn * Math.floor(handSize / 2) * 5.2
+      : 0;
+    const rawCardValue = handSize * 0.85;
+
+    return scorePoints + routeValue + node.accumulatedDevelopmentValue + node.accumulatedSabotageValue +
+      node.accumulatedRoadSplitBonus + node.accumulatedFogBonus + bestHandProgress + rawCardValue - discardRiskPenalty;
+  }
+
+  function developmentCardScore(node: SimulationNode): number {
+    const nodeState = simulateNodeState(node);
+    const nodeScore = getScore(nodeState, playerId).total;
+    const urgency = Math.max(0, 1 - (state.victoryPointsToWin - nodeScore) / 6);
+    const unplayedKnights = activePlayer.developmentCards.filter(card => card.kind === "knight").length;
+    const largestArmyThreshold = Math.max(3, highestOpponentKnights + 1);
+    const armyDistance = node.awards.largestArmy === playerId
+      ? Infinity
+      : largestArmyThreshold - (knightsPlayed + unplayedKnights);
+    const armyBonus = armyDistance === 1 ? (nodeScore + 2 >= state.victoryPointsToWin ? 14 : 8.5)
+      : armyDistance === 2 ? 3.5
+      : node.awards.largestArmy === null && state.turnNumber >= 10 ? 2.5 : 0;
+    const armyDefenseBonus = node.awards.largestArmy === playerId && highestOpponentKnights >= Math.max(2, knightsPlayed - 1)
+      ? 6.0 : 0;
+    const engineReadyBonus = cityCount >= 2 ? 3.5
+      : cityCount >= 1 || (production.ore >= 4 && production.grain >= 4 && production.wool >= 3) ? 2.4 : 0;
+    const estimatedRemainingVictoryPoints = Math.max(0, remainingVictoryPointsInPool - totalOpponentUnplayedDevelopment * 0.25);
+    const immediateVictoryPointChance = nodeScore === state.victoryPointsToWin - 1 && node.deckRemaining > 0
+      ? Math.min(1, estimatedRemainingVictoryPoints / node.deckRemaining)
+      : 0;
+    const baseValue = 5.0 + 2.6 * node.deckRemaining / 25 + 8.0 * urgency +
+      armyBonus + armyDefenseBonus + engineReadyBonus + immediateVictoryPointChance * 28;
+    const stageScale = nodeScore >= state.victoryPointsToWin - 3 || armyDistance === 1
+      ? 0.88
+      : cityCount >= 1 ? 0.8 : 0.74;
+    const repeatDiscount = Math.pow(0.84, node.boughtDevelopment);
+    return baseValue * stageScale * repeatDiscount;
+  }
+
+  function payCost(inventory: Resources, bankInventory: Resources, cost: Resources): { hand: Resources; bank: Resources } {
+    const nextHand = { ...inventory };
+    const nextBank = { ...bankInventory };
+    for (const resource of RESOURCES) {
+      nextHand[resource] -= cost[resource];
+      nextBank[resource] += cost[resource];
+    }
+    return { hand: nextHand, bank: nextBank };
+  }
+
+  function searchTurnPlan(
+    initialNode: SimulationNode,
+    maximumDepth: number,
+    winsOnly: boolean,
+    cachedRootRoute?: RouteCandidate | null,
+  ): { action: GameAction | null; score: number } {
+    let bestAction: GameAction | null = null;
+    let bestScore = winsOnly ? -Infinity : evaluateTurnEndNode(initialNode, 0, false, cachedRootRoute);
+
+    const explore = (node: SimulationNode, depth: number, opponentRoutesChanged: boolean): void => {
+      if (depth > 0) {
+        const nodeScore = evaluateTurnEndNode(node, depth, opponentRoutesChanged, cachedRootRoute);
+        if (nodeScore > bestScore) {
+          bestScore = nodeScore;
+          bestAction = node.firstAction;
+        }
+        if (nodeScore >= 900_000 || depth >= maximumDepth) return;
+      } else {
+        const initialScore = getScore(simulateNodeState(node), playerId).total;
+        if (initialScore >= state.victoryPointsToWin) {
+          bestScore = 1_000_000;
+          bestAction = node.firstAction;
+          return;
+        }
+        if (depth >= maximumDepth) return;
+      }
+
+      const nodeState = simulateNodeState(node);
+      const nodeRatios = Object.fromEntries(
+        RESOURCES.map(resource => [resource, getTradeRatio(nodeState, playerId, resource)]),
+      ) as Resources;
+      const tryAction = (
+        action: GameAction,
+        cost: Resources,
+        changesOpponentRoutes: boolean,
+        applyEffect: (nextHand: Resources, nextBank: Resources, firstAction: GameAction) => SimulationNode,
+      ): void => {
+        const direct = deficit(node.hand, cost) === 0;
+        let workingHand = node.hand;
+        let workingBank = node.bank;
+        let emittedFirstAction = node.firstAction ?? action;
+        if (!direct) {
+          const tradePlan = applyMaritimeTrades(node.hand, node.bank, nodeRatios, cost);
+          if (!tradePlan || !tradePlan.firstTrade) return;
+          workingHand = tradePlan.hand;
+          workingBank = tradePlan.bank;
+          emittedFirstAction = node.firstAction ?? {
+            type: "bank-trade",
+            give: tradePlan.firstTrade.give,
+            receive: tradePlan.firstTrade.receive,
+          };
+        }
+        const paid = payCost(workingHand, workingBank, cost);
+        explore(applyEffect(paid.hand, paid.bank, emittedFirstAction), depth + 1, opponentRoutesChanged || changesOpponentRoutes);
+      };
+
+      const cityVertex = bestVertex(legalCityVertices(nodeState, playerId), false);
+      if (cityVertex) {
+        tryAction({ type: "place-city", vertexId: cityVertex }, COSTS.city, false, (nextHand, nextBank, firstAction) => ({
+          ...node,
+          board: {
+            ...node.board,
+            vertices: node.board.vertices.map(vertex =>
+              vertex.id === cityVertex ? { ...vertex, building: { playerId, kind: "city" } } : vertex),
+          },
+          hand: nextHand,
+          bank: nextBank,
+          firstAction,
+        }));
+      }
+
+      const legalSettlements = legalSettlementVertices(nodeState, playerId);
+      if (legalSettlements.length > 0) {
+        const chosenSettlement = legalSettlements
+          .map(vertexId => ({
+            vertexId,
+            split: settlementRoadSplitImpact(vertexId),
+            rank: vertexValue(vertexId) + islandBonusOnBoard(node.board, vertexId) * 14,
+          }))
+          .toSorted((first, second) => (second.rank + second.split.bonus) - (first.rank + first.split.bonus))[0]!;
+        tryAction(
+          { type: "place-settlement", vertexId: chosenSettlement.vertexId },
+          COSTS.settlement,
+          chosenSettlement.split.bonus > 0,
+          (nextHand, nextBank, firstAction) => {
+            const nextBoard = {
+              ...node.board,
+              vertices: node.board.vertices.map(vertex =>
+                vertex.id === chosenSettlement.vertexId
+                  ? { ...vertex, building: { playerId, kind: "settlement" as const } }
+                  : vertex),
+            };
+            const nextState = { ...nodeState, board: nextBoard };
+            return {
+              ...node,
+              board: nextBoard,
+              hand: nextHand,
+              bank: nextBank,
+              awards: {
+                ...node.awards,
+                longestRoad: chosenSettlement.split.bonus > 0 ? recomputeNodeLongestRoad(nextState) : node.awards.longestRoad,
+              },
+              accumulatedRoadSplitBonus: node.accumulatedRoadSplitBonus + chosenSettlement.split.bonus * 0.5,
+              firstAction,
+            };
+          },
+        );
+      }
+
+      const routeCandidate = depth === 0 && node.board === state.board && cachedRootRoute !== undefined
+        ? cachedRootRoute
+        : bestRoad(nodeState, true, depth === 0);
+      const shouldConsiderRoute = routeCandidate !== null && (
+        routeCandidate.points > 0 ||
+        routeCandidate.defendsLongestRoad ||
+        routeCandidate.revealsFog ||
+        routeCandidate.destinationIslandBonus > 0 ||
+        (routeCandidate.expansion && (legalSettlements.length === 0 || routeCandidate.distance <= 2)) ||
+        (!winsOnly && depth === 0 && resourceTotal(node.hand) > 7 && routeCandidate.expansion)
+      );
+      if (shouldConsiderRoute && routeCandidate) {
+        const routeAction: GameAction = {
+          type: routeCandidate.kind === "ship" ? "place-ship" : "place-road",
+          edgeId: routeCandidate.edgeId,
+        };
+        tryAction(routeAction, COSTS[routeCandidate.kind], false, (nextHand, nextBank, firstAction) => {
+          const nextBoard = {
+            ...node.board,
+            edges: node.board.edges.map(edge =>
+              edge.id === routeCandidate.edgeId ? { ...edge, playerId, kind: routeCandidate.kind } : edge),
+          };
+          const nextState = { ...nodeState, board: nextBoard };
+          return {
+            ...node,
+            board: nextBoard,
+            hand: nextHand,
+            bank: nextBank,
+            awards: { ...node.awards, longestRoad: recomputeNodeLongestRoad(nextState) },
+            accumulatedFogBonus: node.accumulatedFogBonus + (routeCandidate.revealsFog ? 5.5 : 0),
+            firstAction,
+          };
+        });
+      }
+
+      if (!winsOnly && node.deckRemaining > 0) {
+        const developmentMarginalValue = developmentCardScore(node);
+        // Protect a nearly complete city when we produce the missing card and aren't chasing an immediate win.
+        const protectsNearCity = cityVertex !== undefined && cityCount < 3 &&
+          deficit(node.hand, COSTS.city) === 1 &&
+          score < state.victoryPointsToWin - 1 &&
+          resourceTotal(node.hand) <= 7 &&
+          ((node.hand.ore < COSTS.city.ore && production.ore >= 3) ||
+            (node.hand.grain < COSTS.city.grain && production.grain >= 3));
+        if (!protectsNearCity) {
+          tryAction({ type: "buy-development" }, COSTS.development, false, (nextHand, nextBank, firstAction) => ({
+            ...node,
+            hand: nextHand,
+            bank: nextBank,
+            deckRemaining: node.deckRemaining - 1,
+            boughtDevelopment: node.boughtDevelopment + 1,
+            accumulatedDevelopmentValue: node.accumulatedDevelopmentValue + developmentMarginalValue,
+            firstAction,
+          }));
+        }
+      }
+
+      if (state.sabotageEnabled && depth === 0 && hasLegalSabotageTarget(nodeState, playerId)) {
+        const sabotageChoice = bestSabotageTarget(nodeState);
+        const urgentLeader = highestOpponentEffectiveScore >= state.victoryPointsToWin - 2;
+        if (sabotageChoice && (sabotageChoice.value >= 12 || urgentLeader || sabotageChoice.value === 10000)) {
+          tryAction(sabotageChoice.action, COSTS.sabotage, true, (nextHand, nextBank, firstAction) => {
+            const nextBoard = match(sabotageChoice.action)
+              .with({ type: "sabotage-route" }, sabotageAction => ({
+                ...node.board,
+                edges: node.board.edges.map(edge =>
+                  edge.id === sabotageAction.edgeId ? { ...edge, playerId: null, kind: undefined } : edge),
+              }))
+              .with({ type: "sabotage-building" }, sabotageAction => ({
+                ...node.board,
+                vertices: node.board.vertices.map(vertex =>
+                  vertex.id === sabotageAction.vertexId
+                    ? {
+                      ...vertex,
+                      building: vertex.building?.kind === "city"
+                        ? { ...vertex.building, kind: "settlement" as const }
+                        : null,
+                    }
+                    : vertex),
+              }))
+              .otherwise(() => node.board);
+            const nextState = { ...nodeState, board: nextBoard };
+            return {
+              ...node,
+              board: nextBoard,
+              hand: nextHand,
+              bank: nextBank,
+              awards: { ...node.awards, longestRoad: recomputeNodeLongestRoad(nextState) },
+              accumulatedSabotageValue: node.accumulatedSabotageValue + Math.min(35, sabotageChoice.value * 0.75),
+              firstAction,
+            };
+          });
+        }
+      }
+    };
+
+    explore(initialNode, 0, false);
+    return { action: bestAction, score: bestScore };
+  }
+
+  function findImmediateWinningAction(): GameAction | null {
+    const rootNode: SimulationNode = {
+      board: state.board,
+      hand: { ...activePlayer.resources },
+      bank: { ...state.bank },
+      deckRemaining: state.developmentDeck.length,
+      awards: { ...state.awards },
+      boughtDevelopment: 0,
+      accumulatedDevelopmentValue: 0,
+      accumulatedSabotageValue: 0,
+      accumulatedRoadSplitBonus: 0,
+      accumulatedFogBonus: 0,
+      firstAction: null,
+    };
+
+    // Only run multi-action winning search when close enough to win this turn.
+    if (score >= state.victoryPointsToWin - 4) {
+      const directWin = searchTurnPlan(rootNode, 3, true);
+      if (directWin.score >= 900_000 && directWin.action) return directWin.action;
+    }
+
+    if (state.developmentPlayed || score < state.victoryPointsToWin - 4) return null;
+
+    // Check if playing a mature Knight (claiming Largest Army) + remaining builds wins immediately.
+    const matureKnight = activePlayer.developmentCards.find(card => card.kind === "knight" && card.purchasedTurn < state.turnNumber);
+    if (matureKnight && state.awards.largestArmy !== playerId &&
+      activePlayer.knightsPlayed + 1 >= 3 && activePlayer.knightsPlayed + 1 > highestOpponentKnights) {
+      const knightWin = searchTurnPlan({ ...rootNode, awards: { ...rootNode.awards, largestArmy: playerId } }, 2, true);
+      if (knightWin.score >= 900_000) return { type: "play-development", cardId: matureKnight.id };
+    }
+
+    // Check if playing a mature Road Building + remaining builds wins immediately.
+    const matureRoadBuilding = activePlayer.developmentCards.find(card => card.kind === "road-building" && card.purchasedTurn < state.turnNumber);
+    if (matureRoadBuilding) {
+      const firstRoad = bestRoad(planningState, true, true);
+      if (firstRoad) {
+        const boardAfterFirst = {
+          ...state.board,
+          edges: state.board.edges.map(edge =>
+            edge.id === firstRoad.edgeId ? { ...edge, playerId, kind: firstRoad.kind } : edge),
+        };
+        const stateAfterFirst = { ...planningState, board: boardAfterFirst };
+        const secondRoad = bestRoad(stateAfterFirst, true, false);
+        const boardAfterSecond = secondRoad
+          ? {
+            ...boardAfterFirst,
+            edges: boardAfterFirst.edges.map(edge =>
+              edge.id === secondRoad.edgeId ? { ...edge, playerId, kind: secondRoad.kind } : edge),
+          }
+          : boardAfterFirst;
+        const nextAwards = { ...rootNode.awards, longestRoad: recomputeNodeLongestRoad({ ...planningState, board: boardAfterSecond }) };
+        const roadBuildingWin = searchTurnPlan({ ...rootNode, board: boardAfterSecond, awards: nextAwards }, 2, true);
+        if (roadBuildingWin.score >= 900_000) return { type: "play-development", cardId: matureRoadBuilding.id };
+      }
+    }
+
+    // Check if playing a mature Year of Plenty + remaining builds wins immediately.
+    const matureYearOfPlenty = activePlayer.developmentCards.find(card => card.kind === "year-of-plenty" && card.purchasedTurn < state.turnNumber);
+    if (matureYearOfPlenty && resourceTotal(state.bank) > 0) {
+      const drawCount = Math.min(2, resourceTotal(state.bank));
+      const drawPairs: Resources[] = [];
+      if (drawCount === 1) {
+        for (const resource of RESOURCES) {
+          if (state.bank[resource] >= 1) drawPairs.push({ ...emptyResources(), [resource]: 1 });
+        }
+      } else {
+        for (let firstIndex = 0; firstIndex < RESOURCES.length; firstIndex++) {
+          const firstResource = RESOURCES[firstIndex]!;
+          if (state.bank[firstResource] < 1) continue;
+          for (let secondIndex = firstIndex; secondIndex < RESOURCES.length; secondIndex++) {
+            const secondResource = RESOURCES[secondIndex]!;
+            const needed = firstResource === secondResource ? 2 : 1;
+            if (state.bank[secondResource] < needed) continue;
+            const selection = emptyResources();
+            selection[firstResource] += 1;
+            selection[secondResource] += 1;
+            drawPairs.push(selection);
+          }
+        }
+      }
+      for (const selection of drawPairs) {
+        const nextHand = { ...rootNode.hand };
+        const nextBank = { ...rootNode.bank };
+        for (const resource of RESOURCES) {
+          nextHand[resource] += selection[resource];
+          nextBank[resource] -= selection[resource];
+        }
+        const plentyWin = searchTurnPlan({ ...rootNode, hand: nextHand, bank: nextBank }, 2, true);
+        if (plentyWin.score >= 900_000) {
+          return { type: "play-development", cardId: matureYearOfPlenty.id, resources: selection };
+        }
+      }
+    }
+
+    return null;
+  }
+
   function isBlockedTradePartner(otherId: string): boolean {
-    return publicScores.get(otherId)! >= state.victoryPointsToWin - 1;
+    const publicScore = publicScores.get(otherId)!;
+    return publicScore >= state.victoryPointsToWin - 1 ||
+      (publicScore >= state.victoryPointsToWin - 2 && (opponentUnplayedDevelopmentCount.get(otherId) ?? 0) >= 2);
   }
 
   if (responding && state.trade) {
@@ -911,8 +1845,10 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const targets = buildTargets();
     const before = Math.max(0, ...targets.map(target => priority(target)));
     const after = { ...activePlayer.resources };
-    const partnerScore = publicScores.get(trade.offeredBy)!;
-    const partnerIsDangerousLeader = partnerScore >= state.victoryPointsToWin - 2 && partnerScore > score;
+    const partnerEffectiveScore = effectiveScores.get(trade.offeredBy)!;
+    const partnerAhead = partnerEffectiveScore > score;
+    const partnerIsDangerousLeader = partnerEffectiveScore >= state.victoryPointsToWin - 2 && partnerAhead;
+    const partnerIsContender = partnerEffectiveScore >= state.victoryPointsToWin - 3 && partnerEffectiveScore >= score;
     if (trade.give === null) {
       if (isBlockedTradePartner(trade.offeredBy)) {
         return { type: "respond-trade", accept: false };
@@ -922,10 +1858,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       }
       let proposal: { price: Resources; value: number } | null = null;
       const resourcesByScarcity = RESOURCES.toSorted((first, second) => production[first] - production[second]);
+      const requestedCount = resourceTotal(trade.receive);
       for (const target of targets) {
         const price = emptyResources();
         const inventory = { ...after };
-        let remaining = resourceTotal(trade.receive);
+        let remaining = requestedCount;
         for (const resource of RESOURCES) inventory[resource] -= trade.receive[resource];
         for (const resource of resourcesByScarcity) {
           if (trade.receive[resource] > 0) continue;
@@ -935,10 +1872,34 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         }
         const value = priority(target, inventory);
         const completesTarget = deficit(inventory, target.cost) === 0;
-        const meetsLeaderThreshold = !partnerIsDangerousLeader || completesTarget || value > before + 2.0;
+        const requiredMargin = partnerIsDangerousLeader ? (completesTarget ? 0.5 : 2.5)
+          : partnerIsContender && !completesTarget ? 1.1
+          : 0;
         if (remaining === 0 && deficit(inventory, target.cost) < deficit(activePlayer.resources, target.cost) &&
-          value > before && meetsLeaderThreshold && (!proposal || value > proposal.value)) {
+          value > before + requiredMargin && (!proposal || value > proposal.value)) {
           proposal = { price, value };
+        }
+      }
+      // If a dangerous leader asks for a card and 1:1 isn't worth giving them tempo, quote 2:1 for cards we need.
+      if (!proposal && partnerIsDangerousLeader && requestedCount === 1) {
+        for (const target of targets) {
+          const price = emptyResources();
+          const inventory = { ...after };
+          for (const resource of RESOURCES) inventory[resource] -= trade.receive[resource];
+          let remaining = 2;
+          for (const resource of resourcesByScarcity) {
+            if (trade.receive[resource] > 0) continue;
+            const take = Math.min(remaining, Math.max(0, target.cost[resource] - inventory[resource]));
+            price[resource] += take;
+            inventory[resource] += take;
+            remaining -= take;
+          }
+          if (remaining === 0) {
+            const value = priority(target, inventory);
+            if (value > before + 2.0 && (!proposal || value > proposal.value)) {
+              proposal = { price, value };
+            }
+          }
         }
       }
       return proposal
@@ -949,7 +1910,9 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const improvement = Math.max(0, ...targets.map(target => priority(target, after))) - before;
     const completesTargetNow = targets.some(target =>
       deficit(activePlayer.resources, target.cost) > 0 && deficit(after, target.cost) === 0);
-    const minimumImprovement = partnerIsDangerousLeader && !completesTargetNow ? 1.8 : 0.1;
+    const minimumImprovement = partnerIsDangerousLeader && !completesTargetNow ? 2.4
+      : partnerIsContender && !completesTargetNow ? 0.9
+      : 0.1;
     return {
       type: "respond-trade",
       accept: !isBlockedTradePartner(trade.offeredBy) &&
@@ -961,9 +1924,25 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
 
   return match(state.phase)
     .with({ type: "setup-reveal" }, (): GameAction | null => {
+      const revealedSetup = settlementCount > 0;
+      if (revealedSetup) {
+        const openVertices = legalSettlementVertices(state, playerId);
+        const bestOpenVertex = bestSetupVertex(openVertices);
+        if (bestOpenVertex) {
+          const openPips = vertices.get(bestOpenVertex)!.tileIds.reduce((sum, tileId) => {
+            const tile = tiles.get(tileId)!;
+            if (tile.number === null) return sum;
+            return sum + (tile.terrain === "gold" ? pipCount(tile.number) * 2.2 : isResource(tile.terrain) ? pipCount(tile.number) : 0);
+          }, 0);
+          if (openPips >= 9) {
+            return { type: "place-settlement", vertexId: bestOpenVertex };
+          }
+        }
+      }
       const revealCandidates = legalSetupRevealTiles(state, playerId);
       if (revealCandidates.length > 0) {
-        const revealedSetup = settlementCount > 0;
+        const averageX = state.board.tiles.reduce((sum, tile) => sum + tile.x, 0) / Math.max(1, state.board.tiles.length);
+        const averageY = state.board.tiles.reduce((sum, tile) => sum + tile.y, 0) / Math.max(1, state.board.tiles.length);
         const bestRevealTileId = revealCandidates.toSorted((firstId, secondId) => {
           const scoreRevealTile = (tileId: string): number => {
             const tile = tiles.get(tileId)!;
@@ -987,7 +1966,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
                 tileScore -= 4;
               }
             }
-            return tileScore + openVertices * 1.2;
+            const distanceFromCenter = Math.hypot(tile.x - averageX, tile.y - averageY);
+            return tileScore + openVertices * 1.2 - distanceFromCenter * 0.008;
           };
           return scoreRevealTile(secondId) - scoreRevealTile(firstId);
         })[0]!;
@@ -1000,7 +1980,39 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       const vertexId = bestSetupVertex(legalSettlementVertices(state, playerId));
       return vertexId ? { type: "place-settlement", vertexId } : null;
     })
-    .with({ type: "setup-road" }, (): GameAction | null => {
+    .with({ type: "setup-road" }, (phase): GameAction | null => {
+      // On the first setup road, prefer forks and coastal port access since interior spots are often plowed during setup.
+      if (!isSecondSetup && !isFogBoard(state.board)) {
+        const roads = legalRoadEdges(state, playerId);
+        const ships = legalShipEdges(state, playerId);
+        const candidates: { edgeId: string; kind: "road" | "ship"; score: number }[] = [];
+        for (const kind of ["road", "ship"] as const) {
+          for (const edgeId of kind === "road" ? roads : ships) {
+            const edge = edges.get(edgeId)!;
+            const farVertexId = edge.vertexIds[0] === phase.vertexId ? edge.vertexIds[1] : edge.vertexIds[0];
+            let bestTarget = 0;
+            let openForks = 0;
+            let portReachBonus = 0;
+            for (const candidateId of adjacentVertexIds.get(farVertexId) ?? []) {
+              if (candidateId === phase.vertexId) continue;
+              const candidate = vertices.get(candidateId)!;
+              if (candidate.building || blockedVerticesSet.has(candidateId)) continue;
+              if (isSeafarers(state.variant) && !candidate.tileIds.some(id => isLand(tiles.get(id)!.terrain))) continue;
+              const candidateScore = vertexValue(candidateId) + islandBonus(candidateId) * 12;
+              bestTarget = Math.max(bestTarget, candidateScore);
+              openForks++;
+              portReachBonus = Math.max(portReachBonus, portValue(candidateId));
+            }
+            const forkBonus = openForks >= 2 ? 2.2 : 0;
+            const fogBonus = edgeRevealsFog(edgeId) ? 5 : 0;
+            candidates.push({ edgeId, kind, score: bestTarget + forkBonus + portReachBonus * 0.6 + fogBonus });
+          }
+        }
+        const bestChoice = candidates.toSorted((first, second) => second.score - first.score)[0];
+        if (bestChoice && bestChoice.score > 0) {
+          return { type: bestChoice.kind === "ship" ? "place-ship" : "place-road", edgeId: bestChoice.edgeId };
+        }
+      }
       const road = bestRoad(state, false);
       return road ? { type: road.kind === "ship" ? "place-ship" : "place-road", edgeId: road.edgeId } : null;
     })
@@ -1035,39 +2047,94 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     .with({ type: "discard" }, (phase): GameAction | null => {
       if (!discarding) return null;
       const targets = buildTargets();
-      const primaryCost = targets[0]?.cost ?? COSTS.city;
-      const secondaryCost = targets[1]?.cost ?? COSTS.settlement;
-      const discarded = emptyResources();
-      for (let index = 0; index < phase.required[playerId]!; index++) {
-        const available = RESOURCES.filter(resource => activePlayer.resources[resource] > discarded[resource]);
-        const resource = available.toSorted((first, second) => {
-          const keepScore = (candidate: Resource): number => {
-            const remaining = activePlayer.resources[candidate] - discarded[candidate];
-            const inPrimary = remaining <= primaryCost[candidate];
-            const inSecondary = remaining <= secondaryCost[candidate];
-            const primaryWeight = inPrimary ? 1000 : 0;
-            const secondaryWeight = inSecondary ? 180 : 0;
-            const portPairBonus = tradeRatios[candidate] === 2 && remaining === 2 ? 40 : 0;
-            const scarcityBonus = scarcityWeight[candidate] * 12 - production[candidate] * 1.5;
-            const duplicatePenalty = Math.max(0, remaining - primaryCost[candidate]) * 18;
-            return primaryWeight + secondaryWeight + portPairBonus + scarcityBonus - duplicatePenalty;
-          };
-          return keepScore(first) - keepScore(second);
-        })[0]!;
-        discarded[resource]++;
-      }
-      return { type: "discard", resources: discarded };
+      const requiredDiscard = phase.required[playerId]!;
+      const held = activePlayer.resources;
+      let bestDiscard: Resources | null = null;
+      let bestHandScore = -Infinity;
+
+      const scoreKeptHand = (kept: Resources): number => {
+        let bestTargetScore = 0;
+        let secondTargetScore = 0;
+        let completesDirect = false;
+        let completesMaritime = false;
+        for (const candidate of targets) {
+          const scoreValue = priority(candidate, kept);
+          if (scoreValue > bestTargetScore) {
+            secondTargetScore = bestTargetScore;
+            bestTargetScore = scoreValue;
+          } else if (scoreValue > secondTargetScore) {
+            secondTargetScore = scoreValue;
+          }
+          if (deficit(kept, candidate.cost) === 0) completesDirect = true;
+          else if (maritimeAffordable(candidate.cost, kept)) completesMaritime = true;
+        }
+        let tieBreaker = 0;
+        for (const resource of RESOURCES) {
+          const count = kept[resource];
+          if (count === 0) continue;
+          const portPairBonus = tradeRatios[resource] === 2 ? Math.floor(count / 2) * 1.4 : 0;
+          tieBreaker += portPairBonus + count * (scarcityWeight[resource] * 0.45 - production[resource] * 0.04);
+        }
+        return bestTargetScore * 12 + secondTargetScore * 2.2 +
+          (completesDirect ? 25 : completesMaritime ? 8 : 0) + tieBreaker;
+      };
+
+      const currentDiscard = emptyResources();
+      const searchDiscards = (resourceIndex: number, remaining: number): void => {
+        if (resourceIndex === RESOURCES.length - 1) {
+          const lastResource = RESOURCES[resourceIndex]!;
+          if (remaining > held[lastResource]) return;
+          currentDiscard[lastResource] = remaining;
+          const kept = emptyResources();
+          for (const resource of RESOURCES) kept[resource] = held[resource] - currentDiscard[resource];
+          const handScore = scoreKeptHand(kept);
+          if (handScore > bestHandScore) {
+            bestHandScore = handScore;
+            bestDiscard = { ...currentDiscard };
+          }
+          currentDiscard[lastResource] = 0;
+          return;
+        }
+        const resource = RESOURCES[resourceIndex]!;
+        let maxRemainingAfter = 0;
+        for (let nextIndex = resourceIndex + 1; nextIndex < RESOURCES.length; nextIndex++) {
+          maxRemainingAfter += held[RESOURCES[nextIndex]!];
+        }
+        const minimumHere = Math.max(0, remaining - maxRemainingAfter);
+        const maximumHere = Math.min(remaining, held[resource]);
+        for (let count = minimumHere; count <= maximumHere; count++) {
+          currentDiscard[resource] = count;
+          searchDiscards(resourceIndex + 1, remaining - count);
+        }
+        currentDiscard[resource] = 0;
+      };
+
+      searchDiscards(0, requiredDiscard);
+      return { type: "discard", resources: bestDiscard ?? emptyResources() };
     })
     .with({ type: "robber" }, (): GameAction => robberMove().action)
-    .with({ type: "steal" }, (phase): GameAction => ({
-      type: "steal",
-      playerId: phase.victimIds.toSorted((first, second) => {
-        const firstCount = resourceTotal(state.players.find(other => other.id === first)!.resources);
-        const secondCount = resourceTotal(state.players.find(other => other.id === second)!.resources);
-        return Number(secondCount > 0) - Number(firstCount > 0) ||
-          publicScores.get(second)! - publicScores.get(first)! || secondCount - firstCount;
-      })[0]!,
-    }))
+    .with({ type: "steal" }, (phase): GameAction => {
+      const primaryTarget = buildTargets(null)[0];
+      const neededResources = new Set(
+        primaryTarget ? RESOURCES.filter(resource => activePlayer.resources[resource] < primaryTarget.cost[resource]) : [],
+      );
+      const opponentEstimates = neededResources.size > 0 ? estimateOpponentResourcesFromPublicInformation() : null;
+      const victimScore = (victimId: string): number => {
+        const handSize = resourceTotal(state.players.find(other => other.id === victimId)!.resources);
+        if (handSize === 0) return -1000;
+        let neededProbability = 0;
+        if (opponentEstimates) {
+          const estimate = opponentEstimates[victimId]!;
+          for (const resource of neededResources) neededProbability += estimate[resource] / handSize;
+        }
+        return publicScores.get(victimId)! * 10 + effectiveScores.get(victimId)! * 2.5 +
+          neededProbability * 3.5 + Math.min(1.5, handSize * 0.12);
+      };
+      return {
+        type: "steal",
+        playerId: phase.victimIds.toSorted((first, second) => victimScore(second) - victimScore(first))[0]!,
+      };
+    })
     .with({ type: "roll" }, { type: "actions" }, (phase): GameAction | null => {
       const plannedRoute = phase.type === "actions" ? bestRoad(planningState, true, true) : null;
       const targets = buildTargets(plannedRoute);
@@ -1078,19 +2145,28 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         const trade = state.trade;
         let bestProposal: { otherId: string; score: number } | null = null;
         for (const [otherId, price] of Object.entries(trade.responses)) {
-          if (!price || resourceTotal(price) > resourceTotal(trade.receive) ||
-            RESOURCES.some(resource => price[resource] > activePlayer.resources[resource]) ||
+          if (!price || RESOURCES.some(resource => price[resource] > activePlayer.resources[resource]) ||
             isBlockedTradePartner(otherId)) continue;
+          const priceTotal = resourceTotal(price);
+          const receiveTotal = resourceTotal(trade.receive);
           const after = { ...activePlayer.resources };
           for (const resource of RESOURCES) after[resource] += trade.receive[resource] - price[resource];
+          const completesWin = targets.some(candidate => candidate.value === 10000 && deficit(after, candidate.cost) === 0);
+          const currentHandSize = resourceTotal(activePlayer.resources);
+          const bankCost = target ? maritimeTradeCost(target.cost) : null;
+          const beatsBankTrade = priceTotal === 2 && receiveTotal === 1 && target !== undefined &&
+            deficit(after, target.cost) === 0 &&
+            ((bankCost !== null && bankCost >= 3) || currentHandSize >= 8);
+          if (priceTotal > receiveTotal && !completesWin && !beatsBankTrade) continue;
           const helpsAnyTarget = targets.some(candidate =>
             deficit(after, candidate.cost) < deficit(activePlayer.resources, candidate.cost) &&
             (candidate === target || deficit(after, candidate.cost) === 0));
           if (helpsAnyTarget) {
             const afterPriority = Math.max(0, ...targets.map(candidate => priority(candidate, after)));
             const abundancePreference = RESOURCES.reduce((sum, resource) => sum + price[resource] * production[resource], 0);
-            const partnerScorePenalty = publicScores.get(otherId)! * 0.5;
-            const proposalScore = afterPriority * 10 + abundancePreference * 0.2 - partnerScorePenalty;
+            const partnerScorePenalty = effectiveScores.get(otherId)! * 0.55;
+            const extraCardPenalty = Math.max(0, priceTotal - receiveTotal) * 18;
+            const proposalScore = afterPriority * 10 + abundancePreference * 0.2 - partnerScorePenalty - extraCardPenalty;
             if (!bestProposal || proposalScore > bestProposal.score) {
               bestProposal = { otherId, score: proposalScore };
             }
@@ -1103,8 +2179,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       }
 
       if (phase.type === "actions") {
-        const immediateWin = targets.find(candidate => candidate.value === 10000 && deficit(activePlayer.resources, candidate.cost) === 0);
-        if (immediateWin) return immediateWin.action;
+        const immediateWinAction = findImmediateWinningAction();
+        if (immediateWinAction) return immediateWinAction;
       }
 
       const developmentActions: { action: GameAction; value: number }[] = [];
@@ -1116,11 +2192,21 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
           .with("knight", (): typeof developmentActions[number] | null => {
             const robberTile = tiles.get(state.robberTileId);
             const blocked = robberTile?.vertexIds.some(id => vertices.get(id)!.building?.playerId === playerId) ?? false;
+            const blockedPips = (robberTile?.vertexIds ?? []).reduce((sum, id) => {
+              const building = vertices.get(id)!.building;
+              if (building?.playerId !== playerId || robberTile?.number === null || robberTile?.number === undefined) return sum;
+              return sum + pipCount(robberTile.number) * (building.kind === "city" ? 2 : 1);
+            }, 0);
             const army = state.awards.largestArmy !== playerId && activePlayer.knightsPlayed + 1 >= 3 &&
               activePlayer.knightsPlayed + 1 > highestOpponentKnights;
             const move = robberMove(target);
             const unplayedMatureKnights = activePlayer.developmentCards.filter(other =>
               other.kind === "knight" && other.purchasedTurn < state.turnNumber).length;
+            const currentHandSize = resourceTotal(activePlayer.resources);
+            // Avoid stealing an 8th card right before rolling a potential 7 unless winning or unblocking huge production.
+            if (phase.type === "roll" && currentHandSize === 7 && !(army && winsWith(2)) && !(blocked && blockedPips >= 8)) {
+              return null;
+            }
             const aggressiveBeforeRoll = phase.type === "roll" && unplayedMatureKnights >= 2 && move.value >= 12;
             if (!blocked && !army && !aggressiveBeforeRoll && (phase.type === "roll" || move.value <= 0)) return null;
             return {
@@ -1155,13 +2241,29 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
           .with("year-of-plenty", (): typeof developmentActions[number] | null => {
             const count = Math.min(2, resourceTotal(state.bank));
             if (count === 0) return null;
+            const comboTargets: { cost: Resources; value: number }[] = targets.map(candidate => ({
+              cost: candidate.cost,
+              value: candidate.value,
+            }));
+            if (plannedRoute && plannedRoute.expansion && plannedRoute.distance === 1 &&
+              legalSettlementVertices(planningState, playerId).length === 0) {
+              const roadAndSettlementCost: Resources = plannedRoute.kind === "ship"
+                ? { wood: 2, brick: 1, wool: 2, grain: 1, ore: 0 }
+                : { wood: 2, brick: 2, wool: 1, grain: 1, ore: 0 };
+              comboTargets.push({
+                cost: roadAndSettlementCost,
+                value: winsWith(1 + plannedRoute.destinationIslandBonus)
+                  ? 10000
+                  : 24 + plannedRoute.destinationValue * 0.65,
+              });
+            }
             let bestPlan: { selected: Resources; value: number } | null = null;
-            for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
-              const candidate = targets[targetIndex]!;
+            for (let targetIndex = 0; targetIndex < comboTargets.length; targetIndex++) {
+              const candidate = comboTargets[targetIndex]!;
               const missing = deficit(activePlayer.resources, candidate.cost);
               if (missing === 0) continue;
               const selected = emptyResources();
-              const secondaryCost = targets[targetIndex === 0 ? 1 : 0]?.cost ?? COSTS.settlement;
+              const secondaryCost = comboTargets[targetIndex === 0 ? 1 : 0]?.cost ?? COSTS.settlement;
               for (let step = 0; step < count; step++) {
                 const available = RESOURCES.filter(resource => state.bank[resource] > selected[resource]);
                 const resource = available.toSorted((first, second) => {
@@ -1197,23 +2299,35 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
             const leaderExpected = emptyResources();
             for (const other of opponents) {
               const estimate = opponentEstimates[other.id]!;
-              const isLeader = publicScores.get(other.id)! === highestOpponentScore && highestOpponentScore >= 3;
+              const isLeader = effectiveScores.get(other.id)! >= highestOpponentEffectiveScore - 0.01 && highestOpponentEffectiveScore >= 3;
               for (const resource of RESOURCES) {
                 expected[resource] += estimate[resource];
                 if (isLeader) leaderExpected[resource] += estimate[resource];
               }
             }
+            const completesHighValueBuild = (resource: Resource): boolean => {
+              const projectedGain = Math.floor(expected[resource] * 0.85);
+              if (projectedGain <= 0) return false;
+              const projectedHand = { ...activePlayer.resources, [resource]: activePlayer.resources[resource] + projectedGain };
+              return targets.some(candidate =>
+                candidate.value >= 18 &&
+                deficit(activePlayer.resources, candidate.cost) > 0 &&
+                (deficit(projectedHand, candidate.cost) === 0 || maritimeAffordable(candidate.cost, projectedHand)));
+            };
             const scoreMonopoly = (resource: Resource): number => {
               const directGain = expected[resource];
               const neededBonus = Math.min(directGain, Math.max(0, cost[resource] - activePlayer.resources[resource])) * 2.2;
               const portBonus = tradeRatios[resource] === 2 ? directGain * 0.7 : tradeRatios[resource] === 3 ? directGain * 0.25 : 0;
-              const leaderDenial = leaderExpected[resource] * 0.6;
-              return directGain + neededBonus + portBonus + leaderDenial;
+              const leaderDenial = leaderExpected[resource] * 0.65;
+              const completionBonus = completesHighValueBuild(resource) ? 3.5 : 0;
+              return directGain + neededBonus + portBonus + leaderDenial + completionBonus;
             };
             const bestResource = RESOURCES.toSorted((first, second) => scoreMonopoly(second) - scoreMonopoly(first))[0]!;
-            const minimumExpected = score >= state.victoryPointsToWin - 3 || cost[bestResource] > activePlayer.resources[bestResource] ? 2.0 : 2.8;
+            const minimumExpected = score >= state.victoryPointsToWin - 3 ? 2.2
+              : completesHighValueBuild(bestResource) ? 2.5
+              : 3.6;
             return expected[bestResource] >= minimumExpected
-              ? { action: { type: "play-development", cardId: card.id, resource: bestResource }, value: scoreMonopoly(bestResource) * 2.2 }
+              ? { action: { type: "play-development", cardId: card.id, resource: bestResource }, value: scoreMonopoly(bestResource) * 2.4 }
               : null;
           })
           .exhaustive();
@@ -1226,14 +2340,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       const shipMove = bestShipMove(plannedRoute);
       if (shipMove) return shipMove.action;
 
-      if (target && deficit(activePlayer.resources, target.cost) === 0) return target.action;
-
-      if (target && target.value === 10000 && maritimeAffordable(target.cost)) {
-        const winningTrade = selectBankTrade(target.cost);
-        if (winningTrade) return { type: "bank-trade", give: winningTrade.give, receive: winningTrade.receive };
-      }
-
-      if (!state.computerTradeRequested && target) {
+      if (!state.computerTradeRequested && target && deficit(activePlayer.resources, target.cost) > 0) {
         const oneCardBuildTarget = deficit(activePlayer.resources, target.cost) > 1
           ? targets.find(candidate =>
             (candidate.action.type === "place-settlement" || candidate.action.type === "place-city") &&
@@ -1254,47 +2361,32 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         }
       }
 
-      if (target && maritimeAffordable(target.cost)) {
-        const trade = selectBankTrade(target.cost);
-        // Preserve the selected cost: each trade reduces its deficit, and only trade toward an attainable purchase.
-        if (trade) return { type: "bank-trade", give: trade.give, receive: trade.receive };
-      }
+      const turnPlan = searchTurnPlan({
+        board: state.board,
+        hand: { ...activePlayer.resources },
+        bank: { ...state.bank },
+        deckRemaining: state.developmentDeck.length,
+        awards: { ...state.awards },
+        boughtDevelopment: 0,
+        accumulatedDevelopmentValue: 0,
+        accumulatedSabotageValue: 0,
+        accumulatedRoadSplitBonus: 0,
+        accumulatedFogBonus: 0,
+        firstAction: null,
+      }, 2, false, plannedRoute);
+      if (turnPlan.action) return turnPlan.action;
 
       const handSize = resourceTotal(activePlayer.resources);
-      // Spend non-conflicting resources on a useful secondary build when it never touches cards reserved for the top plan.
-      if (target) {
-        const nonConflicting = targets.slice(1).find(secondary =>
-          deficit(activePlayer.resources, secondary.cost) === 0 &&
-          RESOURCES.every(resource => activePlayer.resources[resource] - secondary.cost[resource] >= Math.min(activePlayer.resources[resource], target.cost[resource])) &&
-          (handSize > 6 || secondary.value >= 14));
-        if (nonConflicting) return nonConflicting.action;
-      }
-
-      // Reduce 7-roll discard exposure when holding more than 7 cards at the end of a turn.
-      if (handSize > 7) {
-        const protectNearCity = target?.action.type === "place-city" && deficit(activePlayer.resources, COSTS.city) === 1 && handSize <= 8;
-        const affordableSecondary = targets.slice(1).find(secondary =>
-          deficit(activePlayer.resources, secondary.cost) === 0 &&
-          !(protectNearCity && secondary.action.type === "buy-development"));
-        if (affordableSecondary) return affordableSecondary.action;
-
-        const maritimeSecondary = targets.slice(1).find(secondary =>
-          secondary.value >= 12 && maritimeAffordable(secondary.cost));
-        if (maritimeSecondary) {
-          const trade = selectBankTrade(maritimeSecondary.cost);
-          if (trade) return { type: "bank-trade", give: trade.give, receive: trade.receive };
-        }
-
-        if (target) {
-          const protectiveTrade = selectBankTrade(target.cost);
-          const tradeIsPositiveValue = protectiveTrade !== null && (
-            (protectiveTrade.ratio === 2 && handSize >= 8) ||
-            (protectiveTrade.ratio === 3 && handSize >= 9) ||
-            (protectiveTrade.ratio === 4 && handSize >= 11)
-          );
-          if (protectiveTrade && tradeIsPositiveValue) {
-            return { type: "bank-trade", give: protectiveTrade.give, receive: protectiveTrade.receive };
-          }
+      // Reduce 7-roll discard exposure when holding more than 7 cards and no build sequence improved end-of-turn value.
+      if (handSize > 7 && target) {
+        const protectiveTrade = selectBankTrade(target.cost);
+        const tradeIsPositiveValue = protectiveTrade !== null && (
+          (protectiveTrade.ratio === 2 && handSize >= 8) ||
+          (protectiveTrade.ratio === 3 && handSize >= 9) ||
+          (protectiveTrade.ratio === 4 && handSize >= 11)
+        );
+        if (protectiveTrade && tradeIsPositiveValue) {
+          return { type: "bank-trade", give: protectiveTrade.give, receive: protectiveTrade.receive };
         }
       }
 

@@ -329,7 +329,7 @@ async function expectPhase(pages: Page[], phase: string, activePlayer: string) {
   }
 }
 
-async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Return to lobby" | "Show invitation" | "Leave room") {
+async function chooseGameOption(page: Page, name: "Help" | "Settings" | "Reset game" | "Return to lobby" | "Show invitation" | "Leave room" | "Table activity") {
   await page.getByRole("button", { name: "Game", exact: true }).click();
   await page.getByRole("group", { name: "Game menu", exact: true }).getByRole("button", { name, exact: true }).click();
 }
@@ -634,6 +634,8 @@ test("Japanese phones localize a shared English game without changing its state 
   await host.getByRole("button", { name: "Start game", exact: true }).click();
   await expect(japanesePhone.getByTestId("game-phase")).toBeVisible();
   await expect(englishPhone.getByTestId("game-phase")).toBeVisible();
+  await expect(japanesePhone.getByText(/ゲーム開始 — 席/)).toHaveCount(0);
+  await expect(englishPhone.getByText(/Game started — Seat/)).toHaveCount(0);
   for (const screen of [host, englishPhone]) {
     await screen.getByRole("button", { name: "Game", exact: true }).click();
     await expect(screen.getByRole("button", { name: "Profile", exact: true, includeHidden: true })).toHaveCount(0);
@@ -1851,18 +1853,56 @@ test("Seafarers gold choices are available off-turn on a narrow phone and send o
   snapshot.game!.bank = { wood: 1, brick: 0, wool: 0, grain: 0, ore: 1 };
   snapshot.boardTargets = { vertices: [], edges: [], tiles: [] };
   await present();
-  const choices = phone.getByRole("region", { name: "Choose your gold resources", exact: true });
+  const choices = phone.getByRole("dialog", { name: "Choose 2 gold resources", exact: true });
   await expect(choices).toBeVisible();
-  await expect(choices.getByRole("button", { name: "Collect resources", exact: true })).toBeDisabled();
-  await choices.getByRole("button", { name: "Add Ore to Take from the bank", exact: true }).click();
-  await choices.getByRole("button", { name: "Add Wood to Take from the bank", exact: true }).click();
-  await expect(choices.getByRole("button", { name: "Collect resources", exact: true })).toBeEnabled();
+  await expect(choices.getByRole("columnheader")).toHaveText(["Resource", "In hand", "Pick"]);
+  await expect(choices.getByRole("row").filter({ has: phone.getByRole("rowheader", { name: "Wool" }) }).getByRole("cell"))
+    .toHaveText(["5", "Out of stock"]);
+  const collect = choices.getByRole("button", { name: "Collect 2 resources", exact: true });
+  const progress = choices.getByRole("status");
+  const addOre = choices.getByRole("button", { name: "Add Ore", exact: true });
+  const removeOre = choices.getByRole("button", { name: "Remove Ore", exact: true });
+  await expect(collect).toBeDisabled();
+  await expect(removeOre).toBeDisabled();
+  await addOre.click();
+  await expect(addOre).toBeDisabled();
+  await expect(progress).toHaveText("Selected 1 of 2");
+  await choices.getByRole("button", { name: "Add Wood", exact: true }).click();
+  await expect(collect).toBeEnabled();
+  await removeOre.click();
+  await expect(collect).toBeDisabled();
+  await addOre.click();
+  await expect(progress).toHaveText("Selected 2 of 2");
+  await expect(collect).toBeInViewport({ ratio: 1 });
   await privateScreenFits(phone);
   await screenshot(phone, testInfo, "seafarers-gold-choice");
-  await choices.getByRole("button", { name: "Collect resources", exact: true }).click();
+  await collect.click();
   await expect.poll(async () => (await sentActions(phone)).at(-1)).toMatchObject({
     type: "action", action: { type: "choose-gold", resources: { wood: 1, brick: 0, wool: 0, grain: 0, ore: 1 } },
   });
+});
+
+test("Japanese gold picker shows the available count and keeps Collect visible across screen sizes", { tag: "@desktop-only" }, async ({ multiplayer }) => {
+  const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  await selectMenuLanguage(phone, "en", "ja");
+  const game = snapshot.game!;
+  game.phase = { type: "gold", required: { [snapshot.playerId!]: 2 } };
+  game.bank = { wood: 0, brick: 0, wool: 0, grain: 0, ore: 1 };
+  await present();
+  const choices = phone.getByRole("dialog", { name: "金鉱から資源を1枚選ぶ", exact: true });
+  await expect(choices.getByRole("status")).toHaveText("1枚中0枚を選択");
+  await expect(choices.getByRole("columnheader")).toHaveText(["資源", "手札", "選択"]);
+  const collect = choices.getByRole("button", { name: "資源を1枚受け取る", exact: true });
+  await expect(collect).toBeDisabled();
+  await choices.getByRole("button", { name: "鉱石を追加", exact: true }).click();
+  await expect(collect).toBeEnabled();
+  for (const viewport of [{ width: 320, height: 568 }, { width: 768, height: 840 }, { width: 1440, height: 1000 }]) {
+    await phone.setViewportSize(viewport);
+    await expect(collect).toBeInViewport({ ratio: 1 });
+    expect(await choices.evaluate(dialog => dialog.scrollWidth)).toBeLessThanOrEqual(
+      await choices.evaluate(dialog => dialog.clientWidth),
+    );
+  }
 });
 
 test("one private phone plays with two computers that complete setup automatically", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
@@ -2528,7 +2568,7 @@ test("host and three private phones play over real PeerJS channels and recover a
   await privateScreenFits(activePhone);
 });
 
-test("private robbery notices overlay above turn controls without moving the hand for five visible seconds", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+test("private robbery notices overlay resources without moving build buttons or turn controls", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2540,9 +2580,10 @@ test("private robbery notices overlay above turn controls without moving the han
   const notice = phone.getByRole("region", { name: "Robbery notification", exact: true });
   const announcement = phone.getByRole("status", { name: "Robbery result", exact: true });
   const dismiss = notice.getByRole("button", { name: "Dismiss robbery notification", exact: true });
-  const dashboard = phone.getByLabel("Your hand and actions", { exact: true });
   const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
   const hand = phone.getByRole("region", { name: "Your cards", exact: true });
+  const cards = hand.getByRole("region", { name: "Your current resources", exact: true });
+  const buildRoad = hand.getByRole("button", { name: "Build road", exact: true });
 
   for (const lost of [true, false]) {
     game.activePlayerId = lost ? opponent.id : player.id;
@@ -2550,10 +2591,14 @@ test("private robbery notices overlay above turn controls without moving the han
     await present();
     const turnBeforeNotice = await turnControls.boundingBox();
     const handBeforeNotice = await hand.boundingBox();
+    const cardsBeforeNotice = await cards.boundingBox();
+    const buildBeforeNotice = await buildRoad.boundingBox();
     snapshot.privateThefts.push({ id: lost ? 1 : 2, thiefId: lost ? opponent.id : player.id, victimId: lost ? player.id : opponent.id, resource: "ore" });
     await present();
     expect(await turnControls.boundingBox()).toEqual(turnBeforeNotice);
     expect(await hand.boundingBox()).toEqual(handBeforeNotice);
+    expect(await cards.boundingBox()).toEqual(cardsBeforeNotice);
+    expect(await buildRoad.boundingBox()).toEqual(buildBeforeNotice);
     const title = lost ? `${opponent.name} robbed you` : `You stole from ${opponent.name}`;
     const description = lost ? `${opponent.name} robbed you of 1 Ore.` : `You stole 1 Ore from ${opponent.name}.`;
     await expect(notice).toHaveCount(1);
@@ -2565,6 +2610,7 @@ test("private robbery notices overlay above turn controls without moving the han
 
     for (const { width, height, reducedMotion } of [
       { width: 320, height: 568, reducedMotion: "no-preference" },
+      { width: 390, height: 844, reducedMotion: "reduce" },
       { width: 1440, height: 900, reducedMotion: "no-preference" },
       { width: 320, height: 568, reducedMotion: "reduce" },
     ] as const) {
@@ -2577,15 +2623,19 @@ test("private robbery notices overlay above turn controls without moving the han
       await expect(notice.locator(".resource-card")).toBeInViewport({ ratio: 1 });
       await expect(dismiss).toBeInViewport({ ratio: 1 });
       expect(await notice.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-      expect(await notice.evaluate(element => element.parentElement?.parentElement?.getAttribute("aria-label"))).toBe("Turn controls");
-      await expect(notice).toHaveCSS("position", "absolute");
+      await expect(cards.getByRole("region", { name: "Robbery notification", exact: true })).toBeVisible();
       const noticeBounds = (await notice.boundingBox())!;
+      const headingBounds = (await notice.getByRole("heading").boundingBox())!;
+      const resourceBounds = (await notice.locator(".resource-card").boundingBox())!;
+      const amountBounds = (await notice.getByText(lost ? "-1" : "+1", { exact: true }).boundingBox())!;
       const turnBounds = (await turnControls.boundingBox())!;
-      const gap = turnBounds.y - noticeBounds.y - noticeBounds.height;
-      expect(gap).toBeGreaterThanOrEqual(6);
-      expect(gap).toBeLessThanOrEqual(8);
-      expect(noticeBounds.x).toBeCloseTo(turnBounds.x, 0);
-      expect(noticeBounds.width).toBeCloseTo(turnBounds.width, 0);
+      const cardBounds = (await cards.boundingBox())!;
+      expect(resourceBounds.y).toBeGreaterThanOrEqual(headingBounds.y + headingBounds.height);
+      expect(amountBounds.x).toBeGreaterThan(resourceBounds.x + resourceBounds.width);
+      expect(noticeBounds.y).toBeGreaterThanOrEqual(cardBounds.y);
+      expect(noticeBounds.y).toBeLessThan(cardBounds.y + cardBounds.height);
+      if (width < 700) expect(noticeBounds.y + noticeBounds.height).toBeLessThanOrEqual(turnBounds.y);
+      else expect(noticeBounds.x + noticeBounds.width).toBeLessThanOrEqual(turnBounds.x);
       if (reducedMotion === "reduce") {
         await expect(notice).toHaveCSS("animation-name", "none");
         await expect(notice.locator(".resource-card")).toHaveCSS("animation-name", "none");
@@ -2602,7 +2652,7 @@ test("private robbery notices overlay above turn controls without moving the han
       await building.focus();
       await phone.keyboard.press("Enter");
     }
-    await dashboard.evaluate(element => { element.scrollTop = 0; });
+    await hand.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(notice).not.toBeInViewport({ ratio: 0.5 });
     await phone.clock.fastForward(10_000);
     await expect(notice).toBeVisible();
@@ -2612,6 +2662,7 @@ test("private robbery notices overlay above turn controls without moving the han
     await expect(notice).toBeInViewport({ ratio: 1 });
     const turnBeforeExpiry = await turnControls.boundingBox();
     const handBeforeExpiry = await hand.boundingBox();
+    const buildBeforeExpiry = await buildRoad.boundingBox();
     await phone.clock.fastForward(2_500);
     await present();
     await phone.clock.fastForward(2_499);
@@ -2622,6 +2673,7 @@ test("private robbery notices overlay above turn controls without moving the han
     await expect(announcement).toHaveText("");
     expect(await turnControls.boundingBox()).toEqual(turnBeforeExpiry);
     expect(await hand.boundingBox()).toEqual(handBeforeExpiry);
+    expect(await buildRoad.boundingBox()).toEqual(buildBeforeExpiry);
     await present();
     await expect(notice).toHaveCount(0);
     await expect(announcement).toHaveText("");
@@ -2765,6 +2817,11 @@ test("private monopoly notices report each victim's losses and queue behind unre
   await expect(robberyNotice).toHaveCount(0);
   await monopolyNotice.scrollIntoViewIfNeeded();
   await expect(monopolyNotice).toBeInViewport({ ratio: 1 });
+  const monopolyHeading = (await monopolyNotice.getByRole("heading").boundingBox())!;
+  const monopolyResource = (await monopolyNotice.locator(".resource-card").boundingBox())!;
+  const monopolyAmount = (await monopolyNotice.getByText("-3", { exact: true }).boundingBox())!;
+  expect(monopolyResource.y).toBeGreaterThanOrEqual(monopolyHeading.y + monopolyHeading.height);
+  expect(monopolyAmount.x).toBeGreaterThan(monopolyResource.x + monopolyResource.width);
   await noHorizontalOverflow(phone);
   await screenshot(phone, testInfo, "private-monopoly-victim");
 
@@ -2814,7 +2871,7 @@ test("private custom-target cards and victory instructions use the configured po
   await expect(phone.getByTestId("game-phase")).not.toContainText("reach 10 victory points");
 });
 
-test("private instructions and grouped development cards match single-device gameplay", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+test("private instructions give one placement prompt and group development cards like single-device play", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
@@ -2823,8 +2880,11 @@ test("private instructions and grouped development cards match single-device gam
 
   game.phase = { type: "setup-settlement" };
   await present();
-  await expect(instructions.getByRole("heading", { name: "Find a place to call home.", exact: true })).toBeVisible();
-  await expect(instructions).toContainText("Place your first settlement on a highlighted intersection on the shared board.");
+  const settlementTitle = instructions.getByRole("heading", { name: "Place your settlement on the shared board", exact: true });
+  await expect(settlementTitle).toBeInViewport({ ratio: 1 });
+  await expect(phone.locator(".placement-mode-banner")).toHaveCount(0);
+  await expect(settlementTitle).toHaveCSS("white-space", "normal");
+  await expect(instructions).toContainText("Choose a highlighted intersection for your first settlement.");
   await expect(instructions).toContainText("Leave at least two edges between settlements.");
   await expect(instructions.locator(".turn-card")).toHaveCSS("background-color", "rgb(233, 237, 223)");
   await expect(developmentHand).toHaveCount(0);
@@ -2839,10 +2899,13 @@ test("private instructions and grouped development cards match single-device gam
   await instructions.getByRole("button", { name: "Collapse instructions", exact: true }).click();
   await expect(instructions.locator(".turn-card")).not.toHaveAttribute("data-expanded", "true");
   await screenshot(phone, testInfo, "private-setup-instructions");
+  await selectMenuLanguage(phone, "en", "ja");
+  await expect(instructions.getByRole("heading", { name: "共用ボードに開拓地を配置してください", exact: true })).toBeInViewport({ ratio: 1 });
+  await selectMenuLanguage(phone, "ja", "en");
 
   game.players.forEach((other, index) => { game.board.vertices[index]!.building = { playerId: other.id, kind: "settlement" }; });
   await present();
-  await expect(instructions).toContainText("Place your second settlement");
+  await expect(instructions).toContainText("Choose a highlighted intersection for your second settlement.");
   game.phase = { type: "robber", returnPhase: "roll" };
   game.canCancelKnight = true;
   await present();
@@ -3677,14 +3740,30 @@ test("multi-device trade UX covers responder state, non-clobbering dialogs, disc
   await expect(requestDialog.getByRole("button", { name: "Update price", exact: true })).toBeEnabled();
   await requestDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
 
-  // 4. Withdrawn trade triggers a dismissible Trade notification.
+  // 4. Withdrawing the trade closes the open dialog without a banner.
+  await viewTrade.click();
+  await expect(requestDialog).toBeVisible();
   game.trade = null;
   game.log.push({ key: "{player} withdraws the trade offer.", parameters: { player: opponent!.name } });
   await present();
-  const withdrawnNotice = phone.getByRole("region", { name: "Trade notification", exact: true });
-  await expect(withdrawnNotice).toContainText(`${opponent!.name} withdrew the trade`);
-  await withdrawnNotice.getByRole("button", { name: "Dismiss trade notification", exact: true }).click();
-  await expect(withdrawnNotice).toHaveCount(0);
+  await expect(requestDialog).toHaveCount(0);
+  const turnControls = phone.getByRole("region", { name: "Turn controls", exact: true });
+  const closedMessage = turnControls.getByText("Trade closed", { exact: true });
+  await expect(viewTrade).toHaveCount(0);
+  await expect(closedMessage).toHaveCount(0);
+  await expect(phone.getByRole("region", { name: "Trade notification", exact: true })).toHaveCount(0);
+  await screenshot(phone, testInfo, "trade-withdrawn-no-banner");
+
+  game.trade = { offeredBy: opponent!.id, give: null, receive: { ...emptyResources(), ore: 1 }, responses: {} };
+  await present();
+  await expect(requestDialog).toBeVisible();
+  await requestDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
+  game.trade = null;
+  game.log.push({ key: "{player} begins a turn.", parameters: { player: otherOpponent!.name } });
+  await present();
+  await expect(viewTrade).toHaveCount(0);
+  await expect(closedMessage).toHaveCount(0);
+  await expect(phone.getByRole("region", { name: "Trade notification", exact: true })).toHaveCount(0);
 
   // 5. Offerer view: disconnected human shows "disconnected", View trade shows ready count,
   // Change offer stays enabled when opponent answers, Bank tab defaults to affordable resource & warns,
@@ -3732,7 +3811,7 @@ test("multi-device trade UX covers responder state, non-clobbering dialogs, disc
   await expect(editor.getByText("Confirming a bank exchange will withdraw your open player trade.", { exact: true })).toBeVisible();
 });
 
-test("open trades do not render a shared-board banner or shift layout while phones show completion notices", { tag: "@desktop-only" }, async ({ multiplayer }) => {
+test("open trades do not shift the shared board; only trade partners get a phone receipt", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   await host.addInitScript(() => {
     let seed = 7;
@@ -3749,7 +3828,7 @@ test("open trades do not render a shared-board banner or shift layout while phon
   const invitation = await hostGame(host);
   const phones = new Map<string, Page>();
   for (const name of ["Alex", "Sam", "Taylor"]) {
-    const phone = await multiplayer.newPage(name);
+    const phone = await multiplayer.newPage(name, true);
     await phone.emulateMedia({ reducedMotion: "reduce" });
     phones.set(name, phone);
     await requestSeat(phone, invitation, name);
@@ -3845,8 +3924,41 @@ test("open trades do not render a shared-board banner or shift layout while phon
   await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
 
   await expect(host.getByRole("region", { name: "Open trade", exact: true })).toHaveCount(0);
-  await expect(responderPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`Traded with ${activeName}`);
-  await expect(observerPhone.getByRole("region", { name: "Trade notification", exact: true })).toContainText(`${activeName} traded with ${responderName}`);
+  for (const [phone, partner] of [[activePhone, responderName], [responderPhone, activeName]] as const) {
+    const resources = phone.getByRole("region", { name: "Your current resources", exact: true });
+    const receipt = resources.getByRole("region", { name: "Trade notification", exact: true });
+    await expect(receipt).toContainText(`Traded with ${partner}`);
+    for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+      await phone.setViewportSize(viewport);
+      await expect(receipt).toBeInViewport({ ratio: 1 });
+      const heading = (await receipt.getByRole("heading").boundingBox())!;
+      const gave = receipt.getByRole("img", { name: /^You gave:/ });
+      const received = receipt.getByRole("img", { name: /^You received:/ });
+      const gaveLabel = (await gave.getByText("You gave", { exact: true }).boundingBox())!;
+      const receivedLabel = (await received.getByText("You received", { exact: true }).boundingBox())!;
+      const gaveCard = (await gave.locator(".resource-card").boundingBox())!;
+      const receivedCard = (await received.locator(".resource-card").boundingBox())!;
+      expect(gaveLabel.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+      expect(gaveCard.y).toBeGreaterThanOrEqual(gaveLabel.y + gaveLabel.height);
+      expect(receivedCard.y).toBeGreaterThanOrEqual(receivedLabel.y + receivedLabel.height);
+      expect(receivedCard.x).toBeGreaterThan(gaveCard.x + gaveCard.width);
+    }
+    const build = phone.getByRole("button", { name: "Build road", exact: true });
+    const buildBeforeDismiss = await build.boundingBox();
+    const resourceBounds = (await resources.boundingBox())!;
+    const receiptBounds = (await receipt.boundingBox())!;
+    expect(receiptBounds.y).toBeLessThan(resourceBounds.y + resourceBounds.height);
+    if (phone === responderPhone) await screenshot(phone, testInfo, "trade-participant-receipt-overlay");
+    await receipt.getByRole("button", { name: "Dismiss trade notification", exact: true }).click();
+    await expect(receipt).toHaveCount(0);
+    expect(await build.boundingBox()).toEqual(buildBeforeDismiss);
+    await expect(phone.getByRole("region", { name: "Resource collection", exact: true })).toHaveCount(0);
+  }
+  const publicTrade = `${activeName} trades with ${responderName}.`;
+  await expect(observerPhone.getByRole("region", { name: "Trade notification", exact: true })).toHaveCount(0);
+  await screenshot(observerPhone, testInfo, "trade-spectator-no-notice");
+  await chooseGameOption(observerPhone, "Table activity");
+  await expect(observerPhone.getByRole("dialog", { name: "Table activity", exact: true })).toContainText(publicTrade);
 });
 
 for (const [stage, expectedError] of [
@@ -4029,10 +4141,11 @@ test("a lost phone rejoins mid-game from the host's invitation without host admi
   await screenshot(host, testInfo, "midgame-invitation-rejoin");
 });
 
-test("shared board shows live phase banner, host table activity dialog, and phone lifecycle notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+test("phones start and reset without banners and still report returning to the lobby and room closure", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const alex = await multiplayer.newPage("Alex", true);
+  await alex.setViewportSize({ width: 320, height: 568 });
   await requestSeat(alex, invitation, "Alex");
   await expect(alex.locator(".waiting-dots")).toBeVisible();
   await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
@@ -4041,8 +4154,13 @@ test("shared board shows live phase banner, host table activity dialog, and phon
   await host.getByRole("button", { name: "Start game", exact: true }).click();
 
   await expect(host.getByTestId("game-phase")).toHaveAttribute("data-active-player", "Alex", { timeout: 15_000 });
-  await expect(alex.locator(".private-session-banner")).toContainText("Game started");
-  await expect(alex.locator(".placement-mode-banner")).toContainText("Place your settlement on the shared board");
+  const phoneTurn = alex.getByRole("region", { name: "Turn controls", exact: true });
+  const settlementTitle = phoneTurn.getByRole("heading", { name: "Place your settlement on the shared board", exact: true });
+  await expect(settlementTitle).toBeInViewport({ ratio: 1 });
+  await expect(phoneTurn.getByText(/Game started/)).toHaveCount(0);
+  await expect(alex.locator(".placement-mode-banner")).toHaveCount(0);
+  const startedGameId = (await latestSnapshot(alex)).game!.gameId;
+  await screenshot(alex, testInfo, "phone-game-start-no-banner");
 
   // Host Game menu exposes Table activity dialog.
   await host.getByRole("button", { name: "Game", exact: true }).click();
@@ -4051,10 +4169,18 @@ test("shared board shows live phase banner, host table activity dialog, and phon
   await expect(hostActivity).toBeVisible();
   await hostActivity.getByRole("button", { name: "Close dialog", exact: true }).click();
 
-  // Host Reset game notifies the phone.
+  // Confirm the phone receives the reset before checking that no notice appeared.
   await chooseGameOption(host, "Reset game");
   await host.getByRole("dialog", { name: "Reset this game?", exact: true }).getByRole("button", { name: "Reset game", exact: true }).click();
-  await expect(alex.locator(".private-session-banner")).toContainText("The host reset the game.");
+  await expect.poll(async () => {
+    const resetGameId = (await latestSnapshot(alex)).game?.gameId;
+    return Boolean(resetGameId && resetGameId !== startedGameId);
+  }).toBe(true);
+  await expect(alex.getByTestId("game-phase")).toHaveAttribute("data-phase", "setup-settlement");
+  await expect(phoneTurn.getByText("The host reset the game.", { exact: true })).toHaveCount(0);
+  await expect(settlementTitle).toBeInViewport({ ratio: 1 });
+  await expect(alex.locator(".placement-mode-banner")).toHaveCount(0);
+  await screenshot(alex, testInfo, "phone-game-reset-no-banner");
 
   // Host Return to lobby notifies the phone in the lobby.
   await chooseGameOption(host, "Return to lobby");
@@ -4072,13 +4198,16 @@ test("shared board shows live phase banner, host table activity dialog, and phon
   await screenshot(alex, testInfo, "phone-room-closed-dialog");
 });
 
-test("private phone shows resource collection, rolled seven styling, gold dialog, development draw reveal, and sabotage notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
+test("private phone shows inline roll gains, mandatory choices, development reveal, and sabotage notices", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
   const { phone, snapshot, present } = await privateDialogFixture(multiplayer);
+  await phone.emulateMedia({ reducedMotion: "reduce" });
+  await phone.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+  await phone.clock.pauseAt(new Date("2030-01-01T00:00:01Z"));
   const player = snapshot.privatePlayer!;
   const game = snapshot.game!;
   const opponent = game.players.find(other => other.id !== player.id)!;
 
-  // Non-7 roll resource gain opens ResourceCollection and updates hand badges.
+  // Roll gains update the dice tray and hand without an overlay, even with a private notice queued.
   game.phase = { type: "roll" };
   game.dice = null;
   await present();
@@ -4086,11 +4215,31 @@ test("private phone shows resource collection, rolled seven styling, gold dialog
   game.dice = [2, 4];
   player.resources = { ...player.resources, wood: player.resources.wood + 2 };
   await present();
-  const collection = phone.getByRole("region", { name: "Resource collection", exact: true });
-  await expect(collection).toBeVisible();
-  await expect(collection).toContainText("Added to your hand");
-  await collection.getByRole("button", { name: "Dismiss resource collection", exact: true }).click();
-  await expect(collection).toHaveCount(0);
+  const rollResult = phone.getByRole("region", { name: "Roll result", exact: true });
+  const rewards = rollResult.getByRole("listitem", { name: "Wood +2", exact: true });
+  const wood = phone.getByRole("listitem", { name: `Wood: ${player.resources.wood} in hand`, exact: true });
+  await expect(wood.getByLabel("Received 2 Wood", { exact: true })).toBeVisible();
+  await expect(phone.getByRole("status", { name: "Resource receipt", exact: true })).toHaveText("You received +2 Wood.");
+  await expect(rewards).toBeVisible();
+  await expect(phone.getByRole("region", { name: "Resource collection", exact: true })).toHaveCount(0);
+  await screenshot(phone, testInfo, "phone-roll-gains-no-popup");
+  snapshot.privateThefts.push({ id: 1, thiefId: opponent.id, victimId: player.id, resource: "ore" });
+  player.resources.ore--;
+  await present();
+  const robbery = phone.getByRole("region", { name: "Robbery notification", exact: true });
+  const nextAction = phone.getByRole("button", { name: "End turn", exact: true });
+  for (const width of [320, 390]) {
+    await phone.setViewportSize({ width, height: width === 320 ? 568 : 844 });
+    await expect(robbery).toBeInViewport({ ratio: 1 });
+    await expect(wood).toBeInViewport({ ratio: 1 });
+    await expect(rewards).toBeInViewport({ ratio: 1 });
+    await expect(nextAction).toBeInViewport({ ratio: 1 });
+    await expect(nextAction).toBeEnabled();
+    await expect(phone.getByRole("region", { name: "Resource collection", exact: true })).toHaveCount(0);
+    await screenshot(phone, testInfo, `roll-gains-and-robbery-overlay-${width}`);
+    await expect(robbery).toBeInViewport({ ratio: 1 });
+  }
+  await robbery.getByRole("button", { name: "Dismiss robbery notification", exact: true }).click();
 
   // Rolled 7 highlights dice tray with seven state and opens Discard modal after settling.
   game.turnNumber += 1;
@@ -4100,7 +4249,6 @@ test("private phone shows resource collection, rolled seven styling, gold dialog
   game.phase = { type: "discard", required: { [player.id]: 4 } };
   game.dice = [3, 4];
   await present();
-  const rollResult = phone.getByRole("region", { name: "Roll result", exact: true });
   await expect(rollResult).toHaveAttribute("data-seven", "true");
   await expect(rollResult).toContainText("Robber activates!");
   const discardDialog = phone.getByRole("dialog", { name: "Discard 4 cards", exact: true });
@@ -4113,7 +4261,7 @@ test("private phone shows resource collection, rolled seven styling, gold dialog
   await expect(phone.getByTestId("game-phase")).toContainText(`${opponent.name} is choosing gold. Your turn to choose 2 next.`);
   game.phase = { type: "gold", required: { [player.id]: 2 } };
   await present();
-  const goldDialog = phone.getByRole("dialog", { name: "Choose your gold resources", exact: true });
+  const goldDialog = phone.getByRole("dialog", { name: "Choose 2 gold resources", exact: true });
   await expect(goldDialog).toBeVisible();
   await goldDialog.getByRole("button", { name: "Close dialog", exact: true }).click();
   await phone.getByRole("button", { name: "Choose gold (2)", exact: true }).click();
@@ -4156,8 +4304,31 @@ test("private phone shows resource collection, rolled seven styling, gold dialog
   targetVertex.building = null;
   await present();
   const sabotageNotice = phone.getByRole("region", { name: "Sabotage notification", exact: true });
-  await expect(sabotageNotice).toBeVisible();
-  await expect(sabotageNotice).toContainText(`${opponent.name} sabotaged you`);
-  await expect(sabotageNotice).toContainText(`${opponent.name} sabotaged your settlement.`);
+  await phone.setViewportSize({ width: 320, height: 568 });
+  await expect(sabotageNotice).toBeInViewport({ ratio: 1 });
+  const sabotageHeading = sabotageNotice.getByRole("heading", { name: "Sabotage", exact: true });
+  await expect(sabotageHeading.locator("svg")).toBeVisible();
+  const sabotageMessage = `${opponent.name} destroyed your settlement.`;
+  await expect(sabotageNotice.getByText(sabotageMessage, { exact: true })).toBeVisible();
+  await expect(phone.getByRole("status", { name: "Sabotage result", exact: true })).toHaveText(sabotageMessage);
+  const headingBounds = (await sabotageHeading.boundingBox())!;
+  const pieceBounds = (await sabotageNotice.locator('.piece-icon[data-piece="settlement"]').boundingBox())!;
+  expect(pieceBounds.y).toBeGreaterThanOrEqual(headingBounds.y + headingBounds.height);
+  const buildRoad = phone.getByRole("button", { name: "Build road", exact: true });
+  const buildBeforeDismiss = await buildRoad.boundingBox();
   await screenshot(phone, testInfo, "phone-sabotage-notification");
+  await selectMenuLanguage(phone, "en", "ja");
+  const japaneseNotice = phone.getByRole("region", { name: "破壊工作のお知らせ", exact: true });
+  await expect(japaneseNotice.getByRole("heading", { name: "破壊工作", exact: true })).toBeVisible();
+  await expect(japaneseNotice.getByText(`${opponent.name}があなたの開拓地を破壊しました。`, { exact: true })).toBeVisible();
+  await selectMenuLanguage(phone, "ja", "en");
+  await sabotageNotice.getByRole("button", { name: "Dismiss sabotage notification", exact: true }).click();
+  await expect(sabotageNotice).toHaveCount(0);
+  expect(await buildRoad.boundingBox()).toEqual(buildBeforeDismiss);
+
+  targetVertex.building = { playerId: player.id, kind: "city" };
+  await present();
+  targetVertex.building = { playerId: player.id, kind: "settlement" };
+  await present();
+  await expect(sabotageNotice.getByText(`${opponent.name} reduced your city to a settlement.`, { exact: true })).toBeVisible();
 });
