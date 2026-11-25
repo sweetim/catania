@@ -58,7 +58,9 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
         id: player.id, name: player.name, color: player.color, control: player.control,
         connected: players.some(seat => seat.id === player.id && seat.connected),
         resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length,
-        knightsPlayed: player.knightsPlayed, longestRoad: getLongestRoadLength(game, player.id),
+        knightsPlayed: player.knightsPlayed,
+        ...(game.sabotageEnabled ? { sabotagesPlayed: player.sabotagesPlayed } : {}),
+        longestRoad: getLongestRoadLength(game, player.id),
         score: game.phase.type === "finished" ? score.total : score.public,
         // Publish bonus points, not the host's starting-island bookkeeping.
         ...(game.variant === "seafarers" || game.variant === "four-islands" ? { islands: score.islands } : {}),

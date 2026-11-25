@@ -714,6 +714,7 @@ export function App() {
         player={{ ...player, resourceCount: resourceTotal(player.resources), developmentCount: player.developmentCards.length, longestRoad: getLongestRoadLength(game, player.id), score: game.winnerId ? score.total : score.public }}
         active={game.activePlayerId === player.id} leading={showPublicScoreLeaders && score.public === highestPublicScore}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        masterSaboteur={game.awards.masterSaboteur === player.id} sabotageEnabled={game.sabotageEnabled === true}
         islandBonus={score.islands ?? 0}
         privateScore={player.id === viewerId ? score.total : undefined} />;
     });
@@ -1114,6 +1115,7 @@ export function App() {
                         [translateText("Cities"), score.cities],
                         [translateText(isSeafarers(game.variant) ? "Longest Route" : "Longest Road"), score.longestRoad],
                         [translateText("Largest Army"), score.largestArmy],
+                        ...(game.sabotageEnabled ? [[translateText("Master Saboteur"), score.masterSaboteur ?? 0]] : []),
                         ...(game.variant === "seafarers" || game.variant === "four-islands" ? [[translateText("Island bonuses"), score.islands ?? 0]] : []),
                         [translateText("Revealed victory-point cards"), score.hidden],
                       ].map(([label, points]) => (
@@ -1688,6 +1690,7 @@ export function App() {
                   { kind: "cities", label: translateText("Cities"), note: winnerScore.cities ? translateText("{count} × {points} VP", { count: winnerScore.cities / 2, points: 2 }) : undefined, points: winnerScore.cities },
                   { kind: "longest-road", label: translateText(isSeafarers(game.variant) ? "Longest Route" : "Longest Road"), points: winnerScore.longestRoad },
                   { kind: "largest-army", label: translateText("Largest Army"), points: winnerScore.largestArmy },
+                  ...(game.sabotageEnabled ? [{ kind: "master-saboteur" as const, label: translateText("Master Saboteur"), points: winnerScore.masterSaboteur ?? 0 }] : []),
                   ...(game.variant === "seafarers" || game.variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: winnerScore.islands ? translateText("{count} × {points} VP", { count: winnerScore.islands / 2, points: 2 }) : undefined, points: winnerScore.islands ?? 0 }] : []),
                   { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: winnerScore.hidden ? translateText("{count} × {points} VP", { count: winnerScore.hidden, points: 1 }) : undefined, points: winnerScore.hidden },
                 ]}

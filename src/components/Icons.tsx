@@ -706,6 +706,24 @@ export function LongestRoadAwardIcon({ className = "h-6 w-5 shrink-0", label }: 
   );
 }
 
+export function MasterSaboteurAwardIcon({ className = "h-6 w-5 shrink-0", label }: IconProperties) {
+  return (
+    <svg
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+      data-piece="sabotage"
+      viewBox="0 0 24 28"
+      className={className}
+      fill="none"
+    >
+      {label ? <title>{label}</title> : null}
+      <path d="M4 4h16v14.5l-8 5.5-8-5.5Z" fill="currentColor" fillOpacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="m14.2 6.6-4.2 6.5h3.2L9.8 20.6l5.6-7.6h-3.1l1.9-6.4Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Non-Resource Terrain Icons (Gold, Desert, Sea, Fog)                       */
 /* -------------------------------------------------------------------------- */

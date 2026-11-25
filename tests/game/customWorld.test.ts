@@ -516,7 +516,88 @@ describe("Custom World Sabotage build action", () => {
     room.performBoard({ type: "sabotage-building", vertexId: targetVertexId });
     expect(room.game!.board.vertices.find(vertex => vertex.id === targetVertexId)!.building).toBeNull();
     expect(room.game!.players.find(player => player.id === humanId)!.resources).toEqual({ wood: 0, brick: 0, wool: 0, grain: 0, ore: 0 });
+    expect(room.game!.players.find(player => player.id === humanId)!.sabotagesPlayed).toBe(1);
     expect(room.game!.phase).toEqual({ type: "actions" });
     expect(room.buildMode).toBeNull();
+
+    const afterSabotageSnapshot = room.snapshot("phone-1");
+    expect(afterSabotageSnapshot.game!.players.find(player => player.id === humanId)!.sabotagesPlayed).toBe(1);
+    expect(afterSabotageSnapshot.privatePlayer!.sabotagesPlayed).toBe(1);
+    expect(afterSabotageSnapshot.game!.awards.masterSaboteur).toBeNull();
+    expect(parseServerMessage({ type: "snapshot", snapshot: afterSabotageSnapshot })).toEqual({ type: "snapshot", snapshot: afterSabotageSnapshot });
+  });
+
+  test("tracks sabotagesPlayed and awards Master Saboteur (+2 VP) at 3 sabotages with tie and transfer rules", () => {
+    let state = finishSetup();
+    const firstId = state.activePlayerId;
+    const secondId = state.players.find(player => player.id !== firstId)!.id;
+    const firstPlayer = () => state.players.find(player => player.id === firstId)!;
+    const secondPlayer = () => state.players.find(player => player.id === secondId)!;
+
+    expect(firstPlayer().sabotagesPlayed).toBe(0);
+    expect(state.awards.masterSaboteur).toBeNull();
+    expect(getScore(state, firstId).masterSaboteur).toBe(0);
+
+    // Ensure plenty of opponent targets exist for 7 sabotages total.
+    const thirdId = state.players.find(player => player.id !== firstId && player.id !== secondId)!.id;
+    for (const edge of state.board.edges.filter(edge => !edge.playerId).slice(0, 8)) {
+      edge.playerId = thirdId;
+    }
+
+    state.phase = { type: "actions" };
+    const scoreBefore = getScore(state, firstId).public;
+
+    // 1st and 2nd sabotages increment count without awarding Master Saboteur.
+    for (let step = 1; step <= 2; step++) {
+      firstPlayer().resources = { ...COSTS.sabotage };
+      const targetEdgeId = legalSabotageEdges(state, firstId)[0]!;
+      state = applyAction(state, firstId, { type: "sabotage-route", edgeId: targetEdgeId });
+      expect(firstPlayer().sabotagesPlayed).toBe(step);
+      expect(state.awards.masterSaboteur).toBeNull();
+      expect(getScore(state, firstId).public).toBe(scoreBefore);
+    }
+
+    // 3rd sabotage claims Master Saboteur (+2 VP).
+    firstPlayer().resources = { ...COSTS.sabotage };
+    state = applyAction(state, firstId, { type: "sabotage-route", edgeId: legalSabotageEdges(state, firstId)[0]! });
+    expect(firstPlayer().sabotagesPlayed).toBe(3);
+    expect(state.awards.masterSaboteur).toBe(firstId);
+    expect(getScore(state, firstId).masterSaboteur).toBe(2);
+    expect(getScore(state, firstId).public).toBe(scoreBefore + 2);
+    expect(state.log.some(entry => entry.key === "{player} takes {award}." && entry.parameters?.award === "Master Saboteur")).toBe(true);
+
+    // Second player reaching 3 sabotages ties and does NOT take the award.
+    state.activePlayerId = secondId;
+    secondPlayer().sabotagesPlayed = 2;
+    secondPlayer().resources = { ...COSTS.sabotage };
+    state = applyAction(state, secondId, { type: "sabotage-route", edgeId: legalSabotageEdges(state, secondId)[0]! });
+    expect(secondPlayer().sabotagesPlayed).toBe(3);
+    expect(state.awards.masterSaboteur).toBe(firstId);
+    expect(getScore(state, secondId).masterSaboteur).toBe(0);
+
+    // Second player reaching 4 sabotages surpasses and steals Master Saboteur (+2 VP).
+    const secondScoreBefore = getScore(state, secondId).public;
+    secondPlayer().resources = { ...COSTS.sabotage };
+    state = applyAction(state, secondId, { type: "sabotage-route", edgeId: legalSabotageEdges(state, secondId)[0]! });
+    expect(secondPlayer().sabotagesPlayed).toBe(4);
+    expect(state.awards.masterSaboteur).toBe(secondId);
+    expect(getScore(state, firstId).masterSaboteur).toBe(0);
+    expect(getScore(state, secondId).masterSaboteur).toBe(2);
+    expect(getScore(state, secondId).public).toBe(secondScoreBefore + 2);
+  });
+
+  test("claiming Master Saboteur on the 3rd sabotage can immediately win the game", () => {
+    let state = finishSetup();
+    const activeId = state.activePlayerId;
+    const activePlayer = state.players.find(player => player.id === activeId)!;
+    state.victoryPointsToWin = 4; // Player has 2 settlements (2 VP) -> +2 VP from Master Saboteur wins.
+    state.phase = { type: "actions" };
+    activePlayer.sabotagesPlayed = 2;
+    activePlayer.resources = { ...COSTS.sabotage };
+    state = applyAction(state, activeId, { type: "sabotage-route", edgeId: legalSabotageEdges(state, activeId)[0]! });
+    expect(state.awards.masterSaboteur).toBe(activeId);
+    expect(getScore(state, activeId).total).toBe(4);
+    expect(state.winnerId).toBe(activeId);
+    expect(state.phase).toEqual({ type: "finished" });
   });
 });

@@ -85,7 +85,7 @@ export function HelpDialog({ onClose, multiplayer = false, variant = "original",
             {showSabotage && <li className="min-w-0 rounded-xl border border-line bg-white/30 p-4">
               <div className="mb-3 flex items-center gap-3 text-clay"><PieceIcon piece="sabotage" /><h4 className="font-semibold text-ink">{translateText("Sabotage")}</h4></div>
               <Cost resources={COSTS.sabotage} />
-              <p className="mt-3 text-xs leading-6">{translateText("Pay 1 of each resource after rolling to destroy one opponent road or ship, destroy one opponent settlement (not their last building), or reduce one opponent city to a settlement.")}</p>
+              <p className="mt-3 text-xs leading-6">{translateText("Pay 1 of each resource after rolling to destroy one opponent road or ship, destroy one opponent settlement (not their last building), or reduce one opponent city to a settlement. Using at least three sabotages qualifies for Master Saboteur (+2 points), transferred to anyone who surpasses the holder.")}</p>
             </li>}
           </ul>
         </section>

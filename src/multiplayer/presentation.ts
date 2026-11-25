@@ -6,7 +6,7 @@ import type { SabotageNoticeEvent, TradeOutcomeEvent } from "../components/Priva
 import type { PublicGame } from "./types";
 
 export type SharedPublicEvent =
-  | { id: number; kind: "award"; award: "longest-road" | "largest-army" | "islands"; playerName: string; playerColor: string; previousHolderName?: string }
+  | { id: number; kind: "award"; award: "longest-road" | "largest-army" | "master-saboteur" | "islands"; playerName: string; playerColor: string; previousHolderName?: string }
   | { id: number; kind: "development"; cardKind: DevelopmentKind; playerName: string; playerColor: string }
   | { id: number; kind: "robbery"; thiefName: string; victimName: string; emptyHand: boolean; playerColor: string }
   | { id: number; kind: "shortage"; resources: Resource[] }
@@ -104,6 +104,23 @@ export function detectSharedPublicEvents(
         id: allocateId(),
         kind: "award",
         award: "largest-army",
+        playerName: winner.name,
+        playerColor: winner.color,
+        ...(previousHolder ? { previousHolderName: previousHolder.name } : {}),
+      });
+    }
+  }
+
+  if (next.awards.masterSaboteur && next.awards.masterSaboteur !== previous.awards.masterSaboteur) {
+    const winner = next.players.find(player => player.id === next.awards.masterSaboteur);
+    const previousHolder = previous.awards.masterSaboteur
+      ? next.players.find(player => player.id === previous.awards.masterSaboteur)
+      : undefined;
+    if (winner) {
+      events.push({
+        id: allocateId(),
+        kind: "award",
+        award: "master-saboteur",
         playerName: winner.name,
         playerColor: winner.color,
         ...(previousHolder ? { previousHolderName: previousHolder.name } : {}),

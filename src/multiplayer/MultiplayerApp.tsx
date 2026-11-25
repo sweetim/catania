@@ -15,6 +15,7 @@ import {
   LinkConnectIcon,
   LongestRoadAwardIcon,
   MapFoldIcon,
+  MasterSaboteurAwardIcon,
   MoveShipIcon,
   QrCodeIcon,
   ReturnToLobbyIcon,
@@ -117,10 +118,14 @@ function PlayerList({ snapshot, removePlayer, renameComputer, disabled }: {
         </div>
         {statistics && <>
           <p className="mt-2 text-xs">{translateText("{points} points / {resources} resource cards / {development} development cards", { points: statistics.score, resources: statistics.resourceCount, development: statistics.developmentCount })}</p>
-          <p className="mt-1 text-[11px] text-muted">{translateText(isSeafarers(snapshot.variant) ? "{knights} played Knights / Longest route: {roads}" : "{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}</p>
+          <p className="mt-1 text-[11px] text-muted">
+            {translateText(isSeafarers(snapshot.variant) ? "{knights} played Knights / Longest route: {roads}" : "{knights} played Knights / Longest road: {roads}", { knights: statistics.knightsPlayed, roads: statistics.longestRoad })}
+            {snapshot.game?.sabotageEnabled ? ` / ${translateText("{count} sabotages", { count: statistics.sabotagesPlayed ?? 0 })}` : ""}
+          </p>
           <p className="text-[11px] font-semibold">
             {snapshot.game?.awards.longestRoad === player.id && translateText(isSeafarers(snapshot.variant) ? "Longest Route (+2) " : "Longest Road (+2) ")}
-            {snapshot.game?.awards.largestArmy === player.id && translateText("Largest Army (+2)")}
+            {snapshot.game?.awards.largestArmy === player.id && `${translateText("Largest Army (+2)")} `}
+            {snapshot.game?.awards.masterSaboteur === player.id && translateText("Master Saboteur (+2)")}
           </p>
         </>}
       </li>;
@@ -155,6 +160,7 @@ function victoryBreakdownRows(
     { kind: "cities", label: translateText("Cities"), note: breakdown.cities ? translateText("{count} × {points} VP", { count: breakdown.cities / 2, points: 2 }) : undefined, points: breakdown.cities },
     { kind: "longest-road", label: translateText(isSeafarers(variant) ? "Longest Route" : "Longest Road"), points: breakdown.longestRoad },
     { kind: "largest-army", label: translateText("Largest Army"), points: breakdown.largestArmy },
+    ...(breakdown.masterSaboteur !== undefined ? [{ kind: "master-saboteur" as const, label: translateText("Master Saboteur"), points: breakdown.masterSaboteur }] : []),
     ...(variant === "seafarers" || variant === "four-islands" ? [{ kind: "islands" as const, label: translateText("Island bonuses"), note: breakdown.islands ? translateText("{count} × {points} VP", { count: breakdown.islands / 2, points: 2 }) : undefined, points: breakdown.islands ?? 0 }] : []),
     { kind: "victory-point-cards", label: translateText("Revealed victory-point cards"), note: breakdown.hidden ? translateText("{count} × {points} VP", { count: breakdown.hidden, points: 1 }) : undefined, points: breakdown.hidden },
   ];
@@ -245,11 +251,15 @@ function SharedBoardEventToast({ event, variant }: { event: SharedPublicEvent | 
         .with("largest-army", () => item.previousHolderName
           ? translateText("{name} stole Largest Army from {previous} (+2 VP)", { name: item.playerName, previous: item.previousHolderName })
           : translateText("{name} claimed Largest Army (+2 VP)", { name: item.playerName }))
+        .with("master-saboteur", () => item.previousHolderName
+          ? translateText("{name} stole Master Saboteur from {previous} (+2 VP)", { name: item.playerName, previous: item.previousHolderName })
+          : translateText("{name} claimed Master Saboteur (+2 VP)", { name: item.playerName }))
         .with("islands", () => translateText("{name} earned an Island Bonus (+2 VP)", { name: item.playerName }))
         .exhaustive();
       const icon = match(item.award)
         .with("longest-road", () => <span className="text-[#b58a2d] [&>svg]:h-4 [&>svg]:w-4"><LongestRoadAwardIcon /></span>)
         .with("largest-army", () => <span className="text-[#b58a2d] [&>svg]:h-4 [&>svg]:w-4"><LargestArmyIcon /></span>)
+        .with("master-saboteur", () => <span className="text-[#b58a2d] [&>svg]:h-4 [&>svg]:w-4"><MasterSaboteurAwardIcon /></span>)
         .with("islands", () => <span className="text-[#b58a2d]"><IslandIcon /></span>)
         .exhaustive();
       return { text, icon, accentColor: item.playerColor, tone: "award" as const };
@@ -756,9 +766,10 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
         number={game.players.findIndex(other => other.id === player.id) + 1} active={active}
         leading={ownStatistics.score === highestPublicScore && game.players.some(other => other.score < highestPublicScore)}
         largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+        masterSaboteur={game.awards.masterSaboteur === player.id} sabotageEnabled={game.sabotageEnabled === true}
         islandBonus={ownStatistics.islands ?? 0}
         privateScore={totalScore}
-        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id || (ownStatistics.islands ?? 0) > 0}
+        stacked={game.awards.largestArmy === player.id || game.awards.longestRoad === player.id || game.awards.masterSaboteur === player.id || (ownStatistics.islands ?? 0) > 0}
         badge={<>
           <strong className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold leading-5 text-ink tabular-nums ${resourceTotal(player.resources) > 7 ? "card-count-at-risk bg-clay/30" : "bg-moss"}`}>
             {resourceTotal(player.resources) > 7 && <WarningIcon className="h-3 w-3 shrink-0 text-clay" />}
@@ -1564,6 +1575,7 @@ export function MultiplayerApp() {
               <PlayerSeat variant={game.variant} player={player} number={index + 1} active={player.id === game.activePlayerId}
                 leading={player.score === highestPublicScore && game.players.some(other => other.score < highestPublicScore)}
                 largestArmy={game.awards.largestArmy === player.id} longestRoadAward={game.awards.longestRoad === player.id}
+                masterSaboteur={game.awards.masterSaboteur === player.id} sabotageEnabled={game.sabotageEnabled === true}
                 islandBonus={player.islands ?? 0}
                 disconnected={player.control === "human" && !player.connected} />
             </li>)}

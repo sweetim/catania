@@ -123,6 +123,7 @@ export type Player = {
   resources: Resources;
   developmentCards: { id: string; kind: DevelopmentKind; purchasedTurn: number }[];
   knightsPlayed: number;
+  sabotagesPlayed: number;
 };
 export type ExplorationResumePhase =
   | { type: "setup-settlement"; tileId?: string }
@@ -180,7 +181,7 @@ export type GameState = {
   pirateTileId: string | null;
   shipMoved: boolean;
   shipsBuiltThisTurn: string[];
-  awards: { longestRoad: string | null; largestArmy: string | null };
+  awards: { longestRoad: string | null; largestArmy: string | null; masterSaboteur?: string | null };
   winnerId: string | null;
   log: GameMessage[];
   thefts: TheftEvent[];

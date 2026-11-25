@@ -240,6 +240,10 @@ test("Sabotage build action destroys one opponent road and plays destruction ani
   await expect(roadTargets).toHaveCount(0);
   await expect(settlementTargets).toHaveCount(0);
   await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+
+  // Player badge displays the incremented sabotage count (1 sabotage used).
+  const firstSeat = page.locator(".player-seat", { hasText: firstPlayerName });
+  await expect(firstSeat.getByRole("img", { name: "1 sabotage used", exact: true })).toBeVisible();
 });
 
 test("Sabotage build action destroys an opponent settlement and plays destruction animation", { tag: "@desktop-only" }, async ({ page }) => {
@@ -260,4 +264,99 @@ test("Sabotage build action destroys an opponent settlement and plays destructio
   await expect(page.locator('svg [data-sabotage-burst="settlement"]')).toBeVisible();
   await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
   await expect(settlementTargets).toHaveCount(0);
+});
+
+test("Using 3 sabotages shows count on player badge and awards Master Saboteur (+2 VP) in en, ja, and narrow mobile", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+  const { firstPlayerName } = await setupSabotageReadyGame(page);
+  const firstSeat = page.locator(".player-seat", { hasText: firstPlayerName });
+  await expect(firstSeat.getByRole("img", { name: "0 sabotages used", exact: true })).toBeVisible();
+  await expect(firstSeat.getByRole("img", { name: "Master Saboteur (+2 victory points)", exact: true })).toHaveCount(0);
+
+  // Give the first player enough resources for 3 sabotages via extra rolls? Faster: perform 1st sabotage,
+  // then collect 2 more rounds or trigger 3 sabotages on the same turn by giving resources via rolls.
+  // Actually, firstVertex has grain+ore and secondVertex has wood+brick+wool, so we can roll their numbers!
+  const board = createBoard(seededRandom(SABOTAGE_MAP_CODE), "custom-world", SABOTAGE_CONFIG);
+  const secondVertex = board.vertices.find(vertex => {
+    const terrains = new Set(vertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!.terrain));
+    return terrains.has("wood") && terrains.has("brick") && terrains.has("wool");
+  })!;
+  const secondForbidden = new Set<string>([secondVertex.id]);
+  for (const edgeId of secondVertex.edgeIds) {
+    const edge = board.edges.find(candidate => candidate.id === edgeId)!;
+    for (const vertexId of edge.vertexIds) secondForbidden.add(vertexId);
+  }
+  const firstVertex = board.vertices.find(vertex => {
+    if (secondForbidden.has(vertex.id)) return false;
+    const tiles = vertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!);
+    return tiles.some(tile => tile.terrain === "grain" && tile.number !== null) &&
+      tiles.some(tile => tile.terrain === "ore" && tile.number !== null);
+  })!;
+  const resourceNumbers = [
+    ...secondVertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!).map(tile => tile.number!),
+    firstVertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!).find(tile => tile.terrain === "grain")!.number!,
+    firstVertex.tileIds.map(id => board.tiles.find(tile => tile.id === id)!).find(tile => tile.terrain === "ore")!.number!,
+  ];
+
+  const doSabotage = async () => {
+    await showView(page, "hand");
+    const sabotageButton = page.getByRole("button", { name: /^Sabotage\b/ });
+    await expect(sabotageButton).toBeEnabled();
+    await sabotageButton.click();
+    await showView(page, "board");
+    const target = page.getByRole("button", { name: /^Destroy .+?'s (road|settlement) at / }).first();
+    await target.click();
+    await page.getByRole("button", { name: "Confirm placement", exact: true }).click();
+    await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+  };
+
+  // 1st sabotage (already has 1 of each resource).
+  await doSabotage();
+  await expect(firstSeat.getByRole("img", { name: "1 sabotage used", exact: true })).toBeVisible();
+  await expect(firstSeat.getByRole("img", { name: "Master Saboteur (+2 victory points)", exact: true })).toHaveCount(0);
+
+  // Collect resources for 2 more sabotages by rolling the 5 resource numbers across turns.
+  const collectSetAndReturnToFirst = async () => {
+    // End first player's turn, then cycle through players rolling needed numbers.
+    // We need 5 rolls (one per resource), which takes 2 full rounds (6 turns total: p2, p3, p1, p2, p3, p1).
+    const rollsForRound = [...resourceNumbers, 2]; // 5 resource numbers + 1 neutral non-7 roll
+    for (const total of rollsForRound) {
+      await showView(page, "hand");
+      await page.getByRole("button", { name: "End turn & pass device", exact: true }).click();
+      await revealHand(page);
+      await showView(page, "hand");
+      await chooseDice(page, diceForTotal(total));
+      await page.getByRole("button", { name: "Roll the dice", exact: true }).click();
+      await expect(page.getByRole("button", { name: "End turn & pass device", exact: true })).toBeEnabled();
+    }
+  };
+
+  // 2nd sabotage.
+  await collectSetAndReturnToFirst();
+  await doSabotage();
+  await expect(firstSeat.getByRole("img", { name: "2 sabotages used", exact: true })).toBeVisible();
+  await expect(firstSeat.getByRole("img", { name: "Master Saboteur (+2 victory points)", exact: true })).toHaveCount(0);
+
+  // 3rd sabotage -> earns Master Saboteur (+2 VP), score goes from 2 to 4.
+  await collectSetAndReturnToFirst();
+  await doSabotage();
+  await expect(firstSeat.getByRole("img", { name: "3 sabotages used", exact: true })).toBeVisible();
+  const awardBadge = firstSeat.getByRole("img", { name: "Master Saboteur (+2 victory points)", exact: true });
+  await expect(awardBadge).toBeVisible();
+  await expect(awardBadge).toHaveCSS("color", "rgb(181, 138, 45)");
+  await expect(firstSeat.getByRole("group", { name: `${firstPlayerName}'s victory points`, exact: true })).toContainText("4");
+  await page.screenshot({ path: testInfo.outputPath("sabotage-award-desktop-en.png") });
+
+  // Verify Japanese localization.
+  await page.getByRole("button", { name: /Menu/ }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("radio", { name: "日本語" }).click();
+  await page.getByRole("button", { name: "ダイアログを閉じる", exact: true }).click();
+  await expect(firstSeat.getByRole("img", { name: "使用済みの破壊工作3回", exact: true })).toBeVisible();
+  await expect(firstSeat.getByRole("img", { name: "破壊工作王（勝利点+2）", exact: true })).toBeVisible();
+
+  // Verify narrow 320px layout has no horizontal overflow on the player seat.
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.screenshot({ path: testInfo.outputPath("sabotage-award-mobile-320-ja.png") });
+  const overflow = await firstSeat.evaluate(element => element.scrollWidth - element.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });

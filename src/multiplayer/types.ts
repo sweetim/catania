@@ -15,6 +15,7 @@ export type PublicPlayer = RoomPlayer & {
   resourceCount: number;
   developmentCount: number;
   knightsPlayed: number;
+  sabotagesPlayed?: number;
   longestRoad: number;
   score: number;
   islands?: number;
@@ -28,6 +29,7 @@ export type ScoreBreakdown = {
   cities: number;
   longestRoad: number;
   largestArmy: number;
+  masterSaboteur?: number;
   hidden: number;
   islands?: number;
 };

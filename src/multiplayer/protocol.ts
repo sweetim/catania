@@ -140,28 +140,32 @@ function array(value: unknown, maximum: number, check: (value: unknown) => boole
 const SCORE_BREAKDOWN_FIELDS = ["public", "total", "settlements", "cities", "longestRoad", "largestArmy", "hidden"] as const;
 
 function scoreBreakdown(value: unknown): boolean {
-  if (!record(value) || !fields(value, [...SCORE_BREAKDOWN_FIELDS], ["islands"]) ||
+  if (!record(value) || !fields(value, [...SCORE_BREAKDOWN_FIELDS], ["masterSaboteur", "islands"]) ||
+    (Object.hasOwn(value, "masterSaboteur") && !integer(value.masterSaboteur, 2)) ||
     (Object.hasOwn(value, "islands") && !integer(value.islands, 6))) return false;
   if (!SCORE_BREAKDOWN_FIELDS.every(field => integer(value[field], 30))) return false;
   const parts = value as Record<typeof SCORE_BREAKDOWN_FIELDS[number], number>;
-  return parts.public === parts.settlements + parts.cities + parts.longestRoad + parts.largestArmy + (typeof value.islands === "number" ? value.islands : 0) &&
+  return parts.public === parts.settlements + parts.cities + parts.longestRoad + parts.largestArmy +
+    (typeof value.masterSaboteur === "number" ? value.masterSaboteur : 0) +
+    (typeof value.islands === "number" ? value.islands : 0) &&
     parts.total === parts.public + parts.hidden;
 }
 
 function roomPlayer(value: unknown, publicPlayer = false): boolean {
   if (!record(value) || !fields(value, publicPlayer
     ? ["id", "name", "color", "control", "connected", "resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"]
-    : ["id", "name", "color", "control", "connected"], publicPlayer ? ["islands", "scoreBreakdown"] : [])) return false;
+    : ["id", "name", "color", "control", "connected"], publicPlayer ? ["sabotagesPlayed", "islands", "scoreBreakdown"] : [])) return false;
   return identifier(value.id, "player") && validName(value.name) && typeof value.color === "string" && /^#[a-f0-9]{6}$/i.test(value.color) &&
     (value.control === "human" || value.control === "computer") &&
     typeof value.connected === "boolean" &&
     (!publicPlayer || (["resourceCount", "developmentCount", "knightsPlayed", "longestRoad", "score"].every(key => integer(value[key], 95)) &&
+      (!Object.hasOwn(value, "sabotagesPlayed") || integer(value.sabotagesPlayed, 95)) &&
       (!Object.hasOwn(value, "islands") || integer(value.islands, 6)) &&
       (!Object.hasOwn(value, "scoreBreakdown") || scoreBreakdown(value.scoreBreakdown))));
 }
 function privatePlayer(value: unknown): boolean {
-  return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed"]) &&
-    roomPlayer({ id: value.id, name: value.name, color: value.color, control: value.control, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) &&
+  return record(value) && fields(value, ["id", "name", "color", "control", "resources", "developmentCards", "knightsPlayed", "sabotagesPlayed"]) &&
+    roomPlayer({ id: value.id, name: value.name, color: value.color, control: value.control, connected: true }) && value.control === "human" && resources(value.resources) && integer(value.knightsPlayed, 14) && integer(value.sabotagesPlayed, 95) &&
     array(value.developmentCards, 25, card => record(card) && fields(card, ["id", "kind", "purchasedTurn"]) && identifier(card.id, "development") && integer(card.purchasedTurn) &&
       ["knight", "victory-point", "road-building", "year-of-plenty", "monopoly"].includes(card.kind as string));
 }
@@ -206,7 +210,7 @@ function publicGame(value: unknown): boolean {
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&
     (value.dice === null || (Array.isArray(value.dice) && value.dice.length === 2 && value.dice.every(value => integer(value, 6) && value >= 1))) &&
     Array.isArray(value.diceRollTotals) && value.diceRollTotals.length === 11 && value.diceRollTotals.every(value => integer(value, 10_000)) && (identifier(value.robberTileId, "tile") || ((value.variant === "four-islands" || value.variant === "custom-world" || isFogWorld(value.variant)) && value.robberTileId === "")) &&
-    record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
+    record(value.awards) && fields(value.awards, ["longestRoad", "largestArmy"], ["masterSaboteur"]) && Object.values(value.awards).every(value => value === null || identifier(value, "player")) &&
     (value.winnerId === null || identifier(value.winnerId, "player")) &&
     (trade === null || (record(trade) && fields(trade, ["offeredBy", "give", "receive", "responses"], ["expiresAt"]) &&
       (!Object.hasOwn(trade, "expiresAt") || integer(trade.expiresAt)) && identifier(trade.offeredBy, "player") &&

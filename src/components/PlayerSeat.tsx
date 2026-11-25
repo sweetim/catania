@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CardTypeIcon, DevelopmentCardIcon, getPlayerLabel, IslandIcon, PieceIcon } from "./GameUi";
-import { DisconnectedIcon, LargestArmyIcon, LongestRoadAwardIcon } from "./Icons";
+import { DisconnectedIcon, LargestArmyIcon, LongestRoadAwardIcon, MasterSaboteurAwardIcon } from "./Icons";
 import { useTranslation } from "../localization";
 import { gameplayTranslations } from "../translations/gameplay";
 import { isSeafarers, type GameVariant } from "../game/types";
 
 export { DisconnectedIcon };
 
-export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, islandBonus = 0, stacked = false, privateScore, variant = "original", badge, disconnected = false }: {
+export function PlayerSeat({ player, number, active, leading, largestArmy, longestRoadAward, masterSaboteur = false, sabotageEnabled = false, islandBonus = 0, stacked = false, privateScore, variant = "original", badge, disconnected = false }: {
   variant?: GameVariant;
-  player: { name: string; color: string; control: "human" | "computer"; resourceCount: number; developmentCount: number; knightsPlayed: number; longestRoad: number; score: number };
+  player: { name: string; color: string; control: "human" | "computer"; resourceCount: number; developmentCount: number; knightsPlayed: number; sabotagesPlayed?: number; longestRoad: number; score: number };
   number: number;
   active: boolean;
   leading: boolean;
   largestArmy: boolean;
   longestRoadAward: boolean;
+  masterSaboteur?: boolean;
+  sabotageEnabled?: boolean;
   islandBonus?: number;
   stacked?: boolean;
   privateScore?: number;
@@ -23,6 +25,8 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
 }) {
   const translateText = useTranslation(gameplayTranslations);
   const knightLabel = translateText(player.knightsPlayed === 1 ? "{count} knight played" : "{count} knights played", { count: player.knightsPlayed });
+  const sabotageCount = player.sabotagesPlayed ?? 0;
+  const sabotageLabel = translateText(sabotageCount === 1 ? "{count} sabotage used" : "{count} sabotages used", { count: sabotageCount });
   const roadLabel = translateText(isSeafarers(variant) ? "{count} connected roads and ships" : player.longestRoad === 1 ? "{count} connected road" : "{count} connected roads", { count: player.longestRoad });
   const islandCount = islandBonus / 2;
   const islandLabel = translateText(islandCount === 1 ? "Island bonus: {count} island (+{points} victory points)" : "Island bonus: {count} islands (+{points} victory points)", { count: islandCount, points: islandBonus });
@@ -32,20 +36,24 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
     resourceCount: number;
     developmentCount: number;
     knightsPlayed: number;
+    sabotagesPlayed: number;
     longestRoad: number;
     score: number;
     largestArmy: boolean;
     longestRoadAward: boolean;
+    masterSaboteur: boolean;
     islandBonus: number;
   } | null>(null);
   const [statGenerations, setStatGenerations] = useState({
     resourceCount: 0,
     developmentCount: 0,
     knightsPlayed: 0,
+    sabotagesPlayed: 0,
     longestRoad: 0,
     score: 0,
     largestArmy: 0,
     longestRoadAward: 0,
+    masterSaboteur: 0,
     islandBonus: 0,
   });
 
@@ -55,20 +63,24 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
       const resourceChanged = player.resourceCount !== previous.resourceCount;
       const developmentChanged = player.developmentCount !== previous.developmentCount;
       const knightsChanged = player.knightsPlayed !== previous.knightsPlayed;
+      const sabotagesChanged = sabotageCount !== previous.sabotagesPlayed;
       const roadChanged = player.longestRoad !== previous.longestRoad;
       const scoreChanged = displayedScore !== previous.score;
       const armyGained = largestArmy && !previous.largestArmy;
       const roadAwardGained = longestRoadAward && !previous.longestRoadAward;
+      const sabotageAwardGained = masterSaboteur && !previous.masterSaboteur;
       const islandGained = islandBonus > previous.islandBonus;
-      if (resourceChanged || developmentChanged || knightsChanged || roadChanged || scoreChanged || armyGained || roadAwardGained || islandGained) {
+      if (resourceChanged || developmentChanged || knightsChanged || sabotagesChanged || roadChanged || scoreChanged || armyGained || roadAwardGained || sabotageAwardGained || islandGained) {
         setStatGenerations(current => ({
           resourceCount: current.resourceCount + (resourceChanged ? 1 : 0),
           developmentCount: current.developmentCount + (developmentChanged ? 1 : 0),
           knightsPlayed: current.knightsPlayed + (knightsChanged ? 1 : 0),
+          sabotagesPlayed: current.sabotagesPlayed + (sabotagesChanged ? 1 : 0),
           longestRoad: current.longestRoad + (roadChanged ? 1 : 0),
           score: current.score + (scoreChanged ? 1 : 0),
           largestArmy: current.largestArmy + (armyGained ? 1 : 0),
           longestRoadAward: current.longestRoadAward + (roadAwardGained ? 1 : 0),
+          masterSaboteur: current.masterSaboteur + (sabotageAwardGained ? 1 : 0),
           islandBonus: current.islandBonus + (islandGained ? 1 : 0),
         }));
       }
@@ -77,13 +89,15 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
       resourceCount: player.resourceCount,
       developmentCount: player.developmentCount,
       knightsPlayed: player.knightsPlayed,
+      sabotagesPlayed: sabotageCount,
       longestRoad: player.longestRoad,
       score: displayedScore,
       largestArmy,
       longestRoadAward,
+      masterSaboteur,
       islandBonus,
     };
-  }, [player.resourceCount, player.developmentCount, player.knightsPlayed, player.longestRoad, displayedScore, largestArmy, longestRoadAward, islandBonus]);
+  }, [player.resourceCount, player.developmentCount, player.knightsPlayed, sabotageCount, player.longestRoad, displayedScore, largestArmy, longestRoadAward, masterSaboteur, islandBonus]);
 
   return <div
     data-disconnected={disconnected ? "true" : undefined}
@@ -126,14 +140,18 @@ export function PlayerSeat({ player, number, active, leading, largestArmy, longe
         <span role="img" aria-label={roadLabel} title={roadLabel} className="player-card-stat text-[#497562]">
           <PieceIcon piece="road" /><strong key={statGenerations.longestRoad} className={statGenerations.longestRoad > 0 ? "stat-bump" : undefined}>{player.longestRoad}</strong>
         </span>
+        {sabotageEnabled && <span role="img" aria-label={sabotageLabel} title={sabotageLabel} className="player-card-stat text-clay">
+          <PieceIcon piece="sabotage" /><strong key={statGenerations.sabotagesPlayed} className={statGenerations.sabotagesPlayed > 0 ? "stat-bump" : undefined}>{sabotageCount}</strong>
+        </span>}
       </div>
       <div role="group" aria-label={translateText("{player}'s victory points", { player: player.name })} className={`player-score col-start-3 row-start-1 flex shrink-0 items-center justify-end gap-1 text-right ${leading ? "text-[#8b6425]" : ""}`}>
         <span className="text-[9px] text-muted">{translateText("VP")}</span>
         <span key={statGenerations.score} className={`font-serif text-2xl ${statGenerations.score > 0 ? "stat-bump" : ""}`}>{displayedScore}</span>
-        {(largestArmy || longestRoadAward || islandBonus > 0) && <div role="group" aria-label={translateText("Victory point awards")} className="ml-1.5 flex shrink-0 items-center gap-2.5">
+        {(largestArmy || longestRoadAward || masterSaboteur || islandBonus > 0) && <div role="group" aria-label={translateText("Victory point awards")} className="ml-1.5 flex shrink-0 items-center gap-2.5">
           {islandBonus > 0 && <span key={`island-${statGenerations.islandBonus}`} role="img" aria-label={islandLabel} title={islandLabel} className={`flex shrink-0 items-end gap-px text-[#b58a2d] ${statGenerations.islandBonus > 0 ? "award-badge-enter" : ""}`}><IslandIcon className="shrink-0" /><strong className="translate-y-0.5 text-[10px] font-bold leading-none tabular-nums">{islandCount}</strong></span>}
           {largestArmy && <LargestArmyIcon key={`army-${statGenerations.largestArmy}`} label={translateText("Largest Army (+2 victory points)")} className={`shrink-0 text-[#b58a2d] ${statGenerations.largestArmy > 0 ? "award-badge-enter" : ""}`} />}
           {longestRoadAward && <span key={`road-${statGenerations.longestRoadAward}`} role="img" aria-label={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} title={translateText(isSeafarers(variant) ? "Longest Route (+2 victory points)" : "Longest Road (+2 victory points)")} className={`shrink-0 text-[#b58a2d] ${statGenerations.longestRoadAward > 0 ? "award-badge-enter" : ""}`}><LongestRoadAwardIcon className="shrink-0" /></span>}
+          {masterSaboteur && <MasterSaboteurAwardIcon key={`sabotage-${statGenerations.masterSaboteur}`} label={translateText("Master Saboteur (+2 victory points)")} className={`shrink-0 text-[#b58a2d] ${statGenerations.masterSaboteur > 0 ? "award-badge-enter" : ""}`} />}
         </div>}
       </div>
       {badge && <div className="player-seat-badge col-start-3 row-start-2 flex shrink-0 items-center justify-end gap-1.5">{badge}</div>}

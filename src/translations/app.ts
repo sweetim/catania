@@ -81,6 +81,7 @@ export const appTranslations = {
   "Cities": "都市",
   "Longest Road": "最長交易路",
   "Largest Army": "最大騎士力",
+  "Master Saboteur": "破壊工作王",
   "Revealed victory-point cards": "公開された勝利点カード",
   "{count} × {points} VP": "{count} × {points}勝利点",
   "Dice rolls": "サイコロの出目",

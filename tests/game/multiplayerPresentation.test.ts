@@ -90,9 +90,18 @@ describe("shared board public event detection", () => {
 
     const beforeSteal = room.snapshot().game!;
     game.awards.longestRoad = "player-2";
+    game.awards.masterSaboteur = "player-1";
     const afterSteal = room.snapshot().game!;
     expect(detectSharedPublicEvents(beforeSteal, afterSteal, allocateId)).toEqual([
       expect.objectContaining({ kind: "award", award: "longest-road", playerName: "Grace", previousHolderName: "Ada" }),
+      expect.objectContaining({ kind: "award", award: "master-saboteur", playerName: "Ada" }),
+    ]);
+
+    const beforeSabotageSteal = room.snapshot().game!;
+    game.awards.masterSaboteur = "player-2";
+    const afterSabotageSteal = room.snapshot().game!;
+    expect(detectSharedPublicEvents(beforeSabotageSteal, afterSabotageSteal, allocateId)).toEqual([
+      expect.objectContaining({ kind: "award", award: "master-saboteur", playerName: "Grace", previousHolderName: "Ada" }),
     ]);
   });
 });

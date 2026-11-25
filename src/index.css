@@ -3536,6 +3536,7 @@
     grid-column: 1 / -1;
     grid-row: 2;
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 6px;
   }
 

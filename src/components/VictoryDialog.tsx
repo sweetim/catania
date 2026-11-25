@@ -3,13 +3,14 @@ import { match } from "ts-pattern";
 import { useTranslation } from "../localization";
 import { appTranslations } from "../translations/app";
 import { DevelopmentCardIcon, IslandIcon, PieceIcon } from "./GameUi";
-import { CheckIcon, CrownIcon, LargestArmyIcon, LongestRoadAwardIcon, MapFoldIcon } from "./Icons";
+import { CheckIcon, CrownIcon, LargestArmyIcon, LongestRoadAwardIcon, MapFoldIcon, MasterSaboteurAwardIcon } from "./Icons";
 
 export type VictoryBreakdownKind =
   | "settlements"
   | "cities"
   | "longest-road"
   | "largest-army"
+  | "master-saboteur"
   | "victory-point-cards"
   | "islands";
 
@@ -450,6 +451,11 @@ function BreakdownIcon({ kind }: { kind: VictoryBreakdownKind }) {
     .with("largest-army", () => (
       <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]">
         <LargestArmyIcon />
+      </span>
+    ))
+    .with("master-saboteur", () => (
+      <span className="victory-chip bg-[#b58a2d]/15 text-[#b58a2d]">
+        <MasterSaboteurAwardIcon />
       </span>
     ))
     .with("islands", () => (

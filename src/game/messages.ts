@@ -200,7 +200,7 @@ export type GameMessage = { key: keyof typeof gameMessages; parameters?: Transla
 const developmentNames: Record<DevelopmentKind, string> = {
   knight: "騎士", "victory-point": "勝利点", "road-building": "街道建設", "year-of-plenty": "収穫", monopoly: "独占",
 };
-const awardNames = { "Longest Road": "最長交易路", "Longest Route": "最長交易路", "Largest Army": "最大騎士力" } as const;
+const awardNames = { "Longest Road": "最長交易路", "Longest Route": "最長交易路", "Largest Army": "最大騎士力", "Master Saboteur": "破壊工作王" } as const;
 const resourceNames: Resource[] = ["wood", "brick", "wool", "grain", "ore"];
 
 export function formatGameMessage(language: Language, message: GameMessage): string {

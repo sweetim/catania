@@ -74,7 +74,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
   requireRule(new Set(profiles.map(profile => profile.color)).size === profiles.length, "Choose a different color for each player.");
   const players = shuffle(profiles.map((profile, index): Player => ({
     id: `player-${index + 1}`, name: profile.name.trim(), color: profile.color, control: profile.control,
-    resources: emptyResources(), developmentCards: [], knightsPlayed: 0,
+    resources: emptyResources(), developmentCards: [], knightsPlayed: 0, sabotagesPlayed: 0,
   })), random);
   const board = selectedBoard ? structuredClone(selectedBoard) : createBoard(random, variant, customMapConfig);
   const sabotageEnabled = variant === "custom-world" && isCustomSabotageEnabled(customMapConfig);
@@ -90,7 +90,7 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     turnNumber: 0, dice: null, diceRollTotals: Array.from({ length: 11 }, () => 0), robberTileId: board.tiles.find(tile => tile.terrain === "desert")?.id ?? "",
     pirateTileId: pirateStartTileId(board, random),
     shipMoved: false, shipsBuiltThisTurn: [],
-    awards: { longestRoad: null, largestArmy: null }, winnerId: null,
+    awards: { longestRoad: null, largestArmy: null, ...(sabotageEnabled ? { masterSaboteur: null } : {}) }, winnerId: null,
     log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], monopolies: [], trade: null, computerTradeRequested: false, developmentPlayed: false,
   };
 }
@@ -286,20 +286,22 @@ export function getLongestRoadLength(state: GameState, playerId: string): number
 }
 
 export function getPublicScore(state: GameState, playerId: string): {
-  public: number; settlements: number; cities: number; longestRoad: number; largestArmy: number; islands?: number;
+  public: number; settlements: number; cities: number; longestRoad: number; largestArmy: number; masterSaboteur?: number; islands?: number;
 } {
   playerFor(state, playerId);
   const settlements = pieceCount(state, playerId, "settlement");
   const cities = pieceCount(state, playerId, "city") * 2;
   const longestRoad = state.awards.longestRoad === playerId ? 2 : 0;
   const largestArmy = state.awards.largestArmy === playerId ? 2 : 0;
+  const masterSaboteur = state.awards.masterSaboteur === playerId ? 2 : 0;
   const islands = state.variant === "seafarers" || state.variant === "four-islands"
     ? new Set(state.board.tiles.filter(tile => tile.islandId &&
       (state.variant === "four-islands" ? !state.startingIslandIds?.[playerId]?.includes(tile.islandId) : tile.islandId !== "main") &&
       tile.vertexIds.some(id => state.board.vertices.find(vertex => vertex.id === id)!.building?.playerId === playerId),
     ).map(tile => tile.islandId)).size * 2 : 0;
-  const publicPoints = settlements + cities + longestRoad + largestArmy + islands;
+  const publicPoints = settlements + cities + longestRoad + largestArmy + masterSaboteur + islands;
   return { public: publicPoints, settlements, cities, longestRoad, largestArmy,
+    ...(state.sabotageEnabled ? { masterSaboteur } : {}),
     ...(isSeafarers(state.variant) ? { islands } : {}) };
 }
 
@@ -310,16 +312,29 @@ export function getScore(state: GameState, playerId: string): ReturnType<typeof 
 }
 
 function updateAwards(state: GameState): void {
-  for (const award of ["longestRoad", "largestArmy"] as const) {
+  const awards: ("longestRoad" | "largestArmy" | "masterSaboteur")[] = state.sabotageEnabled
+    ? ["longestRoad", "largestArmy", "masterSaboteur"]
+    : ["longestRoad", "largestArmy"];
+  for (const award of awards) {
     const values = state.players.map(player => ({
-      id: player.id, value: award === "longestRoad" ? getLongestRoadLength(state, player.id) : player.knightsPlayed,
+      id: player.id,
+      value: match(award)
+        .with("longestRoad", () => getLongestRoadLength(state, player.id))
+        .with("largestArmy", () => player.knightsPlayed)
+        .with("masterSaboteur", () => player.sabotagesPlayed)
+        .exhaustive(),
     }));
     const maximum = Math.max(...values.map(player => player.value));
-    const leaders = values.filter(player => player.value === maximum && player.value >= (award === "longestRoad" ? 5 : 3));
-    const previous = state.awards[award];
+    const minimum = award === "longestRoad" ? 5 : 3;
+    const leaders = values.filter(player => player.value === maximum && player.value >= minimum);
+    const previous = state.awards[award] ?? null;
     state.awards[award] = leaders.some(player => player.id === previous) ? previous : leaders.length === 1 ? leaders[0]!.id : null;
     if (state.awards[award] !== previous) {
-      const label = award === "longestRoad" ? isSeafarers(state.variant) ? "Longest Route" : "Longest Road" : "Largest Army";
+      const label = match(award)
+        .with("longestRoad", () => isSeafarers(state.variant) ? "Longest Route" : "Longest Road")
+        .with("largestArmy", () => "Largest Army")
+        .with("masterSaboteur", () => "Master Saboteur")
+        .exhaustive();
       state.log.push(state.awards[award]
         ? { key: "{player} takes {award}.", parameters: { player: playerFor(state, state.awards[award]!).name, award: label } }
         : { key: "{award} is unclaimed.", parameters: { award: label } });
@@ -802,6 +817,7 @@ export function applyAction(
       edge.playerId = null;
       delete edge.kind;
       state.shipsBuiltThisTurn = state.shipsBuiltThisTurn.filter(id => id !== edge.id);
+      player.sabotagesPlayed++;
       state.log.push({
         key: ship ? "{player} destroys {victim}'s ship." : "{player} destroys {victim}'s road.",
         parameters: { player: player.name, victim: victim.name },
@@ -827,6 +843,7 @@ export function applyAction(
           parameters: { player: player.name, victim: victim.name },
         });
       }
+      player.sabotagesPlayed++;
     })
     .with({ type: "end-turn" }, () => {
       requireActions();

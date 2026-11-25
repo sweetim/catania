@@ -1696,8 +1696,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
 
       if (state.sabotageEnabled && depth === 0 && hasLegalSabotageTarget(nodeState, playerId)) {
         const sabotageChoice = bestSabotageTarget(nodeState);
+        const highestOpponentSabotages = Math.max(0, ...opponents.map(other => other.sabotagesPlayed));
+        const claimsMasterSaboteur = node.awards.masterSaboteur !== playerId &&
+          activePlayer.sabotagesPlayed + 1 >= 3 && activePlayer.sabotagesPlayed + 1 > highestOpponentSabotages;
         const urgentLeader = highestOpponentEffectiveScore >= state.victoryPointsToWin - 2;
-        if (sabotageChoice && (sabotageChoice.value >= 12 || urgentLeader || sabotageChoice.value === 10000)) {
+        if (sabotageChoice && (sabotageChoice.value >= 12 || urgentLeader || claimsMasterSaboteur || sabotageChoice.value === 10000)) {
           tryAction(sabotageChoice.action, COSTS.sabotage, true, (nextHand, nextBank, firstAction) => {
             const nextBoard = match(sabotageChoice.action)
               .with({ type: "sabotage-route" }, sabotageAction => ({
@@ -1724,7 +1727,11 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
               board: nextBoard,
               hand: nextHand,
               bank: nextBank,
-              awards: { ...node.awards, longestRoad: recomputeNodeLongestRoad(nextState) },
+              awards: {
+                ...node.awards,
+                longestRoad: recomputeNodeLongestRoad(nextState),
+                ...(claimsMasterSaboteur ? { masterSaboteur: playerId } : {}),
+              },
               accumulatedSabotageValue: node.accumulatedSabotageValue + Math.min(35, sabotageChoice.value * 0.75),
               firstAction,
             };
