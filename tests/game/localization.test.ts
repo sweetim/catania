@@ -58,7 +58,7 @@ describe("translations", () => {
     expect(getPhaseInstructions({ ...options, language: "en" }).description)
       .toBe(`The first player to reach ${points} victory points on their turn wins.`);
     expect(getPhaseInstructions({ ...options, language: "ja" }).description)
-      .toBe(`自分の手番に先に${points}勝利点に到達したプレイヤーが勝利します。`);
+      .toBe(`自分のターンに先に${points}勝利点に到達したプレイヤーが勝利します。`);
     expect(getDevelopmentDescriptions("en", "original", points)["victory-point"])
       .toBe("One hidden victory point. Counts automatically toward victory on your turn, including when purchased.");
   });

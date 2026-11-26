@@ -1,7 +1,7 @@
 export const profileTranslations = {
   "Who's playing?": "誰が遊びますか？",
   "Your player profile": "あなたのプレイヤープロフィール",
-  "Pick a profile and make yourself at home.": "プロフィールを選んで、くつろいで遊びましょう。",
+  "Pick a profile and make yourself at home.": "プロフィールを選んで始めましょう。",
   "Choose a name to use at the table.": "ゲームで使う名前を入力してください。",
   "Current profile": "現在のプロフィール",
   "Games": "対戦数",
@@ -28,7 +28,7 @@ export const profileTranslations = {
   "Delete profile": "プロフィールを削除",
   "Delete {name}": "{name}を削除",
   "This permanently deletes {name}, including all stats and game history on this device. This cannot be undone.": "{name}のプロフィールと、この端末に保存されたすべての成績・ゲーム履歴を完全に削除します。この操作は取り消せません。",
-  "The profile could not be deleted. Check browser storage and try again.": "プロフィールを削除できませんでした。ブラウザのストレージを確認して、もう一度お試しください。",
+  "The profile could not be deleted. Check browser storage and try again.": "プロフィールを削除できませんでした。ブラウザーのストレージを確認して、もう一度お試しください。",
   "Profiles and game history stay on this device. Only lifetime totals are shared after multiplayer games.": "プロフィールとゲーム履歴はこの端末にだけ保存されます。マルチプレイ終了後には通算成績だけが共有されます。",
   "Continue as {name}": "{name}として続ける",
   "{games} games / {wins} wins / {points} total points": "{games}戦 / {wins}勝 / 合計{points}点",

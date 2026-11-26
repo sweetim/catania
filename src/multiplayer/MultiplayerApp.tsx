@@ -722,13 +722,22 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
             : activePlayer.control === "computer"
               ? translateText(game.phase.type === "discard" ? "{name} is discarding resources." : "{name} is playing automatically.", { name: activePlayer.name })
               : translateText("{name} is playing. You can inspect your hand and the island while you wait.", { name: activePlayer.name })
-          : snapshot.buildMode ? translateText("Choose a highlighted location for your {piece} on the shared board, then confirm the placement.", { piece: pieceName(language, snapshot.buildMode) })
-            : phaseInstructions.description;
+          : snapshot.buildMode === "move-ship"
+            ? translateText("Choose an open-ended ship and destination on the shared board, then confirm the move.")
+            : snapshot.buildMode === "sabotage"
+              ? translateText("Choose an opponent's piece to sabotage on the shared board, then confirm.")
+              : snapshot.buildMode
+                ? translateText("Choose a highlighted location for your {piece} on the shared board, then confirm the placement.", { piece: pieceName(language, snapshot.buildMode) })
+                : phaseInstructions.description;
 
   const boardPhaseBanner = !active || game.winnerId ? null : match(game.phase)
     .with({ type: "actions" }, () => snapshot.buildMode ? {
       iconPiece: snapshot.buildMode === "move-ship" ? "ship" as const : snapshot.buildMode,
-      text: translateText("Place your {piece} on the shared board", { piece: pieceName(language, snapshot.buildMode) }),
+      text: snapshot.buildMode === "move-ship"
+        ? translateText("Move your ship on the shared board")
+        : snapshot.buildMode === "sabotage"
+          ? translateText("Choose a sabotage target on the shared board")
+          : translateText("Place your {piece} on the shared board", { piece: pieceName(language, snapshot.buildMode) }),
       cancelable: true,
     } : null)
     .with({ type: "setup-reveal" }, () => ({
@@ -836,7 +845,11 @@ function PlayerControls({ snapshot, disabled, syncing, error, perform, selectBui
                   : translateText("Select a location on the board."));
             return (
               <BuildButton key={piece} piece={piece} color={player.color} resources={COSTS[piece]} available={player.resources} layout="tile"
-                aria-label={piece === "city" ? translateText("Upgrade to city") : translateText("Build {piece}", { piece: pieceName(language, piece) })}
+                aria-label={piece === "city"
+                  ? translateText("Upgrade to city")
+                  : piece === "ship"
+                    ? translateText("Build ship")
+                    : translateText("Build {piece}", { piece: pieceName(language, piece) })}
                 aria-pressed={snapshot.buildMode === piece} aria-describedby={explanation ? `${piece}-build-explanation` : undefined}
                 title={unavailable}
                 disabled={disabled || !normalActions || !canPay(COSTS[piece]) || !locations.length}

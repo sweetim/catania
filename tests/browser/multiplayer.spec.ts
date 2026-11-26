@@ -400,7 +400,7 @@ test("host configures 3 to 13 victory points from the lobby island header and sy
   await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(3);
   await host.getByRole("button", { name: "ゲーム", exact: true }).click();
   await host.getByRole("button", { name: "ヘルプ", exact: true }).click();
-  await expect(host.getByRole("dialog")).toContainText("自分の手番に3点に到達すると勝利です。");
+  await expect(host.getByRole("dialog")).toContainText("自分のターンに3点に到達すると勝利です。");
   await host.keyboard.press("Escape");
   await selectMenuLanguage(host, "ja", "en");
   await selectGameVersion(host, "original");
@@ -666,7 +666,7 @@ test("Japanese phones localize a shared English game without changing its state 
   expect((await messages(japanesePhone)).filter(entry => entry.direction === "sent")).toHaveLength(sentBefore);
   await selectMenuLanguage(japanesePhone, "en", "ja");
   await selectMenuLanguage(host, "en", "ja");
-  await expect(host.getByRole("region", { name: "共用のゲームボード", exact: true })).toBeVisible();
+  await expect(host.getByRole("region", { name: "共有ゲームボード", exact: true })).toBeVisible();
   await expect(englishPhone.locator("html")).toHaveAttribute("lang", "en");
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "japanese-shared-board");
@@ -2900,7 +2900,7 @@ test("private instructions give one placement prompt and group development cards
   await expect(instructions.locator(".turn-card")).not.toHaveAttribute("data-expanded", "true");
   await screenshot(phone, testInfo, "private-setup-instructions");
   await selectMenuLanguage(phone, "en", "ja");
-  await expect(instructions.getByRole("heading", { name: "共用ボードに開拓地を配置してください", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(instructions.getByRole("heading", { name: "共有ボードに開拓地を配置してください", exact: true })).toBeInViewport({ ratio: 1 });
   await selectMenuLanguage(phone, "ja", "en");
 
   game.players.forEach((other, index) => { game.board.vertices[index]!.building = { playerId: other.id, kind: "settlement" }; });

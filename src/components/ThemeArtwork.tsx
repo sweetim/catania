@@ -292,19 +292,28 @@ export function TerrainArtwork({ terrain, theme, clipPathId }: {
   }
   if (terrain === "volcano") {
     return <g className="volcano-artwork" aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M-52-58H52V-6Q0-20-52-6Z" fill="#ffd9a8" fillOpacity=".28" stroke="none" />
-      <path d="M-52 28Q-32 14-14 25Q4 15 24 24Q38 15 52 26V58H-52Z" fill="#6d3a30" fillOpacity=".5" stroke="none" />
-      <path d="M-54 56C-34 42-21 12-14-24L-5-21 0-23 6-21 14-24C21 12 34 42 54 56Z" fill="#59352f" fillOpacity=".9" />
-      <path d="M0-22 6-21 14-24C21 12 34 42 54 56H5C10 28 6 4 0-22Z" fill="#361c18" fillOpacity=".4" stroke="none" />
-      <path d="M-12-18C-17 4-26 24-40 44M11-16C17 6 26 24 39 43" stroke={ink} strokeOpacity=".34" strokeWidth="1.2" />
-      <ellipse cx="0" cy="-24" rx="14.5" ry="4.8" fill="#ff7020" stroke={ink} />
-      <ellipse cx="0" cy="-24" rx="9" ry="2.5" fill="#ffe169" stroke="none" />
-      <path d="M-6-20C-11-9-11 1-18 12C-23 20-26 27-30 33M5-20C11-8 12 2 19 13C24 20 27 27 32 35M-1-19C-3-6 3 6-1 18C-2 24 1 28 0 33" stroke="#ff5e1a" strokeWidth="4" />
-      <path d="M-6-20C-11-9-11 1-18 12C-23 20-26 27-30 33M5-20C11-8 12 2 19 13C24 20 27 27 32 35M-1-19C-3-6 3 6-1 18C-2 24 1 28 0 33" stroke="#ffd859" strokeWidth="1.5" />
-      <path d="M-10-36q4-7 10-5t10-7m-22 2q3-6 8-6" stroke="#fff3e0" strokeOpacity=".65" strokeWidth="2.2" />
-      <circle cx="-18" cy="-35" r="2.2" fill="#ffd859" stroke="none" />
-      <circle cx="15" cy="-38" r="1.8" fill="#ff8f3a" stroke="none" />
-      <circle cx="8" cy="-45" r="1.4" fill="#ffe794" stroke="none" />
+      <path d="M-52-58H52V-10H-52Z" fill="#2c1618" fillOpacity=".68" stroke="none" />
+      <ellipse cx="0" cy="-24" rx="28" ry="15" fill="#ff6a1a" fillOpacity=".35" stroke="none" />
+      <path d="M-8-31C-12-40-18-45-16-56H16C18-45 12-40 8-31Z" fill="#4a3132" fillOpacity=".75" stroke="none" />
+      <path d="M-4-34Q-9-44-6-54M4-34Q10-44 6-54" stroke="#ffb36b" strokeOpacity=".5" strokeWidth="1.4" />
+      <path d="M-54 38L-38 14-26 4-18-33-9-26-2-32 4-25 14-35 25 2 38 14 54 38Z" fill="#321d1f" stroke="#1b0d0e" strokeWidth="1.5" />
+      <path d="M4-25 14-35 25 2 38 14 54 38H8L12 14 4-25Z" fill="#1d0e10" fillOpacity=".55" stroke="none" />
+      <path d="M-18-33L-26 4-38 14M14-35L25 2 38 14" stroke="#ff7a33" strokeOpacity=".65" strokeWidth="1.35" />
+      <path d="M-16-31L-9-26-2-31 4-25 12-32 9-20-11-20Z" fill="#ff5412" stroke="none" />
+      <path d="M-9-27L-2-30 4-25 8-28 5-21-7-21Z" fill="#ffe66d" stroke="none" />
+      <path d="M-13-22L-21-6-29-2-27 12-36 18-33 32M11-22L20-4 29 0 26 14 36 19 33 32" stroke="#ff4d12" strokeWidth="4.4" />
+      <path d="M-13-22L-21-6-29-2-27 12-36 18-33 32M11-22L20-4 29 0 26 14 36 19 33 32" stroke="#ffe46b" strokeWidth="1.7" />
+      <path d="M-52 34Q0 28 52 34V58H-52Z" fill="#d98768" fillOpacity=".92" stroke="none" />
+      <path d="M-46 34Q0 28 46 34" stroke="#5a261d" strokeOpacity=".45" strokeWidth="1.2" />
+      <ellipse cx="-29" cy="32.5" rx="11.5" ry="3.4" fill="#ff5e1a" stroke="none" />
+      <ellipse cx="-29" cy="32.5" rx="6.5" ry="1.6" fill="#ffe46b" stroke="none" />
+      <ellipse cx="29" cy="32.5" rx="11.5" ry="3.4" fill="#ff5e1a" stroke="none" />
+      <ellipse cx="29" cy="32.5" rx="6.5" ry="1.6" fill="#ffe46b" stroke="none" />
+      <circle cx="-11" cy="-42" r="2.1" fill="#ffe66d" stroke="none" />
+      <circle cx="9" cy="-47" r="1.9" fill="#ff7b29" stroke="none" />
+      <circle cx="0" cy="-39" r="1.7" fill="#fff1a8" stroke="none" />
+      <circle cx="19" cy="-40" r="1.5" fill="#ffe66d" stroke="none" />
+      <circle cx="-21" cy="-36" r="1.4" fill="#ff7b29" stroke="none" />
     </g>;
   }
   if (terrain === "gold") {

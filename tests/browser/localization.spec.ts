@@ -311,7 +311,7 @@ test("Japanese help, themes, handoffs, board controls, and settings remain usabl
   await expect(page.getByRole("heading", { name: /に端末を渡してください。$/ })).toBeVisible();
   await expect(page.locator(".hand-resources")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "japanese-handoff.png");
-  await page.getByRole("button", { name: /^私は.+です。手札を表示$/ }).click();
+  await page.getByRole("button", { name: /^.+です。手札を表示$/ }).click();
 
   await page.getByRole("button", { name: "ゲーム", exact: true }).click();
   await page.getByRole("button", { name: "設定", exact: true }).click();
