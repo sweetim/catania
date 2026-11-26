@@ -490,6 +490,7 @@ describe("Custom World Sabotage build action", () => {
     room.game!.phase = { type: "actions" };
     room.game!.turnNumber = 2;
     room.game!.players.find(player => player.id === humanId)!.resources = { ...COSTS.sabotage };
+    room.game!.bank = { wood: 18, brick: 18, wool: 18, grain: 18, ore: 18 };
     room.version++;
 
     // Phone selects Sabotage build mode.

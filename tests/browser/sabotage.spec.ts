@@ -347,16 +347,18 @@ test("Using 3 sabotages shows count on player badge and awards Master Saboteur (
   await page.screenshot({ path: testInfo.outputPath("sabotage-award-desktop-en.png") });
 
   // Verify Japanese localization.
-  await page.getByRole("button", { name: /Menu/ }).click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("radio", { name: "日本語" }).click();
-  await page.getByRole("button", { name: "ダイアログを閉じる", exact: true }).click();
+  await page.getByRole("button", { name: "Game", exact: true }).click();
+  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
+  await page.keyboard.press("Escape");
   await expect(firstSeat.getByRole("img", { name: "使用済みの破壊工作3回", exact: true })).toBeVisible();
   await expect(firstSeat.getByRole("img", { name: "破壊工作王（勝利点+2）", exact: true })).toBeVisible();
 
   // Verify narrow 320px layout has no horizontal overflow on the player seat.
   await page.setViewportSize({ width: 320, height: 640 });
+  await page.getByRole("navigation", { name: "ゲームの表示切り替え", exact: true }).getByRole("button", { name: "プレイヤー", exact: true }).click();
+  const visibleSeat = page.locator(".player-seat:visible", { hasText: firstPlayerName }).first();
+  await expect(visibleSeat).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("sabotage-award-mobile-320-ja.png") });
-  const overflow = await firstSeat.evaluate(element => element.scrollWidth - element.clientWidth);
+  const overflow = await visibleSeat.evaluate(element => element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
