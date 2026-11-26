@@ -3,6 +3,7 @@ import type { TranslationCatalog } from "../i18n";
 export const boardTranslations = {
   "Sea": "海",
   "Gold": "金",
+  "Volcano": "火山",
   "Fog": "霧",
   "Unexplored fog; terrain and number concealed": "未探索の霧：地形と数字は未公開",
   "Move pirate to sea": "海賊を海に移動",
@@ -77,6 +78,7 @@ export const boardTranslations = {
 export const themeTranslations: TranslationCatalog = {
   "Sea": "海",
   "Gold": "金",
+  "Volcano": "火山",
   "Fog": "霧",
   "Illustrated Island": "手描きの島",
   "Soft hills, inked forests, and a quiet green sea.": "やわらかな丘、インクで描いた森、静かな緑の海。",

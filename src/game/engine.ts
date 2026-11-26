@@ -82,6 +82,9 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     ...Array<DevelopmentKind>(14).fill("knight"), ...Array<DevelopmentKind>(5).fill("victory-point"),
     "road-building", "road-building", "year-of-plenty", "year-of-plenty", "monopoly", "monopoly",
   ], random);
+  const hasVolcanoes = variant === "volcano-islands" ||
+    board.tiles.some(tile => tile.terrain === "volcano") ||
+    Object.values(board.fogDiscoveriesByTileId ?? {}).some(discovery => discovery.terrain === "volcano");
   return {
     variant, victoryPointsToWin, ...(sabotageEnabled ? { sabotageEnabled: true } : {}), board, players, bank: { wood: 19, brick: 19, wool: 19, grain: 19, ore: 19 }, developmentDeck,
     activePlayerId: players[0]!.id, phase: isFogBoard(board) ? { type: "setup-reveal" } : { type: "setup-settlement" }, setupIndex: 0,
@@ -91,7 +94,9 @@ export function createGame(profiles: Pick<Player, "name" | "color" | "control">[
     pirateTileId: pirateStartTileId(board, random),
     shipMoved: false, shipsBuiltThisTurn: [],
     awards: { longestRoad: null, largestArmy: null, ...(sabotageEnabled ? { masterSaboteur: null } : {}) }, winnerId: null,
-    log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], monopolies: [], trade: null, computerTradeRequested: false, developmentPlayed: false,
+    log: [{ key: "{player} begins the first settlement placement.", parameters: { player: players[0]!.name } }], thefts: [], monopolies: [],
+    ...(hasVolcanoes ? { lastEruption: null } : {}),
+    trade: null, computerTradeRequested: false, developmentPlayed: false,
   };
 }
 
@@ -237,6 +242,14 @@ export function legalSabotageVertices(state: PlacementState & Pick<GameState, "s
   return sabotageableVertices(state.board, playerId);
 }
 
+export function legalRobberOrPirateTiles(state: Pick<GameState, "board" | "variant" | "robberTileId" | "pirateTileId">): string[] {
+  return state.board.tiles
+    .filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
+      ? isSeafarers(state.variant) && tile.id !== state.pirateTileId
+      : tile.terrain !== "volcano" && tile.id !== state.robberTileId))
+    .map(tile => tile.id);
+}
+
 export function victoryTarget(variant: GameVariant): number {
   return variant === "original" ? 10 : variant === "seafarers" ? 13 : 12;
 }
@@ -371,11 +384,55 @@ function checkVictory(state: GameState): void {
   }
 }
 
-function produce(state: GameState, number: number): Record<string, number> {
+function produce(state: GameState, number: number, random: () => number): Record<string, number> {
   const claims = Object.fromEntries(state.players.map(player => [player.id, emptyResources()]));
   const gold: Record<string, number> = {};
   for (const tile of state.board.tiles) {
-    if (tile.id === state.robberTileId || tile.number !== number || (!isResource(tile.terrain) && tile.terrain !== "gold")) continue;
+    if (tile.id === state.robberTileId || tile.number !== number) continue;
+    if (tile.terrain === "volcano") {
+      const struckVertexId = tile.vertexIds[randomInteger(6, random)]!;
+      const struckVertex = state.board.vertices.find(vertex => vertex.id === struckVertexId)!;
+      let affectedPlayerId: string | null = null;
+      let effect: "none" | "downgraded" | "destroyed" | "spared" = "none";
+      if (struckVertex.building) {
+        affectedPlayerId = struckVertex.building.playerId;
+        const victim = playerFor(state, affectedPlayerId);
+        if (struckVertex.building.kind === "city") {
+          struckVertex.building = { playerId: affectedPlayerId, kind: "settlement" };
+          effect = "downgraded";
+          state.log.push({ key: "Volcano eruption reduces {victim}'s city to a settlement.", parameters: { victim: victim.name } });
+        } else {
+          const totalBuildings = pieceCount(state, affectedPlayerId, "settlement") + pieceCount(state, affectedPlayerId, "city");
+          if (totalBuildings >= 2) {
+            struckVertex.building = null;
+            effect = "destroyed";
+            state.log.push({ key: "Volcano eruption destroys {victim}'s settlement.", parameters: { victim: victim.name } });
+          } else {
+            effect = "spared";
+            state.log.push({ key: "Volcano eruption spares {victim}'s last settlement.", parameters: { victim: victim.name } });
+          }
+        }
+      } else {
+        state.log.push({ key: "A volcano erupts harmlessly." });
+      }
+      state.lastEruption = {
+        id: (state.lastEruption?.id ?? 0) + 1,
+        tileId: tile.id,
+        vertexId: struckVertexId,
+        turnNumber: state.turnNumber,
+        affectedPlayerId,
+        effect,
+      };
+      for (const vertexId of tile.vertexIds) {
+        if (vertexId === struckVertexId) continue;
+        const building = state.board.vertices.find(vertex => vertex.id === vertexId)!.building;
+        if (building) {
+          gold[building.playerId] = (gold[building.playerId] ?? 0) + (building.kind === "city" ? 2 : 1);
+        }
+      }
+      continue;
+    }
+    if (!isResource(tile.terrain) && tile.terrain !== "gold") continue;
     for (const vertexId of tile.vertexIds) {
       const building = state.board.vertices.find(vertex => vertex.id === vertexId)!.building;
       if (building) {
@@ -426,7 +483,8 @@ function discoverFromFog(state: GameState, player: Player, tile: Tile): FogDisco
 function discoverFogTiles(state: GameState, player: Player, tiles: Tile[]): number {
   let gold = 0;
   for (const tile of tiles) {
-    if (discoverFromFog(state, player, tile) === "gold") gold++;
+    const discovered = discoverFromFog(state, player, tile);
+    if (discovered === "gold" || discovered === "volcano") gold++;
     state.log.push({ key: "{player} explores a fog hex.", parameters: { player: player.name } });
   }
   return gold;
@@ -571,9 +629,12 @@ export function applyAction(
       if (total === 7) {
         const required = Object.fromEntries(state.players.filter(player => resourceTotal(player.resources) > 7)
           .map(player => [player.id, Math.floor(resourceTotal(player.resources) / 2)]));
-        state.phase = Object.keys(required).length > 0 ? { type: "discard", required } : { type: "robber", returnPhase: "actions" };
+        const canMoveRobberOrPirate = legalRobberOrPirateTiles(state).length > 0 || (isSeafarers(state.variant) && state.pirateTileId !== null);
+        state.phase = Object.keys(required).length > 0
+          ? { type: "discard", required }
+          : canMoveRobberOrPirate ? { type: "robber", returnPhase: "actions" } : { type: "actions" };
       } else {
-        const required = produce(state, total);
+        const required = produce(state, total, random);
         state.phase = Object.keys(required).length ? { type: "gold", required } : { type: "actions" };
       }
     })
@@ -603,7 +664,10 @@ export function applyAction(
       transfer(player.resources, state.bank, action.resources);
       delete state.phase.required[playerId];
       state.log.push({ key: "{player} discards {count} resource cards.", parameters: { player: player.name, count: required } });
-      if (Object.keys(state.phase.required).length === 0) state.phase = { type: "robber", returnPhase: "actions" };
+      if (Object.keys(state.phase.required).length === 0) {
+        const canMoveRobberOrPirate = legalRobberOrPirateTiles(state).length > 0 || (isSeafarers(state.variant) && state.pirateTileId !== null);
+        state.phase = canMoveRobberOrPirate ? { type: "robber", returnPhase: "actions" } : { type: "actions" };
+      }
     })
     .with({ type: "cancel-knight" }, () => {
       requireRule(state.phase.type === "robber" && state.phase.pendingKnight, "There is no Knight to cancel before moving the robber.");
@@ -627,9 +691,12 @@ export function applyAction(
         return;
       }
       const tile = state.board.tiles.find(tile => tile.id === action.tileId);
+      if (!pirate && tile?.terrain === "volcano") {
+        throw new GameError("The robber cannot be placed on a volcano.");
+      }
       requireRule(tile && (pirate
         ? isSeafarers(state.variant) && tile.terrain === "sea" && tile.id !== state.pirateTileId
-        : isLand(tile.terrain) && tile.id !== state.robberTileId), pirate
+        : isLand(tile.terrain) && tile.terrain !== "volcano" && tile.id !== state.robberTileId), pirate
           ? "Move the pirate to a different sea hex."
           : "Move the robber to a different land hex, including the desert.");
       if (pirate) state.pirateTileId = tile.id;
@@ -761,12 +828,15 @@ export function applyAction(
       match(card.kind)
         .with("knight", () => {
           player.knightsPlayed++;
-          state.phase = {
-            type: "robber", returnPhase,
-            pendingKnight: {
-              card, cardIndex: player.developmentCards.indexOf(card), previousLargestArmy: state.awards.largestArmy,
-            },
-          };
+          const canMoveRobberOrPirate = legalRobberOrPirateTiles(state).length > 0 || (isSeafarers(state.variant) && state.pirateTileId !== null);
+          if (canMoveRobberOrPirate) {
+            state.phase = {
+              type: "robber", returnPhase,
+              pendingKnight: {
+                card, cardIndex: player.developmentCards.indexOf(card), previousLargestArmy: state.awards.largestArmy,
+              },
+            };
+          }
         })
         .with("road-building", () => {
           const remaining = 15 - pieceCount(state, playerId, "road") + (isSeafarers(state.variant) ? 15 - pieceCount(state, playerId, "ship") : 0);

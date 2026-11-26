@@ -3,7 +3,7 @@ import { createBoard, generateMapSeed, normalizeMapSeed, seededRandom } from "..
 import { chooseComputerAction } from "../game/computer";
 import {
   applyAction, COSTS, createGame, getLongestRoadLength, getScore, legalCityVertices,
-  legalRoadEdges, legalSabotageEdges, legalSabotageVertices, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
+  legalRoadEdges, legalRobberOrPirateTiles, legalSabotageEdges, legalSabotageVertices, legalSettlementVertices, legalSetupRevealTiles, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal, victoryTarget,
 } from "../game/engine";
 import {
   DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig, isCustomMapConfigDraft, isGameVariant, isSeafarers, isVictoryPointsToWin,
@@ -50,6 +50,7 @@ export function publicGame(game: GameState, players: RoomPlayer[], gameId: strin
     board: publicBoard(game.board), bank: game.bank, activePlayerId: game.activePlayerId,
     turnNumber: game.turnNumber, dice: game.dice, diceRollTotals: game.diceRollTotals, robberTileId: game.robberTileId,
     awards: game.awards, winnerId: game.winnerId, trade: game.trade,
+    ...(game.lastEruption !== undefined ? { lastEruption: game.lastEruption } : {}),
     // Engine logs describe public events, never drawn cards, discarded kinds, or stolen resources.
     log: game.log, developmentPlayed: game.developmentPlayed,
     players: game.players.map(player => {
@@ -459,9 +460,7 @@ export class HostRoom {
       targets.vertices = legalSettlementVertices(game, game.activePlayerId);
       targets.tiles = legalSetupRevealTiles(game, game.activePlayerId);
     } else if (game.phase.type === "robber") {
-      targets.tiles = game.board.tiles.filter(tile => tile.terrain !== "fog" && (tile.terrain === "sea"
-        ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
-        : tile.id !== game.robberTileId)).map(tile => tile.id);
+      targets.tiles = legalRobberOrPirateTiles(game);
     } else if (game.phase.type === "actions" && this.buildMode === "sabotage") {
       targets.edges = legalSabotageEdges(game, game.activePlayerId);
       targets.vertices = legalSabotageVertices(game, game.activePlayerId);

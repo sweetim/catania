@@ -19,6 +19,7 @@ export const profileTranslations = {
   "Fog Islands": "霧の島",
   "Foggy World": "霧の世界",
   "Mystery World": "謎の世界",
+  "Volcano Islands": "火山の島",
   "Custom World": "カスタム世界",
   "VP": "勝利点",
   "{turns} turns": "{turns}ターン",

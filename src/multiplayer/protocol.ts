@@ -189,7 +189,7 @@ function board(value: unknown): boolean {
     (!Object.hasOwn(value, "fogWorld") || typeof value.fogWorld === "boolean") &&
     array(value.tiles, 42, tile => record(tile) && fields(tile, ["id", "x", "y", "terrain", "number", "vertexIds"], ["islandId"]) && identifier(tile.id, "tile") && position(tile) &&
       (!Object.hasOwn(tile, "islandId") || (typeof tile.islandId === "string" && /^(main|island-[1-9][0-9]{0,2})$/.test(tile.islandId))) &&
-      (resource(tile.terrain) || ["desert", "sea", "gold", "fog"].includes(tile.terrain as string)) && (tile.number === null || integer(tile.number, 12)) && array(tile.vertexIds, 6, value => identifier(value, "vertex"))) &&
+      (resource(tile.terrain) || ["desert", "sea", "gold", "fog", "volcano"].includes(tile.terrain as string)) && (tile.number === null || integer(tile.number, 12)) && array(tile.vertexIds, 6, value => identifier(value, "vertex"))) &&
     array(value.vertices, 130, vertex => record(vertex) && fields(vertex, ["id", "x", "y", "tileIds", "edgeIds", "building"]) && identifier(vertex.id, "vertex") && position(vertex) &&
       array(vertex.tileIds, 3, value => identifier(value, "tile")) && array(vertex.edgeIds, 3, value => identifier(value, "edge")) &&
       (vertex.building === null || (record(vertex.building) && fields(vertex.building, ["playerId", "kind"]) && identifier(vertex.building.playerId, "player") && ["settlement", "city"].includes(vertex.building.kind as string)))) &&
@@ -200,11 +200,18 @@ function board(value: unknown): boolean {
       (!Object.hasOwn(port, "awaitingCoast") || typeof port.awaitingCoast === "boolean") &&
       identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
+function volcanoEruption(value: unknown): boolean {
+  return value === null || (record(value) && fields(value, ["id", "tileId", "vertexId", "turnNumber", "affectedPlayerId", "effect"]) &&
+    integer(value.id) && identifier(value.tileId, "tile") && identifier(value.vertexId, "vertex") && integer(value.turnNumber) &&
+    (value.affectedPlayerId === null || identifier(value.affectedPlayerId, "player")) &&
+    ["none", "downgraded", "destroyed", "spared"].includes(value.effect as string));
+}
 function publicGame(value: unknown): boolean {
-  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"], ["sabotageEnabled"])) return false;
+  if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"], ["sabotageEnabled", "lastEruption"])) return false;
   const trade = value.trade;
   return isGameVariant(value.variant) && isVictoryPointsToWin(value.victoryPointsToWin) &&
-    (!Object.hasOwn(value, "sabotageEnabled") || typeof value.sabotageEnabled === "boolean") && token(value.gameId) &&
+    (!Object.hasOwn(value, "sabotageEnabled") || typeof value.sabotageEnabled === "boolean") &&
+    (!Object.hasOwn(value, "lastEruption") || volcanoEruption(value.lastEruption)) && token(value.gameId) &&
     (value.pirateTileId === null || identifier(value.pirateTileId, "tile")) && typeof value.shipMoved === "boolean" &&
     array(value.shipsBuiltThisTurn, 15, value => identifier(value, "edge")) &&
     board(value.board) && resources(value.bank) && identifier(value.activePlayerId, "player") && integer(value.turnNumber) &&

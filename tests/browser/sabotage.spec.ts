@@ -69,6 +69,7 @@ const SABOTAGE_CONFIG: CustomMapConfig = {
   grain: 8,
   ore: 8,
   gold: 0,
+  volcano: 0,
   desert: 0,
   sea: 0,
   fog: false,

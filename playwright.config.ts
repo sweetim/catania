@@ -5,7 +5,7 @@ const signalingPort = Number(process.env.PLAYWRIGHT_SIGNALING_PORT ?? 4176);
 
 export default defineConfig({
   testDir: "./tests/browser",
-  testMatch: ["buildings.spec.ts", "catania.spec.ts", "multiplayer.spec.ts", "localization.spec.ts", "profile.spec.ts", "sabotage.spec.ts", "scan.spec.ts"],
+  testMatch: ["buildings.spec.ts", "catania.spec.ts", "multiplayer.spec.ts", "localization.spec.ts", "profile.spec.ts", "sabotage.spec.ts", "scan.spec.ts", "volcano-and-wonders.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,

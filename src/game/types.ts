@@ -1,7 +1,7 @@
 import type { GameMessage } from "./messages";
 
 export type Resource = "wood" | "brick" | "wool" | "grain" | "ore";
-export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world", "mystery-world", "custom-world"] as const;
+export const GAME_VARIANTS = ["original", "seafarers", "four-islands", "fog-islands", "foggy-world", "mystery-world", "volcano-islands", "custom-world"] as const;
 export type GameVariant = typeof GAME_VARIANTS[number];
 export function isGameVariant(value: unknown): value is GameVariant {
   return GAME_VARIANTS.some(variant => variant === value);
@@ -18,11 +18,11 @@ export function isFogWorld(variant: GameVariant | undefined): boolean {
 }
 export const CUSTOM_MAP_TILES = 42;
 export const CUSTOM_LAND_MINIMUM = 8;
-export const CUSTOM_MAP_COUNT_FIELDS = ["wood", "brick", "wool", "grain", "ore", "gold", "desert", "sea"] as const;
+export const CUSTOM_MAP_COUNT_FIELDS = ["wood", "brick", "wool", "grain", "ore", "gold", "volcano", "desert", "sea"] as const;
 export type CustomMapCountField = typeof CUSTOM_MAP_COUNT_FIELDS[number];
 export type CustomMapConfig = Record<CustomMapCountField, number> & { fog: boolean; sabotage?: boolean };
 export const DEFAULT_CUSTOM_MAP_CONFIG: CustomMapConfig = {
-  wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13, fog: false, sabotage: true,
+  wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, volcano: 0, desert: 1, sea: 13, fog: false, sabotage: true,
 };
 
 export function isCustomSabotageEnabled(config: Pick<CustomMapConfig, "sabotage"> | undefined): boolean {
@@ -34,11 +34,16 @@ function customMapCounts(value: unknown): Record<CustomMapCountField, number> | 
     Object.getPrototypeOf(value) !== Object.prototype) return null;
   const candidate = value as Record<string, unknown>;
   const hasSabotage = Object.hasOwn(candidate, "sabotage");
-  const expectedKeys = CUSTOM_MAP_COUNT_FIELDS.length + 1 + (hasSabotage ? 1 : 0);
+  const hasVolcano = Object.hasOwn(candidate, "volcano");
+  const expectedKeys = CUSTOM_MAP_COUNT_FIELDS.length - (hasVolcano ? 0 : 1) + 1 + (hasSabotage ? 1 : 0);
   if (Object.keys(candidate).length !== expectedKeys || typeof candidate.fog !== "boolean") return null;
   if (hasSabotage && typeof candidate.sabotage !== "boolean") return null;
   const counts = {} as Record<CustomMapCountField, number>;
   for (const field of CUSTOM_MAP_COUNT_FIELDS) {
+    if (field === "volcano" && !hasVolcano) {
+      counts.volcano = 0;
+      continue;
+    }
     const count = candidate[field];
     if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > CUSTOM_MAP_TILES) return null;
     counts[field] = count;
@@ -65,7 +70,15 @@ export function isCustomMapConfig(value: unknown): value is CustomMapConfig {
   return assigned === CUSTOM_MAP_TILES && assigned - counts.sea >= CUSTOM_LAND_MINIMUM;
 }
 export type Resources = Record<Resource, number>;
-export type Terrain = Resource | "desert" | "sea" | "gold" | "fog";
+export type Terrain = Resource | "desert" | "sea" | "gold" | "fog" | "volcano";
+export type VolcanoEruption = {
+  id: number;
+  tileId: string;
+  vertexId: string;
+  turnNumber: number;
+  affectedPlayerId: string | null;
+  effect: "none" | "downgraded" | "destroyed" | "spared";
+};
 export type DevelopmentKind =
   | "knight"
   | "victory-point"
@@ -98,7 +111,7 @@ export type Edge = {
   kind?: "road" | "ship";
 };
 export type Port = { edgeId: string; resource: Resource | "any"; awaitingCoast?: boolean };
-export type FogDiscovery = { terrain: Resource | "sea" | "gold" | "desert"; number: number | null };
+export type FogDiscovery = { terrain: Resource | "sea" | "gold" | "volcano" | "desert"; number: number | null };
 export type Board = {
   tiles: Tile[];
   vertices: Vertex[];
@@ -186,6 +199,7 @@ export type GameState = {
   log: GameMessage[];
   thefts: TheftEvent[];
   monopolies: MonopolyEvent[];
+  lastEruption?: VolcanoEruption | null;
   trade: TradeOffer | null;
   computerTradeRequested: boolean;
   developmentPlayed: boolean;

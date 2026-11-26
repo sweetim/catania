@@ -12,7 +12,7 @@ import {
 import { match } from "ts-pattern";
 import { blockedSettlementVertices } from "../game/engine";
 import { edgeTiles, hiddenNumberTileIds, isPortRevealed, isResource, portAnchor } from "../game/board";
-import { type Board as BoardState, type Player, type Resource, type Terrain, type Tile } from "../game/types";
+import { type Board as BoardState, type Player, type Resource, type Terrain, type Tile, type VolcanoEruption } from "../game/types";
 import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
@@ -76,6 +76,7 @@ type BoardMotionTracker = {
   lastPirateTileId: string | null | undefined;
   lastRolledNumber: number | undefined;
   lastProducingKey: string;
+  lastEruptionId: number | null;
   version: number;
   generation: number;
   buildings: Map<string, BuildingSnapshot>;
@@ -118,6 +119,7 @@ function createBoardMotionTracker(): BoardMotionTracker {
     lastPirateTileId: undefined,
     lastRolledNumber: undefined,
     lastProducingKey: "",
+    lastEruptionId: null,
     version: 0,
     generation: 0,
     buildings: new Map(),
@@ -651,6 +653,7 @@ export function Board({
   pirateTileId,
   routeMode,
   sabotageMode = false,
+  lastEruption = null,
   pirateIndicator,
   legalVertexIds = [],
   legalEdgeIds = [],
@@ -679,6 +682,7 @@ export function Board({
   pirateTileId?: string | null;
   routeMode?: "road" | "ship" | "move-ship" | null;
   sabotageMode?: boolean;
+  lastEruption?: VolcanoEruption | null;
   pirateIndicator?: {
     onBoard: boolean;
     enabled: boolean;
@@ -927,10 +931,16 @@ export function Board({
           }
         }
 
+        const volcanoStruckVertexId = lastEruption &&
+          (lastEruption.effect === "destroyed" || lastEruption.effect === "downgraded") &&
+          lastEruption.id !== tracker.lastEruptionId
+          ? lastEruption.vertexId
+          : null;
         const pendingSabotageBursts = tracker.sabotageBursts.filter(burst => !tracker.completedKeys.has(burst.key));
         for (const { vertexId, snapshot } of removedBuildings) {
           tracker.newSettlements.delete(vertexId);
           tracker.upgradedCities.delete(vertexId);
+          if (vertexId === volcanoStruckVertexId) continue;
           const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
           pendingSabotageBursts.push({
             key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
@@ -943,6 +953,7 @@ export function Board({
         }
         for (const { vertexId, snapshot } of downgradedCities) {
           tracker.upgradedCities.delete(vertexId);
+          if (vertexId === volcanoStruckVertexId) continue;
           const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
           pendingSabotageBursts.push({
             key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
@@ -1044,17 +1055,18 @@ export function Board({
           const activeProducingTiles = rolledNumber === 7
             ? []
             : producingTileIds.length > 0
-              ? board.tiles.filter(tile => producingTileIds.includes(tile.id) && (isResource(tile.terrain) || tile.terrain === "gold"))
+              ? board.tiles.filter(tile => producingTileIds.includes(tile.id) && (isResource(tile.terrain) || tile.terrain === "gold" || tile.terrain === "volcano"))
               : board.tiles.filter(tile =>
                 tile.id !== robberTileId &&
                 tile.number === rolledNumber &&
-                (isResource(tile.terrain) || tile.terrain === "gold"),
+                (isResource(tile.terrain) || tile.terrain === "gold" || tile.terrain === "volcano"),
               );
 
           const gainsByVertex = new Map<string, { terrain: Resource | "gold"; amount: 1 | 2 }[]>();
           for (const tile of activeProducingTiles) {
-            const terrain = tile.terrain as Resource | "gold";
+            const terrain: Resource | "gold" = tile.terrain === "volcano" ? "gold" : tile.terrain as Resource | "gold";
             for (const vertexId of tile.vertexIds) {
+              if (tile.terrain === "volcano" && lastEruption?.tileId === tile.id && lastEruption.vertexId === vertexId) continue;
               const vertex = verticesById.get(vertexId);
               if (!vertex?.building) continue;
               const entries = gainsByVertex.get(vertexId) ?? [];
@@ -1090,6 +1102,7 @@ export function Board({
       tracker.lastPirateTileId = pirateTileId;
       tracker.lastRolledNumber = rolledNumber;
       tracker.lastProducingKey = producingKey;
+      tracker.lastEruptionId = lastEruption?.id ?? null;
       tracker.buildings = currentBuildings;
       tracker.edges = currentEdges;
       tracker.visiblePortEdgeIds = currentVisiblePortEdgeIds;
@@ -1098,7 +1111,7 @@ export function Board({
     }
 
     return tracker;
-  }, [board, robberTileId, pirateTileId, rolledNumber, producingKey]);
+  }, [board, robberTileId, pirateTileId, rolledNumber, producingKey, lastEruption]);
   const isMotionActive = (key: string | null): key is string =>
     key !== null && !boardMotion.completedKeys.has(key);
   const blockedRollKey = boardMotion.blockedRollGeneration === null
@@ -1242,7 +1255,7 @@ export function Board({
 
   function terrainResourceName(terrain: Terrain) {
     return isResource(terrain) ? resourceName(language, terrain).toLowerCase()
-      : translateText(terrain === "sea" ? "Sea" : terrain === "fog" ? "Fog" : terrain === "gold" ? "Gold" : "Desert").toLowerCase();
+      : translateText(terrain === "sea" ? "Sea" : terrain === "fog" ? "Fog" : terrain === "gold" ? "Gold" : terrain === "volcano" ? "Volcano" : "Desert").toLowerCase();
   }
 
   function tileDescription(tile: Tile) {
@@ -1473,6 +1486,31 @@ export function Board({
                   floodOpacity="0.2"
                 />
               </filter>
+              <filter
+                id={`${illustrationId}-lava-glow`}
+                x="-45%"
+                y="-45%"
+                width="190%"
+                height="190%"
+              >
+                <feGaussianBlur stdDeviation="2.6" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <radialGradient id={`${illustrationId}-crater-flare`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fffbe0" stopOpacity="1" />
+                <stop offset="38%" stopColor="#ffb32c" stopOpacity="0.92" />
+                <stop offset="72%" stopColor="#ff4d0a" stopOpacity="0.58" />
+                <stop offset="100%" stopColor="#ff4d0a" stopOpacity="0" />
+              </radialGradient>
+              <radialGradient id={`${illustrationId}-lava-pool`} cx="50%" cy="46%" r="54%">
+                <stop offset="0%" stopColor="#fff5bd" stopOpacity="0.96" />
+                <stop offset="34%" stopColor="#ff9624" stopOpacity="0.9" />
+                <stop offset="70%" stopColor="#d9380c" stopOpacity="0.72" />
+                <stop offset="100%" stopColor="#4f1408" stopOpacity="0" />
+              </radialGradient>
               <clipPath id={`${illustrationId}-hex-clip`}>
                 <path d={HEX_ARTWORK_CLIP_PATH} />
               </clipPath>
@@ -2371,6 +2409,282 @@ export function Board({
                 </g>
               );
             })}
+            {lastEruption && (() => {
+              const eruptingTile = board.tiles.find(tile => tile.id === lastEruption.tileId);
+              const struckVertex = board.vertices.find(vertex => vertex.id === lastEruption.vertexId);
+              if (!eruptingTile || !struckVertex) return null;
+              const craterHorizontal = eruptingTile.x;
+              const craterVertical = eruptingTile.y - 24;
+              const deltaHorizontal = struckVertex.x - craterHorizontal;
+              const deltaVertical = struckVertex.y - craterVertical;
+              const distance = Math.max(1, Math.hypot(deltaHorizontal, deltaVertical));
+              const unitHorizontal = deltaHorizontal / distance;
+              const unitVertical = deltaVertical / distance;
+              const perpendicularHorizontal = -unitVertical;
+              const perpendicularVertical = unitHorizontal;
+              const curveSign = lastEruption.id % 2 === 0 ? 1 : -1;
+              const isUpperCorner = struckVertex.y < craterVertical + 8;
+              const isBottomCenterCorner = Math.abs(struckVertex.x - eruptingTile.x) < 12 && struckVertex.y > eruptingTile.y;
+
+              let firstControlHorizontal: number;
+              let firstControlVertical: number;
+              let secondControlHorizontal: number;
+              let secondControlVertical: number;
+
+              if (isUpperCorner) {
+                const lateralLift = Math.abs(deltaHorizontal) < 10 ? 18 * curveSign : deltaHorizontal * 0.16;
+                firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.25 + lateralLift;
+                firstControlVertical = craterVertical - 20 + deltaVertical * 0.15;
+                secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 + lateralLift * 0.45;
+                secondControlVertical = craterVertical - 12 + deltaVertical * 0.65;
+              } else if (isBottomCenterCorner) {
+                firstControlHorizontal = craterHorizontal + 26 * curveSign;
+                firstControlVertical = craterVertical + deltaVertical * 0.32;
+                secondControlHorizontal = craterHorizontal + 22 * curveSign;
+                secondControlVertical = craterVertical + deltaVertical * 0.72;
+              } else {
+                const slopeSide = deltaHorizontal >= 0 ? 1 : -1;
+                firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.34 + perpendicularHorizontal * 11 * slopeSide;
+                firstControlVertical = craterVertical + deltaVertical * 0.26 + perpendicularVertical * 11 * slopeSide;
+                secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 - perpendicularHorizontal * 7 * slopeSide;
+                secondControlVertical = craterVertical + deltaVertical * 0.74 - perpendicularVertical * 7 * slopeSide;
+              }
+
+              const lavaPath = `M ${craterHorizontal.toFixed(1)} ${craterVertical.toFixed(1)} C ${firstControlHorizontal.toFixed(1)} ${firstControlVertical.toFixed(1)}, ${secondControlHorizontal.toFixed(1)} ${secondControlVertical.toFixed(1)}, ${struckVertex.x.toFixed(1)} ${struckVertex.y.toFixed(1)}`;
+
+              const branchEndHorizontal = craterHorizontal + deltaHorizontal * 0.56 + perpendicularHorizontal * 14 * curveSign;
+              const branchEndVertical = craterVertical + deltaVertical * 0.56 + perpendicularVertical * 14 * curveSign;
+              const branchPath = !isUpperCorner
+                ? `M ${(craterHorizontal + deltaHorizontal * 0.18 + (isBottomCenterCorner ? 11 * curveSign : 0)).toFixed(1)} ${(craterVertical + deltaVertical * 0.18).toFixed(1)} Q ${(firstControlHorizontal + perpendicularHorizontal * 6 * curveSign).toFixed(1)} ${(firstControlVertical + 4).toFixed(1)}, ${branchEndHorizontal.toFixed(1)} ${branchEndVertical.toFixed(1)}`
+                : null;
+
+              const craterEmbers = [
+                { horizontal: -18, vertical: -30, size: 2.3, delay: 40 },
+                { horizontal: 16, vertical: -34, size: 2.1, delay: 75 },
+                { horizontal: -27, vertical: -19, size: 1.8, delay: 110 },
+                { horizontal: 25, vertical: -22, size: 1.9, delay: 90 },
+                { horizontal: -7, vertical: -39, size: 2.2, delay: 55 },
+                { horizontal: 9, vertical: -37, size: 1.7, delay: 130 },
+                { horizontal: 0, vertical: -42, size: 2.4, delay: 20 },
+              ];
+              const craterSmokePuffs = [
+                { horizontal: -7, vertical: -26, radius: 9.5, delay: 30 },
+                { horizontal: 6, vertical: -34, radius: 12, delay: 110 },
+                { horizontal: -2, vertical: -44, radius: 14, delay: 190 },
+              ];
+              const impactSparks = [
+                { horizontal: -20, vertical: -16, delay: 700 },
+                { horizontal: 21, vertical: -14, delay: 730 },
+                { horizontal: -23, vertical: 9, delay: 760 },
+                { horizontal: 19, vertical: 15, delay: 720 },
+                { horizontal: -6, vertical: -24, delay: 750 },
+                { horizontal: 7, vertical: 21, delay: 780 },
+              ];
+              const debrisShards = [
+                { horizontal: -24, vertical: -22, rotate: -55, delay: 700 },
+                { horizontal: 26, vertical: -18, rotate: 48, delay: 720 },
+                { horizontal: -28, vertical: 6, rotate: -72, delay: 740 },
+                { horizontal: 25, vertical: 12, rotate: 64, delay: 730 },
+                { horizontal: -10, vertical: -30, rotate: -30, delay: 710 },
+                { horizontal: 12, vertical: 24, rotate: 40, delay: 760 },
+              ];
+              const severeImpact = lastEruption.effect === "destroyed" || lastEruption.effect === "downgraded";
+              const sparedImpact = lastEruption.effect === "spared";
+              const affectedPlayerColor = (lastEruption.affectedPlayerId
+                ? playersById.get(lastEruption.affectedPlayerId)?.color
+                : undefined) ?? "#c9502c";
+
+              return (
+                <g
+                  key={`eruption-${lastEruption.id}`}
+                  className="board-volcano-eruption"
+                  data-eruption-tile={lastEruption.tileId}
+                  data-eruption-vertex={lastEruption.vertexId}
+                  data-eruption-effect={lastEruption.effect}
+                  pointerEvents="none"
+                  aria-hidden="true"
+                >
+                  {/* Curved multi-layered molten lava flow */}
+                  <g className="board-volcano-lava-stream">
+                    {branchPath && (
+                      <path
+                        className="board-volcano-lava-branch"
+                        d={branchPath}
+                        pathLength={100}
+                        fill="none"
+                        stroke="#e84812"
+                        strokeWidth="2.8"
+                        strokeLinecap="round"
+                        filter={`url(#${illustrationId}-lava-glow)`}
+                      />
+                    )}
+                    <path
+                      className="board-volcano-lava-crust"
+                      d={lavaPath}
+                      pathLength={100}
+                      fill="none"
+                      stroke="#4a160c"
+                      strokeWidth="8.2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      className="board-volcano-lava-body"
+                      d={lavaPath}
+                      pathLength={100}
+                      fill="none"
+                      stroke="#e84812"
+                      strokeWidth="5.2"
+                      strokeLinecap="round"
+                      filter={`url(#${illustrationId}-lava-glow)`}
+                    />
+                    <path
+                      className="board-volcano-lava-core"
+                      d={lavaPath}
+                      pathLength={100}
+                      fill="none"
+                      stroke="#ffe26a"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </g>
+
+                  {/* Crater flash, rising ash plume, and arcing embers */}
+                  <g transform={`translate(${craterHorizontal} ${craterVertical})`}>
+                    <ellipse
+                      className="board-volcano-crater-flare"
+                      cx="0"
+                      cy="0"
+                      rx="22"
+                      ry="11"
+                      fill={`url(#${illustrationId}-crater-flare)`}
+                    />
+                    {craterSmokePuffs.map((puff, index) => (
+                      <circle
+                        key={`smoke-${index}`}
+                        className="board-volcano-smoke"
+                        cx="0"
+                        cy="-2"
+                        r={puff.radius}
+                        fill={index % 2 === 0 ? "#47302c" : "#6b4d46"}
+                        style={{
+                          "--smoke-x": `${puff.horizontal}px`,
+                          "--smoke-y": `${puff.vertical}px`,
+                          animationDelay: `${puff.delay}ms`,
+                        } as CSSProperties}
+                      />
+                    ))}
+                    {craterEmbers.map((ember, index) => (
+                      <circle
+                        key={`ember-${index}`}
+                        className="board-volcano-ember"
+                        cx="0"
+                        cy="-2"
+                        r={ember.size}
+                        fill={index % 2 === 0 ? "#ffe26a" : "#ff7a1a"}
+                        style={{
+                          "--ember-x": `${ember.horizontal}px`,
+                          "--ember-y": `${ember.vertical}px`,
+                          animationDelay: `${ember.delay}ms`,
+                        } as CSSProperties}
+                      />
+                    ))}
+                  </g>
+
+                  {/* Molten splash, heat shockwave, and sparks at struck corner */}
+                  <g transform={`translate(${struckVertex.x} ${struckVertex.y})`}>
+                    <circle
+                      className="board-volcano-heat-ring"
+                      r={severeImpact ? "22" : "17"}
+                      fill="none"
+                      stroke={sparedImpact ? "#f5d76e" : "#ff6b1a"}
+                      strokeWidth={severeImpact ? "3" : "2.2"}
+                    />
+                    {severeImpact && (
+                      <circle
+                        className="board-volcano-heat-ring board-volcano-heat-ring-secondary"
+                        r="15"
+                        fill="none"
+                        stroke="#ffe169"
+                        strokeWidth="2"
+                      />
+                    )}
+                    <path
+                      className="board-volcano-impact-pool"
+                      d="M-16 -2 C-17 -11, -8 -18, 2 -14 C11 -17, 19 -8, 16 1 C19 10, 10 18, 1 15 C-8 19, -18 11, -16 2 Z"
+                      fill={`url(#${illustrationId}-lava-pool)`}
+                      filter={`url(#${illustrationId}-lava-glow)`}
+                    />
+                    {impactSparks.map((spark, index) => (
+                      <circle
+                        key={`spark-${index}`}
+                        className="board-volcano-splash-spark"
+                        cx="0"
+                        cy="0"
+                        r={index % 2 === 0 ? "2.1" : "1.5"}
+                        fill={index % 2 === 0 ? "#ffe26a" : "#ff6b1a"}
+                        style={{
+                          "--spark-x": `${spark.horizontal}px`,
+                          "--spark-y": `${spark.vertical}px`,
+                          animationDelay: `${spark.delay}ms`,
+                        } as CSSProperties}
+                      />
+                    ))}
+                    {severeImpact && (
+                      <g data-eruption-building={lastEruption.effect === "downgraded" ? "city" : "settlement"}>
+                        <g className="board-volcano-destroyed-piece">
+                          <path
+                            d={lastEruption.effect === "downgraded" ? CITY_SILHOUETTE_PATH : SETTLEMENT_SILHOUETTE_PATH}
+                            fill={affectedPlayerColor}
+                            stroke="#3b120a"
+                            strokeWidth="1.6"
+                          />
+                          <path
+                            d="M-5 -8 L1 -1 L-3 3 L4 9"
+                            fill="none"
+                            stroke="#ffe26a"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </g>
+                        {debrisShards.map((shard, index) => (
+                          <polygon
+                            key={`debris-${index}`}
+                            className="board-volcano-debris-shard"
+                            points="-4,-2 4,-3 2,3 -3,2"
+                            fill={index % 2 === 0 ? affectedPlayerColor : "#ff7a1a"}
+                            stroke="#3b120a"
+                            strokeWidth="0.9"
+                            style={{
+                              "--shard-x": `${shard.horizontal}px`,
+                              "--shard-y": `${shard.vertical}px`,
+                              "--shard-rotate": `${shard.rotate}deg`,
+                              animationDelay: `${shard.delay}ms`,
+                            } as CSSProperties}
+                          />
+                        ))}
+                        <circle
+                          className="board-volcano-ash-puff"
+                          cx="-4"
+                          cy="-4"
+                          r="9"
+                          fill="#3f2722"
+                          style={{ "--smoke-x": "-8px", "--smoke-y": "-24px", animationDelay: "720ms" } as CSSProperties}
+                        />
+                        <circle
+                          className="board-volcano-ash-puff"
+                          cx="5"
+                          cy="-2"
+                          r="10.5"
+                          fill="#5c3d36"
+                          style={{ "--smoke-x": "9px", "--smoke-y": "-30px", animationDelay: "790ms" } as CSSProperties}
+                        />
+                      </g>
+                    )}
+                  </g>
+                </g>
+              );
+            })()}
             {board.tiles
               .filter((tile) => tile.id === robberTileId && tile.terrain !== "sea" && tile.terrain !== "fog")
               .map((tile) => {

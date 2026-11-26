@@ -1591,6 +1591,7 @@ export function MultiplayerApp() {
                 victoryTarget={game.victoryPointsToWin}
                 routeMode={snapshot.buildMode === "ship" || snapshot.buildMode === "move-ship" || snapshot.buildMode === "road" ? snapshot.buildMode : null}
                 sabotageMode={snapshot.buildMode === "sabotage"}
+                lastEruption={game.lastEruption ?? null}
                 pirateIndicator={isSeafarers(game.variant) ? {
                   onBoard: game.pirateTileId !== null,
                   enabled: !disabled && activePlayer?.control === "human" && game.phase.type === "robber" && game.pirateTileId !== null,

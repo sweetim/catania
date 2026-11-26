@@ -18,9 +18,9 @@ import { customMapTranslations } from "../translations/customMap";
 import { PieceIcon, ResourceIcon } from "./GameUi";
 import { ChevronDownIcon, DesertIcon, FogIcon, GoldIcon, MinusIcon, PlusIcon, SeaIcon } from "./Icons";
 
-const TERRAIN_LABELS: Record<CustomMapCountField, "wood" | "brick" | "wool" | "grain" | "ore" | "Gold" | "Desert" | "Sea"> = {
+const TERRAIN_LABELS: Record<CustomMapCountField, "wood" | "brick" | "wool" | "grain" | "ore" | "Gold" | "Volcano" | "Desert" | "Sea"> = {
   wood: "wood", brick: "brick", wool: "wool", grain: "grain", ore: "ore",
-  gold: "Gold", desert: "Desert", sea: "Sea",
+  gold: "Gold", volcano: "Volcano", desert: "Desert", sea: "Sea",
 };
 
 function TerrainFieldIcon({ field }: { field: CustomMapCountField }) {
@@ -36,6 +36,13 @@ function TerrainFieldIcon({ field }: { field: CustomMapCountField }) {
       </span>
     ))
     .with("gold", () => <GoldIcon className="h-3.5 w-3.5 shrink-0 text-[#b58a2d]" />)
+    .with("volcano", () => (
+      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-[#b8563c]" aria-hidden="true" fill="none">
+        <path d="M2 14 6 5h4l4 9H2Z" fill="currentColor" />
+        <ellipse cx="8" cy="5" rx="2.4" ry="1" fill="#ff7426" />
+        <path d="M7.2 5.8 6.5 9.5M8.8 5.8 9.6 10" stroke="#ffd859" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    ))
     .with("desert", () => <DesertIcon className="h-3.5 w-3.5 shrink-0 text-[#9c6f33]" />)
     .with("sea", () => <SeaIcon className="h-3.5 w-3.5 shrink-0 text-[#477c91]" />)
     .exhaustive();
@@ -64,7 +71,7 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
 
   function terrainName(field: CustomMapCountField): string {
     const label = TERRAIN_LABELS[field];
-    return label === "Gold" || label === "Desert" || label === "Sea"
+    return label === "Gold" || label === "Volcano" || label === "Desert" || label === "Sea"
       ? translateBoardText(label)
       : resourceName(language, label);
   }

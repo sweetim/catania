@@ -20,14 +20,17 @@ assets are local.
 - Every island has a map code; enter it to replay the exact same island later.
 - Base-game rules, trading, development cards, Longest Road, and Largest Army.
 - Choose **Original** (default), **Seafarers** (Heading for New Shores),
-  **Four Islands**, **Fog Islands**, **Foggy World**, **Mystery World**, or
-  **Custom World** before starting, locally or in the host lobby.
+  **Four Islands**, **Fog Islands**, **Foggy World**, **Mystery World**,
+  **Volcano Islands**, or **Custom World** before starting,
+  locally or in the host lobby.
   Seafarers scenarios include ships and movement, the pirate, and computer opponents.
   Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
-  terrain and discovery resources; the fog worlds hide the entire map under fog; and
-  Custom World lets you set every terrain count yourself, with an optional whole-map
-  fog. Victory targets are 13 for New Shores and 12 for the other scenarios. When a
-  fog game is won, the whole map is revealed so everyone can view the full island.
+  terrain and discovery resources; the fog worlds hide the entire map under fog;
+  Volcano Islands adds erupting volcanoes (off-limits to the robber) that strike a
+  random corner while granting gold to surviving neighbors; and Custom World lets you
+  set every terrain count yourself (including volcanoes), with optional whole-map fog
+  and Sabotage. Victory targets are 13 for New Shores and 12 for the other scenarios.
+  When a fog game is won, the whole map is revealed so everyone can view the full island.
 - Six board themes, responsive layouts, and keyboard-accessible placement controls.
 - Installable as a progressive web app: add Catania to a home screen and launch it
   offline; single-device play keeps working without a network.

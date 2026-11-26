@@ -27,7 +27,7 @@ const profiles: Pick<Player, "name" | "color" | "control">[] = [
 ];
 
 const visibleConfig: CustomMapConfig = {
-  wood: 5, brick: 3, wool: 5, grain: 5, ore: 3, gold: 1, desert: 1, sea: 19, fog: false,
+  wood: 5, brick: 3, wool: 5, grain: 5, ore: 3, gold: 1, volcano: 0, desert: 1, sea: 19, fog: false,
 };
 
 function configWith(overrides: Partial<CustomMapConfig>): CustomMapConfig {
@@ -167,7 +167,7 @@ describe("Custom World fog board", () => {
       totals[discovery.terrain] = (totals[discovery.terrain] ?? 0) + 1;
       return totals;
     }, {});
-    for (const field of CUSTOM_MAP_COUNT_FIELDS) expect(counts[field]).toBe(config[field]);
+    for (const field of CUSTOM_MAP_COUNT_FIELDS) expect(counts[field] ?? 0).toBe(config[field]);
     expect(deck.filter(discovery => discovery.terrain === "sea" || discovery.terrain === "desert")
       .every(discovery => discovery.number === null)).toBe(true);
     const producing = deck.filter(discovery => discovery.number !== null);

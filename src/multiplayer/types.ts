@@ -37,7 +37,7 @@ export type ScoreBreakdown = {
 export type PublicGame = Pick<GameState,
   "bank" | "activePlayerId" | "turnNumber" | "dice" | "diceRollTotals" |
   "robberTileId" | "pirateTileId" | "variant" | "victoryPointsToWin" | "sabotageEnabled" | "shipMoved" | "shipsBuiltThisTurn" |
-  "awards" | "winnerId" | "log" | "trade" | "developmentPlayed"
+  "awards" | "winnerId" | "log" | "trade" | "developmentPlayed" | "lastEruption"
 > & {
   board: Omit<Board, "fogDiscoveryDeck" | "fogDiscoveriesByTileId">;
   gameId: string;

@@ -1,7 +1,7 @@
 import { match } from "ts-pattern";
 import {
   blockedSettlementVertices, COSTS, emptyResources, getLongestRoadLength, getPublicScore, getScore, getTradeRatio,
-  hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalSabotageEdges, legalSabotageVertices,
+  hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalRobberOrPirateTiles, legalSabotageEdges, legalSabotageVertices,
   legalSettlementVertices, legalShipDestinations, legalShipEdges, legalSetupRevealTiles, movableShipEdges,
   RESOURCES, resourceTotal,
 } from "./engine";
@@ -9,8 +9,9 @@ import { edgeTiles, isLand, isPortRevealed, isResource } from "./board";
 import { isFogBoard, isSeafarers } from "./types";
 import type { GameAction, GameState, Resource, Resources, Tile } from "./types";
 
-const PIP_MULTIPLIER_BY_TERRAIN: Record<Resource | "gold", number> = {
+const PIP_MULTIPLIER_BY_TERRAIN: Record<Resource | "gold" | "volcano", number> = {
   gold: 2.5,
+  volcano: 1.9,
   grain: 1.28,
   ore: 1.25,
   brick: 1.03,
@@ -107,8 +108,8 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       if (tile.number !== null) {
         const yieldValue = pipCount(tile.number) * buildingMultiplier;
         if (isResource(tile.terrain)) production[tile.terrain] += yieldValue;
-        if (tile.terrain === "gold") {
-          for (const resource of RESOURCES) production[resource] += yieldValue / RESOURCES.length;
+        if (tile.terrain === "gold" || tile.terrain === "volcano") {
+          for (const resource of RESOURCES) production[resource] += (yieldValue * (tile.terrain === "volcano" ? 0.8 : 1)) / RESOURCES.length;
         }
         numberProduction.set(tile.number, (numberProduction.get(tile.number) ?? 0) + yieldValue);
       }
@@ -160,6 +161,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
     const tile = tiles.get(tileId)!;
     if (tile.terrain === "desert" || tile.terrain === "sea" || tile.terrain === "fog" || tile.number === null) return value;
     const engineWeight = tile.terrain === "gold" ? 2.5
+      : tile.terrain === "volcano" ? 1.85
       : tile.terrain === "ore" || tile.terrain === "grain" ? 1.34
       : tradeRatios[tile.terrain] === 2 ? 1.28 : 1;
     return value + pipCount(tile.number) * engineWeight;
@@ -1149,8 +1151,9 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       return blocking + bestStealValue;
     };
 
-    const bestLandTile = state.board.tiles.filter(tile => isLand(tile.terrain) && tile.id !== state.robberTileId)
-      .toSorted((first, second) => tileValue(second) - tileValue(first))[0]!;
+    const legalTiles = legalRobberOrPirateTiles(state).map(tileId => tiles.get(tileId)!);
+    const bestLandTile = legalTiles.filter(tile => tile.terrain !== "sea")
+      .toSorted((first, second) => tileValue(second) - tileValue(first))[0];
     const currentRobberTile = tiles.get(state.robberTileId);
     const unblockValue = (currentRobberTile?.vertexIds ?? []).reduce((total, vertexId) => {
       const building = vertices.get(vertexId)!.building;
@@ -1159,7 +1162,7 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
         ? 5.0 * pipCount(number) * (building.kind === "city" ? 2 : 1) : 0);
     }, 0);
 
-    const bestPirateTile = state.board.tiles.filter(tile => tile.terrain === "sea" && tile.id !== state.pirateTileId)
+    const bestPirateTile = legalTiles.filter(tile => tile.terrain === "sea")
       .map(tile => {
         const adjacentShips = state.board.edges.filter(edge => edge.kind === "ship" && edge.playerId &&
           edge.vertexIds.every(id => tile.vertexIds.includes(id)));
@@ -1175,6 +1178,10 @@ export function chooseComputerAction(state: GameState, playerId: string, now = D
       })
       .toSorted((first, second) => second.value - first.value)[0];
 
+    if (!bestLandTile) {
+      if (bestPirateTile) return { action: { type: "move-pirate", tileId: bestPirateTile.tile.id }, value: bestPirateTile.value };
+      return { action: { type: "move-pirate", tileId: null }, value: 0 };
+    }
     if (bestPirateTile && bestPirateTile.value > tileValue(bestLandTile) + unblockValue) {
       return { action: { type: "move-pirate", tileId: bestPirateTile.tile.id }, value: bestPirateTile.value };
     }

@@ -83,6 +83,7 @@ import {
   hasLegalSabotageTarget,
   legalCityVertices,
   legalRoadEdges,
+  legalRobberOrPirateTiles,
   legalSabotageEdges,
   legalSabotageVertices,
   legalShipEdges,
@@ -148,7 +149,10 @@ function phaseDescription(state: GameState, language: Language) {
 function customMapConfigFromParameters(parameters: URLSearchParams): CustomMapConfig | null {
   const sabotageParameter = parameters.get("sabotage");
   const candidate = {
-    ...Object.fromEntries(CUSTOM_MAP_COUNT_FIELDS.map(field => [field, Number(parameters.get(field))])),
+    ...Object.fromEntries(CUSTOM_MAP_COUNT_FIELDS.map(field => [
+      field,
+      parameters.has(field) ? Number(parameters.get(field)) : field === "volcano" ? 0 : NaN,
+    ])),
     fog: parameters.get("fog") === "1",
     ...(sabotageParameter !== null ? { sabotage: sabotageParameter !== "0" && sabotageParameter !== "false" } : {}),
   };
@@ -659,11 +663,8 @@ export function App() {
     game && viewer && isActive && !rollBusy
       ? game.phase.type === "setup-reveal"
         ? legalSetupRevealTiles(game, viewer.id)
-        : game.phase.type === "robber" ? game.board.tiles
-          .filter((tile) => tile.terrain !== "fog" && (tile.terrain === "sea"
-            ? isSeafarers(game.variant) && tile.id !== game.pirateTileId
-            : tile.id !== game.robberTileId))
-          .map((tile) => tile.id)
+        : game.phase.type === "robber"
+          ? legalRobberOrPirateTiles(game)
           : []
       : [];
   const selectedAction: GameAction | null =
@@ -1248,6 +1249,7 @@ export function App() {
                     pirateTileId={game.pirateTileId}
                     routeMode={buildMode === "ship" || buildMode === "move-ship" || buildMode === "road" ? buildMode : null}
                     sabotageMode={buildMode === "sabotage"}
+                    lastEruption={game.lastEruption ?? null}
                     pirateIndicator={isSeafarers(game.variant) ? {
                       onBoard: game.pirateTileId !== null,
                       enabled: isActive && !rollBusy && game.phase.type === "robber",

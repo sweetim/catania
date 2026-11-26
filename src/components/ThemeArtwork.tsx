@@ -290,6 +290,23 @@ export function TerrainArtwork({ terrain, theme, clipPathId }: {
         .exhaustive()}
     </g>;
   }
+  if (terrain === "volcano") {
+    return <g className="volcano-artwork" aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M-52-58H52V-6Q0-20-52-6Z" fill="#ffd9a8" fillOpacity=".28" stroke="none" />
+      <path d="M-52 28Q-32 14-14 25Q4 15 24 24Q38 15 52 26V58H-52Z" fill="#6d3a30" fillOpacity=".5" stroke="none" />
+      <path d="M-54 56C-34 42-21 12-14-24L-5-21 0-23 6-21 14-24C21 12 34 42 54 56Z" fill="#59352f" fillOpacity=".9" />
+      <path d="M0-22 6-21 14-24C21 12 34 42 54 56H5C10 28 6 4 0-22Z" fill="#361c18" fillOpacity=".4" stroke="none" />
+      <path d="M-12-18C-17 4-26 24-40 44M11-16C17 6 26 24 39 43" stroke={ink} strokeOpacity=".34" strokeWidth="1.2" />
+      <ellipse cx="0" cy="-24" rx="14.5" ry="4.8" fill="#ff7020" stroke={ink} />
+      <ellipse cx="0" cy="-24" rx="9" ry="2.5" fill="#ffe169" stroke="none" />
+      <path d="M-6-20C-11-9-11 1-18 12C-23 20-26 27-30 33M5-20C11-8 12 2 19 13C24 20 27 27 32 35M-1-19C-3-6 3 6-1 18C-2 24 1 28 0 33" stroke="#ff5e1a" strokeWidth="4" />
+      <path d="M-6-20C-11-9-11 1-18 12C-23 20-26 27-30 33M5-20C11-8 12 2 19 13C24 20 27 27 32 35M-1-19C-3-6 3 6-1 18C-2 24 1 28 0 33" stroke="#ffd859" strokeWidth="1.5" />
+      <path d="M-10-36q4-7 10-5t10-7m-22 2q3-6 8-6" stroke="#fff3e0" strokeOpacity=".65" strokeWidth="2.2" />
+      <circle cx="-18" cy="-35" r="2.2" fill="#ffd859" stroke="none" />
+      <circle cx="15" cy="-38" r="1.8" fill="#ff8f3a" stroke="none" />
+      <circle cx="8" cy="-45" r="1.4" fill="#ffe794" stroke="none" />
+    </g>;
+  }
   if (terrain === "gold") {
     return <g className="gold-field-artwork" aria-hidden="true" pointerEvents="none" clipPath={clipPath} fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M-52-24L8-58H30L-52-8Z" fill="#fff9cc" fillOpacity=".48" stroke="none" />

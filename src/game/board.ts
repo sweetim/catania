@@ -3,7 +3,7 @@ import { CUSTOM_MAP_COUNT_FIELDS, isCustomMapConfig, isFogBoard, isFogWorld, isS
 import type { Board, CustomMapConfig, Edge, FogDiscovery, GameVariant, Port, Resource, Terrain, Tile, Vertex } from "./types";
 
 export function isResource(terrain: Terrain): terrain is Resource {
-  return terrain !== "desert" && terrain !== "sea" && terrain !== "gold" && terrain !== "fog";
+  return terrain !== "desert" && terrain !== "sea" && terrain !== "gold" && terrain !== "fog" && terrain !== "volcano";
 }
 
 export function isLand(terrain: Terrain): boolean {
@@ -304,7 +304,7 @@ function mysteryWorldTerrainCounts(random: () => number): Record<FogDiscovery["t
   };
   const remaining = 42 - Object.values(resources).reduce((total, count) => total + count, 0);
   const desert = 1 + randomInteger(remaining - 13, random);
-  return { ...resources, desert, sea: remaining - desert };
+  return { ...resources, volcano: 0, desert, sea: remaining - desert };
 }
 
 export function createBoard(random: () => number = secureRandom, variant: GameVariant = "original", customMapConfig?: CustomMapConfig): Board {
@@ -312,11 +312,17 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     throw new GameError("Set up the Custom World map before starting the game.");
   }
   const customConfig = variant === "custom-world" ? customMapConfig as CustomMapConfig : undefined;
-  const terrain = shuffle<Terrain>([
-    "wood", "wood", "wood", "wood", "brick", "brick", "brick",
-    "wool", "wool", "wool", "wool", "grain", "grain", "grain", "grain",
-    "ore", "ore", "ore", "desert",
-  ], random);
+  const terrain = shuffle<Terrain>(variant === "volcano-islands"
+    ? [
+        "wood", "wood", "wood", "brick", "brick", "brick",
+        "wool", "wool", "wool", "wool", "grain", "grain", "grain", "grain",
+        "ore", "ore", "ore", "desert", "volcano",
+      ]
+    : [
+        "wood", "wood", "wood", "wood", "brick", "brick", "brick",
+        "wool", "wool", "wool", "wool", "grain", "grain", "grain", "grain",
+        "ore", "ore", "ore", "desert",
+      ], random);
   const tiles: Tile[] = [];
   const vertices: Vertex[] = [];
   const edges: Edge[] = [];
@@ -373,7 +379,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       const discoveryNumbers = shuffle([2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12, 6, 6, 8, 8,
         2, 3, 4, 5, 6, 8, 9, 10, 11, 12], random);
       const terrainCounts = variant === "mystery-world" ? mysteryWorldTerrainCounts(random)
-        : { wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, desert: 1, sea: 13 };
+        : { wood: 6, brick: 4, wool: 6, grain: 6, ore: 4, gold: 2, volcano: 0, desert: 1, sea: 13 };
       fogDiscoveriesByTileId = Object.fromEntries(shuffle<FogDiscovery["terrain"]>(
         (Object.keys(terrainCounts) as FogDiscovery["terrain"][])
           .flatMap(terrain => Array<FogDiscovery["terrain"]>(terrainCounts[terrain]).fill(terrain)),
@@ -407,6 +413,24 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       for (const [column, row] of customIslandLayout(landCount, random)) {
         positions.push({ column, row, islandId: "main" });
         terrain.push(landTerrain.shift()!);
+      }
+    } else if (variant === "volcano-islands") {
+      const islands = [
+        [[1, -4], [2, -4]],
+        [[4, -4], [4, -3], [5, -3], [4, -2], [4, -1]],
+        [[3, 1], [2, 2]],
+      ];
+      const regularIslandTerrain = shuffle<Terrain>(["ore", "wool", "brick", "ore", "wood", "brick", "grain"], random);
+      const islandTerrains: Terrain[][] = [
+        [regularIslandTerrain.shift()!, regularIslandTerrain.shift()!],
+        shuffle<Terrain>(["volcano", regularIslandTerrain.shift()!, regularIslandTerrain.shift()!, regularIslandTerrain.shift()!, regularIslandTerrain.shift()!], random),
+        shuffle<Terrain>(["volcano", regularIslandTerrain.shift()!], random),
+      ];
+      for (const [index, island] of islands.entries()) {
+        for (const [column, row] of island) {
+          positions.push({ column: column!, row: row!, islandId: `island-${index + 1}` });
+          terrain.push(islandTerrains[index]!.shift()!);
+        }
       }
     } else {
       const islands = [
@@ -470,9 +494,11 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
       tiles.push(tile);
   }
 
-  const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold"), random);
+  const usesSeafarersLayout = variant === "seafarers" || variant === "volcano-islands";
+  const producingTiles = shuffle(tiles.filter(tile => isResource(tile.terrain) || tile.terrain === "gold" || tile.terrain === "volcano"), random);
   // Backtracking terminates even with a constant injected random source, unlike reshuffle-until-valid.
-  let redTileTarget = variant === "seafarers" ? 6
+  let redTileTarget = variant === "volcano-islands" ? 4
+    : usesSeafarersLayout ? 6
     : variant === "four-islands" ? Math.round(producingTiles.length * 6 / 23)
     : variant === "custom-world" ? Math.min(4, producingTiles.length)
     : isFogWorld(variant) ? 0 : 4;
@@ -481,6 +507,7 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     if (redTiles.length === redTileTarget) return true;
     for (let index = start; index < producingTiles.length; index++) {
       const candidate = producingTiles[index]!;
+      if (variant === "volcano-islands" && (candidate.islandId !== "main" || candidate.terrain === "volcano")) continue;
       if (variant === "seafarers" && redTiles.filter(tile => (tile.islandId === "main") === (candidate.islandId === "main")).length >=
         (candidate.islandId === "main" ? 4 : 2)) continue;
       if (redTiles.some(tile => tile.vertexIds.filter(id => candidate.vertexIds.includes(id)).length === 2)) continue;
@@ -502,13 +529,27 @@ export function createBoard(random: () => number = secureRandom, variant: GameVa
     ? fourIslandsOtherNumbers(producingTiles.length - redTileTarget)
     : variant === "custom-world" ? customOtherNumbers(producingTiles.length - redTileTarget)
     : [2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12], random);
-  const islandRedNumbers = variant === "seafarers" ? shuffle([6, 8], random) : [];
-  const islandOtherNumbers = variant === "seafarers" ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
-  for (const tile of producingTiles) {
-    const remote = variant === "seafarers" && tile.islandId !== "main";
-    tile.number = redTiles.includes(tile)
-      ? (remote ? islandRedNumbers : redNumbers).pop()!
-      : (remote ? islandOtherNumbers : otherNumbers).pop()!;
+  const islandRedNumbers = usesSeafarersLayout ? shuffle([6, 8], random) : [];
+  const islandOtherNumbers = usesSeafarersLayout ? shuffle([2, 3, 4, 5, 9, 10, 11], random) : [];
+  if (variant === "volcano-islands") {
+    const mainVolcanoNumber = randomInteger(2, random) === 0 ? 5 : 9;
+    otherNumbers.splice(otherNumbers.indexOf(mainVolcanoNumber), 1);
+    for (const tile of producingTiles) {
+      if (tile.terrain === "volcano") {
+        tile.number = tile.islandId === "main" ? mainVolcanoNumber : islandRedNumbers.pop()!;
+      } else if (tile.islandId !== "main") {
+        tile.number = islandOtherNumbers.pop()!;
+      } else {
+        tile.number = redTiles.includes(tile) ? redNumbers.pop()! : otherNumbers.pop()!;
+      }
+    }
+  } else {
+    for (const tile of producingTiles) {
+      const remote = usesSeafarersLayout && tile.islandId !== "main";
+      tile.number = redTiles.includes(tile)
+        ? (remote ? islandRedNumbers : redNumbers).pop()!
+        : (remote ? islandOtherNumbers : otherNumbers).pop()!;
+    }
   }
 
   const boundary = edges.filter(edge => isSeafarers(variant)
