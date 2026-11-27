@@ -1,10 +1,13 @@
+import { isNativeMobileApp } from "./nativeBridge";
+
 /**
  * PWA setup: head links for the manifest and icons, plus service-worker registration
  * so the installed app launches offline. The links are injected here instead of
  * index.html because Bun's bundler cannot resolve the public/ URLs from src/.
- * Registration is skipped in development so cached assets never shadow hot reloading.
+ * Registration is skipped in development and inside the native mobile WebView.
  */
 export function setupPwa() {
+  if (isNativeMobileApp()) return;
   installHeadLinks();
   registerServiceWorker();
 }

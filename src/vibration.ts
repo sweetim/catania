@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { triggerNativeHaptic } from "./nativeBridge";
 
 const TURN_START_VIBRATION: number[] = [80, 60, 80];
 const INCOMING_TRADE_VIBRATION: number[] = [60];
@@ -9,8 +10,10 @@ export function useVibrateOnYourTurn(active: boolean, enabled: boolean) {
   useEffect(() => {
     const turnArrived = active && !wasActive.current;
     wasActive.current = active;
-    if (turnArrived && enabled && typeof navigator.vibrate === "function") {
-      navigator.vibrate(TURN_START_VIBRATION);
+    if (turnArrived && enabled) {
+      if (!triggerNativeHaptic("turnStart") && typeof navigator.vibrate === "function") {
+        navigator.vibrate(TURN_START_VIBRATION);
+      }
     }
   }, [active, enabled]);
 }
@@ -22,8 +25,10 @@ export function useVibrateOnIncomingTrade(tradeIdentity: string | null, incoming
     const nextIdentity = incoming ? tradeIdentity : null;
     const arrived = nextIdentity !== null && nextIdentity !== previousIdentity.current;
     previousIdentity.current = nextIdentity;
-    if (arrived && enabled && typeof navigator.vibrate === "function") {
-      navigator.vibrate(INCOMING_TRADE_VIBRATION);
+    if (arrived && enabled) {
+      if (!triggerNativeHaptic("incomingTrade") && typeof navigator.vibrate === "function") {
+        navigator.vibrate(INCOMING_TRADE_VIBRATION);
+      }
     }
   }, [tradeIdentity, incoming, enabled]);
 }

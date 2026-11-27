@@ -4,6 +4,7 @@ import { Dialog } from "./GameUi";
 import { useTranslation } from "../localization";
 import { appTranslations } from "../translations/app";
 import { parseInvitationUrl } from "../multiplayer/invitation";
+import { isNativeMobileApp, NATIVE_SCAN_CLOSED_EVENT, requestNativeQrScan } from "../nativeBridge";
 
 type ScanNotice = "scanning" | "joining" | "invalid" | "foreign";
 type CameraFailure = "permission" | "unavailable" | null;
@@ -14,8 +15,20 @@ export function ScanToJoin({ onClose }: { onClose: () => void }) {
   const videoReference = useRef<HTMLVideoElement>(null);
   const [cameraFailure, setCameraFailure] = useState<CameraFailure>(null);
   const [notice, setNotice] = useState<ScanNotice>("scanning");
+  const nativeMobileApp = isNativeMobileApp();
 
   useEffect(() => {
+    if (!nativeMobileApp) return;
+    const handleNativeClose = () => onClose();
+    window.addEventListener(NATIVE_SCAN_CLOSED_EVENT, handleNativeClose);
+    requestNativeQrScan();
+    return () => {
+      window.removeEventListener(NATIVE_SCAN_CLOSED_EVENT, handleNativeClose);
+    };
+  }, [nativeMobileApp, onClose]);
+
+  useEffect(() => {
+    if (nativeMobileApp) return;
     const video = videoReference.current;
     if (!video) return;
     let stream: MediaStream | null = null;
@@ -78,7 +91,9 @@ export function ScanToJoin({ onClose }: { onClose: () => void }) {
       stream?.getTracks().forEach(track => track.stop());
       video.srcObject = null;
     };
-  }, []);
+  }, [nativeMobileApp]);
+
+  if (nativeMobileApp) return null;
 
   return (
     <Dialog title={translateText("Scan to join a board")} onClose={onClose}>

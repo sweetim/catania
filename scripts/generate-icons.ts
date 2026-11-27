@@ -20,6 +20,9 @@ const targets = [
   { file: "public/icons/icon-maskable-192.png", size: 192, markHeight: 0.56 },
   { file: "public/icons/icon-maskable-512.png", size: 512, markHeight: 0.56 },
   { file: "public/apple-touch-icon.png", size: 180, markHeight: 0.66 },
+  { file: "mobile/assets/icon.png", size: 1024, markHeight: 0.66 },
+  { file: "mobile/assets/adaptive-icon.png", size: 1024, markHeight: 0.52 },
+  { file: "mobile/assets/splash-icon.png", size: 1024, markHeight: 0.56 },
 ];
 
 const browser = await chromium.launch();

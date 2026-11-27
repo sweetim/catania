@@ -100,6 +100,30 @@ build command and output directory; no application backend or secrets are needed
 For multiplayer, open the deployed HTTPS URL before generating invitations.
 See the [multiplayer guide](docs/multiplayer.md) for setup and network requirements.
 
+## Mobile Apps (iOS & Android via EAS)
+
+The [`mobile/`](mobile/) directory contains an Expo app (`co.timx.catania`) that
+embeds an offline bundle of the Catania web app inside a native WebView with native
+haptics (`expo-haptics`), native camera QR scanning (`expo-camera`), and deep linking
+(`catania://` and `https://catania.timx.co/`). The website build and deployment are
+unchanged.
+
+To refresh the embedded offline bundle from `src/` and start an EAS cloud build:
+
+```bash
+bun run mobile:bundle
+cd mobile
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+eas build --platform android --profile production
+```
+
+Convenience scripts are also available from the repository root:
+`bun run mobile:build:ios`, `bun run mobile:build:ios:simulator`,
+`bun run mobile:submit:ios`, and `bun run mobile:build:android`. Run
+`bun run scripts/generate-icons.ts` to regenerate both PWA and mobile app icons
+(`mobile/assets/`).
+
 ## Verify
 
 ```bash

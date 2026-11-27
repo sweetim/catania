@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Catania",
+    "slug": "catania",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "catania",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f6f3eb"
+    },
+    "ios": {
+      "bundleIdentifier": "co.timx.catania",
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:catania.timx.co"
+      ],
+      "infoPlist": {
+        "NSCameraUsageDescription": "Catania uses the camera to scan multiplayer invitation QR codes.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "co.timx.catania",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f6f3eb"
+      },
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "catania.timx.co",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Catania uses the camera to scan multiplayer invitation QR codes."
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "extra": {
+      "webOrigin": "https://catania.timx.co",
+      "eas": {
+        "projectId": "517871c0-388f-4c10-b7ac-60d7da641f24"
+      }
+    },
+    "owner": "timx88"
+  }
+}
