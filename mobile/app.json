@@ -30,8 +30,9 @@
         "backgroundColor": "#f6f3eb"
       },
       "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
@@ -56,7 +57,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Catania uses the camera to scan multiplayer invitation QR codes."
+          "cameraPermission": "Catania uses the camera to scan multiplayer invitation QR codes.",
+          "recordAudioAndroid": false
         }
       ],
       "expo-status-bar"
