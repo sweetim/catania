@@ -56,3 +56,17 @@ test("registers the service worker and launches offline", async ({ page, context
   await page.reload();
   await expect(page.getByRole("heading", { name: "Your player profile" }), "cached shell renders offline").toBeVisible();
 });
+
+test("serves static privacy policy and support pages in English and Japanese", async ({ page }) => {
+  const privacyResponse = await page.goto("/privacy.html");
+  expect(privacyResponse?.status()).toBe(200);
+  expect(privacyResponse?.headers()["content-type"]).toContain("text/html");
+  await expect(page.getByRole("heading", { name: "Privacy Policy (English)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "プライバシーポリシー（日本語）" })).toBeVisible();
+
+  const supportResponse = await page.goto("/support.html");
+  expect(supportResponse?.status()).toBe(200);
+  expect(supportResponse?.headers()["content-type"]).toContain("text/html");
+  await expect(page.getByRole("heading", { name: "Support & FAQ (English)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "サポート・よくある質問（日本語）" })).toBeVisible();
+});

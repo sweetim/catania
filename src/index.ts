@@ -24,6 +24,16 @@ const server = serve({
 
     "/apple-touch-icon.png": () => new Response(publicFile("apple-touch-icon.png")),
 
+    "/privacy.html": () =>
+      new Response(publicFile("privacy.html"), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+
+    "/support.html": () =>
+      new Response(publicFile("support.html"), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }),
+
     "/icons/*": (request) => {
       const name = decodeURIComponent(new URL(request.url).pathname.replace(/^\/icons\//, ""));
       if (!name || name.includes("/") || name.includes("..")) return new Response(null, { status: 404 });

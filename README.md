@@ -122,7 +122,9 @@ Convenience scripts are also available from the repository root:
 `bun run mobile:build:ios`, `bun run mobile:build:ios:simulator`,
 `bun run mobile:submit:ios`, and `bun run mobile:build:android`. Run
 `bun run scripts/generate-icons.ts` to regenerate both PWA and mobile app icons
-(`mobile/assets/`).
+(`mobile/assets/`). Static App Store policy pages live at
+[`public/privacy.html`](public/privacy.html) and
+[`public/support.html`](public/support.html).
 
 ## Verify
 
