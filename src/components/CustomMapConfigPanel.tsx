@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, type ReactNode } from "react";
 import { match } from "ts-pattern";
 import {
   CUSTOM_LAND_MINIMUM,
@@ -12,16 +12,26 @@ import {
 } from "../game/types";
 import { resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
-import { useBoardTheme } from "../themes";
+import { useBoardTheme, type BoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
 import { customMapTranslations } from "../translations/customMap";
-import { PieceIcon, ResourceIcon } from "./GameUi";
-import { ChevronDownIcon, DesertIcon, FogIcon, GoldIcon, MinusIcon, PlusIcon, SeaIcon } from "./Icons";
+import { Dialog, PieceIcon, ResourceIcon } from "./GameUi";
+import { DesertIcon, FogIcon, GoldIcon, MinusIcon, PlusIcon, SeaIcon } from "./Icons";
 
 const TERRAIN_LABELS: Record<CustomMapCountField, "wood" | "brick" | "wool" | "grain" | "ore" | "Gold" | "Volcano" | "Desert" | "Sea"> = {
   wood: "wood", brick: "brick", wool: "wool", grain: "grain", ore: "ore",
   gold: "Gold", volcano: "Volcano", desert: "Desert", sea: "Sea",
 };
+
+function terrainBarColor(theme: BoardTheme, field: CustomMapCountField): string {
+  return match(field)
+    .with("wood", "brick", "wool", "grain", "ore", resource => theme.resources[resource])
+    .with("gold", () => theme.terrain.gold.fill)
+    .with("volcano", () => theme.terrain.volcano.fill)
+    .with("desert", () => theme.terrain.desert.fill)
+    .with("sea", () => theme.sea[2])
+    .exhaustive();
+}
 
 function TerrainFieldIcon({ field }: { field: CustomMapCountField }) {
   const theme = useBoardTheme();
@@ -29,40 +39,103 @@ function TerrainFieldIcon({ field }: { field: CustomMapCountField }) {
     .with("wood", "brick", "wool", "grain", "ore", resource => (
       <span
         aria-hidden="true"
-        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-white"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-white shadow-xs"
         style={{ backgroundColor: theme.resources[resource] }}
       >
-        <ResourceIcon resource={resource} compact className="h-3 w-3" />
+        <ResourceIcon resource={resource} compact className="h-3.5 w-3.5" />
       </span>
     ))
-    .with("gold", () => <GoldIcon className="h-3.5 w-3.5 shrink-0 text-[#b58a2d]" />)
-    .with("volcano", () => (
-      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-[#b8563c]" aria-hidden="true" fill="none">
-        <path d="M2 14 6 5h4l4 9H2Z" fill="currentColor" />
-        <ellipse cx="8" cy="5" rx="2.4" ry="1" fill="#ff7426" />
-        <path d="M7.2 5.8 6.5 9.5M8.8 5.8 9.6 10" stroke="#ffd859" strokeWidth="1.2" strokeLinecap="round" />
-      </svg>
+    .with("gold", () => (
+      <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#b58a2d]/15 text-[#9a711e]">
+        <GoldIcon className="h-3.5 w-3.5 shrink-0" />
+      </span>
     ))
-    .with("desert", () => <DesertIcon className="h-3.5 w-3.5 shrink-0 text-[#9c6f33]" />)
-    .with("sea", () => <SeaIcon className="h-3.5 w-3.5 shrink-0 text-[#477c91]" />)
+    .with("volcano", () => (
+      <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#b8563c]/15 text-[#b8563c]">
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true" fill="none">
+          <path d="M2 14 6 5h4l4 9H2Z" fill="currentColor" />
+          <ellipse cx="8" cy="5" rx="2.4" ry="1" fill="#ff7426" />
+          <path d="M7.2 5.8 6.5 9.5M8.8 5.8 9.6 10" stroke="#ffd859" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      </span>
+    ))
+    .with("desert", () => (
+      <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#9c6f33]/15 text-[#8a6128]">
+        <DesertIcon className="h-3.5 w-3.5 shrink-0" />
+      </span>
+    ))
+    .with("sea", () => (
+      <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#477c91]/15 text-[#3b6d80]">
+        <SeaIcon className="h-3.5 w-3.5 shrink-0" />
+      </span>
+    ))
     .exhaustive();
 }
 
-export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
+function CustomMapOptionCard({
+  icon,
+  label,
+  description,
+  checked,
+  disabled,
+  onChange,
+  accentClassName,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+  accentClassName: string;
+}) {
+  const descriptionId = useId();
+  return (
+    <div className="rounded-xl border border-line bg-white/55 p-2.5">
+      <label className="flex min-h-7 cursor-pointer items-center justify-between gap-3 text-sm font-semibold text-ink">
+        <span className="flex min-w-0 items-center gap-2">
+          <span aria-hidden="true" className="shrink-0">{icon}</span>
+          <span className="truncate">{label}</span>
+        </span>
+        <span className="relative inline-flex h-6 w-11 shrink-0">
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={disabled}
+            onChange={event => onChange(event.currentTarget.checked)}
+            aria-describedby={descriptionId}
+            className="peer absolute inset-0 z-10 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          />
+          <span
+            aria-hidden="true"
+            className={`absolute inset-0 rounded-full bg-ink/20 transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-forest peer-disabled:opacity-50 ${accentClassName}`}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"
+          />
+        </span>
+      </label>
+      <p id={descriptionId} className="mt-1.5 text-xs leading-4 text-muted">{description}</p>
+    </div>
+  );
+}
+
+export function CustomMapConfigDialog({ value, onChange, onClose, disabled = false }: {
   value: CustomMapConfig;
   onChange: (config: CustomMapConfig) => void;
+  onClose: () => void;
   disabled?: boolean;
 }) {
   const { language } = useLanguage();
+  const theme = useBoardTheme();
   const translateText = useTranslation(customMapTranslations);
   const translateBoardText = useTranslation(boardTranslations);
   const assigned = CUSTOM_MAP_COUNT_FIELDS.reduce((total, field) => total + value[field], 0);
   const remaining = CUSTOM_MAP_TILES - assigned;
   const land = customMapConfigLandCount(value);
+  const valid = isCustomMapConfig(value);
   const sabotageEnabled = isCustomSabotageEnabled(value);
-  const [expanded, setExpanded] = useState(true);
-  const contentId = useId();
-  const statusClassName = `text-xs font-semibold ${isCustomMapConfig(value) ? "text-forest" : "text-clay"}`;
   const statusText = remaining > 0
     ? translateText(remaining === 1 ? "{count} tile left to assign." : "{count} tiles left to assign.", { count: remaining })
     : land < CUSTOM_LAND_MINIMUM
@@ -83,80 +156,108 @@ export function CustomMapConfigPanel({ value, onChange, disabled = false }: {
     onChange(next);
   }
 
-  return (
-    <section aria-label={translateText("Customize the map")} className="rounded-xl border border-line bg-paper/70 p-3">
-      <button
-        type="button"
-        className={`flex min-h-9 w-full cursor-pointer items-center gap-2 text-left text-[11px] font-semibold text-muted ${expanded ? "mb-2" : ""}`}
-        aria-expanded={expanded}
-        aria-controls={contentId}
-        onClick={() => setExpanded(!expanded)}
+  const summary = (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className={`text-xs font-semibold ${valid ? "text-[#2f6653]" : "text-clay"}`} role="status">
+          {statusText}
+        </p>
+        <span
+          aria-hidden="true"
+          className={`rounded-full border px-2 py-0.5 text-[11px] font-bold tabular-nums ${valid ? "border-[#2f6653]/25 bg-moss text-ink" : "border-clay/35 bg-clay/10 text-clay"}`}
+        >
+          {assigned} / {CUSTOM_MAP_TILES}
+        </span>
+      </div>
+      <div
+        aria-hidden="true"
+        className={`flex h-2 w-full overflow-hidden rounded-full ${valid ? "bg-ink/10" : "bg-clay/15 ring-1 ring-clay/35"}`}
       >
-        <span className="min-w-0 flex-1 truncate">{translateText("Customize the map")}</span>
-        {!expanded && <span className={`${statusClassName} truncate`} role="status">{statusText}</span>}
-        <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-      <div id={contentId} hidden={!expanded}>
-      <div className="grid grid-cols-1 gap-1.5 min-[360px]:grid-cols-2 sm:grid-cols-4">
+        {CUSTOM_MAP_COUNT_FIELDS.map(field => value[field] > 0 && (
+          <div
+            key={field}
+            data-terrain-segment={field}
+            title={`${terrainName(field)}: ${value[field]}`}
+            className="h-full border-r border-paper/70 transition-[width] duration-150 last:border-r-0"
+            style={{
+              width: `${(value[field] / CUSTOM_MAP_TILES) * 100}%`,
+              backgroundColor: terrainBarColor(theme, field),
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <Dialog
+      title={translateText("Customize the map")}
+      eyebrow={<p className="eyebrow">{translateText("Custom World")}</p>}
+      summary={summary}
+      wide
+      onClose={onClose}
+    >
+      <h3 className="eyebrow mb-1.5">{translateText("Tiles")}</h3>
+      <div className="grid grid-cols-1 gap-1.5 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-2">
         {CUSTOM_MAP_COUNT_FIELDS.map(field => (
-          <div key={field} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white/40 px-2 py-1.5 min-[360px]:block" role="group" aria-label={terrainName(field)}>
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <div
+            key={field}
+            className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white/55 px-2.5 py-1.5 min-[360px]:block"
+            role="group"
+            aria-label={terrainName(field)}
+          >
+            <p className="flex min-w-0 items-center gap-2 text-xs font-semibold text-ink">
               <TerrainFieldIcon field={field} />
               <span className="truncate">{terrainName(field)}</span>
             </p>
-            <div className="flex items-center justify-between gap-1 min-[360px]:mt-1">
+            <div className="flex items-center justify-between gap-1.5 min-[360px]:mt-1.5">
               <button
                 type="button"
                 aria-label={translateText("Decrease {terrain} tiles", { terrain: terrainName(field) })}
                 disabled={disabled || value[field] === 0}
                 onClick={() => adjust(field, -1)}
-                className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-md border border-line bg-paper text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
+                className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-line bg-paper text-ink transition-colors hover:bg-moss disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
               ><MinusIcon className="h-3.5 w-3.5" /></button>
-              <span className="min-w-6 text-center text-sm font-bold tabular-nums" aria-label={terrainName(field)}>{value[field]}</span>
+              <span className="min-w-7 text-center text-base font-bold tabular-nums text-ink" aria-label={terrainName(field)}>{value[field]}</span>
               <button
                 type="button"
                 aria-label={translateText("Increase {terrain} tiles", { terrain: terrainName(field) })}
                 disabled={disabled || remaining === 0}
                 onClick={() => adjust(field, 1)}
-                className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-md border border-line bg-paper text-ink disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
+                className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-line bg-paper text-ink transition-colors hover:bg-moss disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:w-8"
               ><PlusIcon className="h-3.5 w-3.5" /></button>
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex min-h-11 cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink">
-            <input
-              type="checkbox"
-              checked={value.fog}
-              disabled={disabled}
-              onChange={event => onChange({ ...value, fog: event.target.checked })}
-              className="h-4 w-4 accent-[#477c91]"
-            />
-            <FogIcon className="h-3.5 w-3.5 shrink-0 text-[#477c91]" />
-            {translateBoardText("Fog")}
-          </label>
-          <label className="flex min-h-11 cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink">
-            <input
-              type="checkbox"
-              checked={sabotageEnabled}
-              disabled={disabled}
-              onChange={event => onChange({ ...value, sabotage: event.target.checked })}
-              className="h-4 w-4 accent-[#8a2f22]"
-            />
-            <span aria-hidden="true" className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[#8a2f22] [&>svg]:h-4 [&>svg]:w-4">
-              <PieceIcon piece="sabotage" />
-            </span>
-            {translateText("Sabotage")}
-          </label>
-        </div>
-        <p className={statusClassName} role="status">{statusText}</p>
+
+      <h3 className="eyebrow mb-1.5 mt-3">{translateText("Options")}</h3>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <CustomMapOptionCard
+          icon={<FogIcon className="h-4 w-4 text-[#477c91]" />}
+          label={translateBoardText("Fog")}
+          description={translateText("Fog hides the whole map until discovered.")}
+          checked={value.fog}
+          disabled={disabled}
+          onChange={fog => onChange({ ...value, fog })}
+          accentClassName="peer-checked:bg-[#477c91]"
+        />
+        <CustomMapOptionCard
+          icon={<span className="inline-flex h-4 w-4 items-center justify-center text-[#8a2f22] [&>svg]:h-4 [&>svg]:w-4"><PieceIcon piece="sabotage" /></span>}
+          label={translateText("Sabotage")}
+          description={translateText("Sabotage spends 1 of each resource to destroy 1 opponent road or ship, destroy a settlement, or reduce a city.")}
+          checked={sabotageEnabled}
+          disabled={disabled}
+          onChange={sabotage => onChange({ ...value, sabotage })}
+          accentClassName="peer-checked:bg-[#8a2f22]"
+        />
       </div>
-      <p className="mt-1 text-[10px] leading-4 text-muted">
-        {translateText("Fog hides the whole map until discovered.")} {translateText("Sabotage spends 1 of each resource to destroy 1 opponent road or ship, destroy a settlement, or reduce a city.")}
-      </p>
+
+      <div className="mt-3 flex justify-end border-t border-line pt-3">
+        <button type="button" className="button-primary" onClick={onClose}>
+          {translateText("Done")}
+        </button>
       </div>
-    </section>
+    </Dialog>
   );
 }

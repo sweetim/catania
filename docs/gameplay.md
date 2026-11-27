@@ -12,8 +12,8 @@ side on desktop and wide landscape phones. On narrower screens, switch between
 **Setup** and **Island**; return to **Setup** to start the game. **Play across
 devices** and the **Scan to join a board** QR action remain available in either
 view. Portrait phones fit the local setup without scrolling using compact icons;
-short landscape windows or the **Custom World** terrain editor scroll inside
-the setup card while its start button stays visible in the card footer.
+short landscape windows scroll inside the setup card while its start button stays
+visible in the card footer.
 
 The **On this device** card contains the local player settings and **Let's settle
 in**, beneath the theme selector.
@@ -247,12 +247,14 @@ turn.
 
 ### Custom World
 
-Custom World hands the map design to the players. Selecting it adds a
-**Customize the map** panel to setup (and to the multiplayer host lobby) with a
-stepper for every terrain type — wood, brick, wool, grain, ore, gold, desert,
-and sea — plus a fog toggle and a **Sabotage** toggle (default on).
-Assign exactly 42 tiles with at least 8 land hexes; the panel tracks the tiles
-left, and the game cannot start until the mix is complete.
+Custom World hands the map design to the players. Selecting it opens the
+**Customize the map** dialog (and adds a **Customize** trigger beside **Game
+version** in local setup and in the board toolbar for the island preview and
+multiplayer host lobby) with a stepper for every terrain type — wood, brick,
+wool, grain, ore, gold, volcano, desert, and sea — plus a fog toggle and a
+**Sabotage** toggle (default on). Assign exactly 42 tiles with at least 8 land
+hexes; the dialog header tracks the tiles left, and the game cannot start until
+the mix is complete.
 
 - **Fog off:** the map grows one connected island from the configured land
   hexes, ringed by the configured sea. All land is open for starting

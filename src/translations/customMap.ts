@@ -1,7 +1,12 @@
 import type { TranslationCatalog } from "../i18n";
 
 export const customMapTranslations = {
+  "Custom World": "カスタム世界",
+  "Customize": "カスタマイズ",
   "Customize the map": "マップをカスタマイズ",
+  "Tiles": "タイル",
+  "Options": "オプション",
+  "Done": "完了",
   "Tiles left to assign": "未割り当てのタイル",
   "{count} tile left to assign.": "あと{count}枚のタイルを割り振ってください。",
   "{count} tiles left to assign.": "あと{count}枚のタイルを割り振ってください。",

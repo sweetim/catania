@@ -390,41 +390,63 @@ function produce(state: GameState, number: number, random: () => number): Record
   for (const tile of state.board.tiles) {
     if (tile.id === state.robberTileId || tile.number !== number) continue;
     if (tile.terrain === "volcano") {
-      const struckVertexId = tile.vertexIds[randomInteger(6, random)]!;
-      const struckVertex = state.board.vertices.find(vertex => vertex.id === struckVertexId)!;
-      let affectedPlayerId: string | null = null;
-      let effect: "none" | "downgraded" | "destroyed" | "spared" = "none";
-      if (struckVertex.building) {
-        affectedPlayerId = struckVertex.building.playerId;
-        const victim = playerFor(state, affectedPlayerId);
-        if (struckVertex.building.kind === "city") {
-          struckVertex.building = { playerId: affectedPlayerId, kind: "settlement" };
-          effect = "downgraded";
-          state.log.push({ key: "Volcano eruption reduces {victim}'s city to a settlement.", parameters: { victim: victim.name } });
-        } else {
-          const totalBuildings = pieceCount(state, affectedPlayerId, "settlement") + pieceCount(state, affectedPlayerId, "city");
-          if (totalBuildings >= 2) {
-            struckVertex.building = null;
-            effect = "destroyed";
-            state.log.push({ key: "Volcano eruption destroys {victim}'s settlement.", parameters: { victim: victim.name } });
+      const maximumStrikes = Math.max(1, Math.floor(tile.vertexIds.length / 2));
+      const strikeCount = 1 + randomInteger(maximumStrikes, random);
+      const remainingVertexIds = [...tile.vertexIds];
+      const struckVertexIds: string[] = [];
+      for (let index = 0; index < strikeCount; index++) {
+        const chosenIndex = randomInteger(remainingVertexIds.length, random);
+        struckVertexIds.push(remainingVertexIds.splice(chosenIndex, 1)[0]!);
+      }
+      const struckVertexSet = new Set(struckVertexIds);
+      const strikes: NonNullable<GameState["lastEruption"]>["strikes"] = [];
+      const destroyedRoads: NonNullable<GameState["lastEruption"]>["destroyedRoads"] = [];
+      for (const struckVertexId of struckVertexIds) {
+        const struckVertex = state.board.vertices.find(vertex => vertex.id === struckVertexId)!;
+        let affectedPlayerId: string | null = null;
+        let effect: "none" | "downgraded" | "destroyed" | "spared" = "none";
+        if (struckVertex.building) {
+          affectedPlayerId = struckVertex.building.playerId;
+          const victim = playerFor(state, affectedPlayerId);
+          if (struckVertex.building.kind === "city") {
+            struckVertex.building = { playerId: affectedPlayerId, kind: "settlement" };
+            effect = "downgraded";
+            state.log.push({ key: "Volcano eruption reduces {victim}'s city to a settlement.", parameters: { victim: victim.name } });
           } else {
-            effect = "spared";
-            state.log.push({ key: "Volcano eruption spares {victim}'s last settlement.", parameters: { victim: victim.name } });
+            const totalBuildings = pieceCount(state, affectedPlayerId, "settlement") + pieceCount(state, affectedPlayerId, "city");
+            if (totalBuildings >= 2) {
+              struckVertex.building = null;
+              effect = "destroyed";
+              state.log.push({ key: "Volcano eruption destroys {victim}'s settlement.", parameters: { victim: victim.name } });
+            } else {
+              effect = "spared";
+              state.log.push({ key: "Volcano eruption spares {victim}'s last settlement.", parameters: { victim: victim.name } });
+            }
           }
         }
-      } else {
+        strikes.push({ vertexId: struckVertexId, affectedPlayerId, effect });
+        for (const edgeId of struckVertex.edgeIds) {
+          const edge = state.board.edges.find(candidate => candidate.id === edgeId);
+          if (!edge || edge.playerId === null || edge.kind === "ship") continue;
+          const victim = playerFor(state, edge.playerId);
+          destroyedRoads.push({ edgeId: edge.id, playerId: edge.playerId });
+          edge.playerId = null;
+          delete edge.kind;
+          state.log.push({ key: "Volcano eruption destroys {victim}'s road.", parameters: { victim: victim.name } });
+        }
+      }
+      if (strikes.every(strike => strike.effect === "none") && destroyedRoads.length === 0) {
         state.log.push({ key: "A volcano erupts harmlessly." });
       }
       state.lastEruption = {
         id: (state.lastEruption?.id ?? 0) + 1,
         tileId: tile.id,
-        vertexId: struckVertexId,
         turnNumber: state.turnNumber,
-        affectedPlayerId,
-        effect,
+        strikes,
+        destroyedRoads,
       };
       for (const vertexId of tile.vertexIds) {
-        if (vertexId === struckVertexId) continue;
+        if (struckVertexSet.has(vertexId)) continue;
         const building = state.board.vertices.find(vertex => vertex.id === vertexId)!.building;
         if (building) {
           gold[building.playerId] = (gold[building.playerId] ?? 0) + (building.kind === "city" ? 2 : 1);

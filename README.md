@@ -26,8 +26,9 @@ assets are local.
   Seafarers scenarios include ships and movement, the pirate, and computer opponents.
   Four Islands rewards settling beyond your starting islands; Fog Islands adds hidden
   terrain and discovery resources; the fog worlds hide the entire map under fog;
-  Volcano Islands adds erupting volcanoes (off-limits to the robber) that strike a
-  random corner while granting gold to surviving neighbors; and Custom World lets you
+  Volcano Islands adds erupting volcanoes (off-limits to the robber) that strike 1 to 3
+  random corners—damaging buildings and destroying connected roads—while granting gold
+  to surviving neighbors; and Custom World lets you
   set every terrain count yourself (including volcanoes), with optional whole-map fog
   and Sabotage. Victory targets are 13 for New Shores and 12 for the other scenarios.
   When a fog game is won, the whole map is revealed so everyone can view the full island.

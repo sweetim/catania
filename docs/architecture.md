@@ -27,7 +27,7 @@ CSS v4 foundation without a database or runtime external assets.
 | `src/components/PlayerSeat.tsx` | Shared player identity, card counts, public score, turn/leader styling, and award indicators. |
 | `src/components/TurnInstructions.tsx` | Shared phase headings, guidance, and instruction-panel presentation. |
 | `src/components/GameVariantSelector.tsx` | Shared setup choices for every game version, including Custom World. |
-| `src/components/CustomMapConfigPanel.tsx` | Custom World terrain-count steppers and fog toggle, shared by local setup and the host lobby. |
+| `src/components/CustomMapConfigPanel.tsx` | Custom World modal dialog with terrain-count steppers, fog toggle, and sabotage toggle, shared by local setup and the host lobby. |
 | `src/components/SeafarersControls.tsx` | Shared free road/ship choices and finite-bank gold-resource selection. |
 | `src/components/DevelopmentHand.tsx` | Shared grouped development-card list and eligible-copy selection. |
 | `src/themes.ts` | Six presentation-only theme palettes and shared React theme context. |

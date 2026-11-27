@@ -143,12 +143,12 @@ export function GameMenu({ actions, exitAction, icon = false, triggerLabel, grou
     }} className={icon
       ? "flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
       : profileName
-        ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+        ? "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line/90 bg-white/75 py-1 pl-1 pr-2.5 shadow-[0_1px_2px_rgba(37,59,54,0.06)] transition-all hover:border-ink/25 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
         : "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-xs font-semibold hover:bg-moss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"}>
       {icon
         ? <MoreVerticalIcon />
-        : <>{profileName ? <ProfileAvatar name={profileName} className="h-9 w-9 text-sm" /> : triggerName}
-          <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" /></>}
+        : <>{profileName ? <ProfileAvatar name={profileName} className="h-8 w-8 text-sm" /> : triggerName}
+          <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} /></>}
     </summary>
     <div ref={menuContent} id="game-menu" role="group" aria-label={groupName} popover={icon ? "manual" : undefined} className={`z-50 w-48 rounded-xl border border-line bg-paper p-1.5 shadow-xl ${icon ? "fixed m-0 max-h-[calc(100dvh-16px)] overflow-auto" : "absolute right-0 top-full mt-1"}`}>
       {actions.map(action => <button key={action.label} className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm hover:bg-moss" disabled={action.disabled} onClick={() => selectAction(action)}>

@@ -17,8 +17,9 @@ import { pieceName, resourceName } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
 import { getTerrainName, getThemeName, useBoardTheme } from "../themes";
 import { boardTranslations } from "../translations/board";
+import { customMapTranslations } from "../translations/customMap";
 import { getPlayerLabel } from "./GameUi";
-import { ChevronDownIcon, PaletteIcon, PirateShipIcon, TrophyIcon, ZoomInIcon, ZoomOutIcon } from "./Icons";
+import { ChevronDownIcon, PaletteIcon, PirateShipIcon, SlidersIcon, TrophyIcon, ZoomInIcon, ZoomOutIcon } from "./Icons";
 import { HEX_ARTWORK_CLIP_PATH, ResourceArtwork, TerrainArtwork } from "./ThemeArtwork";
 
 const tileElevation = 8;
@@ -592,11 +593,11 @@ export function VictoryTargetBadge({ victoryTarget, disabled = false, onChange }
           const next = VICTORY_TARGETS[VICTORY_TARGETS.indexOf(victoryTarget) + (event.key === "ArrowDown" ? 1 : -1)];
           if (next !== undefined) onChange(next);
         }}
-        className={`${victoryTargetPillClassName} min-h-11 cursor-pointer @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]`}
+        className={`${victoryTargetPillClassName} min-h-11 cursor-pointer transition-colors hover:border-[#cbb37c] hover:from-[#fcf4de] hover:to-[#efe0b5] @max-[80px]:gap-1 @max-[80px]:px-1 @max-[64px]:[&>svg]:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636]`}
       >
         <TrophyIcon className="h-3 w-3 shrink-0 text-[#b58a2d]" />
         <VictoryTargetLabel victoryTarget={victoryTarget} />
-        <ChevronDownIcon className="hidden h-2.5 w-2.5 shrink-0 @min-[120px]:block" />
+        <ChevronDownIcon className="h-3 w-3 shrink-0 opacity-75 @max-[119px]:hidden" />
       </button>
       {open && (
         <div
@@ -667,6 +668,9 @@ export function Board({
   confirmation,
   onSelect,
   onChangeTheme,
+  onCustomizeMap,
+  customizeMapNeedsAttention = false,
+  customizeMapDisabled = false,
   headerControls,
   interactive = true,
   compact = false,
@@ -706,6 +710,9 @@ export function Board({
   };
   onSelect?: (kind: "vertex" | "edge" | "tile", id: string) => void;
   onChangeTheme?: () => void;
+  onCustomizeMap?: () => void;
+  customizeMapNeedsAttention?: boolean;
+  customizeMapDisabled?: boolean;
   headerControls?: ReactNode;
   interactive?: boolean;
   compact?: boolean;
@@ -716,6 +723,7 @@ export function Board({
 }) {
   const { language } = useLanguage();
   const translateText = useTranslation(boardTranslations);
+  const translateCustomMapText = useTranslation(customMapTranslations);
   const theme = useBoardTheme();
   const illustrationId = useId().replace(/:/g, "");
   const surfaceReference = useRef<HTMLDivElement>(null);
@@ -931,16 +939,24 @@ export function Board({
           }
         }
 
-        const volcanoStruckVertexId = lastEruption &&
-          (lastEruption.effect === "destroyed" || lastEruption.effect === "downgraded") &&
-          lastEruption.id !== tracker.lastEruptionId
-          ? lastEruption.vertexId
-          : null;
+        const isNewVolcanoEruption = Boolean(lastEruption && lastEruption.id !== tracker.lastEruptionId);
+        const volcanoStruckVertexIds = new Set(
+          isNewVolcanoEruption && lastEruption
+            ? lastEruption.strikes
+              .filter(strike => strike.effect === "destroyed" || strike.effect === "downgraded")
+              .map(strike => strike.vertexId)
+            : [],
+        );
+        const volcanoDestroyedRoadEdgeIds = new Set(
+          isNewVolcanoEruption && lastEruption
+            ? lastEruption.destroyedRoads.map(road => road.edgeId)
+            : [],
+        );
         const pendingSabotageBursts = tracker.sabotageBursts.filter(burst => !tracker.completedKeys.has(burst.key));
         for (const { vertexId, snapshot } of removedBuildings) {
           tracker.newSettlements.delete(vertexId);
           tracker.upgradedCities.delete(vertexId);
-          if (vertexId === volcanoStruckVertexId) continue;
+          if (volcanoStruckVertexIds.has(vertexId)) continue;
           const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
           pendingSabotageBursts.push({
             key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
@@ -953,7 +969,7 @@ export function Board({
         }
         for (const { vertexId, snapshot } of downgradedCities) {
           tracker.upgradedCities.delete(vertexId);
-          if (vertexId === volcanoStruckVertexId) continue;
+          if (volcanoStruckVertexIds.has(vertexId)) continue;
           const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
           pendingSabotageBursts.push({
             key: `${tracker.version}:sabotage:${++tracker.generation}:${vertexId}`,
@@ -968,6 +984,7 @@ export function Board({
           tracker.newRoads.delete(edgeId);
           tracker.newShips.delete(edgeId);
           tracker.movedShips.delete(edgeId);
+          if (volcanoDestroyedRoadEdgeIds.has(edgeId)) continue;
           const color = playersById.get(snapshot.playerId)?.color ?? "#8a2f22";
           pendingSabotageBursts.push({
             key: `${tracker.version}:sabotage:${++tracker.generation}:${edgeId}`,
@@ -1066,7 +1083,7 @@ export function Board({
           for (const tile of activeProducingTiles) {
             const terrain: Resource | "gold" = tile.terrain === "volcano" ? "gold" : tile.terrain as Resource | "gold";
             for (const vertexId of tile.vertexIds) {
-              if (tile.terrain === "volcano" && lastEruption?.tileId === tile.id && lastEruption.vertexId === vertexId) continue;
+              if (tile.terrain === "volcano" && lastEruption?.tileId === tile.id && lastEruption.strikes.some(strike => strike.vertexId === vertexId)) continue;
               const vertex = verticesById.get(vertexId);
               if (!vertex?.building) continue;
               const entries = gainsByVertex.get(vertexId) ?? [];
@@ -2411,52 +2428,15 @@ export function Board({
             })}
             {lastEruption && (() => {
               const eruptingTile = board.tiles.find(tile => tile.id === lastEruption.tileId);
-              const struckVertex = board.vertices.find(vertex => vertex.id === lastEruption.vertexId);
-              if (!eruptingTile || !struckVertex) return null;
+              if (!eruptingTile) return null;
+              const resolvedStrikes = lastEruption.strikes.flatMap(strike => {
+                const struckVertex = verticesById.get(strike.vertexId);
+                return struckVertex ? [{ strike, struckVertex }] : [];
+              });
+              if (resolvedStrikes.length === 0) return null;
               const craterHorizontal = eruptingTile.x;
               const craterVertical = eruptingTile.y - 24;
-              const deltaHorizontal = struckVertex.x - craterHorizontal;
-              const deltaVertical = struckVertex.y - craterVertical;
-              const distance = Math.max(1, Math.hypot(deltaHorizontal, deltaVertical));
-              const unitHorizontal = deltaHorizontal / distance;
-              const unitVertical = deltaVertical / distance;
-              const perpendicularHorizontal = -unitVertical;
-              const perpendicularVertical = unitHorizontal;
-              const curveSign = lastEruption.id % 2 === 0 ? 1 : -1;
-              const isUpperCorner = struckVertex.y < craterVertical + 8;
-              const isBottomCenterCorner = Math.abs(struckVertex.x - eruptingTile.x) < 12 && struckVertex.y > eruptingTile.y;
-
-              let firstControlHorizontal: number;
-              let firstControlVertical: number;
-              let secondControlHorizontal: number;
-              let secondControlVertical: number;
-
-              if (isUpperCorner) {
-                const lateralLift = Math.abs(deltaHorizontal) < 10 ? 18 * curveSign : deltaHorizontal * 0.16;
-                firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.25 + lateralLift;
-                firstControlVertical = craterVertical - 20 + deltaVertical * 0.15;
-                secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 + lateralLift * 0.45;
-                secondControlVertical = craterVertical - 12 + deltaVertical * 0.65;
-              } else if (isBottomCenterCorner) {
-                firstControlHorizontal = craterHorizontal + 26 * curveSign;
-                firstControlVertical = craterVertical + deltaVertical * 0.32;
-                secondControlHorizontal = craterHorizontal + 22 * curveSign;
-                secondControlVertical = craterVertical + deltaVertical * 0.72;
-              } else {
-                const slopeSide = deltaHorizontal >= 0 ? 1 : -1;
-                firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.34 + perpendicularHorizontal * 11 * slopeSide;
-                firstControlVertical = craterVertical + deltaVertical * 0.26 + perpendicularVertical * 11 * slopeSide;
-                secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 - perpendicularHorizontal * 7 * slopeSide;
-                secondControlVertical = craterVertical + deltaVertical * 0.74 - perpendicularVertical * 7 * slopeSide;
-              }
-
-              const lavaPath = `M ${craterHorizontal.toFixed(1)} ${craterVertical.toFixed(1)} C ${firstControlHorizontal.toFixed(1)} ${firstControlVertical.toFixed(1)}, ${secondControlHorizontal.toFixed(1)} ${secondControlVertical.toFixed(1)}, ${struckVertex.x.toFixed(1)} ${struckVertex.y.toFixed(1)}`;
-
-              const branchEndHorizontal = craterHorizontal + deltaHorizontal * 0.56 + perpendicularHorizontal * 14 * curveSign;
-              const branchEndVertical = craterVertical + deltaVertical * 0.56 + perpendicularVertical * 14 * curveSign;
-              const branchPath = !isUpperCorner
-                ? `M ${(craterHorizontal + deltaHorizontal * 0.18 + (isBottomCenterCorner ? 11 * curveSign : 0)).toFixed(1)} ${(craterVertical + deltaVertical * 0.18).toFixed(1)} Q ${(firstControlHorizontal + perpendicularHorizontal * 6 * curveSign).toFixed(1)} ${(firstControlVertical + 4).toFixed(1)}, ${branchEndHorizontal.toFixed(1)} ${branchEndVertical.toFixed(1)}`
-                : null;
+              const edgeGeometryById = new Map(edgeGeometry.map(entry => [entry.edge.id, entry]));
 
               const craterEmbers = [
                 { horizontal: -18, vertical: -30, size: 2.3, delay: 40 },
@@ -2488,65 +2468,111 @@ export function Board({
                 { horizontal: -10, vertical: -30, rotate: -30, delay: 710 },
                 { horizontal: 12, vertical: 24, rotate: 40, delay: 760 },
               ];
-              const severeImpact = lastEruption.effect === "destroyed" || lastEruption.effect === "downgraded";
-              const sparedImpact = lastEruption.effect === "spared";
-              const affectedPlayerColor = (lastEruption.affectedPlayerId
-                ? playersById.get(lastEruption.affectedPlayerId)?.color
-                : undefined) ?? "#c9502c";
+              const roadDebrisShards = [
+                { horizontal: -18, vertical: -14, rotate: -48, delay: 710 },
+                { horizontal: 19, vertical: -12, rotate: 52, delay: 735 },
+                { horizontal: -16, vertical: 14, rotate: -65, delay: 755 },
+                { horizontal: 17, vertical: 13, rotate: 60, delay: 745 },
+              ];
 
               return (
                 <g
                   key={`eruption-${lastEruption.id}`}
                   className="board-volcano-eruption"
                   data-eruption-tile={lastEruption.tileId}
-                  data-eruption-vertex={lastEruption.vertexId}
-                  data-eruption-effect={lastEruption.effect}
+                  data-eruption-strikes={resolvedStrikes.length}
                   pointerEvents="none"
                   aria-hidden="true"
                 >
-                  {/* Curved multi-layered molten lava flow */}
-                  <g className="board-volcano-lava-stream">
-                    {branchPath && (
-                      <path
-                        className="board-volcano-lava-branch"
-                        d={branchPath}
-                        pathLength={100}
-                        fill="none"
-                        stroke="#e84812"
-                        strokeWidth="2.8"
-                        strokeLinecap="round"
-                        filter={`url(#${illustrationId}-lava-glow)`}
-                      />
-                    )}
-                    <path
-                      className="board-volcano-lava-crust"
-                      d={lavaPath}
-                      pathLength={100}
-                      fill="none"
-                      stroke="#4a160c"
-                      strokeWidth="8.2"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      className="board-volcano-lava-body"
-                      d={lavaPath}
-                      pathLength={100}
-                      fill="none"
-                      stroke="#e84812"
-                      strokeWidth="5.2"
-                      strokeLinecap="round"
-                      filter={`url(#${illustrationId}-lava-glow)`}
-                    />
-                    <path
-                      className="board-volcano-lava-core"
-                      d={lavaPath}
-                      pathLength={100}
-                      fill="none"
-                      stroke="#ffe26a"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </g>
+                  {/* Curved multi-layered molten lava flows to each struck corner */}
+                  {resolvedStrikes.map(({ strike, struckVertex }, strikeIndex) => {
+                    const deltaHorizontal = struckVertex.x - craterHorizontal;
+                    const deltaVertical = struckVertex.y - craterVertical;
+                    const distance = Math.max(1, Math.hypot(deltaHorizontal, deltaVertical));
+                    const unitHorizontal = deltaHorizontal / distance;
+                    const unitVertical = deltaVertical / distance;
+                    const perpendicularHorizontal = -unitVertical;
+                    const perpendicularVertical = unitHorizontal;
+                    const curveSign = (lastEruption.id + strikeIndex) % 2 === 0 ? 1 : -1;
+                    const isUpperCorner = struckVertex.y < craterVertical + 8;
+                    const isBottomCenterCorner = Math.abs(struckVertex.x - eruptingTile.x) < 12 && struckVertex.y > eruptingTile.y;
+
+                    let firstControlHorizontal: number;
+                    let firstControlVertical: number;
+                    let secondControlHorizontal: number;
+                    let secondControlVertical: number;
+
+                    if (isUpperCorner) {
+                      const lateralLift = Math.abs(deltaHorizontal) < 10 ? 18 * curveSign : deltaHorizontal * 0.16;
+                      firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.25 + lateralLift;
+                      firstControlVertical = craterVertical - 20 + deltaVertical * 0.15;
+                      secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 + lateralLift * 0.45;
+                      secondControlVertical = craterVertical - 12 + deltaVertical * 0.65;
+                    } else if (isBottomCenterCorner) {
+                      firstControlHorizontal = craterHorizontal + 26 * curveSign;
+                      firstControlVertical = craterVertical + deltaVertical * 0.32;
+                      secondControlHorizontal = craterHorizontal + 22 * curveSign;
+                      secondControlVertical = craterVertical + deltaVertical * 0.72;
+                    } else {
+                      const slopeSide = deltaHorizontal >= 0 ? 1 : -1;
+                      firstControlHorizontal = craterHorizontal + deltaHorizontal * 0.34 + perpendicularHorizontal * 11 * slopeSide;
+                      firstControlVertical = craterVertical + deltaVertical * 0.26 + perpendicularVertical * 11 * slopeSide;
+                      secondControlHorizontal = craterHorizontal + deltaHorizontal * 0.72 - perpendicularHorizontal * 7 * slopeSide;
+                      secondControlVertical = craterVertical + deltaVertical * 0.74 - perpendicularVertical * 7 * slopeSide;
+                    }
+
+                    const lavaPath = `M ${craterHorizontal.toFixed(1)} ${craterVertical.toFixed(1)} C ${firstControlHorizontal.toFixed(1)} ${firstControlVertical.toFixed(1)}, ${secondControlHorizontal.toFixed(1)} ${secondControlVertical.toFixed(1)}, ${struckVertex.x.toFixed(1)} ${struckVertex.y.toFixed(1)}`;
+                    const branchEndHorizontal = craterHorizontal + deltaHorizontal * 0.56 + perpendicularHorizontal * 14 * curveSign;
+                    const branchEndVertical = craterVertical + deltaVertical * 0.56 + perpendicularVertical * 14 * curveSign;
+                    const branchPath = !isUpperCorner
+                      ? `M ${(craterHorizontal + deltaHorizontal * 0.18 + (isBottomCenterCorner ? 11 * curveSign : 0)).toFixed(1)} ${(craterVertical + deltaVertical * 0.18).toFixed(1)} Q ${(firstControlHorizontal + perpendicularHorizontal * 6 * curveSign).toFixed(1)} ${(firstControlVertical + 4).toFixed(1)}, ${branchEndHorizontal.toFixed(1)} ${branchEndVertical.toFixed(1)}`
+                      : null;
+
+                    return (
+                      <g key={`stream-${strike.vertexId}`} className="board-volcano-lava-stream">
+                        {branchPath && (
+                          <path
+                            className="board-volcano-lava-branch"
+                            d={branchPath}
+                            pathLength={100}
+                            fill="none"
+                            stroke="#e84812"
+                            strokeWidth="2.8"
+                            strokeLinecap="round"
+                            filter={`url(#${illustrationId}-lava-glow)`}
+                          />
+                        )}
+                        <path
+                          className="board-volcano-lava-crust"
+                          d={lavaPath}
+                          pathLength={100}
+                          fill="none"
+                          stroke="#4a160c"
+                          strokeWidth="8.2"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          className="board-volcano-lava-body"
+                          d={lavaPath}
+                          pathLength={100}
+                          fill="none"
+                          stroke="#e84812"
+                          strokeWidth="5.2"
+                          strokeLinecap="round"
+                          filter={`url(#${illustrationId}-lava-glow)`}
+                        />
+                        <path
+                          className="board-volcano-lava-core"
+                          d={lavaPath}
+                          pathLength={100}
+                          fill="none"
+                          stroke="#ffe26a"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                      </g>
+                    );
+                  })}
 
                   {/* Crater flash, rising ash plume, and arcing embers */}
                   <g transform={`translate(${craterHorizontal} ${craterVertical})`}>
@@ -2590,69 +2616,52 @@ export function Board({
                     ))}
                   </g>
 
-                  {/* Molten splash, heat shockwave, and sparks at struck corner */}
-                  <g transform={`translate(${struckVertex.x} ${struckVertex.y})`}>
-                    <circle
-                      className="board-volcano-heat-ring"
-                      r={severeImpact ? "22" : "17"}
-                      fill="none"
-                      stroke={sparedImpact ? "#f5d76e" : "#ff6b1a"}
-                      strokeWidth={severeImpact ? "3" : "2.2"}
-                    />
-                    {severeImpact && (
-                      <circle
-                        className="board-volcano-heat-ring board-volcano-heat-ring-secondary"
-                        r="15"
-                        fill="none"
-                        stroke="#ffe169"
-                        strokeWidth="2"
-                      />
-                    )}
-                    <path
-                      className="board-volcano-impact-pool"
-                      d="M-16 -2 C-17 -11, -8 -18, 2 -14 C11 -17, 19 -8, 16 1 C19 10, 10 18, 1 15 C-8 19, -18 11, -16 2 Z"
-                      fill={`url(#${illustrationId}-lava-pool)`}
-                      filter={`url(#${illustrationId}-lava-glow)`}
-                    />
-                    {impactSparks.map((spark, index) => (
-                      <circle
-                        key={`spark-${index}`}
-                        className="board-volcano-splash-spark"
-                        cx="0"
-                        cy="0"
-                        r={index % 2 === 0 ? "2.1" : "1.5"}
-                        fill={index % 2 === 0 ? "#ffe26a" : "#ff6b1a"}
-                        style={{
-                          "--spark-x": `${spark.horizontal}px`,
-                          "--spark-y": `${spark.vertical}px`,
-                          animationDelay: `${spark.delay}ms`,
-                        } as CSSProperties}
-                      />
-                    ))}
-                    {severeImpact && (
-                      <g data-eruption-building={lastEruption.effect === "downgraded" ? "city" : "settlement"}>
+                  {/* Destroyed roads connected to struck corners */}
+                  {lastEruption.destroyedRoads.map(destroyedRoad => {
+                    const geometry = edgeGeometryById.get(destroyedRoad.edgeId);
+                    if (!geometry) return null;
+                    const roadColor = playersById.get(destroyedRoad.playerId)?.color ?? "#c9502c";
+                    return (
+                      <g
+                        key={`road-${destroyedRoad.edgeId}`}
+                        transform={`translate(${geometry.x} ${geometry.y})`}
+                        data-eruption-road={destroyedRoad.edgeId}
+                      >
+                        <circle
+                          className="board-volcano-heat-ring"
+                          r="16"
+                          fill="none"
+                          stroke="#ff6b1a"
+                          strokeWidth="2.2"
+                        />
                         <g className="board-volcano-destroyed-piece">
-                          <path
-                            d={lastEruption.effect === "downgraded" ? CITY_SILHOUETTE_PATH : SETTLEMENT_SILHOUETTE_PATH}
-                            fill={affectedPlayerColor}
-                            stroke="#3b120a"
-                            strokeWidth="1.6"
-                          />
-                          <path
-                            d="M-5 -8 L1 -1 L-3 3 L4 9"
-                            fill="none"
-                            stroke="#ffe26a"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
+                          <g transform={`rotate(${geometry.rotation})`}>
+                            <rect
+                              x="-22"
+                              y="-5"
+                              width="44"
+                              height="10"
+                              rx="4"
+                              fill={roadColor}
+                              stroke="#3b120a"
+                              strokeWidth="1.5"
+                            />
+                            <path
+                              d="M-3 -6 L2 0 L-2 6"
+                              fill="none"
+                              stroke="#ffe26a"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </g>
                         </g>
-                        {debrisShards.map((shard, index) => (
+                        {roadDebrisShards.map((shard, index) => (
                           <polygon
-                            key={`debris-${index}`}
+                            key={`road-debris-${index}`}
                             className="board-volcano-debris-shard"
-                            points="-4,-2 4,-3 2,3 -3,2"
-                            fill={index % 2 === 0 ? affectedPlayerColor : "#ff7a1a"}
+                            points="-3.5,-2 3.5,-2.5 2,2.5 -2.5,2"
+                            fill={index % 2 === 0 ? roadColor : "#ff7a1a"}
                             stroke="#3b120a"
                             strokeWidth="0.9"
                             style={{
@@ -2665,23 +2674,123 @@ export function Board({
                         ))}
                         <circle
                           className="board-volcano-ash-puff"
-                          cx="-4"
-                          cy="-4"
-                          r="9"
-                          fill="#3f2722"
-                          style={{ "--smoke-x": "-8px", "--smoke-y": "-24px", animationDelay: "720ms" } as CSSProperties}
-                        />
-                        <circle
-                          className="board-volcano-ash-puff"
-                          cx="5"
+                          cx="0"
                           cy="-2"
-                          r="10.5"
-                          fill="#5c3d36"
-                          style={{ "--smoke-x": "9px", "--smoke-y": "-30px", animationDelay: "790ms" } as CSSProperties}
+                          r="8.5"
+                          fill="#47302c"
+                          style={{ "--smoke-x": "4px", "--smoke-y": "-22px", animationDelay: "740ms" } as CSSProperties}
                         />
                       </g>
-                    )}
-                  </g>
+                    );
+                  })}
+
+                  {/* Molten splash, heat shockwave, and sparks at each struck corner */}
+                  {resolvedStrikes.map(({ strike, struckVertex }) => {
+                    const severeImpact = strike.effect === "destroyed" || strike.effect === "downgraded";
+                    const sparedImpact = strike.effect === "spared";
+                    const affectedPlayerColor = (strike.affectedPlayerId
+                      ? playersById.get(strike.affectedPlayerId)?.color
+                      : undefined) ?? "#c9502c";
+
+                    return (
+                      <g
+                        key={`impact-${strike.vertexId}`}
+                        transform={`translate(${struckVertex.x} ${struckVertex.y})`}
+                        data-eruption-vertex={strike.vertexId}
+                        data-eruption-effect={strike.effect}
+                      >
+                        <circle
+                          className="board-volcano-heat-ring"
+                          r={severeImpact ? "22" : "17"}
+                          fill="none"
+                          stroke={sparedImpact ? "#f5d76e" : "#ff6b1a"}
+                          strokeWidth={severeImpact ? "3" : "2.2"}
+                        />
+                        {severeImpact && (
+                          <circle
+                            className="board-volcano-heat-ring board-volcano-heat-ring-secondary"
+                            r="15"
+                            fill="none"
+                            stroke="#ffe169"
+                            strokeWidth="2"
+                          />
+                        )}
+                        <path
+                          className="board-volcano-impact-pool"
+                          d="M-16 -2 C-17 -11, -8 -18, 2 -14 C11 -17, 19 -8, 16 1 C19 10, 10 18, 1 15 C-8 19, -18 11, -16 2 Z"
+                          fill={`url(#${illustrationId}-lava-pool)`}
+                          filter={`url(#${illustrationId}-lava-glow)`}
+                        />
+                        {impactSparks.map((spark, index) => (
+                          <circle
+                            key={`spark-${index}`}
+                            className="board-volcano-splash-spark"
+                            cx="0"
+                            cy="0"
+                            r={index % 2 === 0 ? "2.1" : "1.5"}
+                            fill={index % 2 === 0 ? "#ffe26a" : "#ff6b1a"}
+                            style={{
+                              "--spark-x": `${spark.horizontal}px`,
+                              "--spark-y": `${spark.vertical}px`,
+                              animationDelay: `${spark.delay}ms`,
+                            } as CSSProperties}
+                          />
+                        ))}
+                        {severeImpact && (
+                          <g data-eruption-building={strike.effect === "downgraded" ? "city" : "settlement"}>
+                            <g className="board-volcano-destroyed-piece">
+                              <path
+                                d={strike.effect === "downgraded" ? CITY_SILHOUETTE_PATH : SETTLEMENT_SILHOUETTE_PATH}
+                                fill={affectedPlayerColor}
+                                stroke="#3b120a"
+                                strokeWidth="1.6"
+                              />
+                              <path
+                                d="M-5 -8 L1 -1 L-3 3 L4 9"
+                                fill="none"
+                                stroke="#ffe26a"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </g>
+                            {debrisShards.map((shard, index) => (
+                              <polygon
+                                key={`debris-${index}`}
+                                className="board-volcano-debris-shard"
+                                points="-4,-2 4,-3 2,3 -3,2"
+                                fill={index % 2 === 0 ? affectedPlayerColor : "#ff7a1a"}
+                                stroke="#3b120a"
+                                strokeWidth="0.9"
+                                style={{
+                                  "--shard-x": `${shard.horizontal}px`,
+                                  "--shard-y": `${shard.vertical}px`,
+                                  "--shard-rotate": `${shard.rotate}deg`,
+                                  animationDelay: `${shard.delay}ms`,
+                                } as CSSProperties}
+                              />
+                            ))}
+                            <circle
+                              className="board-volcano-ash-puff"
+                              cx="-4"
+                              cy="-4"
+                              r="9"
+                              fill="#3f2722"
+                              style={{ "--smoke-x": "-8px", "--smoke-y": "-24px", animationDelay: "720ms" } as CSSProperties}
+                            />
+                            <circle
+                              className="board-volcano-ash-puff"
+                              cx="5"
+                              cy="-2"
+                              r="10.5"
+                              fill="#5c3d36"
+                              style={{ "--smoke-x": "9px", "--smoke-y": "-30px", animationDelay: "790ms" } as CSSProperties}
+                            />
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
                 </g>
               );
             })()}
@@ -3022,7 +3131,7 @@ export function Board({
         {onChangeTheme && (
           <button
             type="button"
-            className={`board-theme-button ${victoryTarget === undefined && !pirateIndicator ? "mr-auto" : ""}`}
+            className={`board-theme-button ${!onCustomizeMap && victoryTarget === undefined && !pirateIndicator ? "mr-auto" : ""}`}
             onClick={onChangeTheme}
             aria-label={translateText("Change theme")}
             aria-haspopup="dialog"
@@ -3030,6 +3139,24 @@ export function Board({
           >
             <PaletteIcon className="h-[18px] w-[18px] shrink-0" />
             <span className="board-theme-label">{translateText("Theme")}</span>
+          </button>
+        )}
+        {onCustomizeMap && (
+          <button
+            type="button"
+            className={`board-customize-button ${victoryTarget === undefined && !pirateIndicator ? "mr-auto" : ""}`}
+            data-attention={customizeMapNeedsAttention ? "true" : undefined}
+            disabled={customizeMapDisabled}
+            onClick={onCustomizeMap}
+            aria-label={translateCustomMapText("Customize the map")}
+            aria-haspopup="dialog"
+            title={translateCustomMapText("Customize the map")}
+          >
+            <SlidersIcon className="h-[18px] w-[18px] shrink-0" />
+            <span className="board-customize-label">{translateCustomMapText("Customize")}</span>
+            {customizeMapNeedsAttention && (
+              <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-clay" />
+            )}
           </button>
         )}
         {pirateIndicator && (

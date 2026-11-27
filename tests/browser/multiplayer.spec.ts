@@ -452,25 +452,36 @@ test("host configures 3 to 13 victory points from the lobby island header and sy
   await expect.poll(async () => (await latestSnapshot(phone)).victoryPointsToWin).toBe(7);
 });
 
-test("Custom World config panel collapses to free the map and a join request takes an open seat without scrolling", async ({ multiplayer }, testInfo) => {
+test("Custom World dialog keeps full map height on tablet and desktop and lets a join request take an open seat without scrolling", async ({ multiplayer }, testInfo) => {
   const host = await multiplayer.newPage("Host");
   const invitation = await hostGame(host);
   const phone = await multiplayer.newPage("hellooworld", true);
   await requestSeat(phone, invitation, "hellooworld");
-  await selectGameVersion(host, "custom-world");
-  const panel = host.getByRole("region", { name: "Customize the map", exact: true });
-  const toggle = panel.getByRole("button", { name: /^Customize the map/ });
   const map = host.locator(".multiplayer-lobby-map");
   const players = host.locator(".multiplayer-lobby-players");
   const island = host.getByRole("region", { name: "Island preview", exact: true });
   const openSeats = host.getByRole("list", { name: "Open seats", exact: true });
-  for (const viewport of [{ width: 720, height: 1100 }, { width: 1440, height: 1000 }, { width: 1024, height: 720 }]) {
+  const baselineHeights = new Map<string, number>();
+  for (const viewport of [{ width: 720, height: 1100 }, { width: 1024, height: 720 }, { width: 1440, height: 1000 }]) {
     await host.setViewportSize(viewport);
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(panel.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeHidden();
-    await expect(panel.getByRole("status")).toHaveText("All 42 tiles assigned.");
+    baselineHeights.set(`${viewport.width}x${viewport.height}`, (await map.boundingBox())!.height);
+  }
+  await host.setViewportSize({ width: 720, height: 1100 });
+  await selectGameVersion(host, "custom-world");
+  const dialog = host.getByRole("dialog", { name: "Customize the map", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText("All 42 tiles assigned.");
+  await expect(dialog.locator("[data-terrain-segment]")).toHaveCount(8);
+  await expect(dialog.locator('[data-terrain-segment="volcano"]')).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeVisible();
+  await screenshot(host, testInfo, "custom-lobby-dialog-720-1100");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const customizeButton = host.getByRole("button", { name: "Customize the map", exact: true });
+  await expect(customizeButton).toBeVisible();
+
+  for (const viewport of [{ width: 720, height: 1100 }, { width: 1024, height: 720 }, { width: 1440, height: 1000 }]) {
+    await host.setViewportSize(viewport);
     await expect(openSeats.getByRole("listitem").first().getByText("hellooworld", { exact: true })).toBeVisible();
     await expect(openSeats.getByText("Player needed", { exact: true })).toHaveCount(2);
     await expect(host.getByRole("button", { name: "Admit hellooworld", exact: true })).toBeInViewport({ ratio: 1 });
@@ -481,13 +492,32 @@ test("Custom World config panel collapses to free the map and a join request tak
     expect(playersHeight.content).toBeLessThanOrEqual(playersHeight.available + 1);
     const islandHeight = await island.evaluate(element => ({ content: element.scrollHeight, available: element.clientHeight }));
     expect(islandHeight.content).toBeLessThanOrEqual(islandHeight.available + 1);
-    const collapsedMapHeight = (await map.boundingBox())!.height;
-    await screenshot(host, testInfo, `custom-lobby-collapsed-${viewport.width}-${viewport.height}`);
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(panel.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeVisible();
-    await expect.poll(async () => (await map.boundingBox())!.height).toBeLessThanOrEqual(collapsedMapHeight);
+    const customMapHeight = (await map.boundingBox())!.height;
+    expect(Math.abs(customMapHeight - baselineHeights.get(`${viewport.width}x${viewport.height}`)!)).toBeLessThanOrEqual(1);
+    await screenshot(host, testInfo, `custom-lobby-closed-${viewport.width}-${viewport.height}`);
+    await customizeButton.click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Increase Gold tiles", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Done", exact: true })).toBeInViewport({ ratio: 1 });
+    await screenshot(host, testInfo, `custom-lobby-dialog-${viewport.width}-${viewport.height}`);
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(dialog).toBeHidden();
   }
+
+  // Verify Japanese localization in the dialog and tablet lobby without overflow.
+  await host.setViewportSize({ width: 1024, height: 720 });
+  await selectMenuLanguage(host, "en", "ja");
+  await noHorizontalOverflow(host);
+  const japaneseCustomizeButton = host.getByRole("button", { name: "マップをカスタマイズ", exact: true });
+  await expect(japaneseCustomizeButton).toBeVisible();
+  await japaneseCustomizeButton.click();
+  const japaneseDialog = host.getByRole("dialog", { name: "マップをカスタマイズ", exact: true });
+  await expect(japaneseDialog).toBeVisible();
+  await expect(japaneseDialog.getByRole("status")).toHaveText("42枚すべてのタイルを割り振りました。");
+  await expect(japaneseDialog.getByRole("button", { name: "完了", exact: true })).toBeInViewport({ ratio: 1 });
+  await screenshot(host, testInfo, "custom-lobby-dialog-ja-1024-720");
+  await japaneseDialog.getByRole("button", { name: "完了", exact: true }).click();
+  await expect(japaneseDialog).toBeHidden();
 });
 
 test("Custom World lobby lets the host shape the island and share it with phones", { tag: "@desktop-only" }, async ({ multiplayer }, testInfo) => {
@@ -497,14 +527,16 @@ test("Custom World lobby lets the host shape the island and share it with phones
   await requestSeat(phone, invitation, "Alex");
   await host.getByRole("button", { name: "Admit Alex", exact: true }).click();
   await selectGameVersion(host, "custom-world");
-  const panel = host.getByRole("region", { name: "Customize the map", exact: true });
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  const dialog = host.getByRole("dialog", { name: "Customize the map", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
   await expect.poll(async () => (await latestSnapshot(phone)).variant).toBe("custom-world");
   await expect.poll(async () => (await latestSnapshot(phone)).customMapConfig).toEqual(DEFAULT_CUSTOM_MAP_CONFIG);
-  await panel.getByRole("button", { name: "Decrease Sea tiles", exact: true }).click();
-  await panel.getByRole("button", { name: "Increase Gold tiles", exact: true }).click();
-  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Decrease Sea tiles", exact: true }).click();
+  await dialog.getByRole("button", { name: "Increase Gold tiles", exact: true }).click();
+  await expect(dialog.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
   const mapCode = await host.getByRole("textbox", { name: "Map code", exact: true }).inputValue();
   const configured = { ...DEFAULT_CUSTOM_MAP_CONFIG, gold: 3, sea: 12 };
   await expect.poll(async () => (await latestSnapshot(phone)).customMapConfig).toEqual(configured);
@@ -992,6 +1024,7 @@ test("lobby shows required seats and lets the host add or remove computer player
   const addComputer = host.getByRole("button", { name: "Add computer", exact: true });
   const startGame = host.getByRole("button", { name: "Start game", exact: true });
   await expect(readiness).toContainText("3 more players needed to start.");
+  await expect(readiness).toHaveAttribute("data-ready", "false");
   await expect(openSeats.getByRole("listitem")).toHaveCount(4);
   await expect(openSeats.getByText("Player needed", { exact: true })).toHaveCount(3);
   await expect(openSeats.getByText("Optional fourth player", { exact: true })).toBeVisible();
@@ -1005,16 +1038,19 @@ test("lobby shows required seats and lets the host add or remove computer player
   await expect(readiness).toContainText("2 more players needed to start.");
   await expect(phone.getByRole("status").filter({ hasText: "seats filled" })).toContainText("2 more players needed to start.");
   await expect(phone.getByRole("button", { name: "Add computer", exact: true })).toHaveCount(0);
+  await expect(phone.getByRole("button", { name: /^Add computer to seat / })).toHaveCount(0);
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "lobby-missing-players");
 
   await addComputer.click();
   await expect(readiness).toContainText("1 more player needed to start.");
+  await expect(readiness).toHaveAttribute("data-ready", "false");
   await expect(startGame).toBeDisabled();
   await expect(roster.getByRole("img", { name: "Computer player", exact: true })).toHaveCount(1);
   await expect(roster.getByText("Computer", { exact: true })).toHaveCount(0);
   await addComputer.click();
   await expect(readiness).toContainText("Ready to start with 3 players.");
+  await expect(readiness).toHaveAttribute("data-ready", "true");
   await expect(startGame).toBeEnabled();
   await expect(openSeats.getByRole("listitem")).toHaveCount(1);
   await expect(openSeats.getByText("Optional fourth player", { exact: true })).toBeVisible();
@@ -1022,7 +1058,7 @@ test("lobby shows required seats and lets the host add or remove computer player
   await noHorizontalOverflow(host);
   await screenshot(host, testInfo, "lobby-human-and-computers");
 
-  await addComputer.click();
+  await openSeats.getByRole("button", { name: "Add computer to seat 4", exact: true }).click();
   await expect(readiness).toContainText("Ready to start with 4 players.");
   await expect(addComputer).toBeDisabled();
   await expect(openSeats).toHaveCount(0);
@@ -1030,6 +1066,7 @@ test("lobby shows required seats and lets the host add or remove computer player
   await host.getByRole("button", { name: "Remove Computer 1", exact: true }).click();
   await host.getByRole("button", { name: "Remove Computer 2", exact: true }).click();
   await expect(readiness).toContainText("1 more player needed to start.");
+  await expect(readiness).toHaveAttribute("data-ready", "false");
   await expect(startGame).toBeDisabled();
   await addComputer.click();
   await expect(startGame).toBeEnabled();
@@ -1125,6 +1162,10 @@ test("desktop lobby fits the map left and invitation above players right without
   await host.setViewportSize({ width: 1440, height: 1000 });
   await hostGame(host);
   await expect(host.getByText("Shared board / Connected", { exact: true })).toHaveCount(0);
+  await expect(host.getByRole("button", { name: "Victory points to win", exact: true }).locator("svg").filter({ visible: true })).toHaveCount(2);
+  await expect(host.getByRole("heading", { name: "Your island awaits.", exact: true })).toHaveCSS("font-size", "20px");
+  await expect(host.getByRole("heading", { name: "Scan. Join. Settle in.", exact: true })).toHaveCSS("font-size", "20px");
+  await expect(host.getByRole("heading", { name: "Who is joining?", exact: true })).toHaveCSS("font-size", "20px");
   for (const playerCount of [0, 4]) {
     if (playerCount === 4) {
       for (let player = 0; player < 4; player++) await host.getByRole("button", { name: "Add computer", exact: true }).click();
@@ -1143,6 +1184,14 @@ test("desktop lobby fits the map left and invitation above players right without
       const map = host.getByRole("region", { name: "Island map. Use the zoom controls to enlarge, then scroll or drag to pan.", exact: true });
       await expect(map).toBeInViewport({ ratio: 1 });
       expect((await map.boundingBox())!.height).toBeGreaterThanOrEqual(400);
+      const mapScroll = await map.evaluate(element => ({
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+        scrollHeight: element.scrollHeight,
+        clientHeight: element.clientHeight,
+      }));
+      expect(mapScroll.scrollWidth).toBeLessThanOrEqual(mapScroll.clientWidth);
+      expect(mapScroll.scrollHeight).toBeLessThanOrEqual(mapScroll.clientHeight);
       const islandBounds = await host.getByRole("region", { name: "Island preview", exact: true }).boundingBox();
       const invitationBounds = await host.getByRole("region", { name: "Room invitation", exact: true }).boundingBox();
       const playersBounds = await host.locator(".multiplayer-lobby-players").boundingBox();

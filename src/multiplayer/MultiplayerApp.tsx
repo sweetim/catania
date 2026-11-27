@@ -17,6 +17,7 @@ import {
   MapFoldIcon,
   MasterSaboteurAwardIcon,
   MoveShipIcon,
+  PlusIcon,
   QrCodeIcon,
   ReturnToLobbyIcon,
   RobberIcon,
@@ -47,10 +48,10 @@ import { ThemeSelector } from "../components/ThemeSelector";
 import { PrivateNotices, type SabotageNoticeEvent, type TradeOutcomeEvent } from "../components/PrivateNotices";
 import { ResourceReceiptAnnouncement, type ResourceReceipt } from "../components/ResourceCollection";
 import { CollapsibleSection } from "../components/CollapsibleSection";
-import { CustomMapConfigPanel } from "../components/CustomMapConfigPanel";
+import { CustomMapConfigDialog } from "../components/CustomMapConfigPanel";
 import { COSTS, emptyResources, hasLegalSabotageTarget, legalCityVertices, legalRoadEdges, legalSettlementVertices, legalShipEdges, legalShipDestinations, movableShipEdges, RESOURCES, resourceTotal } from "../game/engine";
 import { pirateStartTileId, seededRandom } from "../game/board";
-import { DEFAULT_CUSTOM_MAP_CONFIG, isCustomSabotageEnabled, isSeafarers, type DevelopmentKind, type GameAction, type GameVariant, type Resources } from "../game/types";
+import { DEFAULT_CUSTOM_MAP_CONFIG, isCustomMapConfig, isCustomSabotageEnabled, isSeafarers, type DevelopmentKind, type GameAction, type GameVariant, type Resources } from "../game/types";
 import { formatGameMessage } from "../game/messages";
 import { pieceName, resourceName, type TranslationParameters } from "../i18n";
 import { useLanguage, useTranslation } from "../localization";
@@ -59,6 +60,7 @@ import { BOARD_THEMES, BoardThemeContext, type BoardThemeId } from "../themes";
 import { multiplayerUiTranslations } from "../translations/multiplayer-ui";
 import { getResourceGains } from "../resourceReceipt";
 import { hostSession, joinSession } from "./session";
+import { PLAYER_COLORS } from "./state";
 import { parseInvitationUrl } from "./invitation";
 import { validName, type TradeIdentity } from "./protocol";
 import { MultiplayerDice, SharedBoardDice, useDiceRollAnimation } from "./MultiplayerDice";
@@ -1084,7 +1086,7 @@ export function MultiplayerApp() {
   const [localError, setLocalError] = useState<keyof typeof multiplayerUiTranslations | "">("");
   const [qrCode, setQrCode] = useState("");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("illustrated");
-  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "activity" | "leave" | "reset" | "lobby" | "invitation" | null>(null);
+  const [dialog, setDialog] = useState<"help" | "settings" | "theme" | "custom-map" | "activity" | "leave" | "reset" | "lobby" | "invitation" | null>(null);
   const boardSettings = useBoardSettings();
   const [selected, setSelected] = useState<{ kind: "vertex" | "edge" | "tile"; id: string; version: number } | null>(null);
   const [movingShip, setMovingShip] = useState<{ edgeId: string; version: number } | null>(null);
@@ -1107,6 +1109,7 @@ export function MultiplayerApp() {
   const [victoryReady, setVictoryReady] = useState(false);
   const previousWinnerGameReference = useRef<{ gameId: string | null; winnerId: string | null }>({ gameId: null, winnerId: null });
   const [mapCode, setMapCode] = useState("");
+  const [syncedMapSeed, setSyncedMapSeed] = useState<string | undefined>(undefined);
   const [profileState, setProfileState] = useState<ProfileState>(() => readProfileState());
   const [profileGateOpen, setProfileGateOpen] = useState(false);
   const [storedRoomName] = useState<string | null>(() => {
@@ -1133,6 +1136,8 @@ export function MultiplayerApp() {
     <button className="button-secondary min-h-9 shrink-0 px-3 py-1.5" aria-label={translateText("Decline {name}", { name: player.name })} disabled={disabled} onClick={() => session.current?.reject(player.connectionId)}>{translateText("Decline")}</button>
   </>;
   const disconnectedPlayers = snapshot?.players.filter(player => player.control === "human" && !player.connected) ?? [];
+  const readyToStart = missingPlayers === 0 && disconnectedPlayers.length === 0;
+  const openSeatColors = PLAYER_COLORS.filter(color => !(snapshot?.players ?? []).some(player => player.color === color));
   const sessionError = view?.error ? formatGameMessage(language, view.error) : "";
   const victoryWinner = game?.winnerId ? game.players.find(player => player.id === game.winnerId) : undefined;
   const sharedRollIdentity = host && game?.dice
@@ -1280,10 +1285,11 @@ export function MultiplayerApp() {
     if (completed) setTradeOutcomes(current => [...current.slice(-9), completed]);
   }, [host, game, snapshot?.privatePlayer]);
 
-  useEffect(() => {
-    // The field follows the host's current map code; typing a different code replays that island.
-    if (snapshot?.mapSeed) setMapCode(snapshot.mapSeed);
-  }, [snapshot?.mapSeed]);
+  // The field follows the host's current map code synchronously so variant switches never flash a stale seed.
+  if (snapshot?.mapSeed && snapshot.mapSeed !== syncedMapSeed) {
+    setSyncedMapSeed(snapshot.mapSeed);
+    setMapCode(snapshot.mapSeed);
+  }
 
   function connect() {
     if (!invitation || !name.trim()) return;
@@ -1343,13 +1349,13 @@ export function MultiplayerApp() {
     }
   }
   const invitationQr = qrCode
-    ? <img src={qrCode} alt={translateText("Scan to join this game")} className="lobby-qr aspect-square w-full max-w-80 rounded-xl" width={320} height={320} />
+    ? <img src={qrCode} alt={translateText("Scan to join this game")} className="lobby-qr aspect-square w-full max-w-80 rounded-xl border border-line/70 bg-white p-1 shadow-[0_2px_10px_-6px_rgba(37,59,54,0.2)]" width={320} height={320} />
     : <p className="lobby-qr py-16 text-sm text-muted">{translateText("Preparing your invitation...")}</p>;
   const invitationLink = view?.invitationUrl && <div className="lobby-invitation-link mt-4 w-full">
-    <label htmlFor="room-invitation-url" className="block text-xs text-muted">{translateText("Game invitation")}</label>
-    <div className="mt-1 flex min-w-0 items-stretch rounded-xl border border-line bg-white">
-      <input id="room-invitation-url" className="min-h-11 min-w-0 flex-1 rounded-l-xl bg-transparent px-3 text-xs" readOnly value={view.invitationUrl} onFocus={event => event.target.select()} />
-      <button className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-r-xl border-l border-line px-3 text-xs font-semibold hover:bg-moss" aria-label={translateText("Copy invitation")} title={translateText(copied ? "Invitation copied" : "Copy invitation")} onClick={copyInvitationUrl}>
+    <label htmlFor="room-invitation-url" className="block text-[10px] font-semibold uppercase tracking-[.12em] text-muted">{translateText("Game invitation")}</label>
+    <div className="mt-1 flex min-w-0 items-stretch rounded-[10px] border border-[#253b36]/15 bg-[#fffdf7] shadow-[inset_0_1px_2px_rgba(37,59,54,0.04)] transition-shadow focus-within:border-[#557263] focus-within:ring-2 focus-within:ring-[#b0cdc1]/45">
+      <input id="room-invitation-url" className="min-h-11 min-w-0 flex-1 truncate rounded-l-[10px] bg-transparent px-3 text-xs text-muted outline-none" readOnly value={view.invitationUrl} onFocus={event => event.target.select()} />
+      <button className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-r-[9px] border-l border-[#253b36]/14 px-3 text-xs font-semibold text-[#455e4d] transition-colors hover:bg-[#e9edde]" aria-label={translateText("Copy invitation")} title={translateText(copied ? "Invitation copied" : "Copy invitation")} onClick={copyInvitationUrl}>
         {copied ? <CheckIcon /> : <CopyIcon />}
         <span role="status" className={copied ? "" : "sr-only"}>{copied ? translateText("Copied") : ""}</span>
       </button>
@@ -1485,20 +1491,20 @@ export function MultiplayerApp() {
 
         {view && !game && <div className={`mx-auto grid max-w-5xl gap-6 lg:grid-cols-2 ${host ? "multiplayer-lobby-grid" : ""}`}>
           {host && snapshot?.previewBoard && <section aria-label={translateText("Island preview")} className="multiplayer-lobby-island panel min-w-0 p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
-              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0"><p className="eyebrow">{translateText("A place to begin")}</p><h2 className="mt-1 font-serif text-2xl">{translateText("Your island awaits.")}</h2></div>
+              <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                 <VictoryTargetBadge victoryTarget={snapshot.victoryPointsToWin} disabled={disabled} onChange={points => session.current?.setVictoryPointsToWin(points)} />
-                <GameVariantSelector value={snapshot.variant} disabled={disabled} onChange={variant => session.current?.setVariant(variant)} />
+                <GameVariantSelector
+                  value={snapshot.variant}
+                  disabled={disabled}
+                  onChange={variant => session.current?.setVariant(variant)}
+                  onSelectOption={selectedVariant => {
+                    if (selectedVariant === "custom-world") setDialog("custom-map");
+                  }}
+                />
               </div>
             </div>
-            {snapshot.variant === "custom-world" && <div className="mb-4">
-              <CustomMapConfigPanel
-                value={snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG}
-                disabled={disabled}
-                onChange={config => session.current?.setCustomMapConfig(config)}
-              />
-            </div>}
             <div className="multiplayer-lobby-map h-[320px] min-w-0 sm:h-[420px]">
               <Board
                 board={snapshot.previewBoard}
@@ -1510,6 +1516,9 @@ export function MultiplayerApp() {
                 compact
                 fit
                 onChangeTheme={() => setDialog("theme")}
+                onCustomizeMap={snapshot.variant === "custom-world" ? () => setDialog("custom-map") : undefined}
+                customizeMapNeedsAttention={snapshot.variant === "custom-world" && !isCustomMapConfig(snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG)}
+                customizeMapDisabled={disabled}
                 headerControls={<MapSeedControls
                   value={mapCode}
                   onChange={setMapCode}
@@ -1525,19 +1534,23 @@ export function MultiplayerApp() {
             {host && <section aria-label={translateText("Room invitation")} className="multiplayer-lobby-invitation panel flex min-w-0 flex-col items-center p-4 sm:p-6">
               <div className="lobby-invitation-heading text-center">
                 <p className="eyebrow">{translateText("Welcome to the table")}</p>
-                <h1 className="my-3 font-serif text-3xl">{translateText("Scan. Join. Settle in.")}</h1>
+                <h1 className="my-2 font-serif text-3xl">{translateText("Scan. Join. Settle in.")}</h1>
+                <p className="lobby-invitation-hint text-xs leading-5 text-muted">{translateText("Scan with a phone camera or share the link.")}</p>
               </div>
               {invitationQr}
               {invitationLink}
             </section>}
-            <section className={`panel min-w-0 p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h2 className="break-words font-serif text-3xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
-                {!host && !snapshot?.playerId && view.status === "connected" && (
-                  <span className="waiting-dots" aria-hidden="true" title={translateText("Waiting for host")}>
-                    <span /><span /><span />
-                  </span>
-                )}
+            <section className={`panel min-w-0 p-4 sm:p-6 ${host ? "multiplayer-lobby-players" : "lg:col-span-2"}`}>
+              <div className="lobby-players-heading">
+                {host && <p className="eyebrow">{translateText("At the table")}</p>}
+                <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                  <h2 className="break-words font-serif text-2xl">{snapshot?.playerId ? translateText("Welcome, {name}.", { name: snapshot.players.find(player => player.id === snapshot.playerId)!.name }) : translateText(host ? "Who is joining?" : view.status === "disconnected" ? "Not connected" : "Waiting for admission")}</h2>
+                  {!host && !snapshot?.playerId && view.status === "connected" && (
+                    <span className="waiting-dots" aria-hidden="true" title={translateText("Waiting for host")}>
+                      <span /><span /><span />
+                    </span>
+                  )}
+                </div>
               </div>
               {!host && lobbyNotice && (
                 <div role="status" className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-forest/60 bg-moss px-3.5 py-2.5 text-xs font-semibold text-ink">
@@ -1550,22 +1563,60 @@ export function MultiplayerApp() {
               {!host && <p className="my-4 text-sm leading-6 text-muted">{translateText(snapshot?.playerId ? "Your seat is reserved. The host will start when everyone is connected." : view.status === "disconnected" ? "Reconnect to request admission, or change your name before trying again." : "Ask the host to admit your name on the shared screen. Your hand will appear here when the game starts.")}</p>}
               {!host && !snapshot?.playerId && <button className="button-secondary" onClick={() => { session.current?.close(); session.current = null; setView(null); }}>{translateText("Change name")}</button>}
               {snapshot && <>
-                <div id="lobby-readiness" role="status" className="my-4 rounded-xl bg-moss p-4">
-                  <p className="eyebrow">{translateText("{count} of 4 seats filled", { count: playerCount })}</p>
-                  <p className="mt-1 text-sm font-semibold">{missingPlayers > 0 ? translateText(missingPlayers === 1 ? "{count} more player needed to start." : "{count} more players needed to start.", { count: missingPlayers }) : disconnectedPlayers.length > 0 ? translateText("Enough players to start once everyone is connected.") : translateText("Ready to start with {count} players.", { count: playerCount })}</p>
-                  {disconnectedPlayers.length > 0 && <p className="mt-2 text-xs text-clay">{translateText("Waiting for {names} to reconnect.", { names: disconnectedPlayers.map(player => player.name).join(", ") })}</p>}
+                <div
+                  id="lobby-readiness"
+                  role="status"
+                  data-ready={readyToStart ? "true" : "false"}
+                  className={`my-4 rounded-xl border p-3.5 transition-colors ${readyToStart ? "border-forest/65 bg-moss" : "border-line/80 bg-[#f4f1e6]"}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="eyebrow">{translateText("{count} of 4 seats filled", { count: playerCount })}</p>
+                    <span className="flex items-center gap-1" aria-hidden="true">
+                      {[0, 1, 2, 3].map(slot => {
+                        const seatedPlayer = snapshot.players[slot];
+                        return (
+                          <span
+                            key={slot}
+                            className={`h-1.5 w-4 rounded-full transition-colors ${seatedPlayer ? "" : slot < 3 ? "bg-ink/15" : "border border-dashed border-ink/20 bg-transparent"}`}
+                            style={seatedPlayer ? { backgroundColor: seatedPlayer.color } : undefined}
+                          />
+                        );
+                      })}
+                    </span>
+                  </div>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
+                    {readyToStart && <CheckIcon className="h-4 w-4 shrink-0 text-[#3c6e52]" />}
+                    <span>{missingPlayers > 0 ? translateText(missingPlayers === 1 ? "{count} more player needed to start." : "{count} more players needed to start.", { count: missingPlayers }) : disconnectedPlayers.length > 0 ? translateText("Enough players to start once everyone is connected.") : translateText("Ready to start with {count} players.", { count: playerCount })}</span>
+                  </p>
+                  {host && missingPlayers > 0 && (
+                    <p className="lobby-readiness-hint mt-0.5 text-xs text-muted">{translateText("Join by phone or add a computer.")}</p>
+                  )}
+                  {disconnectedPlayers.length > 0 && <p className="mt-1.5 text-xs text-clay">{translateText("Waiting for {names} to reconnect.", { names: disconnectedPlayers.map(player => player.name).join(", ") })}</p>}
                 </div>
                 <div className="lobby-roster my-5 space-y-2">
                   <PlayerList snapshot={snapshot} disabled={disabled} removePlayer={host ? playerId => session.current?.removePlayer(playerId) : undefined} renameComputer={host ? (playerId, name) => session.current?.renameComputer(playerId, name) : undefined} />
-                  {playerCount < 4 && <ul aria-label={translateText("Open seats")} className="grid gap-2">
+                  {playerCount < 4 && <ul aria-label={translateText("Open seats")} className="grid grid-cols-[minmax(0,1fr)] gap-2">
                     {Array.from({ length: 4 - playerCount }, (_, index) => playerCount + index + 1).map((seat, index) => {
                       const pendingPlayer = host ? pendingPlayers[index] : undefined;
-                      return pendingPlayer ? <li key={pendingPlayer.connectionId} className="lobby-pending-enter flex items-center gap-3 rounded-xl border border-line p-3">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
+                      const seatColor = openSeatColors[index] ?? PLAYER_COLORS[(seat - 1) % PLAYER_COLORS.length]!;
+                      return pendingPlayer ? <li key={pendingPlayer.connectionId} className="lobby-pending-enter flex min-w-0 items-center gap-3 rounded-xl border border-line bg-white/80 p-3">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums" style={{ color: seatColor, borderColor: `${seatColor}66`, backgroundColor: `${seatColor}14` }}>{seat}</span>
                         {renderPendingPlayer(pendingPlayer)}
-                      </li> : <li key={seat} className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3 text-muted">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-xs">{seat}</span>
-                        <div><p className="text-sm font-semibold">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</p><p className="mt-1 text-xs">{translateText(seat < 4 ? "Join by phone or add a computer." : "Start with three, or fill this seat.")}</p></div>
+                      </li> : <li key={seat} className="lobby-open-seat flex min-w-0 items-center gap-2.5 rounded-xl border border-dashed border-line/90 bg-white/35 px-3 py-2.5 text-muted">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums" style={{ color: seatColor, borderColor: `${seatColor}55`, backgroundColor: `${seatColor}12` }}>{seat}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink/75">{translateText(seat < 4 ? "Player needed" : "Optional fourth player")}</span>
+                        {host && (
+                          <button
+                            type="button"
+                            className="lobby-seat-add-computer inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-transparent px-2 py-1 text-xs font-semibold text-muted transition-colors hover:border-line hover:bg-white hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 min-[380px]:px-2.5"
+                            aria-label={translateText("Add computer to seat {seat}", { seat })}
+                            disabled={disabled || !snapshot || playerCount >= 4}
+                            onClick={() => session.current?.addComputer(language)}
+                          >
+                            <PlusIcon className="h-3.5 w-3.5" />
+                            <span className="hidden min-[380px]:inline">{translateText("Computer")}</span>
+                          </button>
+                        )}
                       </li>;
                     })}
                   </ul>}
@@ -1573,7 +1624,7 @@ export function MultiplayerApp() {
               </>}
               {host && extraPendingPlayers.map(player => <div key={player.connectionId} className="lobby-pending-enter my-3 flex items-center gap-2 rounded-xl border border-line p-3">{renderPendingPlayer(player)}</div>)}
               {host && <>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="lobby-players-actions grid gap-2 sm:grid-cols-[auto_1fr]">
                   <button className="button-secondary" disabled={disabled || !snapshot || playerCount >= 4} onClick={() => session.current?.addComputer(language)}><AddRobotIcon />{translateText("Add computer")}</button>
                   <button className="button-primary" aria-describedby="lobby-readiness" disabled={disabled || !snapshot || missingPlayers > 0 || disconnectedPlayers.length > 0} onClick={() => session.current?.startGame()}>{translateText("Start game")} <Arrow /></button>
                 </div>
@@ -1726,6 +1777,14 @@ export function MultiplayerApp() {
         setBoardThemeId(theme);
         if (host) session.current?.setBoardTheme(theme);
       }} /></Dialog>}
+      {dialog === "custom-map" && host && !game && snapshot?.variant === "custom-world" && (
+        <CustomMapConfigDialog
+          value={snapshot.customMapConfig ?? DEFAULT_CUSTOM_MAP_CONFIG}
+          disabled={disabled}
+          onChange={config => session.current?.setCustomMapConfig(config)}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === "invitation" && host && <Dialog title={translateText("Room invitation")} onClose={() => setDialog(null)}>
         <p className="mb-5 text-sm leading-6">{translateText("Share this code or link to let a disconnected player rejoin their seat with the same profile or name.")}</p>
         <div className="flex flex-col items-center">

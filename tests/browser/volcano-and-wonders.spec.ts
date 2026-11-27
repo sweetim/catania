@@ -19,10 +19,12 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
     }
     await expect(page.locator(".volcano-artwork")).toHaveCount(3);
 
-    // Open Help and confirm Volcano Islands rules note robber exclusion.
+    // Open Help and confirm Volcano Islands rules note robber exclusion, multi-corner strikes, and road destruction.
     await page.getByRole("button", { name: "Game", exact: true }).click();
     await page.getByRole("button", { name: "Help", exact: true }).click();
     await expect(page.getByText(/The robber cannot be placed on a volcano/).first()).toBeVisible();
+    await expect(page.getByText(/strikes 1 to 3 random corners/).first()).toBeVisible();
+    await expect(page.getByText(/destroying roads connected to struck corners/).first()).toBeVisible();
     await page.getByRole("button", { name: "Close dialog" }).click();
 
     // Switch to Japanese and verify translated help.
@@ -30,6 +32,8 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("ja");
     await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
     await expect(page.getByText(/盗賊は火山タイルには配置できません/).first()).toBeVisible();
+    await expect(page.getByText(/ランダムな1〜3つの交差点に溶岩が流れます/).first()).toBeVisible();
+    await expect(page.getByText(/当たった交差点につながる街道も破壊されます/).first()).toBeVisible();
   });
 
   test("configures Volcano tiles in Custom World and omits Wonders from the variant selector", async ({ page }) => {
@@ -45,12 +49,17 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
     await page.getByRole("option", { name: "Custom World" }).click();
 
     // Decrease Sea by 2 and increase Volcano by 2 in Custom World.
-    const decreaseSea = page.getByRole("button", { name: "Decrease Sea tiles" });
-    const increaseVolcano = page.getByRole("button", { name: "Increase Volcano tiles" });
+    const dialog = page.getByRole("dialog", { name: "Customize the map", exact: true });
+    await expect(dialog).toBeVisible();
+    const decreaseSea = dialog.getByRole("button", { name: "Decrease Sea tiles" });
+    const increaseVolcano = dialog.getByRole("button", { name: "Increase Volcano tiles" });
     await decreaseSea.click();
     await decreaseSea.click();
     await increaseVolcano.click();
     await increaseVolcano.click();
+    await expect(dialog.locator('[data-terrain-segment="volcano"]')).toHaveCount(1);
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(dialog).toBeHidden();
 
     // Verify no horizontal overflow at 320px.
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
@@ -94,7 +103,7 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
       if (await confirm.isVisible()) await confirm.click();
     }
 
-    const eruption = page.locator("[data-eruption-tile][data-eruption-vertex]");
+    const eruption = page.locator("[data-eruption-tile][data-eruption-strikes]");
     // Either a computer player rolls 6 first, or it becomes our turn to roll the dice.
     await expect.poll(async () => {
       if (await eruption.isVisible()) return "erupted";
@@ -107,16 +116,24 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
     }, { timeout: 15000 }).not.toBe("waiting");
 
     await expect(eruption).toBeVisible();
+    // With RNG returning ~0.45, strike count is 1 + floor(0.45 * 3) = 2 distinct corners.
+    await expect(eruption).toHaveAttribute("data-eruption-strikes", "2");
+    await expect(eruption.locator("[data-eruption-vertex]")).toHaveCount(2);
     await expect(eruption.locator("line")).toHaveCount(0);
     await expect(eruption.locator(".board-volcano-scorch")).toHaveCount(0);
-    await expect(eruption.locator(".board-volcano-lava-body")).toHaveCount(1);
-    await expect(eruption.locator(".board-volcano-lava-core")).toHaveCount(1);
+    await expect(eruption.locator(".board-volcano-lava-body")).toHaveCount(2);
+    await expect(eruption.locator(".board-volcano-lava-core")).toHaveCount(2);
     await expect(eruption.locator(".board-volcano-crater-flare")).toHaveCount(1);
     await expect(eruption.locator(".board-volcano-smoke")).toHaveCount(3);
-    await expect(eruption.locator(".board-volcano-impact-pool")).toHaveCount(1);
+    await expect(eruption.locator(".board-volcano-impact-pool")).toHaveCount(2);
 
-    const lavaPath = await eruption.locator(".board-volcano-lava-body").getAttribute("d");
-    expect(lavaPath).toMatch(/^M [\d.-]+ [\d.-]+ C /);
+    const lavaPaths = await eruption.locator(".board-volcano-lava-body").evaluateAll(
+      elements => elements.map(element => element.getAttribute("d") ?? ""),
+    );
+    expect(lavaPaths).toHaveLength(2);
+    for (const lavaPath of lavaPaths) {
+      expect(lavaPath).toMatch(/^M [\d.-]+ [\d.-]+ C /);
+    }
 
     // Capture mid-eruption frame and post-fade frame when CAPTURE_SCREENSHOTS is enabled.
     if (process.env.CAPTURE_SCREENSHOTS && testInfo.project.name === "desktop") {
@@ -137,13 +154,13 @@ test.describe("Volcano Islands and Custom World Volcanoes", () => {
     }
 
     // Verify the active eruption fades out completely with no lingering mark.
-    const lavaOpacity = await eruption.locator(".board-volcano-lava-body").evaluate(
-      element => Number.parseFloat(getComputedStyle(element).opacity),
+    const lavaOpacities = await eruption.locator(".board-volcano-lava-body").evaluateAll(
+      elements => elements.map(element => Number.parseFloat(getComputedStyle(element).opacity)),
     );
-    const poolOpacity = await eruption.locator(".board-volcano-impact-pool").evaluate(
-      element => Number.parseFloat(getComputedStyle(element).opacity),
+    const poolOpacities = await eruption.locator(".board-volcano-impact-pool").evaluateAll(
+      elements => elements.map(element => Number.parseFloat(getComputedStyle(element).opacity)),
     );
-    expect(lavaOpacity).toBe(0);
-    expect(poolOpacity).toBe(0);
+    expect(lavaOpacities).toEqual([0, 0]);
+    expect(poolOpacities).toEqual([0, 0]);
   });
 });

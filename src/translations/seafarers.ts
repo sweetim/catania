@@ -1,5 +1,6 @@
 export const seafarersTranslations = {
   "Game version": "ゲームの種類",
+  "{points} VP": "{points}勝利点",
   "Original": "オリジナル",
   "Seafarers": "航海者",
   "Four Islands": "四つの島",
@@ -8,7 +9,7 @@ export const seafarersTranslations = {
   "Mystery World": "謎の世界",
   "Volcano Islands": "火山の島",
   "Custom World": "カスタム世界",
-  "Three active Volcano hexes sit across the main and outlying islands. The robber cannot be placed on a volcano. When a volcano's number is rolled, it erupts: lava strikes one random corner, downgrading a city to a settlement or destroying a settlement (sparing a player's last building). All other adjacent buildings harvest gold (1 per settlement, 2 per city). Reach {points} points on your own turn to win.": "本島と周辺の島に3つの活火山タイルがあります。盗賊は火山タイルには配置できません。火山の数字が出ると噴火し、ランダムな1つの交差点に溶岩が流れます。当たった都市は開拓地に格下げされ、開拓地は破壊されます（最後の1つの建物は守られます）。それ以外の隣接する建物は金鉱として好きな資源を受け取ります（開拓地1枚、都市2枚）。自分のターンに{points}点に到達すると勝利です。",
+  "Three active Volcano hexes sit across the main and outlying islands. The robber cannot be placed on a volcano. When a volcano's number is rolled, it erupts: lava strikes 1 to 3 random corners, downgrading cities to settlements, destroying settlements (sparing a player's last building), and destroying roads connected to struck corners. All other adjacent buildings harvest gold (1 per settlement, 2 per city). Reach {points} points on your own turn to win.": "本島と周辺の島に3つの活火山タイルがあります。盗賊は火山タイルには配置できません。火山の数字が出ると噴火し、ランダムな1〜3つの交差点に溶岩が流れます。当たった都市は開拓地に格下げされ、開拓地は破壊されます（最後の1つの建物は守られます）。当たった交差点につながる街道も破壊されます。それ以外の隣接する建物は金鉱として好きな資源を受け取ります（開拓地1枚、都市2枚）。自分のターンに{points}点に到達すると勝利です。",
   "Pick every terrain count yourself before starting: resources, gold, desert, sea, whether fog hides the whole map, and whether Sabotage is enabled. Without fog, you settle one connected island of your own design with nine harbors along its coasts. With fog, terrain and numbers are fixed before play and hidden; choose a hidden cell for your first settlement, reveal only that cell, and uncover the rest as your roads and ships explore. Sea discoveries let you choose again; each resource discovery grants one matching bank card, and gold grants one resource choice. Neither robber nor pirate may enter fog, and there are no island bonuses. Reach {points} points on your own turn to win.": "開始前に地形の枚数やルールを自由に決められます。資源・金鉱・砂漠・海に加え、霧でマップ全体を隠すかどうかや、破壊工作を有効にするかどうかも選べます。霧なしの場合は、自分で設計した1つのつながった島を、海岸に9つの港を添えて開拓します。霧ありの場合は、地形と数字が開始前に決まり、霧に覆われます。最初の開拓地では非公開のタイルを選び、選んだタイルだけを公開し、その後は街道や船が進むにつれて残りを公開していきます。海なら公開したまま別のタイルを選びます。資源タイルの発見では対応する資源を銀行から1枚、金鉱では好きな資源を1枚受け取ります。盗賊も海賊も霧には入れません。島の開拓ボーナスはありません。自分のターンに{points}点に到達すると勝利です。",
   "Destroy {name}'s road?": "{name}の街道を破壊しますか？",
   "Destroy {name}'s ship?": "{name}の船を破壊しますか？",

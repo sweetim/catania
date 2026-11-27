@@ -159,10 +159,12 @@ test("menu dropdown items render leading icons", async ({ page, isMobile }, test
   await page.getByRole("button", { name: "Continue as Alex", exact: true }).click();
   await page.getByRole("button", { name: "Game version", exact: true }).click();
   await page.getByRole("option", { name: "Custom World", exact: true }).click();
-  const customPanel = page.getByRole("region", { name: "Customize the map", exact: true });
-  await expect(customPanel.locator('[role="group"] p svg')).toHaveCount(8);
-  await expect(customPanel.getByRole("button", { name: "Decrease Wood tiles", exact: true }).locator(":scope > svg")).toHaveCount(1);
-  await expect(customPanel.getByRole("button", { name: "Increase Wood tiles", exact: true }).locator(":scope > svg")).toHaveCount(1);
+  const customDialog = page.getByRole("dialog", { name: "Customize the map", exact: true });
+  await expect(customDialog.locator('[role="group"] p svg')).toHaveCount(9);
+  await expect(customDialog.getByRole("button", { name: "Decrease Wood tiles", exact: true }).locator(":scope > svg")).toHaveCount(1);
+  await expect(customDialog.getByRole("button", { name: "Increase Wood tiles", exact: true }).locator(":scope > svg")).toHaveCount(1);
+  await customDialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(customDialog).toBeHidden();
   await page.getByRole("button", { name: "Game version", exact: true }).click();
   await page.getByRole("option", { name: "Original", exact: true }).click();
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();

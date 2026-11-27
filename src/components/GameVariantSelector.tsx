@@ -1,8 +1,19 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { match } from "ts-pattern";
+import { victoryTarget } from "../game/engine";
 import { type GameVariant } from "../game/types";
 import { useTranslation } from "../localization";
 import { seafarersTranslations } from "../translations/seafarers";
-import { ChevronDownIcon, GameVariantIcon } from "./Icons";
+import {
+  ChevronDownIcon,
+  FogIcon,
+  HexIslandIcon,
+  MapFoldIcon,
+  MoveShipIcon,
+  SeaIcon,
+  SlidersIcon,
+  TrophyIcon,
+} from "./Icons";
 
 type ListboxPosition = {
   left: number;
@@ -23,10 +34,30 @@ export const GAME_VARIANT_LABELS = {
   "custom-world": "Custom World",
 } as const satisfies Record<GameVariant, keyof typeof seafarersTranslations>;
 
-export function GameVariantSelector({ value, onChange, disabled = false, className = "" }: {
+function VariantBadgeIcon({ variant, className = "h-4 w-4 shrink-0" }: { variant: GameVariant; className?: string }) {
+  return match(variant)
+    .with("original", () => <HexIslandIcon className={className} />)
+    .with("seafarers", () => <MoveShipIcon className={className} />)
+    .with("four-islands", () => <SeaIcon className={className} />)
+    .with("fog-islands", "foggy-world", () => <FogIcon className={className} />)
+    .with("mystery-world", () => <MapFoldIcon className={className} />)
+    .with("volcano-islands", () => (
+      <svg viewBox="0 0 16 16" className={className} aria-hidden="true" fill="none">
+        <path d="M2 14 6 5h4l4 9H2Z" fill="currentColor" />
+        <ellipse cx="8" cy="5" rx="2.4" ry="1" fill="#ff7426" />
+        <path d="M7.2 5.8 6.5 9.5M8.8 5.8 9.6 10" stroke="#ffd859" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+    ))
+    .with("custom-world", () => <SlidersIcon className={className} />)
+    .exhaustive();
+}
+
+export function GameVariantSelector({ value, onChange, onSelectOption, disabled = false, showVictoryTarget = false, className = "" }: {
   value: GameVariant;
   onChange: (variant: GameVariant) => void;
+  onSelectOption?: (variant: GameVariant) => void;
   disabled?: boolean;
+  showVictoryTarget?: boolean;
   className?: string;
 }) {
   const translateText = useTranslation(seafarersTranslations);
@@ -97,6 +128,7 @@ export function GameVariantSelector({ value, onChange, disabled = false, classNa
     setOpen(false);
     button.current?.focus({ preventScroll: true });
     if (variant !== value) onChange(variant);
+    onSelectOption?.(variant);
   }
 
   const variants = Object.keys(GAME_VARIANT_LABELS) as GameVariant[];
@@ -130,13 +162,23 @@ export function GameVariantSelector({ value, onChange, disabled = false, classNa
             const next = variants[variants.indexOf(value) + (event.key === "ArrowDown" ? 1 : -1)];
             if (next !== undefined) onChange(next);
           }}
-          className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-[#dfcfab] bg-gradient-to-b from-[#fdf8e7] to-[#f6ecd0] px-3.5 py-2 text-left text-sm font-semibold text-[#6e4f1d] shadow-[inset_0_1px_0_#fffdf6,0_1px_2px_#423d2810] transition-colors hover:border-[#cfb986] hover:from-[#fbf3da] hover:to-[#f1e2ba] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed"
+          className="group flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-[#dfcfab] bg-gradient-to-b from-[#fdf9ec] to-[#f4e9cb] px-3 py-1.5 text-left text-sm font-semibold text-[#5d4217] shadow-[inset_0_1px_0_#fffdf7,0_1px_2px_#423d2812] transition-all hover:border-[#cbb37c] hover:from-[#fcf4de] hover:to-[#efe0b5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] disabled:cursor-not-allowed"
         >
-          <span className="flex min-w-0 flex-1 items-center gap-2">
-            <GameVariantIcon className="h-4 w-4 shrink-0 text-[#9c732d]" />
+          <span className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#e8d5a4]/65 text-[#8a6121] shadow-[inset_0_1px_0_#fffdf7]">
+              <VariantBadgeIcon variant={value} className="h-4 w-4 shrink-0" />
+            </span>
             <span className="min-w-0 flex-1 truncate">{translateText(GAME_VARIANT_LABELS[value])}</span>
           </span>
-          <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-[#8b6425]" />
+          <span className="flex shrink-0 items-center gap-1.5">
+            {showVictoryTarget && (
+              <span aria-hidden="true" className="hidden items-center gap-1 rounded-full border border-[#d9c48f]/80 bg-white/60 px-2 py-0.5 text-[10px] font-bold tracking-wide text-[#7a571e] tabular-nums min-[360px]:inline-flex">
+                <TrophyIcon className="h-3 w-3 shrink-0 text-[#a5782a]" />
+                {translateText("{points} VP", { points: victoryTarget(value) })}
+              </span>
+            )}
+            <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-[#8b6425] transition-transform ${open ? "rotate-180" : ""}`} />
+          </span>
         </button>
         {open && listboxPosition && (
           <div
@@ -173,11 +215,22 @@ export function GameVariantSelector({ value, onChange, disabled = false, classNa
                 key={variant}
                 type="button"
                 role="option"
+                aria-label={translateText(GAME_VARIANT_LABELS[variant])}
                 aria-selected={variant === value}
-                className="flex min-h-11 shrink-0 cursor-pointer items-center rounded-lg px-3 text-sm font-semibold normal-case tracking-normal text-ink hover:bg-moss aria-selected:bg-forest"
+                className="flex min-h-11 shrink-0 cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 text-sm font-semibold normal-case tracking-normal text-ink transition-colors hover:bg-moss aria-selected:bg-forest"
                 onClick={() => selectVariant(variant)}
               >
-                {translateText(GAME_VARIANT_LABELS[variant])}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink/5 text-ink/80">
+                    <VariantBadgeIcon variant={variant} className="h-3.5 w-3.5 shrink-0" />
+                  </span>
+                  <span className="truncate">{translateText(GAME_VARIANT_LABELS[variant])}</span>
+                </span>
+                {showVictoryTarget && (
+                  <span aria-hidden="true" className="shrink-0 rounded-full bg-ink/8 px-2 py-0.5 text-[10px] font-bold text-ink/75 tabular-nums">
+                    {translateText("{points} VP", { points: victoryTarget(variant) })}
+                  </span>
+                )}
               </button>
             ))}
           </div>

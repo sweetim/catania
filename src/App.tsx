@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties } from "react";
 import { match } from "ts-pattern";
 import { DiceIcon, EndTurnIcon } from "./components/ActionIcons";
 import {
@@ -25,10 +25,10 @@ import {
 import { Board, useFogRevealHistory } from "./components/Board";
 import { MapSeedControls } from "./components/MapSeedControls";
 import { BoardSettingsDialog, useBoardSettings } from "./components/BoardSettings";
-import { CustomMapConfigPanel } from "./components/CustomMapConfigPanel";
+import { CustomMapConfigDialog } from "./components/CustomMapConfigPanel";
 import { GameMenu } from "./components/GameMenu";
 import { HelpDialog } from "./components/HelpDialog";
-import { GameVariantSelector } from "./components/GameVariantSelector";
+import { GAME_VARIANT_LABELS, GameVariantSelector } from "./components/GameVariantSelector";
 import { GoldSelection } from "./components/SeafarersControls";
 import { RollSummary, type RollStage } from "./components/RollSummary";
 import { ResourceCollection, type ResourceReceipt } from "./components/ResourceCollection";
@@ -53,6 +53,7 @@ import { useVibrateOnYourTurn } from "./vibration";
 import { defaultComputerName, resourceName, type Language, type TranslationParameters } from "./i18n";
 import { useLanguage, useTranslation } from "./localization";
 import { appTranslations } from "./translations/app";
+import { customMapTranslations } from "./translations/customMap";
 import { ProfileGate } from "./components/ProfileGate";
 import { ScanToJoin } from "./components/ScanToJoin";
 import {
@@ -162,6 +163,7 @@ function customMapConfigFromParameters(parameters: URLSearchParams): CustomMapCo
 export function App() {
   const { language } = useLanguage();
   const translateText = useTranslation(appTranslations);
+  const translateCustomMapText = useTranslation(customMapTranslations);
   const homePreviewClipId = `${useId().replace(/:/g, "")}-hex-clip`;
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>(() => {
     try {
@@ -223,7 +225,7 @@ export function App() {
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [handoffTarget, setHandoffTarget] = useState<string | null>(null);
   const [dialog, setDialog] = useState<
-    "help" | "settings" | "theme" | "trade" | "development" | "players" | "restart" | "reset" | "scan" | null
+    "help" | "settings" | "theme" | "custom-map" | "trade" | "development" | "players" | "restart" | "reset" | "scan" | null
   >(null);
   const gamePaused = dialog === "restart" || dialog === "reset";
   const [mobileView, setMobileView] = useState<"board" | "hand" | "players">(
@@ -818,17 +820,17 @@ export function App() {
           <main className="home-main" data-view={homeView}>
             <div className="home-left">
               <div className="home-introduction">
-                <p className="eyebrow mb-3 flex items-center gap-3">
-                  <span className="h-px w-8 bg-clay" />
+                <p className="eyebrow mb-2.5 flex items-center gap-3">
+                  <span className="h-0.5 w-7 rounded-full bg-clay" aria-hidden="true" />
                   {translateText("Your next gathering starts here")}
                 </p>
-                <h1 className="font-serif leading-[1.08] tracking-[-.045em]">
+                <h1 className="font-serif leading-[1.06] tracking-[-.04em]">
                   {translateText("A little island.")}
                   {language === "en" && " "}
                   <br className="hidden lg:inline" />
                   {language === "en"
-                    ? <>Endless <span className="italic text-ink">possibility.</span></>
-                    : <span className="italic text-ink">{translateText("Endless possibility.")}</span>}
+                    ? <>Endless <span className="home-title-accent italic">possibility.</span></>
+                    : <span className="home-title-accent italic">{translateText("Endless possibility.")}</span>}
                 </h1>
               </div>
               <nav className="home-navigation" aria-label={translateText("Home views")}>
@@ -849,15 +851,16 @@ export function App() {
                 className="home-setup panel"
                 aria-label={translateText("Set up your table")}
               >
+                <span className="home-setup-accent" aria-hidden="true" />
                 <div className="home-setup-content">
-                  <div>
+                  <div className="home-setup-header">
                     <p className="eyebrow">{translateText("On this device")}</p>
                     <h2 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
                       {translateText("Make room at the table.")}
                     </h2>
                   </div>
                   <div className="home-table-options">
-                    <div className="flex min-h-11 items-center gap-1 rounded-xl border border-line/80 bg-moss/75 p-1" role="group" aria-label={translateText("Number of players")}>
+                    <div className="home-player-count flex min-h-11 items-center gap-1 rounded-xl border border-line/85 bg-moss/70 p-1" role="group" aria-label={translateText("Number of players")}>
                       <span className="flex shrink-0 items-center pl-1.5 text-muted sm:pl-2" aria-hidden="true" title={translateText("Table size")}>
                         <UsersIcon />
                       </span>
@@ -870,7 +873,7 @@ export function App() {
                           }}
                           aria-label={translateText("{count} players", { count })}
                           aria-pressed={playerCount === count}
-                          className={`min-h-9 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors ${playerCount === count ? "bg-white text-ink shadow-[0_1px_2px_rgba(37,59,54,0.12)]" : "text-muted hover:text-ink"}`}
+                          className={`min-h-9 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold tabular-nums transition-all ${playerCount === count ? "bg-white text-ink shadow-[0_1px_3px_rgba(37,59,54,0.14)] ring-1 ring-ink/8" : "text-muted hover:bg-white/45 hover:text-ink"}`}
                         >
                           {count}
                         </button>
@@ -881,7 +884,7 @@ export function App() {
                       <span className="relative flex items-center">
                         <UserIcon className="pointer-events-none absolute left-2 h-4 w-4 text-muted sm:left-2.5" />
                         <select
-                          className="field !min-h-11 appearance-none !pl-7 !pr-6 !text-base font-medium text-ink transition-colors hover:border-ink/30 sm:!pl-8 sm:!pr-8 sm:!text-sm sm:font-semibold"
+                          className="field !min-h-11 appearance-none !bg-white/90 !pl-7 !pr-6 !text-base font-medium text-ink shadow-[0_1px_2px_rgba(37,59,54,0.04)] transition-colors hover:border-ink/30 hover:!bg-white sm:!pl-8 sm:!pr-8 sm:!text-sm sm:font-semibold"
                           value={humanCount}
                           onChange={(event) => setHumanCount(Number(event.target.value))}
                         >
@@ -895,32 +898,49 @@ export function App() {
                         <ChevronDownIcon className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-muted sm:right-2.5" />
                       </span>
                     </label>
-                    <GameVariantSelector className="home-variant-selector" value={variant} onChange={nextVariant => {
-                      setVariant(nextVariant);
-                      const seed = generateMapSeed();
-                      setPreview({
-                        seed, board: createBoard(seededRandom(seed), nextVariant,
-                          nextVariant === "custom-world" ? playableCustomMapConfig() : undefined)
-                      });
-                    }} />
+                    <div className="home-variant-selector flex min-w-0 items-stretch gap-1.5">
+                      <GameVariantSelector
+                        className="min-w-0 flex-1"
+                        showVictoryTarget
+                        value={variant}
+                        onChange={nextVariant => {
+                          setVariant(nextVariant);
+                          const seed = generateMapSeed();
+                          setPreview({
+                            seed, board: createBoard(seededRandom(seed), nextVariant,
+                              nextVariant === "custom-world" ? playableCustomMapConfig() : undefined)
+                          });
+                        }}
+                        onSelectOption={selectedVariant => {
+                          if (selectedVariant === "custom-world") setDialog("custom-map");
+                        }}
+                      />
+                      {variant === "custom-world" && (
+                        <button
+                          type="button"
+                          onClick={() => setDialog("custom-map")}
+                          aria-label={translateCustomMapText("Customize the map")}
+                          aria-haspopup="dialog"
+                          title={translateCustomMapText("Customize the map")}
+                          className={`flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold shadow-[inset_0_1px_0_#fffdf7,0_1px_2px_#423d2812] transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#886636] ${isCustomMapConfig(customMapConfig)
+                            ? "border-[#dfcfab] bg-gradient-to-b from-[#fdf9ec] to-[#f4e9cb] text-[#5d4217] hover:border-[#cbb37c] hover:from-[#fcf4de] hover:to-[#efe0b5]"
+                            : "border-clay/60 bg-clay/10 text-clay hover:border-clay hover:bg-clay/15"}`}
+                        >
+                          <SlidersIcon className="h-4 w-4 shrink-0" />
+                          <span className="hidden min-[360px]:inline">{translateCustomMapText("Customize")}</span>
+                          {!isCustomMapConfig(customMapConfig) && (
+                            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-clay" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {variant === "custom-world" && (
-                    <CustomMapConfigPanel
-                      value={customMapConfig}
-                      onChange={nextConfig => {
-                        setCustomMapConfig(nextConfig);
-                        if (isCustomMapConfig(nextConfig)) {
-                          lastValidCustomMapConfig.current = nextConfig;
-                          setPreview(current => ({ seed: current.seed, board: createBoard(seededRandom(current.seed), "custom-world", nextConfig) }));
-                        }
-                      }}
-                    />
-                  )}
-                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                  <div className="home-seats-grid grid grid-cols-2 gap-1.5 sm:gap-2">
                     {names.slice(0, playerCount).map((name, index) => index < humanCount ? (
                       <label
                         key={index}
-                        className="group flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-white px-2.5 transition-colors hover:border-ink/30 focus-within:border-ink/45 focus-within:ring-2 focus-within:ring-forest/50 sm:gap-2"
+                        style={{ "--seat-color": PLAYER_COLORS[index] } as CSSProperties}
+                        className="home-seat home-seat-human group flex min-h-11 items-center gap-1.5 rounded-xl border border-line bg-white/95 px-2.5 transition-all hover:border-ink/30 hover:bg-white focus-within:border-ink/45 focus-within:bg-white focus-within:ring-2 focus-within:ring-forest/50 sm:gap-2"
                       >
                         <span
                           className="player-number flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white shadow-xs"
@@ -942,20 +962,21 @@ export function App() {
                           }
                           className="min-h-11 w-full min-w-0 bg-transparent text-base font-medium text-ink focus-visible:outline-none sm:text-sm"
                         />
-                        <EditPencilIcon className="hidden h-3.5 w-3.5 shrink-0 text-muted/45 transition-colors group-hover:text-muted group-focus-within:text-ink/70 sm:block" />
+                        <EditPencilIcon className="hidden h-3.5 w-3.5 shrink-0 text-muted/40 transition-colors group-hover:text-muted group-focus-within:text-ink/70 sm:block" />
                       </label>
                     ) : (
                       <div
                         key={index}
-                        className="flex min-h-11 min-w-0 items-center gap-1.5 rounded-xl border border-line/80 bg-moss/55 px-2.5 text-sm text-ink/85 sm:gap-2"
+                        style={{ "--seat-color": PLAYER_COLORS[index] } as CSSProperties}
+                        className="home-seat home-seat-ai flex min-h-11 min-w-0 items-center gap-1.5 rounded-xl border border-line/80 bg-moss/55 px-2.5 text-sm text-ink/85 sm:gap-2"
                       >
                         <span
-                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white"
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-xs"
                           style={{ background: PLAYER_COLORS[index] }}
                         >
                           <RobotIcon label={translateText("AI")} className="h-3.5 w-3.5" strokeWidth={2} />
                         </span>
-                        <span className="min-w-0 flex-1 truncate">
+                        <span className="min-w-0 flex-1 truncate font-medium">
                           {defaultComputerName(language, index - humanCount + 1)}
                         </span>
                       </div>
@@ -964,7 +985,7 @@ export function App() {
                       <button
                         type="button"
                         onClick={() => setPlayerCount(4)}
-                        className="flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-paper/45 px-2.5 text-xs font-semibold text-muted transition-colors hover:border-ink/35 hover:bg-moss/45 hover:text-ink"
+                        className="home-seat-add flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-dashed border-ink/20 bg-paper/55 px-2.5 text-xs font-semibold text-muted transition-all hover:border-ink/40 hover:bg-moss/65 hover:text-ink"
                       >
                         <PlusIcon className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{translateText("Add 4th player")}</span>
@@ -977,33 +998,42 @@ export function App() {
                     aria-haspopup="dialog"
                     onClick={() => setDialog("theme")}
                   >
-                    <svg className="home-theme-preview" data-theme={boardThemeId} viewBox="0 0 176 76" aria-hidden="true" focusable="false">
-                      <defs>
-                        <clipPath id={homePreviewClipId}>
-                          <path d={HEX_ARTWORK_CLIP_PATH} />
-                        </clipPath>
-                      </defs>
-                      {(["wood", "grain", "ore"] as const).map((terrain, index) => (
-                        <g key={terrain} transform={`translate(${30 + index * 58} ${index === 1 ? 32 : 44}) scale(.5)`}>
-                          <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill={boardTheme.terrain[terrain].fill} stroke={boardTheme.border} strokeWidth="3" strokeLinejoin="round" />
-                          <TerrainArtwork terrain={terrain} theme={boardTheme} clipPathId={homePreviewClipId} />
-                        </g>
-                      ))}
-                    </svg>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[10px] font-medium text-muted">{translateText("Board theme")}</span>
-                      <span className="block truncate text-xs font-semibold">{getThemeName(boardTheme, language)}</span>
+                    <span
+                      className="home-theme-swatch"
+                      aria-hidden="true"
+                      style={{ background: `linear-gradient(135deg, ${boardTheme.sea[0]}, ${boardTheme.sea[1]})` }}
+                    >
+                      <svg className="home-theme-preview" data-theme={boardThemeId} viewBox="0 0 176 76" aria-hidden="true" focusable="false">
+                        <defs>
+                          <clipPath id={homePreviewClipId}>
+                            <path d={HEX_ARTWORK_CLIP_PATH} />
+                          </clipPath>
+                        </defs>
+                        {(["wood", "grain", "ore"] as const).map((terrain, index) => (
+                          <g key={terrain} transform={`translate(${30 + index * 58} ${index === 1 ? 32 : 44}) scale(.5)`}>
+                            <polygon points="0,-58 50,-29 50,29 0,58 -50,29 -50,-29" fill={boardTheme.terrain[terrain].fill} stroke={boardTheme.border} strokeWidth="3" strokeLinejoin="round" />
+                            <TerrainArtwork terrain={terrain} theme={boardTheme} clipPathId={homePreviewClipId} />
+                          </g>
+                        ))}
+                      </svg>
                     </span>
-                    <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{translateText("Board theme")}</span>
+                      <span className="block truncate text-xs font-semibold text-ink sm:text-sm">{getThemeName(boardTheme, language)}</span>
+                    </span>
+                    <span className="home-theme-chevron" aria-hidden="true">
+                      <ChevronRightIcon className="h-4 w-4 shrink-0" />
+                    </span>
                   </button>
                 </div>
                 <div className="home-local-start" role="group" aria-label={translateText("Start on this device")}>
                   {error && <p className="home-error mb-2 text-xs leading-4 text-clay" role="alert">{errorText}</p>}
                   <button
-                    className="button-primary w-full justify-between"
+                    className="button-primary home-start-button w-full justify-between"
                     onClick={() => startGame(preview.board, preview.seed)}
                   >
-                    {translateText("Let's settle in")} <Arrow />
+                    <span>{translateText("Let's settle in")}</span>
+                    <Arrow className="home-start-arrow h-4 w-4 shrink-0" />
                   </button>
                 </div>
               </section>
@@ -1011,11 +1041,13 @@ export function App() {
                 <h2 className="eyebrow mb-2">{translateText("Or play across devices")}</h2>
                 <div className="home-multiplayer-actions">
                   <a className="button-secondary home-multiplayer-link min-w-0 flex-1 justify-between" href="/?multiplayer=1">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <CrossDeviceIcon className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="home-action-icon home-action-icon-devices" aria-hidden="true">
+                        <CrossDeviceIcon className="h-4 w-4 shrink-0" />
+                      </span>
                       <span className="truncate">{translateText("Play across devices")}</span>
                     </span>
-                    <Arrow className="h-4 w-4 shrink-0 text-muted" />
+                    <Arrow className="home-action-arrow h-4 w-4 shrink-0 text-muted" />
                   </a>
                   <button
                     type="button"
@@ -1024,11 +1056,13 @@ export function App() {
                     title={translateText("Scan to join a board")}
                     onClick={() => setDialog("scan")}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <QrCodeIcon className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="home-action-icon home-action-icon-scan" aria-hidden="true">
+                        <QrCodeIcon className="h-4 w-4 shrink-0" />
+                      </span>
                       <span className="home-scan-label truncate">{translateText("Scan to join a board")}</span>
                     </span>
-                    <Arrow className="home-scan-arrow h-4 w-4 shrink-0 text-muted" />
+                    <Arrow className="home-scan-arrow home-action-arrow h-4 w-4 shrink-0 text-muted" />
                   </button>
                 </div>
               </section>
@@ -1038,11 +1072,16 @@ export function App() {
               className="home-island"
               aria-label={translateText("Island preview")}
             >
-              <div className="home-island-heading shrink-0">
-                <p className="eyebrow">{translateText("A place to begin")}</p>
-                <h2 className="mt-0.5 font-serif text-lg lg:mt-1 lg:text-2xl">{translateText("Your island awaits.")}</h2>
+              <div className="home-island-heading flex shrink-0 items-baseline justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="eyebrow">{translateText("A place to begin")}</p>
+                  <h2 className="mt-0.5 truncate font-serif text-lg lg:mt-1 lg:text-2xl">{translateText("Your island awaits.")}</h2>
+                </div>
+                <span aria-hidden="true" className="shrink-0 rounded-full border border-line bg-white/75 px-2.5 py-1 text-[11px] font-semibold text-ink/80 shadow-[0_1px_2px_rgba(37,59,54,0.06)]">
+                  {translateText(GAME_VARIANT_LABELS[variant])}
+                </span>
               </div>
-              <div className="min-h-0 flex-1">
+              <div className="home-island-stage min-h-0 flex-1">
                 <Board
                   board={preview.board}
                   players={[]}
@@ -1056,6 +1095,8 @@ export function App() {
                   fit
                   victoryTarget={victoryTarget(variant)}
                   onChangeTheme={() => setDialog("theme")}
+                  onCustomizeMap={variant === "custom-world" ? () => setDialog("custom-map") : undefined}
+                  customizeMapNeedsAttention={variant === "custom-world" && !isCustomMapConfig(customMapConfig)}
                   headerControls={<MapSeedControls
                     value={mapCode}
                     showCopy
@@ -1748,6 +1789,20 @@ export function App() {
               {translateText("Changes apply immediately to the board and resource artwork. Resource names and rules stay the same. Your choice is saved in this browser when storage is available; games are not saved.")}
             </p>
           </Dialog>
+        )}
+
+        {dialog === "custom-map" && !game && variant === "custom-world" && (
+          <CustomMapConfigDialog
+            value={customMapConfig}
+            onChange={nextConfig => {
+              setCustomMapConfig(nextConfig);
+              if (isCustomMapConfig(nextConfig)) {
+                lastValidCustomMapConfig.current = nextConfig;
+                setPreview(current => ({ seed: current.seed, board: createBoard(seededRandom(current.seed), "custom-world", nextConfig) }));
+              }
+            }}
+            onClose={() => setDialog(null)}
+          />
         )}
 
         {dialog === "settings" && <BoardSettingsDialog {...boardSettings} onClose={() => setDialog(null)} />}

@@ -19,7 +19,7 @@ import { parseAction, validName } from "./protocol";
 import type { Command, CommandResult, JoinMessage } from "./protocol";
 import type { BuildMode, PublicGame, RoomPlayer, RoomSnapshot } from "./types";
 
-const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
+export const PLAYER_COLORS = ["#b85d47", "#477c91", "#c1953d", "#76608c"];
 const BOARD_ACTIONS = new Set(["place-settlement", "reveal-tile", "place-road", "place-ship", "move-ship", "place-city", "move-robber", "move-pirate", "sabotage-route", "sabotage-building"]);
 
 function requireRoom(condition: unknown, message: GameMessage["key"]): asserts condition {

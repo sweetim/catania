@@ -191,10 +191,12 @@ test("Custom World setup toggles Sabotage and reflects it in Help", { tag: "@des
   await page.goto("/");
   await page.getByRole("button", { name: "Game version", exact: true }).click();
   await page.getByRole("listbox", { name: "Game version", exact: true }).getByRole("option", { name: "Custom World", exact: true }).click();
-  const panel = page.getByRole("region", { name: "Customize the map", exact: true });
-  const sabotageCheckbox = panel.getByRole("checkbox", { name: "Sabotage", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Customize the map", exact: true });
+  const sabotageCheckbox = dialog.getByRole("checkbox", { name: "Sabotage", exact: true });
   await expect(sabotageCheckbox).toBeVisible();
   await expect(sabotageCheckbox).toBeChecked();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
 
   await page.getByRole("button", { name: /Menu/ }).click();
   await page.getByRole("button", { name: "Help", exact: true }).click();
@@ -205,8 +207,12 @@ test("Custom World setup toggles Sabotage and reflects it in Help", { tag: "@des
   await expect(sabotageBuildItem).toContainText("Pay 1 of each resource");
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
 
+  await page.getByRole("button", { name: "Customize the map", exact: true }).click();
+  await expect(dialog).toBeVisible();
   await sabotageCheckbox.uncheck();
   await expect(sabotageCheckbox).not.toBeChecked();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
 
   await page.getByRole("button", { name: /Menu/ }).click();
   await page.getByRole("button", { name: "Help", exact: true }).click();

@@ -651,11 +651,16 @@ test("mobile home fits without scrolling, uses compact icon controls, and keeps 
     const customOption = listbox.getByRole("option", { name: "Custom World", exact: true });
     await customOption.scrollIntoViewIfNeeded();
     await customOption.click();
-    await expect(versionButton).toContainText("Custom World");
-    const decreaseWood = page.getByRole("button", { name: "Decrease Wood tiles", exact: true });
+    const customDialog = page.getByRole("dialog", { name: "Customize the map", exact: true });
+    await expect(customDialog).toBeVisible();
+    const decreaseWood = customDialog.getByRole("button", { name: "Decrease Wood tiles", exact: true });
     const decreaseBox = (await decreaseWood.boundingBox())!;
     expect(decreaseBox.width).toBeGreaterThanOrEqual(44);
     expect(decreaseBox.height).toBeGreaterThanOrEqual(44);
+    await customDialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(customDialog).toBeHidden();
+    await expect(versionButton).toContainText("Custom World");
+    await expect(page.getByRole("button", { name: "Customize the map", exact: true })).toBeVisible();
     await noPageOverflow(page);
   }
 
@@ -669,6 +674,54 @@ test("mobile home fits without scrolling, uses compact icon controls, and keeps 
   expect(landscapeBounds.y).toBeGreaterThanOrEqual(0);
   expect(landscapeBounds.x + landscapeBounds.width).toBeLessThanOrEqual(844);
   expect(landscapeBounds.y + landscapeBounds.height).toBeLessThanOrEqual(390);
+});
+
+test("home desktop cross-device actions, menu dropdown layering, and variant VP cues localize cleanly", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const [language, labels] of [
+    ["en", { menu: "Menu", settings: "Settings", version: "Game version", original: "Original", seafarers: "Seafarers", originalVp: "10 VP", seafarersVp: "13 VP", crossDevice: "Play across devices", scan: "Scan to join a board" }],
+    ["ja", { menu: "メニュー", settings: "設定", version: "ゲームの種類", original: "オリジナル", seafarers: "航海者", originalVp: "10勝利点", seafarersVp: "13勝利点", crossDevice: "複数の端末で遊ぶ", scan: "読み取ってボードに参加" }],
+  ] as const) {
+    await page.addInitScript(locale => localStorage.setItem("catania.language", locale), language);
+    await page.goto("/");
+    const menuButton = page.getByRole("button", { name: labels.menu, exact: true });
+    await expect(menuButton).toHaveText("A");
+    await menuButton.click();
+    await page.getByRole("button", { name: labels.settings, exact: true }).click();
+    await expect(page.getByRole("dialog", { name: labels.settings, exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    const multiplayer = page.getByRole("link", { name: labels.crossDevice, exact: true });
+    const scanButton = page.getByRole("button", { name: labels.scan, exact: true });
+    const multiplayerBox = (await multiplayer.boundingBox())!;
+    const scanBox = (await scanButton.boundingBox())!;
+    expect(Math.abs(multiplayerBox.y - scanBox.y)).toBeLessThanOrEqual(2);
+    expect(scanBox.x).toBeGreaterThanOrEqual(multiplayerBox.x + multiplayerBox.width);
+
+    const homeControls = page.locator(".home-island .board-controls");
+    await expect(homeControls).toHaveCSS("position", "absolute");
+    const homeViewportScroll = await page.locator(".home-island .board-viewport").evaluate(element => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }));
+    expect(homeViewportScroll.scrollWidth).toBeLessThanOrEqual(homeViewportScroll.clientWidth);
+    expect(homeViewportScroll.scrollHeight).toBeLessThanOrEqual(homeViewportScroll.clientHeight);
+    await screenshot(page, testInfo, `home-desktop-${language}`, false);
+
+    const versionButton = page.getByRole("button", { name: labels.version, exact: true });
+    await expect(versionButton).toContainText(labels.original);
+    await expect(versionButton).toContainText(labels.originalVp);
+    await versionButton.click();
+    const listbox = page.getByRole("listbox", { name: labels.version, exact: true });
+    const seafarersOption = listbox.getByRole("option", { name: labels.seafarers, exact: true });
+    await expect(seafarersOption).toContainText(labels.seafarersVp);
+    await seafarersOption.click();
+    await expect(versionButton).toContainText(labels.seafarers);
+    await expect(versionButton).toContainText(labels.seafarersVp);
+    await noPageOverflow(page);
+  }
 });
 
 for (const language of ["en", "ja"] as const) {
@@ -2723,25 +2776,27 @@ test("Seafarers selection changes the preview independently of themes and can re
 test("Custom World shapes the island from configured tile counts and fog", { tag: "@desktop-only" }, async ({ page }, testInfo) => {
   await page.goto("/");
   await selectGameVersion(page, "custom-world");
-  const panel = page.getByRole("region", { name: "Customize the map", exact: true });
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
-  await expect(panel.getByRole("group", { name: "Wood", exact: true })).toContainText("6");
+  const dialog = page.getByRole("dialog", { name: "Customize the map", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("group", { name: "Wood", exact: true })).toContainText("6");
   await expect(page.locator(".terrain-hex")).toHaveCount(42);
   await expect(page.locator(".board-surface")).toHaveAttribute("data-variant", "custom-world");
   const island = page.getByRole("region", { name: "Island preview", exact: true, includeHidden: true });
   await expect(island.getByRole("img", { name: /, wood,/, includeHidden: true })).toHaveCount(6);
-  await panel.getByRole("button", { name: "Decrease Wood tiles", exact: true }).click();
-  await expect(panel.getByText("1 tile left to assign.", { exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: "Increase Sea tiles", exact: true }).click();
-  await expect(panel.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Decrease Wood tiles", exact: true }).click();
+  await expect(dialog.getByText("1 tile left to assign.", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Increase Sea tiles", exact: true }).click();
+  await expect(dialog.getByText("All 42 tiles assigned.", { exact: true })).toBeVisible();
   await expect(island.getByRole("img", { name: /, wood,/, includeHidden: true })).toHaveCount(5);
   await expect(island.getByRole("img", { name: /, sea,/, includeHidden: true })).toHaveCount(14);
   const mapCode = await page.getByRole("textbox", { name: "Map code", exact: true, includeHidden: true }).inputValue();
   expect(createBoard(seededRandom(mapCode), "custom-world", { ...DEFAULT_CUSTOM_MAP_CONFIG, wood: 5, sea: 14 })
     .tiles.filter(tile => tile.terrain === "wood")).toHaveLength(5);
-  await panel.getByLabel("Fog", { exact: true }).check();
+  await dialog.getByLabel("Fog", { exact: true }).check();
   await expect(island.getByRole("img", { name: "Unexplored fog; terrain and number concealed", includeHidden: true })).toHaveCount(42);
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.getByRole("combobox", { name: "Human players", exact: true }).selectOption("3");
   await page.getByRole("button", { name: "Let's settle in", exact: true }).click();
   await revealHand(page);

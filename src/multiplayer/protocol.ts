@@ -201,10 +201,27 @@ function board(value: unknown): boolean {
       identifier(port.edgeId, "edge") && (port.resource === "any" || resource(port.resource)));
 }
 function volcanoEruption(value: unknown): boolean {
-  return value === null || (record(value) && fields(value, ["id", "tileId", "vertexId", "turnNumber", "affectedPlayerId", "effect"]) &&
-    integer(value.id) && identifier(value.tileId, "tile") && identifier(value.vertexId, "vertex") && integer(value.turnNumber) &&
-    (value.affectedPlayerId === null || identifier(value.affectedPlayerId, "player")) &&
-    ["none", "downgraded", "destroyed", "spared"].includes(value.effect as string));
+  return value === null || (
+    record(value) &&
+    fields(value, ["id", "tileId", "turnNumber", "strikes", "destroyedRoads"]) &&
+    integer(value.id) &&
+    identifier(value.tileId, "tile") &&
+    integer(value.turnNumber) &&
+    array(value.strikes, 3, strike =>
+      record(strike) &&
+      fields(strike, ["vertexId", "affectedPlayerId", "effect"]) &&
+      identifier(strike.vertexId, "vertex") &&
+      (strike.affectedPlayerId === null || identifier(strike.affectedPlayerId, "player")) &&
+      ["none", "downgraded", "destroyed", "spared"].includes(strike.effect as string),
+    ) &&
+    (value.strikes as unknown[]).length >= 1 &&
+    array(value.destroyedRoads, 9, road =>
+      record(road) &&
+      fields(road, ["edgeId", "playerId"]) &&
+      identifier(road.edgeId, "edge") &&
+      identifier(road.playerId, "player"),
+    )
+  );
 }
 function publicGame(value: unknown): boolean {
   if (!record(value) || !fields(value, ["variant", "victoryPointsToWin", "gameId", "pirateTileId", "shipMoved", "shipsBuiltThisTurn", "board", "bank", "activePlayerId", "turnNumber", "dice", "diceRollTotals", "robberTileId", "awards", "winnerId", "trade", "log", "developmentPlayed", "players", "phase", "canCancelKnight", "developmentRemaining"], ["sabotageEnabled", "lastEruption"])) return false;

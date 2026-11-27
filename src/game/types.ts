@@ -71,13 +71,21 @@ export function isCustomMapConfig(value: unknown): value is CustomMapConfig {
 }
 export type Resources = Record<Resource, number>;
 export type Terrain = Resource | "desert" | "sea" | "gold" | "fog" | "volcano";
+export type VolcanoEruptionStrike = {
+  vertexId: string;
+  affectedPlayerId: string | null;
+  effect: "none" | "downgraded" | "destroyed" | "spared";
+};
+export type VolcanoDestroyedRoad = {
+  edgeId: string;
+  playerId: string;
+};
 export type VolcanoEruption = {
   id: number;
   tileId: string;
-  vertexId: string;
   turnNumber: number;
-  affectedPlayerId: string | null;
-  effect: "none" | "downgraded" | "destroyed" | "spared";
+  strikes: VolcanoEruptionStrike[];
+  destroyedRoads: VolcanoDestroyedRoad[];
 };
 export type DevelopmentKind =
   | "knight"

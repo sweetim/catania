@@ -61,6 +61,7 @@ export const gameMessages = {
   "Volcano eruption reduces {victim}'s city to a settlement.": "火山の噴火により、{victim}の都市が開拓地に格下げされました。",
   "Volcano eruption destroys {victim}'s settlement.": "火山の噴火により、{victim}の開拓地が破壊されました。",
   "Volcano eruption spares {victim}'s last settlement.": "火山の噴火から、{victim}の最後の開拓地は守られました。",
+  "Volcano eruption destroys {victim}'s road.": "火山の噴火により、{victim}の街道が破壊されました。",
   "The robber cannot be placed on a volcano.": "盗賊は火山タイルには配置できません。",
   "{player} begins a turn.": "{player}のターンが始まります。",
   "Specify a nonnegative whole number for each of the five resources.": "5種類の資源それぞれに0以上の整数を指定してください。",

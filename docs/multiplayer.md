@@ -39,10 +39,11 @@ The shared screen hosts the game without occupying a player seat.
    **Four Islands**, **Fog Islands**, **Foggy World**, **Mystery World**, or
    **Custom World** under **Game version**; Original is the default.
    Changing the version regenerates the preview and synchronizes the choice to all
-   phones without changing the roster. With **Custom World** selected, the host
-   also edits the terrain-count panel and fog toggle beneath the version
-   selector (expanded by default; select its header to collapse it and give the map
-   the space); phones receive the configuration with the snapshot but cannot
+   phones without changing the roster. With **Custom World** selected, the
+   **Customize the map** dialog opens to edit terrain counts, fog, and sabotage
+   without taking space from the island preview (reopen it anytime via the
+   **Customize** button in the map's bottom toolbar or by choosing **Custom
+   World** again); phones receive the configuration with the snapshot but cannot
    change it. Select the gold **VP** badge in the map's
    zoom bar to choose **Victory points to win** from **3 to 13**. The map, phone lobby summaries,
    help, and victory checks use this target. It stays fixed during play and is
