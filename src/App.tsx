@@ -819,20 +819,6 @@ export function App() {
         {!game ? (
           <main className="home-main" data-view={homeView}>
             <div className="home-left">
-              <div className="home-introduction">
-                <p className="eyebrow mb-2.5 flex items-center gap-3">
-                  <span className="h-0.5 w-7 rounded-full bg-clay" aria-hidden="true" />
-                  {translateText("Your next gathering starts here")}
-                </p>
-                <h1 className="font-serif leading-[1.06] tracking-[-.04em]">
-                  {translateText("A little island.")}
-                  {language === "en" && " "}
-                  <br className="hidden lg:inline" />
-                  {language === "en"
-                    ? <>Endless <span className="home-title-accent italic">possibility.</span></>
-                    : <span className="home-title-accent italic">{translateText("Endless possibility.")}</span>}
-                </h1>
-              </div>
               <nav className="home-navigation" aria-label={translateText("Home views")}>
                 {(["setup", "island"] as const).map(view => (
                   <button
@@ -855,9 +841,9 @@ export function App() {
                 <div className="home-setup-content">
                   <div className="home-setup-header">
                     <p className="eyebrow">{translateText("On this device")}</p>
-                    <h2 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
+                    <h1 className="home-setup-heading mt-0.5 font-serif text-lg sm:mt-1 sm:text-2xl">
                       {translateText("Make room at the table.")}
-                    </h2>
+                    </h1>
                   </div>
                   <div className="home-table-options">
                     <div className="home-player-count flex min-h-11 items-center gap-1 rounded-xl border border-line/85 bg-moss/70 p-1" role="group" aria-label={translateText("Number of players")}>

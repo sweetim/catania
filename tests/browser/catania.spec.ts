@@ -1234,7 +1234,9 @@ test("fresh profile creation has neutral guidance and persists on reload", async
 
 test("table names, player counts, keyboard Help and private start", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "A little island. Endless possibility." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Make room at the table.", level: 1, exact: true })).toBeVisible();
+  await expect(page.getByText("Your next gathering starts here")).toHaveCount(0);
+  await expect(page.getByText("A little island.")).toHaveCount(0);
   const logoPaths = page.getByRole("banner").locator("svg").first().locator("path");
   await expect(logoPaths.nth(0)).toHaveCSS("fill", "rgb(176, 205, 193)");
   await expect(logoPaths.nth(1)).toHaveCSS("fill", "rgb(37, 59, 54)");
