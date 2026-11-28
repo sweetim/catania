@@ -16,7 +16,13 @@ const server = serve({
       if (relative.includes("..")) return new Response(null, { status: 404 });
       const file = Bun.file(path.join(dist, relative));
       if (await file.exists()) {
-        return new Response(file, relative === "sw.js" ? { headers: { "Cache-Control": "no-cache" } } : undefined);
+        const headers: Record<string, string> | undefined =
+          relative === "sw.js"
+            ? { "Cache-Control": "no-cache" }
+            : relative === ".well-known/apple-app-site-association" || relative === ".well-known/assetlinks.json"
+              ? { "Content-Type": "application/json" }
+              : undefined;
+        return new Response(file, headers ? { headers } : undefined);
       }
       return new Response(Bun.file(path.join(dist, "index.html")), {
         headers: { "Cache-Control": "no-cache" },

@@ -1,7 +1,7 @@
 // Catania service worker: installable app shell with offline launch.
 // Bun copies this file into dist/ verbatim, so it stays plain JavaScript.
 // Bump VERSION to push refreshed shell assets and public/ files to clients.
-const VERSION = "catania-v1";
+const VERSION = "catania-v2";
 const PRECACHE_URLS = [
   "/",
   "/manifest.webmanifest",
@@ -48,7 +48,7 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/.well-known/")) return;
 
   if (event.request.mode === "navigate") {
     // Network-first keeps deployed updates prompt; the cached shell answers offline.

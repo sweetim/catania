@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "co.timx.catania",
+      "sha256_cert_fingerprints": [
+        "8A:BF:FF:E7:6F:2C:D3:23:CB:05:F1:5B:E3:79:FE:57:57:4E:D7:75:D1:59:19:BB:CC:04:70:20:A3:39:6B:0D"
+      ]
+    }
+  }
+]

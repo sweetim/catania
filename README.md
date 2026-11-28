@@ -128,7 +128,10 @@ Convenience scripts are also available from the repository root:
 `bun run scripts/generate-icons.ts` to regenerate both PWA and mobile app icons
 (`mobile/assets/`). Static App Store policy pages live at
 [`public/privacy.html`](public/privacy.html) and
-[`public/support.html`](public/support.html).
+[`public/support.html`](public/support.html), and Universal Links / Android App
+Links domain verification files live at
+[`public/.well-known/apple-app-site-association`](public/.well-known/apple-app-site-association)
+and [`public/.well-known/assetlinks.json`](public/.well-known/assetlinks.json).
 
 ## Verify
 
