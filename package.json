@@ -13,6 +13,7 @@
     "mobile:build:android": "bun run mobile:bundle && cd mobile && eas build --platform android --profile production",
     "mobile:submit:ios": "cd mobile && eas submit --platform ios --latest",
     "mobile:submit:android": "cd mobile && eas submit --platform android --latest",
+    "mobile:submit:all": "cd mobile && eas submit --platform all --latest",
     "typecheck": "tsgo --noEmit",
     "test": "bun test tests/game",
     "test:browser": "playwright test",

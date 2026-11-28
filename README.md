@@ -121,8 +121,8 @@ eas submit --platform android --latest
 
 Convenience scripts are also available from the repository root:
 `bun run mobile:build:ios`, `bun run mobile:build:ios:simulator`,
-`bun run mobile:submit:ios`, `bun run mobile:build:android`, and
-`bun run mobile:submit:android`. Run
+`bun run mobile:submit:ios`, `bun run mobile:build:android`,
+`bun run mobile:submit:android`, and `bun run mobile:submit:all`. Run
 `bun run scripts/generate-icons.ts` to regenerate both PWA and mobile app icons
 (`mobile/assets/`). Static App Store policy pages live at
 [`public/privacy.html`](public/privacy.html) and
