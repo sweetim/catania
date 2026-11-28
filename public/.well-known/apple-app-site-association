@@ -1,0 +1,28 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "GGZ6ZQ4MRD.co.timx.catania"
+        ],
+        "components": [
+          {
+            "/": "/privacy.html",
+            "exclude": true
+          },
+          {
+            "/": "/support.html",
+            "exclude": true
+          },
+          {
+            "/": "/.well-known/*",
+            "exclude": true
+          },
+          {
+            "/": "/*"
+          }
+        ]
+      }
+    ]
+  }
+}

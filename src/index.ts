@@ -7,6 +7,16 @@ const publicFile = (relative: string) => Bun.file(path.join(import.meta.dir, "..
 const server = serve({
   hostname: process.env.HOST,
   routes: {
+    "/.well-known/apple-app-site-association": () =>
+      new Response(publicFile(".well-known/apple-app-site-association"), {
+        headers: { "Content-Type": "application/json" },
+      }),
+
+    "/.well-known/assetlinks.json": () =>
+      new Response(publicFile(".well-known/assetlinks.json"), {
+        headers: { "Content-Type": "application/json" },
+      }),
+
     // Serve index.html for all unmatched routes.
     "/*": index,
 

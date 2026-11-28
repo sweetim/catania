@@ -70,3 +70,47 @@ test("serves static privacy policy and support pages in English and Japanese", a
   await expect(page.getByRole("heading", { name: "Support & FAQ (English)" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "サポート・よくある質問（日本語）" })).toBeVisible();
 });
+
+type AppleAppSiteAssociation = {
+  applinks: {
+    details: Array<{
+      appIDs: string[];
+      components: Array<Record<string, unknown>>;
+    }>;
+  };
+};
+
+type AndroidAssetLink = {
+  relation: string[];
+  target: {
+    namespace: string;
+    package_name: string;
+    sha256_cert_fingerprints: string[];
+  };
+};
+
+test("serves Universal Links and Android App Links association files as JSON", async ({ request }) => {
+  const appleResponse = await request.get("/.well-known/apple-app-site-association");
+  expect(appleResponse.status()).toBe(200);
+  expect(appleResponse.headers()["content-type"]).toContain("application/json");
+  const appleAssociation = (await appleResponse.json()) as AppleAppSiteAssociation;
+  expect(appleAssociation.applinks.details[0]?.appIDs).toContain("GGZ6ZQ4MRD.co.timx.catania");
+  expect(appleAssociation.applinks.details[0]?.components).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ "/": "/privacy.html", exclude: true }),
+      expect.objectContaining({ "/": "/support.html", exclude: true }),
+      expect.objectContaining({ "/": "/*" }),
+    ]),
+  );
+
+  const androidResponse = await request.get("/.well-known/assetlinks.json");
+  expect(androidResponse.status()).toBe(200);
+  expect(androidResponse.headers()["content-type"]).toContain("application/json");
+  const assetLinks = (await androidResponse.json()) as AndroidAssetLink[];
+  expect(assetLinks[0]?.relation).toContain("delegate_permission/common.handle_all_urls");
+  expect(assetLinks[0]?.target.namespace).toBe("android_app");
+  expect(assetLinks[0]?.target.package_name).toBe("co.timx.catania");
+  expect(assetLinks[0]?.target.sha256_cert_fingerprints).toContain(
+    "8A:BF:FF:E7:6F:2C:D3:23:CB:05:F1:5B:E3:79:FE:57:57:4E:D7:75:D1:59:19:BB:CC:04:70:20:A3:39:6B:0D",
+  );
+});
