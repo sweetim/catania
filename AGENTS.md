@@ -102,6 +102,8 @@ work") require constant clarification.
   browser (`openBrowserPage`). Verify UI changes via Playwright browser tests
   and inspect their captured screenshots; only use `openBrowserPage` with a
   known reachable host/IP (`HOST=<host>`).
+- Project skills live in `.agents/skills/`, not `.kilo/skills/`; the root
+  `kilo.json` loads them via `skills.paths`. Put new skills there.
 
 ## 6. Learn From User Feedback
 
