@@ -75,9 +75,15 @@ work") require constant clarification.
 
 - After code changes that affect documented behavior, update the relevant docs
   (README, AGENTS.md, inline docs) to match the new behavior.
-- Invoke Bun via `mise exec -- bun ...` (or with `$HOME/.local/share/mise/shims`
-  on `PATH`), since `bun` is managed by `mise.toml` and may not be on the
-  default non-interactive `PATH`.
+- Invoke Bun via `mise exec -- bun ...` when `mise` is trusted and available;
+  in sandboxed or non-interactive shells where `mise` prompts for trust, lacks
+  `$HOME/.local/share/mise`, or resolves unrelated global tools, invoke
+  `$HOME/.local/share/mise/installs/bun/latest/bin/bun` directly (e.g.
+  `bun install --frozen-lockfile --offline`), or run `./node_modules/bun/bin/bun.exe`
+  and the platform `tsgo` binary under `node_modules/@typescript/` inside the
+  sandbox once `node_modules` is installed. If `~/.cache/ms-playwright` is
+  absent, pass `executablePath: "/usr/bin/chromium"` via a scratch Playwright
+  config rather than editing `playwright.config.ts`.
 - After any UI or `RoomSnapshot`/protocol change, check single-device and
   multi-device parity, both `en` and `ja` localization, and desktop + narrow
   mobile (`320px`) / unfolded layouts.
