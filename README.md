@@ -6,6 +6,8 @@ at a 3-4 player table.
 Built with Bun, React 19, TypeScript, and Tailwind CSS v4. All illustrations and
 assets are local.
 
+![Catania gameplay screenshot](docs/screenshot.png)
+
 ## Features
 
 - Solo AI opponents or human pass-and-play on one device.
